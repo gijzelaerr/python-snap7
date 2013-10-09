@@ -1,16 +1,10 @@
 from ctypes import cdll, sizeof, byref, CFUNCTYPE, POINTER, c_int, c_char
 
-#TODO: somehow find_lib doesn't work
-"""
 from ctypes.util import find_library
 lib_location = find_library('snap7')
 if not lib_location:
-    raise Exception("cant find snap7 library.")
+    raise Exception("cant find snap7 library. If installed, try running ldconfig")
 clib = cdll.LoadLibrary(lib_location)
-"""
-
-clib = cdll.LoadLibrary('/usr/lib/libsnap7.so')
-
 
 # Server Area ID  (use with Register/unregister - Lock/unlock Area)
 srvAreaPE = 0
