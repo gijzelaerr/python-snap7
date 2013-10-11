@@ -1,10 +1,6 @@
-from ctypes import cdll, sizeof, byref, CFUNCTYPE, POINTER, c_int, c_char
+from ctypes import sizeof, byref, CFUNCTYPE, POINTER, c_int, c_char
 
-from ctypes.util import find_library
-lib_location = find_library('snap7')
-if not lib_location:
-    raise Exception("cant find snap7 library. If installed, try running ldconfig")
-clib = cdll.LoadLibrary(lib_location)
+from loadlib import clib
 
 # Server Area ID  (use with Register/unregister - Lock/unlock Area)
 srvAreaPE = 0
@@ -26,6 +22,7 @@ typedef struct{
     word EvtParam4; // param4
 }
 """
+
 
 class Snap7Server(object):
     def __init__(self, pointer):
