@@ -33,3 +33,7 @@ class Server(unittest2.TestCase):
 
         stop(server)
         destroy(server)
+
+
+if __name__ == '__main__':
+    unittest2.main()
