@@ -91,3 +91,28 @@ def stop(server):
 
 def destroy(server):
     return clib.Srv_Destroy(server.pointer)
+
+
+"""
+Srv_ClearEvents
+Srv_Create
+Srv_Destroy
+Srv_ErrorText
+Srv_EventText
+Srv_GetMask
+Srv_GetParam
+Srv_GetStatus
+Srv_LockArea
+Srv_PickEvent
+Srv_RegisterArea
+Srv_SetCpuStatus
+Srv_SetEventsCallback
+Srv_SetMask
+Srv_SetParam
+Srv_Start
+Srv_StartTo
+Srv_Stop
+Srv_UnlockArea
+Srv_UnregisterArea
+"""
+
