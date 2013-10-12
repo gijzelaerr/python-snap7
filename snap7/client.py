@@ -1,63 +1,79 @@
-from ctypes import c_int, c_char_p, c_char
-# from ctypes import sizeof
-
+from ctypes import c_int, c_char_p, c_char, byref, c_uint, c_ubyte, sizeof
 from loadlib import clib
-from ctypes import pointer
+import logging
+
+from data import block_types
+from error import error_parse
+
+logger = logging.getLogger(__name__)
+
+S7Object = c_uint
+buffer_size = 65536
+buffer_type = c_ubyte * buffer_size
 
 
-class Snap7Client(object):
-    def __init__(self, pointer):
-        self.pointer = pointer
+def error_wrap(code):
+    error = error_parse(code)
+    if error:
+        logging.error(error)
+        raise Exception(error)
 
 
-def create():
-    """Create a server.
+class Client(object):
+    def __init__(self):
+        """Create a server.
 
-    :returns: A Snap7Client object
+        :returns: A Snap7Client object
+        """
+        logger.info("creating snap7 client")
+        self.pointer = S7Object(clib.Cli_Create())
 
-    """
-    pointer = clib.Cli_Create()
-    return Snap7Client(pointer)
+    def destroy(self):
+        logger.info("destroying snap7 client")
+        clib.Cli_Destroy(byref(self.pointer))
+
+    def disconnect(self):
+        logger.info("disconnecting snap7 client")
+        # Cli_Disconnect(Client : S7Object) : integer;
+        x = clib.Cli_Disconnect(self.pointer)
+
+    def connect(self, address, rack, slot):
+        logger.info("connecting to %s rack %s slot %s" % (address, rack, slot))
+        return clib.Cli_ConnectTo(self.pointer, c_char_p(address),
+                                  c_int(rack), c_int(slot))
+
+    def db_read(self, db_number, start, size):
+        """This is a lean function of Cli_ReadArea() to read PLC DB.
+
+        :returns: A string?
+        """
+        logger.info("db_read, db_number:%s, start:%s, size:%s" % (db_number, start, size))
+        buffer_ = buffer_type()
+        error_wrap(clib.Cli_DBRead(self.pointer, db_number, start, size, byref(buffer_)))
+        return bytearray(buffer_)
+
+    def db_upload(self, block_type, block_num, data):
+        """Uploads a block body from AG.
+        """
+        logger.info("db_upload block_type: %s, block_num: %s, data: %s" % 
+                    (block_type, block_num, data))
+        assert(block_type in block_types.values())
+        size = c_int(sizeof(data))
+        logger.info("requesting size: %s" % size)
+        error_wrap(clib.Cli_Upload(self.pointer, block_type, block_num,
+                                byref(data), byref(size)))
+        logger.info('received %s bytes' % size)
+
+    def db_get(self, db_number):
+        """Uploads a DB from AG.
+        """
+        logging.info("db_get db_number: %s" % db_number)
+        buffer_ = buffer_type()
+        error_wrap(clib.Cli_DBGet(self.pointer, db_number, byref(buffer_),
+                                  byref(c_int(buffer_size))))
+        return bytearray(buffer_)
 
 
-def destroy(client):
-    clib.Cli_Destroy(client.pointer)
-
-
-def disconnect(client):
-    # Cli_Disconnect(Client : S7Object) : integer;
-    clib.Cli_Disconnect(client)
-
-
-def connect(client, address, rack, slot):
-    print address, rack, slot
-    return clib.Cli_ConnectTo(client.pointer, c_char_p(address),
-                              c_int(rack), c_int(slot))
-
-
-def readDB(client, db_number):
-    """
-    read a dataBlock from plc
-
-    :returns: A string?
-    """
-
-    bufferData = c_char * 65000
-
-    clib.readDB(client, db_number, bufferData)
-
-    return bufferData
-
-
-def uploadDB(client, db):
-    """
-    upload datablock to PLC
-    """
-    # int S7API Cli_Upload(S7Object Client,
-    # int BlockType, int BlockNum, void *pUsrData, int *Size);
-
-    # FIXME
-    clib.Cli_Upload(client)
 
 
 
