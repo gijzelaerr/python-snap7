@@ -1,22 +1,20 @@
-from ctypes import c_int, c_char_p, c_char, byref, c_uint, c_ubyte, sizeof
+from ctypes import c_int, c_char_p, byref, sizeof
 from loadlib import clib
 import logging
 
+from types import S7Object, buffer_type, buffer_size
 from data import block_types
 from error import error_parse
 
 logger = logging.getLogger(__name__)
 
-S7Object = c_uint
-buffer_size = 65536
-buffer_type = c_ubyte * buffer_size
-
 
 def error_wrap(code):
-    error = error_parse(code)
-    if error:
-        logging.error(error)
-        raise Exception(error)
+    errors = error_parse(code, client=True)
+    if errors:
+        for error in errors:
+            logger.error(error)
+        raise Exception(", ".join(errors))
 
 
 class Client(object):
@@ -34,7 +32,6 @@ class Client(object):
 
     def disconnect(self):
         logger.info("disconnecting snap7 client")
-        # Cli_Disconnect(Client : S7Object) : integer;
         x = clib.Cli_Disconnect(self.pointer)
 
     def connect(self, address, rack, slot):
@@ -47,9 +44,11 @@ class Client(object):
 
         :returns: A string?
         """
-        logger.info("db_read, db_number:%s, start:%s, size:%s" % (db_number, start, size))
+        logger.info("db_read, db_number:%s, start:%s, size:%s" % (db_number,
+                                                                  start, size))
         buffer_ = buffer_type()
-        error_wrap(clib.Cli_DBRead(self.pointer, db_number, start, size, byref(buffer_)))
+        error_wrap(clib.Cli_DBRead(self.pointer, db_number, start, size,
+                                   byref(buffer_)))
         return bytearray(buffer_)
 
     def db_upload(self, block_type, block_num, data):

@@ -1,38 +1,39 @@
 import unittest2
+import logging
+import snap7
+import ctypes
 
-from snap7.server import create, register_area, set_events_callback, start,\
-    error_text, stop, destroy, srvAreaDB
+
+logging.basicConfig()
+l = logging.getLogger()
+l.setLevel(logging.INFO)
 
 
 class Server(unittest2.TestCase):
-    def test_create(self):
-        server = create()
+    def setUp(self):
+        self.server = snap7.server.Server()
+        self.server.start()
 
-        import ctypes
+    def tearDown(self):
+        self.server.stop()
+        self.server.destroy()
 
-        db1_type = ctypes.c_char * 512
-        db2_type = ctypes.c_char * 128
-        db3_type = ctypes.c_char * 1024
+    def test_register_area(self):
+        db1_type = ctypes.c_char * 1024
+        self.server.register_area(snap7.server.srvAreaDB, 3, db1_type())
 
-        db1 = db1_type()
-        db2 = db2_type()
-        db3 = db3_type()
+    def test_error(self):
+        self.server.error_text()
 
-        register_area(server, srvAreaDB, 1, db1)
-        register_area(server, srvAreaDB, 2, db2)
-        register_area(server, srvAreaDB, 3, db3)
-
+    def test_callback(self):
         def event_call_back(event):
             print event
+        self.server.set_events_callback(event_call_back)
 
-        set_events_callback(server, event_call_back)
+    def test_error(self):
+        for error in snap7.error.server_errors:
+            snap7.server.error_text(error)
 
-        error = start(server)
-        if error:
-            print(error_text(error))
-
-        stop(server)
-        destroy(server)
 
 
 if __name__ == '__main__':

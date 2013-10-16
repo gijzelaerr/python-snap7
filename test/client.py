@@ -1,5 +1,4 @@
 import unittest2
-import time
 import snap7
 
 import logging
@@ -8,7 +7,8 @@ logging.basicConfig()
 l = logging.getLogger()
 l.setLevel(logging.INFO)
 
-ip = '192.168.200.24'
+#ip = '192.168.200.24'
+ip = '127.0.0.1'
 db_number = 1
 rack = 0
 slot = 3
