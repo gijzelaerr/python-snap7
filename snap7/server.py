@@ -48,6 +48,10 @@ class PSrvEvent(ctypes.Structure):
                                                self.EvtParam3, self.EvtParam4)
 
 
+CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
+                            ctypes.POINTER(PSrvEvent), ctypes.c_uint)
+
+
 def error_wrap(code):
     errors = error_parse(code, client=False)
     if errors:
@@ -55,8 +59,7 @@ def error_wrap(code):
             logging.error(error)
         raise Exception(", ".join(errors))
 
-callback_wrap = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p, PSrvEvent,
-                                 ctypes.c_uint)
+
 
 
 def error_text(error):
@@ -79,13 +82,11 @@ def event_text(event):
     :param event: an PSrvEvent struct object
     :returns: the error string
     """
-    logger.info("event text for %s" % hex(event.EvtCode))
     len_ = 1024
     text_type = ctypes.c_char * len_
     text = text_type()
     error_wrap(clib.Srv_EventText(ctypes.byref(event), ctypes.byref(text),
                                   len_))
-    #int Srv_EventText(TSrvEvent *Event, char *Text, int TextLen);
     return text.value
 
 
@@ -106,22 +107,22 @@ class Server(object):
     def set_events_callback(self, call_back):
         """Sets the user callback that the Server object has to call when an
         event is created.
-
-        The expected callback is defined as:
-        typedef void (S7API *pfn_SrvCallBack) (void * usrPtr, PSrvEvent PEvent,
-        int Size);
         """
         logger.info("setting event callback")
 
-        def wrap_func(usrptr, pevent, size):
-            # TODO: call the callback function
-            #call_back(pevent)
-            logger.info("usrptr: %s, pevent: %s, size: %s" % (usrptr, pevent,
-                                                              size))
+        def wrap_callback(usrptr, pevent, size):
+            """ Wraps python function into a ctypes function
+            :param usrptr: not used
+            :param pevent: a snap7 event struct
+            :param size:
+            :returns: should return an int
+            """
+            # TODO: call the actual callback function
+            logger.info(event_text(pevent.contents))
             return 0
-
         error_wrap(clib.Srv_SetEventsCallback(self.pointer,
-                                              callback_wrap(wrap_func)))
+                                              CALLBACK(wrap_callback)))
+
 
     def start(self):
         logger.info("starting server")
@@ -163,7 +164,6 @@ Srv_ClearEvents
 Srv_EventText
 Srv_GetMask
 Srv_GetParam
-Srv_GetStatus
 Srv_LockArea
 Srv_PickEvent
 Srv_RegisterArea

@@ -14,9 +14,8 @@ def test_server():
     server = snap7.server.Server()
     server.set_events_callback(event_callback)
     server.start()
-    print snap7.server.event_text(snap7.server.PSrvEvent(EvtRetCode=32652))
     while True:
-        print server.get_status()
+        print "server: %s cpu: %s users: %s" % server.get_status()
         time.sleep(1)
 
 if __name__ == '__main__':
