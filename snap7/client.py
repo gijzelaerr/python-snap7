@@ -1,19 +1,19 @@
 from ctypes import c_int, c_char_p, byref, sizeof
-from loadlib import clib
 import logging
-from decorator import decorator
 from snap7.types import S7Object, buffer_type, buffer_size, block_types,\
     wordlen_to_ctypes
 from snap7.error import check_error
+from snap7.loadlib import clib
+
 
 logger = logging.getLogger(__name__)
 
 
 def error_wrap(func):
-    def f(func, *args, **kw):
+    def f(*args, **kw):
         code = func(*args, **kw)
-        check_error(code)
-    return decorator(f, func)
+        check_error(code, client=True)
+    return f
 
 
 class Client(object):

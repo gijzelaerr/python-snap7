@@ -1,4 +1,4 @@
-import unittest2
+import unittest
 import snap7
 import ctypes
 import logging
@@ -13,7 +13,7 @@ db_number = 1
 rack = 0
 slot = 3
 
-class TestClient(unittest2.TestCase):
+class TestClient(unittest.TestCase):
 
     def setUp(self):
         self.client = snap7.client.Client()
@@ -25,7 +25,6 @@ class TestClient(unittest2.TestCase):
 
     def test_db_read(self):
         data = self.client.db_read(db_number=db_number, start=0, size=100)
-        print data
 
     def test_db_get(self):
         result = self.client.db_get(db_number=db_number)

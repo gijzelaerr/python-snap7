@@ -1,9 +1,9 @@
-import unittest2
+import unittest
 import snap7
 import ctypes
 
 
-class TestServer(unittest2.TestCase):
+class TestServer(unittest.TestCase):
     def setUp(self):
         self.server = snap7.server.Server()
         self.server.start()
@@ -19,10 +19,10 @@ class TestServer(unittest2.TestCase):
     def test_error(self):
         self.server.error_text()
 
-    @unittest2.skip('not yet implemented')
+    @unittest.skip('not yet implemented')
     def test_callback(self):
         def event_call_back(event):
-            print event
+            pass
         self.server.set_events_callback(event_call_back)
 
     def test_error(self):
@@ -31,7 +31,7 @@ class TestServer(unittest2.TestCase):
 
     def test_event(self):
         event = snap7.server.SrvEvent()
-        snap7.server.event_text()
+        snap7.server.event_text(event)
 
     def test_get_status(self):
         server, cpu, num_clients = self.server.get_status()
@@ -110,4 +110,4 @@ class TestServer(unittest2.TestCase):
 
 
 if __name__ == '__main__':
-    unittest2.main()
+    unittest.main()

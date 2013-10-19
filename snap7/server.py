@@ -1,11 +1,9 @@
 import ctypes
 import logging
 import re
-from decorator import decorator
-from loadlib import clib
 from snap7.types import S7Object, time_t, longword, word
 from snap7.error import check_error
-
+from snap7.loadlib import clib
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +19,10 @@ srvAreaDB = 5
 ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 def error_wrap(func):
-    def f(func, *args, **kw):
+    def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code)
-    return decorator(f, func)
+    return f
 
 server_statuses = {
     0: 'SrvStopped',
