@@ -1,39 +1,37 @@
 from ctypes import c_int, c_char_p, byref, sizeof
 from loadlib import clib
 import logging
-
-from types import S7Object, buffer_type, buffer_size
-from data import block_types
-from error import error_parse
+from decorator import decorator
+from snap7.types import S7Object, buffer_type, buffer_size, block_types,\
+    wordlen_to_ctypes
+from snap7.error import check_error
 
 logger = logging.getLogger(__name__)
 
 
-def error_wrap(code):
-    errors = error_parse(code, client=True)
-    if errors:
-        for error in errors:
-            logger.error(error)
-        raise Exception(", ".join(errors))
+def error_wrap(func):
+    def f(func, *args, **kw):
+        code = func(*args, **kw)
+        check_error(code)
+    return decorator(f, func)
 
 
 class Client(object):
     def __init__(self):
-        """Create a server.
-
-        :returns: A Snap7Client object
-        """
         logger.info("creating snap7 client")
         self.pointer = S7Object(clib.Cli_Create())
 
+    @error_wrap
     def destroy(self):
         logger.info("destroying snap7 client")
-        clib.Cli_Destroy(byref(self.pointer))
+        return clib.Cli_Destroy(byref(self.pointer))
 
+    @error_wrap
     def disconnect(self):
         logger.info("disconnecting snap7 client")
-        x = clib.Cli_Disconnect(self.pointer)
+        return clib.Cli_Disconnect(self.pointer)
 
+    @error_wrap
     def connect(self, address, rack, slot):
         logger.info("connecting to %s rack %s slot %s" % (address, rack, slot))
         return clib.Cli_ConnectTo(self.pointer, c_char_p(address),
@@ -44,36 +42,56 @@ class Client(object):
 
         :returns: A string?
         """
-        logger.info("db_read, db_number:%s, start:%s, size:%s" % (db_number,
+        logger.debug("db_read, db_number:%s, start:%s, size:%s" % (db_number,
                                                                   start, size))
         buffer_ = buffer_type()
-        error_wrap(clib.Cli_DBRead(self.pointer, db_number, start, size,
-                                   byref(buffer_)))
+        result = (clib.Cli_DBRead(self.pointer, db_number, start, size,
+                                  byref(buffer_)))
+        check_error(result, client=True)
         return bytearray(buffer_)
 
     def db_upload(self, block_type, block_num, data):
         """Uploads a block body from AG.
         """
-        logger.info("db_upload block_type: %s, block_num: %s, data: %s" % 
+        logger.debug("db_upload block_type: %s, block_num: %s, data: %s" %
                     (block_type, block_num, data))
         assert(block_type in block_types.values())
         size = c_int(sizeof(data))
-        logger.info("requesting size: %s" % size)
-        error_wrap(clib.Cli_Upload(self.pointer, block_type, block_num,
-                                byref(data), byref(size)))
+        logger.debug("requesting size: %s" % size)
+        result = clib.Cli_Upload(self.pointer, block_type, block_num,
+                                 byref(data), byref(size))
+        check_error(result, client=True)
         logger.info('received %s bytes' % size)
 
     def db_get(self, db_number):
         """Uploads a DB from AG.
         """
-        logging.info("db_get db_number: %s" % db_number)
+        logging.debug("db_get db_number: %s" % db_number)
         buffer_ = buffer_type()
-        error_wrap(clib.Cli_DBGet(self.pointer, db_number, byref(buffer_),
-                                  byref(c_int(buffer_size))))
+        result = clib.Cli_DBGet(self.pointer, db_number, byref(buffer_),
+                                  byref(c_int(buffer_size)))
+        check_error(result, client=True)
         return bytearray(buffer_)
 
+    def read_area(self, area, dbnumber, start, amount, wordlen):
+        """This is the main function to read data from a PLC.
+        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+        """
+        data = (wordlen_to_ctypes[wordlen] * amount)()
+        result = clib.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
+                                   wordlen, byref(data))
+        check_error(result, client=True)
+        return data
 
-
+    @error_wrap
+    def write_area(self, area, dbnumber, start, amount, wordlen, data):
+        """This is the main function to write data into a PLC. It's the
+        complementary function of Cli_ReadArea(), the parameters and their
+        meanings are the same. The only difference is that the data is
+        transferred from the buffer pointed by pUsrData into PLC.
+        """
+        return clib.Cli_WriteArea(self.pointer, area, dbnumber, start, amount,
+                                  wordlen, byref(data))
 
 
 """

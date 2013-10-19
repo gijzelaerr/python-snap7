@@ -31,7 +31,7 @@ class TestServer(unittest2.TestCase):
 
     def test_event(self):
         event = snap7.server.SrvEvent()
-        snap7.server.event_text(event)
+        snap7.server.event_text()
 
     def test_get_status(self):
         server, cpu, num_clients = self.server.get_status()

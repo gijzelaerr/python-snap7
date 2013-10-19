@@ -4,11 +4,13 @@ import re
 from decorator import decorator
 from loadlib import clib
 from snap7.types import S7Object, time_t, longword, word
-from snap7.error import error_parse
+from snap7.error import check_error
+
 
 logger = logging.getLogger(__name__)
 
 # Server Area ID  (use with Register/unregister - Lock/unlock Area)
+# NOTE: these are not the same for the client!!
 srvAreaPE = 0
 srvAreaPA = 1
 srvAreaMK = 2
@@ -18,21 +20,11 @@ srvAreaDB = 5
 
 ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
-
-def check_error(code):
-    errors = error_parse(code, client=False)
-    if errors:
-        for error in errors:
-            logging.error(error)
-        raise Exception(", ".join(errors))
-
-
 def error_wrap(func):
     def f(func, *args, **kw):
         code = func(*args, **kw)
         check_error(code)
     return decorator(f, func)
-
 
 server_statuses = {
     0: 'SrvStopped',
@@ -116,7 +108,9 @@ class Server(object):
         """Shares a memory area with the server. That memory block will be
         visible by the clients.
         """
-        logger.info("registering area")
+        size = ctypes.sizeof(userdata)
+        logger.info("registering area %s, index %s, size %s" % (area_code,
+                                                                index, size))
         size = ctypes.sizeof(userdata)
         return clib.Srv_RegisterArea(self.pointer, area_code, index,
                                      ctypes.byref(userdata), size)

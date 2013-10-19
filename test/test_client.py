@@ -1,6 +1,6 @@
 import unittest2
 import snap7
-
+import ctypes
 import logging
 
 logging.basicConfig()
@@ -32,9 +32,22 @@ class TestClient(unittest2.TestCase):
 
     def test_db_upload(self):
         data = snap7.client.buffer_type()
-        self.client.db_upload(block_type=snap7.data.block_types['DB'],
+        self.client.db_upload(block_type=snap7.types.block_types['DB'],
                               block_num=db_number, data=data)
 
+    def test_read_area(self):
+        area = snap7.types.S7AreaDB
+        dbnumber = 1
+        amount = 10
+        start = 1
+        wordlen = snap7.types.S7WLByte
+        self.client.read_area(area, dbnumber, start, amount, wordlen)
 
-if __name__ == '__main__':
-    unittest2.main()
+    def test_write_area(self):
+        area = snap7.types.S7AreaDB
+        dbnumber = 1
+        amount = 10
+        start = 1
+        wordlen = snap7.types.S7WLByte
+        data = (ctypes.c_int16 * amount)()
+        self.client.write_area(area, dbnumber, start, amount, wordlen, data)

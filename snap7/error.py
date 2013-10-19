@@ -1,3 +1,11 @@
+import logging
+
+def check_error(code, client=False):
+    errors = error_parse(code, client)
+    if errors:
+        for error in errors:
+            logging.error(error)
+        raise Exception(", ".join(errors))
 
 def error_parse(code, client=True):
     """
@@ -116,3 +124,5 @@ client_errors.update(tcp_errors)
 server_errors = s7_server_errors.copy()
 server_errors.update(isotcp_errors)
 server_errors.update(tcp_errors)
+
+
