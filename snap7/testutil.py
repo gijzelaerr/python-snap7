@@ -4,19 +4,21 @@ import snap7
 
 logging.basicConfig()
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
-def test_server():
-    def event_callback(event):
-        logger.info(event)
-
+def server():
     server = snap7.server.Server()
-    server.set_events_callback(event_callback)
     server.start()
     while True:
-        print "server: %s cpu: %s users: %s" % server.get_status()
+        logger.info("server: %s cpu: %s users: %s" % server.get_status())
+        while True:
+            event = server.pick_event()
+            if event:
+                logger.info(snap7.server.event_text(event))
+            else:
+                break
         time.sleep(1)
 
 if __name__ == '__main__':
-    test_server()
+    server()

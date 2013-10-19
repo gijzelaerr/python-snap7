@@ -1,15 +1,9 @@
 import unittest2
-import logging
 import snap7
 import ctypes
 
 
-logging.basicConfig()
-l = logging.getLogger()
-l.setLevel(logging.INFO)
-
-
-class Server(unittest2.TestCase):
+class TestServer(unittest2.TestCase):
     def setUp(self):
         self.server = snap7.server.Server()
         self.server.start()
@@ -25,6 +19,7 @@ class Server(unittest2.TestCase):
     def test_error(self):
         self.server.error_text()
 
+    @unittest2.skip('not yet implemented')
     def test_callback(self):
         def event_call_back(event):
             print event
@@ -34,12 +29,16 @@ class Server(unittest2.TestCase):
         for error in snap7.error.server_errors:
             snap7.server.error_text(error)
 
+    def test_event(self):
+        event = snap7.server.SrvEvent()
+        snap7.server.event_text(event)
+
     def test_get_status(self):
         server, cpu, num_clients = self.server.get_status()
 
     def test_clear_events(self):
         self.server.clear_events()
-        self.assertFalse(self.server.pick_event())
+        self.assertFalse(self.server.clear_events())
 
     def test_get_mask(self):
         self.server.get_mask(snap7.types.mkEvent)

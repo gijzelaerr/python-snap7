@@ -82,7 +82,7 @@ def error_text(error):
     :param error: a error integer
     :returns: the erorr string
     """
-    logger.info("error text for %s" % hex(error))
+    logger.debug("error text for %s" % hex(error))
     len_ = 1024
     text_type = ctypes.c_char * len_
     text = text_type()
@@ -96,6 +96,7 @@ def event_text(event):
     :param event: an PSrvEvent struct object
     :returns: the error string
     """
+    logger.debug("error text for %s" % hex(event.EvtCode))
     len_ = 1024
     text_type = ctypes.c_char * len_
     text = text_type()
@@ -108,7 +109,7 @@ class Server(object):
     def __init__(self):
         logger.info("creating server")
         self.pointer = S7Object(clib.Srv_Create())
-        self._set_log_callback()
+        #self._set_log_callback()
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
@@ -126,7 +127,7 @@ class Server(object):
         event is created.
         """
         logger.info("setting event callback")
-
+        raise NotImplementedError
         def wrap_callback(usrptr, pevent, size):
             """ Wraps python function into a ctypes function
             :param usrptr: not used
@@ -136,7 +137,7 @@ class Server(object):
             """
             # TODO: call the actual callback function. Somehow we can't access
             # objects in the scope of this object...
-            logger.info(event_text(pevent.contents))
+            logger.info("callback event: " + event_text(pevent.contents))
             return 0
 
         return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
@@ -146,8 +147,9 @@ class Server(object):
         """Sets a callback that logs the events
         """
         logger.debug("setting up event logger")
+        raise NotImplementedError
         def wrap_callback(usrptr, pevent, size):
-            logger.info(event_text(pevent.contents))
+            logger.info("callback event: " + event_text(pevent.contents))
             return 0
         return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
 
@@ -246,9 +248,9 @@ class Server(object):
                               ctypes.byref(ready))
         check_error(code)
         if ready:
-            logger.debug("no events ready")
+            logger.debug("one event ready: %s" % event)
             return event
-        logger.debug("one event ready: %s" % event)
+        logger.debug("no events ready")
 
     def get_param(self, number):
         """Reads an internal Server object parameter.

@@ -13,7 +13,7 @@ db_number = 1
 rack = 0
 slot = 3
 
-class Client(unittest2.TestCase):
+class TestClient(unittest2.TestCase):
 
     def setUp(self):
         self.client = snap7.client.Client()
