@@ -13,6 +13,7 @@ before_install:
 install:
   - python setup.py install
 script:
-  - sudo nosetests
+  - nohup sudo /home/travis/virtualenv/python2.7/bin/snap7-server.py &
+  - nosetests
 
 
