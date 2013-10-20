@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def error_wrap(func):
+    """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, client=True)
@@ -17,11 +18,11 @@ def error_wrap(func):
 
 
 class Client(object):
+    """A snap7 client"""
     def __init__(self):
         logger.info("creating snap7 client")
         self.pointer = S7Object(clib.Cli_Create())
 
-    #@error_wrap
     def destroy(self):
         logger.info("destroying snap7 client")
         return clib.Cli_Destroy(byref(self.pointer))
@@ -117,6 +118,17 @@ class Client(object):
         check_error(result, client=True)
         logging.debug("blocks: %s" % blocksList)
         return blocksList
+
+    def list_blocks_of_type(self, blocktype, size):
+        """This function returns the AG list of a specified block type."""
+        logging.debug("listing blocks of type: %s size: %s" % (blocktype, size))
+        data = (c_int * 10)()
+        count = c_int(size)
+        result = clib.Cli_ListBlocksOfType(self.pointer, blocktype, byref(data),
+                                          byref(count))
+        logging.debug("number of items found: %s" % count)
+        check_error(result, client=True)
+        return data
 
     @error_wrap
     def set_session_password(self, password):

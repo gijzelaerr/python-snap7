@@ -68,6 +68,9 @@ class TestClient(unittest.TestCase):
     def test_list_blocks(self):
         blockList = self.client.list_blocks()
 
+    def test_list_blocks_of_type(self):
+        self.client.list_blocks_of_type(snap7.types.block_types['DB'], 10)
+
     def test_set_session_password(self):
         password = 'abcdefgh'
         self.client.set_session_password(password)
