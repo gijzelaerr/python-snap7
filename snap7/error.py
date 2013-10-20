@@ -1,11 +1,13 @@
 import logging
 
+
 def check_error(code, client=False):
     errors = error_parse(code, client)
     if errors:
         for error in errors:
             logging.error(error)
         raise Exception(", ".join(errors))
+
 
 def error_parse(code, client=True):
     """

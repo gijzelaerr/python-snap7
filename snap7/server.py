@@ -3,33 +3,24 @@ import logging
 import re
 from snap7.types import S7Object, longword, SrvEvent, server_statuses, cpu_statuses
 from snap7.error import check_error
-from snap7.loadlib import clib
+from snap7.common import load_lib
 
 logger = logging.getLogger(__name__)
 
-ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
+clib = load_lib()
 
-def error_wrap(func):
-    def f(*args, **kw):
-        code = func(*args, **kw)
-        check_error(code)
-    return f
+ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
                             ctypes.POINTER(SrvEvent), ctypes.c_uint)
 
-def error_text(error):
-    """Returns a textual explanation of a given error number
 
-    :param error: a error integer
-    :returns: the erorr string
-    """
-    logger.debug("error text for %s" % hex(error))
-    len_ = 1024
-    text_type = ctypes.c_char * len_
-    text = text_type()
-    clib.Srv_ErrorText(error, text, len_)
-    return text.value
+def error_wrap(func):
+    """Parses a s7 error code returned the decorated function."""
+    def f(*args, **kw):
+        code = func(*args, **kw)
+        check_error(code, client=True)
+    return f
 
 
 def event_text(event):

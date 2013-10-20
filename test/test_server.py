@@ -27,7 +27,7 @@ class TestServer(unittest.TestCase):
 
     def test_error(self):
         for error in snap7.error.server_errors:
-            snap7.server.error_text(error)
+            snap7.common.error_text(error, client=False)
 
     def test_event(self):
         event = snap7.server.SrvEvent()

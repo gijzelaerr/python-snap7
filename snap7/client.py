@@ -2,11 +2,10 @@ from ctypes import c_int, c_char_p, byref, sizeof
 import logging
 from snap7.types import S7Object, buffer_type, buffer_size, block_types,\
     wordlen_to_ctypes, BlocksList
-from snap7.error import check_error
-from snap7.loadlib import clib
-
+from snap7.common import check_error, load_lib
 
 logger = logging.getLogger(__name__)
+clib = load_lib()
 
 
 def error_wrap(func):
