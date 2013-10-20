@@ -1,20 +1,11 @@
 import ctypes
 import logging
 import re
-from snap7.types import S7Object, time_t, longword, word
+from snap7.types import S7Object, longword, SrvEvent, server_statuses, cpu_statuses
 from snap7.error import check_error
 from snap7.loadlib import clib
 
 logger = logging.getLogger(__name__)
-
-# Server Area ID  (use with Register/unregister - Lock/unlock Area)
-# NOTE: these are not the same for the client!!
-srvAreaPE = 0
-srvAreaPA = 1
-srvAreaMK = 2
-srvAreaCT = 3
-srvAreaTM = 4
-srvAreaDB = 5
 
 ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
@@ -24,47 +15,8 @@ def error_wrap(func):
         check_error(code)
     return f
 
-server_statuses = {
-    0: 'SrvStopped',
-    1: 'SrvRunning',
-    2: 'SrvError',
-}
-
-cpu_statuses = {
-    0: 'S7CpuStatusUnknown',
-    4: 'S7CpuStatusStop',
-    8: 'S7CpuStatusRun',
-}
-
-
-class SrvEvent(ctypes.Structure):
-    _fields_ = [
-        ('EvtTime', time_t),
-        ('EvtSender', ctypes.c_int),
-        ('EvtCode', longword),
-        ('EvtRetCode', word),
-        ('EvtParam1', word),
-        ('EvtParam2', word),
-        ('EvtParam3', word),
-        ('EvtParam4', word),
-    ]
-
-    def __str__(self):
-        return "<event time: %s sender: %s code: %s retcode: %s param1: " \
-               "%s param2:%s param3: %s param4: %s>" % (
-                                                        self.EvtTime,
-                                                        self.EvtSender,
-                                                        self.EvtCode,
-                                                        self.EvtRetCode,
-                                                        self.EvtParam1,
-                                                        self.EvtParam2,
-                                                        self.EvtParam3,
-                                                        self.EvtParam4)
-
-
 CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
                             ctypes.POINTER(SrvEvent), ctypes.c_uint)
-
 
 def error_text(error):
     """Returns a textual explanation of a given error number

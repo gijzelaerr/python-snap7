@@ -11,8 +11,9 @@ logger.setLevel(logging.INFO)
 
 def server():
     server = snap7.server.Server()
-    data = (ctypes.c_int * 10)()
-    server.register_area(snap7.server.srvAreaDB, 1, data)
+    size = 100
+    data = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
+    server.register_area(snap7.types.srvAreaDB, 1, data)
 
     server.start()
     while True:

@@ -14,7 +14,7 @@ class TestServer(unittest.TestCase):
 
     def test_register_area(self):
         db1_type = ctypes.c_char * 1024
-        self.server.register_area(snap7.server.srvAreaDB, 3, db1_type())
+        self.server.register_area(snap7.types.srvAreaDB, 3, db1_type())
 
     def test_error(self):
         self.server.error_text()
@@ -57,7 +57,7 @@ class TestServer(unittest.TestCase):
                           snap7.types.RemotePort)
 
     def test_lock_area(self):
-        area_code = snap7.server.srvAreaDB
+        area_code = snap7.types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
         # we need to register first
@@ -89,7 +89,7 @@ class TestServer(unittest.TestCase):
         self.assertRaises(AssertionError, self.server.start_to, 'bogus')
 
     def test_unlock_area(self):
-        area_code = snap7.server.srvAreaDB
+        area_code = snap7.types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
 
@@ -101,7 +101,7 @@ class TestServer(unittest.TestCase):
         self.server.unlock_area(area_code, index)
 
     def test_unregister_area(self):
-        area_code = snap7.server.srvAreaDB
+        area_code = snap7.types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
         self.server.register_area(area_code, index, db1_type())

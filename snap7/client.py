@@ -1,7 +1,7 @@
 from ctypes import c_int, c_char_p, byref, sizeof
 import logging
 from snap7.types import S7Object, buffer_type, buffer_size, block_types,\
-    wordlen_to_ctypes
+    wordlen_to_ctypes, BlocksList
 from snap7.error import check_error
 from snap7.loadlib import clib
 
@@ -21,7 +21,7 @@ class Client(object):
         logger.info("creating snap7 client")
         self.pointer = S7Object(clib.Cli_Create())
 
-    @error_wrap
+    #@error_wrap
     def destroy(self):
         logger.info("destroying snap7 client")
         return clib.Cli_Destroy(byref(self.pointer))
@@ -37,18 +37,27 @@ class Client(object):
         return clib.Cli_ConnectTo(self.pointer, c_char_p(address),
                                   c_int(rack), c_int(slot))
 
-    def db_read(self, db_number, start, size):
+    def db_read(self, db_number, start, type_, size):
         """This is a lean function of Cli_ReadArea() to read PLC DB.
 
-        :returns: A string?
+        :param type_: a ctypes type
+
+        :returns: user buffer.
         """
-        logger.debug("db_read, db_number:%s, start:%s, size:%s" % (db_number,
-                                                                  start, size))
-        buffer_ = buffer_type()
+        logger.debug("db_read, db_number:%s, start:%s, type:%s size:%s" %
+                     (db_number, start, type_, size))
+        data = (type_ * size)()
         result = (clib.Cli_DBRead(self.pointer, db_number, start, size,
-                                  byref(buffer_)))
+                                  byref(data)))
         check_error(result, client=True)
-        return bytearray(buffer_)
+        return bytearray(data)
+
+    @error_wrap
+    def db_write(self, db_number, start, size, data):
+        logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
+                     (db_number, start, size, data))
+        return clib.Cli_DBWrite(self.pointer, db_number, start, size,
+                                byref(data))
 
     def db_upload(self, block_type, block_num, data):
         """Uploads a block body from AG.
@@ -77,6 +86,8 @@ class Client(object):
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
         """
+        logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
+                      "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
         data = (wordlen_to_ctypes[wordlen] * amount)()
         result = clib.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
                                    wordlen, byref(data))
@@ -90,9 +101,33 @@ class Client(object):
         meanings are the same. The only difference is that the data is
         transferred from the buffer pointed by pUsrData into PLC.
         """
+        logging.debug("writing area: %s dbnumber: %s start: %s: amount %s: "
+              "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
         return clib.Cli_WriteArea(self.pointer, area, dbnumber, start, amount,
                                   wordlen, byref(data))
 
+    def list_blocks(self):
+        """Returns the AG blocks amount divided by type.
+
+        :returns: a snap7.types.BlocksList object.
+        """
+        logging.debug("listing blocks")
+        blocksList = BlocksList()
+        result = clib.Cli_ListBlocks(self.pointer, byref(blocksList))
+        check_error(result, client=True)
+        logging.debug("blocks: %s" % blocksList)
+        return blocksList
+
+    @error_wrap
+    def set_session_password(self, password):
+        """Send the password to the PLC to meet its security level."""
+        assert len(password) <= 8, 'maximum password length is 8'
+        return clib.Cli_SetSessionPassword(self.pointer, c_char_p(password))
+
+    @error_wrap
+    def clear_session_password(self):
+        """Clears the password set for the current session (logout)."""
+        return clib.Cli_ClearSessionPassword(self.pointer)
 
 """
 Cli_ABRead
