@@ -53,7 +53,6 @@ class Client(object):
     @error_wrap
     def disconnect(self):
         logger.info("disconnecting snap7 client")
-        clib.Cli_Disconnect(self.pointer)
         return clib.Cli_Disconnect(self.pointer)
 
     @error_wrap
