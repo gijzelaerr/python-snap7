@@ -1,4 +1,4 @@
-import unittest2
+import unittest
 import snap7
 import ctypes
 import logging
@@ -14,7 +14,7 @@ rack = 1
 slot = 1
 
 
-class TestClient(unittest2.TestCase):
+class TestClient(unittest.TestCase):
 
     def setUp(self):
         self.client = snap7.client.Client()
@@ -45,7 +45,7 @@ class TestClient(unittest2.TestCase):
     def test_db_get(self):
         self.client.db_get(db_number=db_number)
 
-    @unittest2.skip('authorization required?')
+    @unittest.skip('authorization required?')
     def test_db_upload(self):
         data = snap7.client.buffer_type()
         self.client.db_upload(block_type=snap7.types.block_types['DB'],
@@ -84,4 +84,4 @@ class TestClient(unittest2.TestCase):
 
 
 if __name__ == '__main__':
-    unittest2.main()
+    unittest.main()
