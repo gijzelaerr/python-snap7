@@ -1,5 +1,4 @@
 import unittest2
-import time
 import snap7
 
 import logging
@@ -13,6 +12,7 @@ db_number = 1
 rack = 0
 slot = 3
 
+
 class Client(unittest2.TestCase):
 
     def setUp(self):
@@ -25,13 +25,19 @@ class Client(unittest2.TestCase):
 
     def test_db_read(self):
         data = self.client.db_read(db_number=db_number, start=0, size=100)
-        print data
+        print data[:100]
+
+    def test_db_write(self):
+        data = self.client.db_read(db_number=db_number, start=0, size=100)
+        self.client.db_write(db_number=db_number, start=0, size=100, data=data)
 
     def test_db_get(self):
-        result = self.client.db_get(db_number=db_number)
+        self.client.db_get(db_number=db_number)
 
     def test_db_upload(self):
-        data = snap7.client.buffer_type()
+        data = self.client._buffer
+        print 'Upload', data[:100]
+
         self.client.db_upload(block_type=snap7.data.block_types['DB'],
                               block_num=db_number, data=data)
 

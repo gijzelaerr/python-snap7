@@ -21,12 +21,14 @@ def error_wrap(code):
 
 class Client(object):
     def __init__(self):
-        """Create a server.
+        """Create a Client
 
         :returns: A Snap7Client object
         """
         logger.info("creating snap7 client")
         self.pointer = S7Object(clib.Cli_Create())
+        # local buffer used by test for now..
+        self._buffer = buffer_type()
 
     def destroy(self):
         logger.info("destroying snap7 client")
@@ -34,8 +36,7 @@ class Client(object):
 
     def disconnect(self):
         logger.info("disconnecting snap7 client")
-        # Cli_Disconnect(Client : S7Object) : integer;
-        x = clib.Cli_Disconnect(self.pointer)
+        error_wrap(clib.Cli_Disconnect(self.pointer))
 
     def connect(self, address, rack, slot):
         logger.info("connecting to %s rack %s slot %s" % (address, rack, slot))
@@ -47,21 +48,41 @@ class Client(object):
 
         :returns: A string?
         """
-        logger.info("db_read, db_number:%s, start:%s, size:%s" % (db_number, start, size))
-        buffer_ = buffer_type()
-        error_wrap(clib.Cli_DBRead(self.pointer, db_number, start, size, byref(buffer_)))
-        return bytearray(buffer_)
+        logger.info("db_read, db_number:%s, start:%s, size:%s" %
+                    (db_number, start, size))
+        #buffer_ = buffer_type()
+
+        error_wrap(clib.Cli_DBRead(self.pointer, db_number,
+                                   start, size, byref(self._buffer)))
+        return bytearray(self._buffer)
+
+    def db_write(self, db_number, start, size, data):
+        """write some data in db
+        """
+        # fixme type data?
+        # how do we normalize data
+        #size = c_int(sizeof(data))
+        print 'Data', data
+        data = (c_ubyte * size)(data)
+        print data
+        logger.info("db_write, db_number:%s, start:%s, size:%s" %
+                    (db_number, start, size))
+
+        error_wrap(clib.Cli_DBWrite(self.pointer, db_number,
+                                    start, size, byref(data)))
 
     def db_upload(self, block_type, block_num, data):
         """Uploads a block body from AG.
         """
-        logger.info("db_upload block_type: %s, block_num: %s, data: %s" % 
+        logger.info("db_upload block_type: %s, block_num: %s, data: %s" %
                     (block_type, block_num, data))
+
         assert(block_type in block_types.values())
         size = c_int(sizeof(data))
         logger.info("requesting size: %s" % size)
         error_wrap(clib.Cli_Upload(self.pointer, block_type, block_num,
-                                byref(data), byref(size)))
+                                   byref(data), byref(size)))
+
         logger.info('received %s bytes' % size)
 
     def db_get(self, db_number):
@@ -72,7 +93,6 @@ class Client(object):
         error_wrap(clib.Cli_DBGet(self.pointer, db_number, byref(buffer_),
                                   byref(c_int(buffer_size))))
         return bytearray(buffer_)
-
 
 
 
