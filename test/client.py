@@ -1,3 +1,7 @@
+"""
+Used to test against real plc
+"""
+
 import unittest2
 import snap7
 
@@ -24,22 +28,41 @@ class Client(unittest2.TestCase):
         self.client.destroy()
 
     def test_db_read(self):
-        data = self.client.db_read(db_number=db_number, start=0, size=100)
-        print data[:100]
+        size = 40
+        start = 0
+        db = db_number
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        self.client.db_read(db_number=db, start=start, type_=type_,
+                            size=size)
 
     def test_db_write(self):
-        data = self.client.db_read(db_number=db_number, start=0, size=100)
-        self.client.db_write(db_number=db_number, start=0, size=100, data=data)
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        data = self.client.db_read(db_number=db_number, start=0,
+                                   type_=type_, size=100)
+        self.client.db_write(db_number=db_number, start=0,
+                             size=100, data=data)
 
     def test_db_get(self):
         self.client.db_get(db_number=db_number)
 
     def test_db_upload(self):
-        data = self.client._buffer
+        data = self.client.db_get(db_number=db_number)
         print 'Upload', data[:100]
-
-        self.client.db_upload(block_type=snap7.data.block_types['DB'],
+        self.client.db_upload(block_type=snap7.types.block_types['DB'],
                               block_num=db_number, data=data)
+
+    def test_read_area(self):
+        area = snap7.types.S7AreaDB
+        dbnumber = 1
+        amount = 128
+        start = 1
+        wordlen = snap7.types.S7WLByte
+        data = self.client.read_area(area, dbnumber, start, amount, wordlen)
+        print data
+
+    def test_list_blocks(self):
+        blockList = self.client.list_blocks()
+        print blockList
 
 
 if __name__ == '__main__':

@@ -1,16 +1,32 @@
+import logging
 
-def error_parse(code):
+
+def check_error(code, client=False):
+    errors = error_parse(code, client)
+    if errors:
+        for error in errors:
+            logging.error(error)
+        raise Exception(", ".join(errors))
+
+
+def error_parse(code, client=True):
+    """
+    parse a error code as defined in the snap7 document.
+
+    If client is false server error codes are used.
+    """
+    errors = client_errors if client else server_errors
     tcp_error = code & 0x0000FFFF
     isotcp_error = code & 0x000F0000
     s7_error = code & 0xFFF00000
+    parsed_errors = []
+    for suberror in (tcp_error, isotcp_error, s7_error):
+        if suberror in errors:
+            parsed_errors.append(errors[suberror])
 
-    mapping = ((s7_error, s7_client_errors),
-         (isotcp_error, isotcp_errors),
-         (tcp_error, tcp_errors))
-
-    for error, errors in mapping:
-        if error:
-            return errors.get(error, "unknown error %s" % hex(error))
+    if code and not len(errors):
+        raise Exception("unknown error %s" % hex(code))
+    return parsed_errors
 
 
 s7_client_errors = {
@@ -72,7 +88,6 @@ isotcp_errors = {
     0x000F0000: 'errIsoResvd_4',
 }
 
-
 tcp_errors = {
     0x00000001: 'evcServerStarted',
     0x00000002: 'evcServerStopped',
@@ -91,3 +106,25 @@ tcp_errors = {
     0x00004000: 'evcReserved_00004000',
     0x00008000: 'evcReserved_00008000',
 }
+
+s7_server_errors = {
+    0x00100000: 'errSrvCannotStart',
+    0x00200000: 'errSrvDBNullPointer',
+    0x00300000: 'errSrvAreaAlreadyExists',
+    0x00400000: 'errSrvUnknownArea',
+    0x00500000: 'verrSrvInvalidParams',
+    0x00600000: 'errSrvTooManyDB',
+    0x00700000: 'errSrvInvalidParamNumber',
+    0x00800000: 'errSrvCannotChangeParam',
+}
+
+
+client_errors = s7_client_errors.copy()
+client_errors.update(isotcp_errors)
+client_errors.update(tcp_errors)
+
+server_errors = s7_server_errors.copy()
+server_errors.update(isotcp_errors)
+server_errors.update(tcp_errors)
+
+
