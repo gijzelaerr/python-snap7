@@ -77,7 +77,7 @@ class Client(object):
         check_error(result, client=True)
         return bytearray(data)
 
-    @error_wrap  # NQA
+    @error_wrap
     def db_write(self, db_number, start, size, data):
         """
         :param data: bytearray
