@@ -1,83 +1,10 @@
 import re
-import time
 
 asci = re.compile('[a-zA-Z0-9 ]')
 import snap7
 
 client = snap7.client.Client()
-
 client.connect('192.168.200.24', 0, 3)
-
-# RC_IF layout / Route Control Interface DB block
-"""
-# Status fields.
-NAME          IN     TYPE
-
-EN            IN     BOOL
-RC_IF_ID      IN     INT
-RC_IF_NAME    IN     STRING[16]
-LockAct       IN     BOOL
-GrpErr        IN     BOOL
-RdyToStart    IN     BOOL
-RdyToReset    IN     BOOL
-LocalAct      IN     BOOL
-AutAct        IN     BOOL
-ManAct        IN     BOOL
-OoSAct        IN     BOOL
-FbkOpenOut    IN     BOOL
-FbkCloseOut   IN     BOOL
-FbkRunOut     IN     BOOL
-PV_Li         IN     STRUCT
-PV_Li.Value   IN     REAL
-PV_Li.ST      IN     BYTE
-PV_LiUnit     IN     INT
-ScaleOut      IN     STRUCT
-ScaleOut.High IN     REAL
-ScaleOut.Low  IN     REAL
-PV_Out        IN     STRUCT
-PV_Out.Value  IN     BOOL
-PV_Out.ST     IN     BYTE
-FlutAct       IN     STRUCT
-FlutAct.Value IN     BOOL
-FlutAct.ST    IN     BYTE
-Bad           IN     STRUCT
-Bad.Value     IN     BOOL
-Bad.ST        IN     BYTE
-
-# Controlfields. DB Fields we can change
-
-ENO           OUT    BOOL
-OpenAut       OUT    BOOL
-CloseAut      OUT    BOOL
-StartAut      OUT    BOOL
-StopAut       OUT    BOOL
-SP_Ext        OUT    REAL
-ModLiOp       OUT    BOOL
-AutModLi      OUT    BOOL
-ManModLi      OUT    BOOL
-RstLi         OUT    BOOL
-BoolValue     OUT    BOOL
-RealValue     OUT    REAL
-IntValue      OUT    INT
-StringValue   OUT    STRING[32]
-BatchID       OUT    DWORD
-BatchName     OUT    STRING[32]
-StepNo        OUT    DWORD
-Occupied      OUT    BOOL
-RC_IF_ERR     OUT    BOOL
-"""
-
-# FIXME
-row_status_setters = {
-    'name': (0, 50),
-    'value': (50, 51),
-    'reservering': (60, 100),
-}
-
-# FIXME..
-row_control_setters = {
-    #
-}
 
 
 def print_row(data):
@@ -125,7 +52,8 @@ def get_db1():
 def get_db_row(db, start, size):
     type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
     data = client.db_read(db, start, type_, size)
-    print_row(data)
+    print_row(data[:60])
+    return data
 
 
 def show_row(x):
@@ -139,8 +67,8 @@ def show_row(x):
 
         # do some check action..
 
-show_row(0)
+#show_row(0)
 #show_row(1)
-#show_row(2)
+show_row(2)
 
 client.disconnect()
