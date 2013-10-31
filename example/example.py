@@ -1,6 +1,4 @@
-import re
 import time
-asci = re.compile('[a-zA-Z0-9 ]')
 import snap7
 from snap7 import s7util
 from db_layouts import rc_if_db_1_layout
@@ -10,37 +8,6 @@ client = snap7.client.Client()
 client.connect('192.168.200.24', 0, 3)
 
 
-def print_row(data):
-    """print a single db row in chr and str
-    """
-    index_line = ""
-    pri_line1 = ""
-    chr_line2 = ""
-
-    for i, xi in enumerate(data):
-        # index
-        if not i % 5:
-            diff = len(pri_line1) - len(index_line)
-            i = str(i)
-            index_line += diff * ' '
-            index_line += i
-            #i = i + (ws - len(i)) * ' ' + ','
-
-        # byte array line
-        str_v = str(xi)
-        pri_line1 += str(xi) + ','
-        # char line
-        c = chr(xi)
-        c = c if asci.match(c) else ' '
-        # align white space
-        w = len(str_v)
-        c = c + (w - 1) * ' ' + ','
-        chr_line2 += c
-
-    print index_line
-    print pri_line1
-    print chr_line2
-
 
 def get_db1():
     all_data = client.db_get(1)
@@ -49,7 +16,7 @@ def get_db1():
         row_size = 130                   # size of item
         index = i * row_size
         offset = index + row_size        # end of row in db
-        print_row(all_data[index:offset])
+        s7util.print_row(all_data[index:offset])
 
 
 def get_db_row(db, start, size):
@@ -69,7 +36,8 @@ def show_row(x):
 
     while True:
         data = get_db_row(1, 4 + x * row_size, row_size)
-        row = s7util.db.DB_Row(data, rc_if_db_1_layout)
+        row = s7util.db.DB_Row(data, rc_if_db_1_layout,
+                               layout_offset=4)
         print 'name', row['RC_IF_NAME']
         print row['RC_IF_NAME']
         break
@@ -81,7 +49,8 @@ def show_row(x):
 def get_row(x):
     row_size = 126
     data = get_db_row(1, 4 + x * row_size, row_size)
-    row = s7util.db.DB_Row(data, rc_if_db_1_layout)
+    row = s7util.db.DB_Row(data, rc_if_db_1_layout,
+                           layout_offset=4)
     return row
 
 
@@ -91,8 +60,10 @@ def set_row(x, row):
 
 
 def open_row(row):
-
+    """
+    """
     # row['AutAct'] = 1
+
     row['Occupied'] = 1
     row['BatchName'] = 'test'
     row['AutModLi'] = 1
@@ -109,6 +80,8 @@ def open_row(row):
 
 
 def close_row(row):
+    """
+    """
     #print row['RC_IF_NAME']
     row['BatchName'] = ''
     row['Occupied'] = 0
@@ -133,39 +106,51 @@ def open_and_close():
         set_row(x, row)
 
 
+def set_part_db(start, size, _bytearray):
+    data = _bytearray[start:start+size]
+    set_db_row(1, start, size, data)
+
+
+def write_data_db(dbnumber, all_data, size):
+    area = snap7.types.S7AreaDB
+    dbnumber = 1
+    client.write_area(area, dbnumber, 0, size, all_data)
+
+
 def open_and_close_db1():
-    all_data, size = client.db_full_upload(1)
+    t = time.time()
+    all_data = client.db_upload(1)
+
+    print 'getting all data took: ', time.time() - t
     db1 = s7util.db.DB(all_data, rc_if_db_1_layout,
-                       126, 450, id_field='RC_IF_NAME')
+                       126, 450, id_field='RC_IF_NAME',
+                       layout_offset=4,
+                       db_offset=4)
 
-    #print_row(all_data[0:100])
+    print 'row objects: ', len(db1.index)
 
-    client.db_download(1, all_data, size)
-
-    return
-
-    old = bytearray(all_data)
-    for name, row in db1.index.items()[:10]:
+    for x, (name, row) in enumerate(db1.index.items()):
         open_row(row)
-        print name, row['OpenAut']
+        #set_part_db(4+x*126, 126, all_data)
 
-    print 'opening..'
-    client.db_download(1, all_data)
-
-    assert(old != all_data)
+    t = time.time()
+    write_data_db(1, all_data, 4 + 126 * 450)
+    print 'opening all valves took: ', time.time() - t
 
     print 'sleep...'
     time.sleep(5)
-    print 'closing..'
-
-    for name, row in db1.index.items()[:10]:
+    for x, (name, row) in enumerate(db1.index.items()):
         close_row(row)
-        print name, row['OpenAut']
+        #set_part_db(4+x*126, 126, all_data)
 
-    client.db_download(1, db1._bytearray)
+    print time.time() - t
 
-open_and_close()
-#open_and_close_db1()
+    t = time.time()
+    write_data_db(1, all_data, 4 + 126 * 450)
+    print 'closing all valves took: ', time.time() - t
+
+#open_and_close()
+open_and_close_db1()
 #time.sleep(1)
 #show_row(2)
 

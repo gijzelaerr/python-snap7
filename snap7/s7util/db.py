@@ -133,8 +133,11 @@ class DB(object):
     row_size = None        # bytes size of a db row
 
     def __init__(self, _bytearray,
-                 specification, row_size, size, id_field=None):
+                 specification, row_size, size, id_field=None,
+                 db_offset=0, layout_offset=0):
 
+        self.db_offset = db_offset
+        self.layout_offset = layout_offset  # if row layout does not start a 0
         self._bytearray = _bytearray
         self.row_size = row_size
         self.specification = specification
@@ -143,9 +146,12 @@ class DB(object):
         self.index = OrderedDict()
 
         for i in range(size):
-            offset = i * row_size + 4
+            db_offset = i * row_size + self.db_offset
+            # print db_offset
             row = DB_Row(self._bytearray,
-                         specification, offset=offset)
+                         specification,
+                         db_offset=db_offset,
+                         layout_offset=layout_offset)
 
             key = row[id_field] if id_field else i
             self.index[key] = row
@@ -163,9 +169,13 @@ class DB_Row(object):
     Provide ROW API for DB bytearray
     """
 
-    def __init__(self, _bytearray, _specification, offset=0):
-        # if _bytearray contains many row we need offset
-        self.offset = offset
+    def __init__(self, _bytearray, _specification,
+                 db_offset=0, layout_offset=0):
+        # if _bytearray contains many row we need a row offset
+                                          # in layout spec
+        self.db_offset = db_offset    # starintg point of db data
+        self.layout_offset = layout_offset  # starign point of row data
+
         assert(isinstance(_bytearray, bytearray))
         self._bytearray = _bytearray
         self._specification = parse_specification(_specification)
@@ -199,11 +209,9 @@ class DB_Row(object):
     def get_offset(self, byte_index):
         """
         Calculate correct beginning position for a row
-        First 4 bytes in a db are used, and we need to add
-        the offset = row_size * index
-
+        the db_offset = row_size * index
         """
-        return int(byte_index) - 4 + self.offset
+        return int(byte_index) - self.layout_offset + self.db_offset
 
     def get_value(self, byte_index, _type):
         _bytearray = self._bytearray

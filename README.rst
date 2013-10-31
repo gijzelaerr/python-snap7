@@ -38,3 +38,6 @@ credits
 Stephan Preeker
 Gijs Molenaar
 
+Davide Nardella for creating snap7
+thank Thomas Hergenhahn for his libnodave.
+thanks to Thomas W for his S7comm wireshark plugin
