@@ -2,11 +2,10 @@ import time
 import snap7
 from snap7 import s7util
 from db_layouts import rc_if_db_1_layout
-#from db_layouts import tank_rc_if_db_layout
+from db_layouts import tank_rc_if_db_layout
 
 client = snap7.client.Client()
 client.connect('192.168.200.24', 0, 3)
-
 
 
 def get_db1():
@@ -139,7 +138,7 @@ def open_and_close_db1():
 
     print 'sleep...'
     time.sleep(5)
-    for x, (name, row) in enumerate(db1.index.items()):
+    for x, (name, row) in enumerate(db1):
         close_row(row)
         #set_part_db(4+x*126, 126, all_data)
 
@@ -149,8 +148,21 @@ def open_and_close_db1():
     write_data_db(1, all_data, 4 + 126 * 450)
     print 'closing all valves took: ', time.time() - t
 
+
+def read_tank_db():
+
+    tank_data = client.db_upload(73)
+    db73 = s7util.db.DB(tank_data, tank_rc_if_db_layout,
+                        238, 10, id_field='RC_IF_NAME')
+    print len(db73)
+    for x, (name, row) in enumerate(db73):
+        print row['RC_IF_NAME']
+        print 'M', row['Massa']
+
+
+read_tank_db()
 #open_and_close()
-open_and_close_db1()
+#open_and_close_db1()
 #time.sleep(1)
 #show_row(2)
 

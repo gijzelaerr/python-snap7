@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import struct
 
 
 def parse_specification(db_specification):
@@ -74,16 +75,21 @@ def set_real(_bytearray, byte_index, real):
     Set Real value
 
     make 4 byte data from real
+
     """
-    raise NotImplementedError
+    real = struct.pack('>f', real)
+    _bytes = struct.unpack('4B', real)
+    for i, b in enumerate(_bytes):
+        _bytearray[byte_index+i] = b
 
 
 def get_real(_bytearray, byte_index):
     """
     Get real value. create float from 4 bytes
     """
-    #raise NotImplementedError
-    pass
+    x = _bytearray[byte_index:byte_index+4]
+    real = struct.unpack('>f', struct.pack('4B', *x))[0]
+    return real
 
 
 def set_string(_bytearray, byte_index, value):
@@ -115,12 +121,15 @@ def get_string(_bytearray, byte_index):
 
 
 def get_dword(_bytearray, byte_index):
-    pass
-    # raise NotImplementedError
+    data = _bytearray[byte_index:byte_index+4]
+    dword = struct.unpack('I', struct.pack('4B', *data))[0]
+    return dword
 
 
 def set_dword(_bytearray, byte_index, dword):
-    raise NotImplementedError
+    _bytes = struct.unpack('4B', struct.pack('I', dword))
+    for i, b in enumerate(_bytes):
+        _bytearray[byte_index+i] = b
 
 
 class DB(object):
@@ -131,6 +140,10 @@ class DB(object):
     _bytearray = None      # data from plc
     specification = None   # layout of db rows
     row_size = None        # bytes size of a db row
+    layout_offset = None   # at which byte in row specification should
+                           # we start reading the data
+    db_offset = None       # at which byte in db should we start reading
+                           # first fields could be used for something else
 
     def __init__(self, _bytearray,
                  specification, row_size, size, id_field=None,
@@ -146,13 +159,14 @@ class DB(object):
         self.index = OrderedDict()
 
         for i in range(size):
+            # calculate where row in bytearray starts
             db_offset = i * row_size + self.db_offset
-            # print db_offset
+            # create a row object
             row = DB_Row(self._bytearray,
                          specification,
                          db_offset=db_offset,
                          layout_offset=layout_offset)
-
+            # store row object
             key = row[id_field] if id_field else i
             self.index[key] = row
 
@@ -162,6 +176,9 @@ class DB(object):
     def __iter__(self):
         for key, row in self.index.items():
             yield key, row
+
+    def __len__(self):
+        return len(self.index)
 
 
 class DB_Row(object):

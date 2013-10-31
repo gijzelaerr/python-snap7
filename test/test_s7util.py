@@ -16,14 +16,18 @@ test_spec = """
 12.5	testbool6    BOOL
 12.6	testbool7    BOOL
 12.7	testbool8    BOOL
-# 13      testReal     REAL
+13      testReal     REAL
+17      testDword    DWORD
 """
 
 _bytearray = bytearray([
     0, 0,                                          # test int
     4, 4, ord('t'), ord('e'), ord('s'), ord('t'),  # test string
     128*0 + 64*0 + 32*0 + 16*0 +
-    8*1 + 4*1 + 2*1 + 1*1])                # test bools
+    8*1 + 4*1 + 2*1 + 1*1,                         # test bools
+    68, 78, 211, 51,                                # test real
+    68, 78, 211, 51                                # test dword
+    ])
 
 
 class TestS7util(unittest.TestCase):
@@ -76,17 +80,14 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray * 10)
 
         test_db = db.DB(test_array, test_spec,
-                        row_size=9,
+                        row_size=len(_bytearray),
                         size=10,
                         layout_offset=4,
                         db_offset=0)
 
         self.assertTrue(len(test_db.index) == 10)
-        #print_row(test_db._bytearray[:60])
 
         for i, row in test_db:
-            #print_row(row._bytearray[row.db_offset:
-            #                         row.db_offset+9])
 
             self.assertTrue(row['testbool1'] == 1)
             self.assertTrue(row['testbool2'] == 1)
@@ -98,6 +99,28 @@ class TestS7util(unittest.TestCase):
             self.assertTrue(row['testbool7'] == 0)
             self.assertTrue(row['testbool8'] == 0)
             self.assertTrue(row['NAME'] == 'test')
+
+    def test_get_real(self):
+        test_array = bytearray(_bytearray)
+        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        self.assertTrue(0.01 > (row['testReal'] - 827.3) > -0.1)
+
+    def test_set_real(self):
+        test_array = bytearray(_bytearray)
+        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testReal'] = 1337.1337
+        self.assertTrue(0.01 > (row['testReal'] - 1337.1337) > -0.01)
+
+    def test_set_dword(self):
+        test_array = bytearray(_bytearray)
+        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testDword'] = 9999999
+        self.assertTrue(row['testDword'] == 9999999)
+
+    def test_get_dword(self):
+        test_array = bytearray(_bytearray)
+        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        self.assertTrue(row['testDword'] == 869486148)
 
 
 def print_row(data):
@@ -131,7 +154,6 @@ def print_row(data):
     print index_line
     print pri_line1
     print chr_line2
-
 
 
 if __name__ == '__main__':

@@ -78,23 +78,23 @@ tank_rc_if_db_layout = """
 68.0    RC_IF_ERR        BOOL     # Module Fout
 68.1    QOk              BOOL     # Module OK Module specifieke parameters
 68.2    Unlock           BOOL
-70      Cmd              INT            # Commando
-72      T_Uit            REAL           # Uitschakeltijd
-76      Massa            REAL           # Massa product in tank
-80      MaxMassa         REAL           # Maximale capaciteit van tank
-84      T_Aflever        REAL           # Aflevertemperatuur
-88      T_Max            REAL           # Maximale product temperatuur
-92      T_HH             REAL           # Hoog Hoog alarm product temperatuur
-96      T_LL             REAL           # Laag Laag alarm product temperatuur
-100     T_Schakel        REAL           # Schakeltemperatuur productverwarming
-104     T_Warmwater      REAL           # Maximale watertemperatuur verwarming
-108     SG               REAL           # Soortelijk gewicht bij temperatuur SG_T
-112     SG_T             REAL           # Soortelijk gewicht temperatuur
-116     SG_DT            REAL           # Soortelijk gewicht delta T
-120     SG_R             INT            # Soortelijk gewicht rekenmethodiek
-122     Temp             REAL           # Temperatuur
-126.0   Temp_MAX         BOOL           # Tmperatuur boven de maximale producttemperatuur
-126.1   Temp_H           BOOL           # Temperatuur te hoog
+70      Cmd              INT      # Commando
+72      T_Uit            REAL     # Uitschakeltijd
+76      Massa            REAL     # Massa product in tank
+80      MaxMassa         REAL     # Maximale capaciteit van tank
+84      T_Aflever        REAL     # Aflevertemperatuur
+88      T_Max            REAL     # Maximale product temperatuur
+92      T_HH             REAL     # Hoog Hoog alarm product temperatuur
+96      T_LL             REAL     # Laag Laag alarm product temperatuur
+100     T_Schakel        REAL     # Schakeltemperatuur productverwarming
+104     T_Warmwater      REAL     # Maximale watertemperatuur verwarming
+108     SG               REAL     # Soortelijk gewicht bij temperatuur SG_T
+112     SG_T             REAL     # Soortelijk gewicht temperatuur
+116     SG_DT            REAL     # Soortelijk gewicht delta T
+120     SG_R             INT      # Soortelijk gewicht rekenmethodiek
+122     Temp             REAL     # Temperatuur
+126.0   Temp_MAX         BOOL     # Tmperatuur boven de maximale producttemperatuur
+126.1   Temp_H           BOOL     # Temperatuur te hoog
 126.2   Temp_L               BOOL           # Temperatuur te laag
 126.3   Temp_BA              BOOL           # Temperatuur boven aflevertemperatuur
 126.4   Temp_OS              BOOL           # Temperatuur onder schakeltemperatuur
