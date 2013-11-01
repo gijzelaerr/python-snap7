@@ -214,8 +214,8 @@ class DB_Row(object):
 
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = '%s\n%-15s %10s' % (string, var_name,
-                                         self.get_value(index, _type))
+            string = '%s\n%-20s %-10s' % (string, var_name,
+                                          self.get_value(index, _type))
         return string
 
     def unchanged(self, _bytearray):

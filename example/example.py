@@ -153,11 +153,10 @@ def read_tank_db():
 
     tank_data = client.db_upload(73)
     db73 = s7util.db.DB(tank_data, tank_rc_if_db_layout,
-                        238, 10, id_field='RC_IF_NAME')
+                        238, 2, id_field='RC_IF_NAME')
     print len(db73)
     for x, (name, row) in enumerate(db73):
-        print row['RC_IF_NAME']
-        print 'M', row['Massa']
+        print row
 
 
 read_tank_db()

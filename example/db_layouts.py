@@ -70,7 +70,7 @@ tank_rc_if_db_layout = """
 2       RC_IF_NAME       STRING[16]
 20      BatchName        STRING[32]
 54      BatchID          DWORD
-58      Occupied         BOOL     # Bezet door Koole PA
+58.0    Occupied         BOOL     # Bezet door Koole PA
 60      Status           INT      # Status
 62      SubStatus        INT      # Substatus
 64      Opdrachtstatus   INT      # Opdrachtstatus (zie enum)
