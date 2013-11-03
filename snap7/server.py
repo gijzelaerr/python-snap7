@@ -38,10 +38,19 @@ def event_text(event):
 
 
 class Server(object):
-    def __init__(self):
+    def __init__(self, log=True):
+        """
+        Create a fake S7 server. set log to false if you want to disable
+        event logging to python logging.
+        """
         logger.info("creating server")
         self.pointer = S7Object(clib.Srv_Create())
-        #self._set_log_callback()
+        if log:
+            self._set_log_callback()
+
+    def __del__(self):
+        self.stop()
+        self.destroy()
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
@@ -61,7 +70,10 @@ class Server(object):
         event is created.
         """
         logger.info("setting event callback")
-        def wrap_callback(usrptr, pevent, size):
+        CALLBACK = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
+                                    ctypes.POINTER(SrvEvent), ctypes.c_int)
+
+        def wrapper(usrptr, pevent, size):
             """ Wraps python function into a ctypes function
             :param usrptr: not used
             :param pevent: pointer to snap7 event struct
@@ -69,20 +81,18 @@ class Server(object):
             :returns: should return an int
             """
             logger.info("callback event: " + event_text(pevent.contents))
-            #call_back(pevent)
-            return 0
-        return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
+            call_back(pevent.contents)
 
-    @error_wrap
+        self._callback = CALLBACK(wrapper)
+        return clib.Srv_SetEventsCallback(self.pointer, self._callback)
+
     def _set_log_callback(self):
         """Sets a callback that logs the events
         """
         logger.debug("setting up event logger")
-        def wrap_callback(usrptr, pevent, size):
-            #logger.info("callback event: " + event_text(pevent.contents))
-            return 0
-
-        return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
+        def log_callback(event):
+            logger.info("callback event: " + event_text(event))
+        self.set_events_callback(log_callback)
 
     @error_wrap
     def start(self):
