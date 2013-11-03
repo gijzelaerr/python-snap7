@@ -1,6 +1,8 @@
 import unittest
 import snap7
 import ctypes
+import logging
+
 
 class TestServer(unittest.TestCase):
     def setUp(self):
@@ -19,7 +21,7 @@ class TestServer(unittest.TestCase):
 
     def test_error(self):
         for error in snap7.error.server_errors:
-            snap7.common.error_text(error, client=False)
+            snap7.common.error_text(error, context="client")
 
     def test_event(self):
         event = snap7.server.SrvEvent()

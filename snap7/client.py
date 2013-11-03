@@ -17,7 +17,7 @@ def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
         code = func(*args, **kw)
-        check_error(code, client=True)
+        check_error(code, context="client")
     return f
 
 
@@ -77,7 +77,7 @@ class Client(object):
         data = (type_ * size)()
         result = (clib.Cli_DBRead(self.pointer, db_number, start, size,
                                   byref(data)))
-        check_error(result, client=True)
+        check_error(result, context="client")
         return bytearray(data)
 
     @error_wrap
@@ -107,7 +107,7 @@ class Client(object):
         result = clib.Cli_FullUpload(self.pointer, block_type, block_num,
                                      byref(_buffer), byref(size))
 
-        check_error(result, client=True)
+        check_error(result, context="client")
 
         return bytearray(_buffer), size.value
 
@@ -128,7 +128,7 @@ class Client(object):
         result = clib.Cli_Upload(self.pointer, block_type, block_num,
                                  byref(_buffer), byref(size))
 
-        check_error(result, client=True)
+        check_error(result, context="client")
         logger.info('received %s bytes' % size)
         return bytearray(_buffer)
 
@@ -153,7 +153,7 @@ class Client(object):
         _buffer = buffer_type()
         result = clib.Cli_DBGet(self.pointer, db_number, byref(_buffer),
                                 byref(c_int(buffer_size)))
-        check_error(result, client=True)
+        check_error(result, context="client")
         return bytearray(_buffer)
 
     def read_area(self, area, dbnumber, start, amount):
@@ -166,7 +166,7 @@ class Client(object):
         data = (wordlen_to_ctypes[wordlen] * amount)()
         result = clib.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
                                    wordlen, byref(data))
-        check_error(result, client=True)
+        check_error(result, context="client")
         return data
 
     @error_wrap
@@ -193,7 +193,7 @@ class Client(object):
         logging.debug("listing blocks")
         blocksList = BlocksList()
         result = clib.Cli_ListBlocks(self.pointer, byref(blocksList))
-        check_error(result, client=True)
+        check_error(result, context="client")
         logging.debug("blocks: %s" % blocksList)
         return blocksList
 
@@ -208,7 +208,7 @@ class Client(object):
                                            byref(count))
 
         logging.debug("number of items found: %s" % count)
-        check_error(result, client=True)
+        check_error(result, context="client")
         return data
 
     @error_wrap

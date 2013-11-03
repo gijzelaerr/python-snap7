@@ -2,23 +2,16 @@ import ctypes
 import logging
 import re
 from snap7.types import S7Object, longword, SrvEvent, server_statuses, cpu_statuses
-from snap7.common import check_error, load_lib
+from snap7.common import check_error, clib, ipv4
 
 logger = logging.getLogger(__name__)
-
-clib = load_lib()
-
-ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
-
-CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
-                            ctypes.POINTER(SrvEvent), ctypes.c_uint)
 
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
         code = func(*args, **kw)
-        check_error(code, client=False)
+        check_error(code, context="server")
     return f
 
 
@@ -43,14 +36,17 @@ class Server(object):
         Create a fake S7 server. set log to false if you want to disable
         event logging to python logging.
         """
-        logger.info("creating server")
-        self.pointer = S7Object(clib.Srv_Create())
+        self.pointer = self.create()
         if log:
             self._set_log_callback()
 
     def __del__(self):
         self.stop()
         self.destroy()
+
+    def create(self):
+        logger.info("creating server")
+        return S7Object(clib.Srv_Create())
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
