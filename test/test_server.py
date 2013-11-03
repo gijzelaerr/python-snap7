@@ -19,10 +19,9 @@ class TestServer(unittest.TestCase):
     def test_error(self):
         self.server.error_text()
 
-    @unittest.skip('not yet implemented')
     def test_callback(self):
         def event_call_back(event):
-            pass
+            print event
         self.server.set_events_callback(event_call_back)
 
     def test_error(self):
@@ -110,4 +109,6 @@ class TestServer(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    import logging
+    logging.basicConfig()
     unittest.main()

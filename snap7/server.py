@@ -2,8 +2,7 @@ import ctypes
 import logging
 import re
 from snap7.types import S7Object, longword, SrvEvent, server_statuses, cpu_statuses
-from snap7.error import check_error
-from snap7.common import load_lib
+from snap7.common import check_error, load_lib
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
         code = func(*args, **kw)
-        check_error(code, client=True)
+        check_error(code, client=False)
     return f
 
 
@@ -62,19 +61,16 @@ class Server(object):
         event is created.
         """
         logger.info("setting event callback")
-        raise NotImplementedError
         def wrap_callback(usrptr, pevent, size):
             """ Wraps python function into a ctypes function
             :param usrptr: not used
-            :param pevent: a snap7 event struct
+            :param pevent: pointer to snap7 event struct
             :param size:
             :returns: should return an int
             """
-            # TODO: call the actual callback function. Somehow we can't access
-            # objects in the scope of this object...
             logger.info("callback event: " + event_text(pevent.contents))
+            #call_back(pevent)
             return 0
-
         return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
 
     @error_wrap
@@ -82,10 +78,10 @@ class Server(object):
         """Sets a callback that logs the events
         """
         logger.debug("setting up event logger")
-        raise NotImplementedError
         def wrap_callback(usrptr, pevent, size):
-            logger.info("callback event: " + event_text(pevent.contents))
+            #logger.info("callback event: " + event_text(pevent.contents))
             return 0
+
         return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
 
     @error_wrap
@@ -98,10 +94,9 @@ class Server(object):
         logger.info("stopping server")
         return clib.Srv_Stop(self.pointer)
 
-    @error_wrap
     def destroy(self):
         logger.info("destroying server")
-        return clib.Srv_Destroy(ctypes.byref(self.pointer))
+        clib.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self):
         """Reads the server status, the Virtual CPU status and the number of
