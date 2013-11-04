@@ -4,7 +4,8 @@ from ctypes import c_int, c_char_p, byref, sizeof
 import logging
 
 import snap7
-from snap7.types import S7Object, buffer_type, buffer_size, block_types
+
+from snap7.types import S7Object, buffer_type, buffer_size
 from snap7.types import wordlen_to_ctypes, BlocksList
 from snap7.common import check_error, load_lib
 
@@ -16,17 +17,18 @@ def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
         code = func(*args, **kw)
-        check_error(code, client=True)
+        check_error(code, context="client")
     return f
 
 
 def bytearray_to_buffer(data):
     """Convert a byte arra to a ctypes / snap7 type
-
     """
     assert isinstance(data, bytearray)
     # creates a 65535 ctypes.c_ubyte buffer
+
     _buffer = snap7.types.buffer_type()
+
     assert len(data) <= len(_buffer)
 
     for i in range(len(data)):
@@ -61,20 +63,21 @@ class Client(object):
         return clib.Cli_ConnectTo(self.pointer, c_char_p(address),
                                   c_int(rack), c_int(slot))
 
-    def db_read(self, db_number, start, type_, size):
+    def db_read(self, db_number, start, size):
         """This is a lean function of Cli_ReadArea() to read PLC DB.
 
         :param type_: a ctypes type
 
         :returns: user buffer.
         """
-        logger.debug("db_read, db_number:%s, start:%s, type:%s size:%s" %
-                     (db_number, start, type_, size))
+        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
+                     (db_number, start, size))
 
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
         result = (clib.Cli_DBRead(self.pointer, db_number, start, size,
                                   byref(data)))
-        check_error(result, client=True)
+        check_error(result, context="client")
         return bytearray(data)
 
     @error_wrap
@@ -91,61 +94,96 @@ class Client(object):
         return clib.Cli_DBWrite(self.pointer, db_number, start, size,
                                 byref(_buffer))
 
-    def db_upload(self, block_type, block_num, data):
-        """Uploads a block body from AG.
+    def db_full_upload(self, _type, block_num):
+        """
+        Uploads a full block body from AG
+        """
+        _buffer = buffer_type()
+
+        #logger.debug("db_full_upload db_number:%s" % (block_num))
+        size = c_int(sizeof(_buffer))
+        block_type = snap7.types.block_types[_type]
+
+        result = clib.Cli_FullUpload(self.pointer, block_type, block_num,
+                                     byref(_buffer), byref(size))
+
+        check_error(result, context="client")
+
+        return bytearray(_buffer), size.value
+
+        #return bytearray(_buffer[:size.value])
+
+    def db_upload(self, block_num):
+        """Uploads a block body from AG
 
         :param data: bytearray
 
         """
-        logger.debug("db_upload block_type: %s, block_num: %s, data: %s" %
-                     (block_type, block_num, data))
+        logger.debug("db_upload block_num: %s" % (block_num))
 
-        _buffer = bytearray_to_buffer(data)
-
-        assert(block_type in block_types.values())
-
+        block_type = snap7.types.block_types['DB']
+        _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
-        logger.debug("requesting size: %s" % size)
         result = clib.Cli_Upload(self.pointer, block_type, block_num,
                                  byref(_buffer), byref(size))
 
-        check_error(result, client=True)
+        check_error(result, context="client")
         logger.info('received %s bytes' % size)
+        return bytearray(_buffer)
+
+    @error_wrap
+    def db_download(self, db_number, data, size):
+        """Downloads a DB data into the AG
+        """
+
+        #logger.debug("db_download block_num: %s, data: %s size: %s" %
+        #             (db_number, data[:100], size))
+
+        _buffer = bytearray_to_buffer(data)
+
+        result = clib.Cli_Download(self.pointer, db_number,
+                                   byref(_buffer), size)
+        return result
 
     def db_get(self, db_number):
         """Uploads a DB from AG.
         """
         logging.debug("db_get db_number: %s" % db_number)
-        buffer_ = buffer_type()
-        result = clib.Cli_DBGet(self.pointer, db_number, byref(buffer_),
+        _buffer = buffer_type()
+        result = clib.Cli_DBGet(self.pointer, db_number, byref(_buffer),
                                 byref(c_int(buffer_size)))
-        check_error(result, client=True)
-        return bytearray(buffer_)
+        check_error(result, context="client")
+        return bytearray(_buffer)
 
-    def read_area(self, area, dbnumber, start, amount, wordlen):
+    def read_area(self, area, dbnumber, start, amount):
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
         """
+        wordlen = snap7.types.S7WLByte
         logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
         data = (wordlen_to_ctypes[wordlen] * amount)()
         result = clib.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
                                    wordlen, byref(data))
-        check_error(result, client=True)
+        check_error(result, context="client")
         return data
 
     @error_wrap
-    def write_area(self, area, dbnumber, start, amount, wordlen, data):
+    def write_area(self, area, dbnumber, start, amount, data):
         """This is the main function to write data into a PLC. It's the
         complementary function of Cli_ReadArea(), the parameters and their
         meanings are the same. The only difference is that the data is
         transferred from the buffer pointed by pUsrData into PLC.
         """
+        wordlen = snap7.types.S7WLByte
         logging.debug("writing area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
+
+        _buffer = bytearray_to_buffer(data)
+
         return clib.Cli_WriteArea(self.pointer, area, dbnumber, start, amount,
-                                  wordlen, byref(data))
+                                  wordlen, byref(_buffer))
 
     def list_blocks(self):
         """Returns the AG blocks amount divided by type.
@@ -155,7 +193,7 @@ class Client(object):
         logging.debug("listing blocks")
         blocksList = BlocksList()
         result = clib.Cli_ListBlocks(self.pointer, byref(blocksList))
-        check_error(result, client=True)
+        check_error(result, context="client")
         logging.debug("blocks: %s" % blocksList)
         return blocksList
 
@@ -170,7 +208,7 @@ class Client(object):
                                            byref(count))
 
         logging.debug("number of items found: %s" % count)
-        check_error(result, client=True)
+        check_error(result, context="client")
         return data
 
     @error_wrap

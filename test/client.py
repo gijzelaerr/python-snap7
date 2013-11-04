@@ -46,10 +46,7 @@ class Client(unittest2.TestCase):
         self.client.db_get(db_number=db_number)
 
     def test_db_upload(self):
-        data = self.client.db_get(db_number=db_number)
-        print 'Upload', data[:100]
-        self.client.db_upload(block_type=snap7.types.block_types['DB'],
-                              block_num=db_number, data=data)
+        self.client.db_upload(block_num=db_number)
 
     def test_read_area(self):
         area = snap7.types.S7AreaDB

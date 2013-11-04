@@ -2,24 +2,16 @@ import ctypes
 import logging
 import re
 from snap7.types import S7Object, longword, SrvEvent, server_statuses, cpu_statuses
-from snap7.error import check_error
-from snap7.common import load_lib
+from snap7.common import check_error, clib, ipv4
 
 logger = logging.getLogger(__name__)
-
-clib = load_lib()
-
-ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
-
-CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_void_p,
-                            ctypes.POINTER(SrvEvent), ctypes.c_uint)
 
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
         code = func(*args, **kw)
-        check_error(code, client=True)
+        check_error(code, context="server")
     return f
 
 
@@ -39,10 +31,22 @@ def event_text(event):
 
 
 class Server(object):
-    def __init__(self):
+    def __init__(self, log=True):
+        """
+        Create a fake S7 server. set log to false if you want to disable
+        event logging to python logging.
+        """
+        self.pointer = self.create()
+        if log:
+            self._set_log_callback()
+
+    def __del__(self):
+        self.stop()
+        self.destroy()
+
+    def create(self):
         logger.info("creating server")
-        self.pointer = S7Object(clib.Srv_Create())
-        #self._set_log_callback()
+        return S7Object(clib.Srv_Create())
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
@@ -62,31 +66,29 @@ class Server(object):
         event is created.
         """
         logger.info("setting event callback")
-        raise NotImplementedError
-        def wrap_callback(usrptr, pevent, size):
+        CALLBACK = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
+                                    ctypes.POINTER(SrvEvent), ctypes.c_int)
+
+        def wrapper(usrptr, pevent, size):
             """ Wraps python function into a ctypes function
             :param usrptr: not used
-            :param pevent: a snap7 event struct
+            :param pevent: pointer to snap7 event struct
             :param size:
             :returns: should return an int
             """
-            # TODO: call the actual callback function. Somehow we can't access
-            # objects in the scope of this object...
             logger.info("callback event: " + event_text(pevent.contents))
-            return 0
+            call_back(pevent.contents)
 
-        return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
+        self._callback = CALLBACK(wrapper)
+        return clib.Srv_SetEventsCallback(self.pointer, self._callback)
 
-    @error_wrap
     def _set_log_callback(self):
         """Sets a callback that logs the events
         """
         logger.debug("setting up event logger")
-        raise NotImplementedError
-        def wrap_callback(usrptr, pevent, size):
-            logger.info("callback event: " + event_text(pevent.contents))
-            return 0
-        return clib.Srv_SetEventsCallback(self.pointer, CALLBACK(wrap_callback))
+        def log_callback(event):
+            logger.info("callback event: " + event_text(event))
+        self.set_events_callback(log_callback)
 
     @error_wrap
     def start(self):
@@ -98,10 +100,9 @@ class Server(object):
         logger.info("stopping server")
         return clib.Srv_Stop(self.pointer)
 
-    @error_wrap
     def destroy(self):
         logger.info("destroying server")
-        return clib.Srv_Destroy(ctypes.byref(self.pointer))
+        clib.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self):
         """Reads the server status, the Virtual CPU status and the number of

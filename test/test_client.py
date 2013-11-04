@@ -1,6 +1,5 @@
 import unittest
 import snap7
-import ctypes
 import logging
 
 logging.basicConfig()
@@ -28,13 +27,10 @@ class TestClient(unittest.TestCase):
         size = 40
         start = 0
         db = 1
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
-        data = (type_ * size)()
-        data = bytearray(data)
+        data = bytearray(40)
         self.client.db_write(db_number=db, start=start, size=size, data=data)
-        result = self.client.db_read(db_number=db, start=start, size=size,
-                                     type_=type_)
-        self.assertEqual(bytearray(data), result)
+        result = self.client.db_read(db_number=db, start=start, size=size)
+        self.assertEqual(data, result)
 
     def test_db_write(self):
         size = 40
@@ -47,26 +43,22 @@ class TestClient(unittest.TestCase):
 
     @unittest.skip('authorization required?')
     def test_db_upload(self):
-        data = snap7.client.buffer_type()
-        self.client.db_upload(block_type=snap7.types.block_types['DB'],
-                              block_num=db_number, data=data)
+        self.client.db_upload(block_num=db_number)
 
     def test_read_area(self):
         area = snap7.types.S7AreaDB
         dbnumber = 1
         amount = 10
         start = 1
-        wordlen = snap7.types.S7WLByte
-        self.client.read_area(area, dbnumber, start, amount, wordlen)
+        self.client.read_area(area, dbnumber, start, amount)
 
     def test_write_area(self):
         area = snap7.types.S7AreaDB
         dbnumber = 1
         amount = 10
         start = 1
-        wordlen = snap7.types.S7WLByte
-        data = (ctypes.c_int16 * amount)()
-        self.client.write_area(area, dbnumber, start, amount, wordlen, data)
+        data = bytearray(10)
+        self.client.write_area(area, dbnumber, start, amount, data)
 
     def test_list_blocks(self):
         blockList = self.client.list_blocks()
