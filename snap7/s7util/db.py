@@ -1,3 +1,12 @@
+"""
+Utility functions to work with DB objects
+
+example:
+
+see test code test_s7util
+
+"""
+
 from collections import OrderedDict
 import struct
 
@@ -142,36 +151,49 @@ class DB(object):
     row_size = None        # bytes size of a db row
     layout_offset = None   # at which byte in row specification should
                            # we start reading the data
-    db_offset = None       # at which byte in db should we start reading
+    db_offset = None       # at which byte in db should we start reading?
                            # first fields could be used for something else
 
-    def __init__(self, _bytearray,
+    def __init__(self, db_number, _bytearray,
                  specification, row_size, size, id_field=None,
                  db_offset=0, layout_offset=0):
 
-        self.db_offset = db_offset
-        self.layout_offset = layout_offset  # if row layout does not start a 0
-        self._bytearray = _bytearray
+        self.db_number = db_number
+        self.size = size
         self.row_size = row_size
+        self.id_field = id_field
+
+        self.db_offset = db_offset
+        self.layout_offset = layout_offset
+        self._bytearray = _bytearray
         self.specification = specification
         # loop over bytearray. make rowObjects
         # store index of id_field to row objects
         self.index = OrderedDict()
+        self.make_rows()
 
-        for i in range(size):
+    def make_rows(self):
+        id_field = self.id_field
+        row_size = self.row_size
+        specification = self.specification
+        layout_offset = self.layout_offset
+
+        for i in range(self.size):
             # calculate where row in bytearray starts
             db_offset = i * row_size + self.db_offset
             # create a row object
-            row = DB_Row(self._bytearray,
+            row = DB_Row(self,
                          specification,
+                         row_size=row_size,
                          db_offset=db_offset,
                          layout_offset=layout_offset)
+
             # store row object
             key = row[id_field] if id_field else i
             self.index[key] = row
 
-    def __getitem__(self, key):
-        return self.index.get(key)
+    def __getitem__(self, key, default=None):
+        return self.index.get(key, default)
 
     def __iter__(self):
         for key, row in self.index.items():
@@ -180,22 +202,36 @@ class DB(object):
     def __len__(self):
         return len(self.index)
 
+    def set_data(self, _bytearray):
+        assert(isinstance(_bytearray, bytearray))
+        self._bytearray = _bytearray
+
 
 class DB_Row(object):
     """
     Provide ROW API for DB bytearray
     """
+    _bytearray = None      # data of reference to parent DB
+    _specification = None  # row specification
 
-    def __init__(self, _bytearray, _specification,
+    def __init__(self, _bytearray, _specification, row_size=0,
                  db_offset=0, layout_offset=0):
-        # if _bytearray contains many row we need a row offset
-                                          # in layout spec
-        self.db_offset = db_offset    # starintg point of db data
-        self.layout_offset = layout_offset  # starign point of row data
 
-        assert(isinstance(_bytearray, bytearray))
+        self.db_offset = db_offset          # start point of row data in db
+        self.layout_offset = layout_offset  # start point of row data in layout
+        self.row_size = row_size
+
+        assert(isinstance(_bytearray, (bytearray, DB)))
         self._bytearray = _bytearray
         self._specification = parse_specification(_specification)
+
+    def get_bytearray(self):
+        """
+        return bytearray from self or DB parent
+        """
+        if isinstance(self._bytearray, DB):
+            return self._bytearray._bytearray
+        return self._bytearray
 
     def __getitem__(self, key):
         """
@@ -219,7 +255,7 @@ class DB_Row(object):
         return string
 
     def unchanged(self, _bytearray):
-        if self._bytearray == _bytearray:
+        if self.get_bytearray() == _bytearray:
             return True
         return False
 
@@ -231,7 +267,7 @@ class DB_Row(object):
         return int(byte_index) - self.layout_offset + self.db_offset
 
     def get_value(self, byte_index, _type):
-        _bytearray = self._bytearray
+        _bytearray = self.get_bytearray()
 
         if _type == 'BOOL':
             byte_index, bool_index = byte_index.split('.')
@@ -257,7 +293,7 @@ class DB_Row(object):
         raise ValueError
 
     def set_value(self, byte_index, _type, value):
-        _bytearray = self._bytearray
+        _bytearray = self.get_bytearray()
 
         if _type == 'BOOL':
             byte_index, bool_index = byte_index.split('.')
@@ -277,3 +313,29 @@ class DB_Row(object):
 
         if _type == 'INT':
             return set_int(_bytearray, byte_index, value)
+
+        raise ValueError
+
+    def write(self, client):
+        """
+        Write current data to db in plc
+        """
+        assert(isinstance(self._bytearray, DB))
+        assert(self.row_size >= 0)
+        db_nr = self._bytearray.db_number
+        data = self.get_bytearray()[self.db_offset:self.row_size]
+        client.db_write(db_nr, self.db_offset, self.row_size, data)
+
+    def read(self, client):
+        """
+        read current data of db row from plc
+        """
+        assert(isinstance(self._bytearray, DB))
+        assert(self.row_size >= 0)
+        db_nr = self._bytearray.db_number
+        _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
+
+        data = self.get_bytearray()[self.db_offset:self.row_size]
+        # replace data in bytearray
+        for i, b in enumerate(_bytearray):
+            data[i+self.db_offset] = b

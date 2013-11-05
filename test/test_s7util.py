@@ -25,7 +25,7 @@ _bytearray = bytearray([
     4, 4, ord('t'), ord('e'), ord('s'), ord('t'),  # test string
     128*0 + 64*0 + 32*0 + 16*0 +
     8*1 + 4*1 + 2*1 + 1*1,                         # test bools
-    68, 78, 211, 51,                                # test real
+    68, 78, 211, 51,                               # test real
     68, 78, 211, 51                                # test dword
     ])
 
@@ -79,7 +79,7 @@ class TestS7util(unittest.TestCase):
     def test_db_creation(self):
         test_array = bytearray(_bytearray * 10)
 
-        test_db = db.DB(test_array, test_spec,
+        test_db = db.DB(1, test_array, test_spec,
                         row_size=len(_bytearray),
                         size=10,
                         layout_offset=4,
@@ -88,7 +88,7 @@ class TestS7util(unittest.TestCase):
         self.assertTrue(len(test_db.index) == 10)
 
         for i, row in test_db:
-
+            # print row
             self.assertTrue(row['testbool1'] == 1)
             self.assertTrue(row['testbool2'] == 1)
             self.assertTrue(row['testbool3'] == 1)
