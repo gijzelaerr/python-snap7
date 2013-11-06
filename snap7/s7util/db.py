@@ -233,6 +233,15 @@ class DB_Row(object):
             return self._bytearray._bytearray
         return self._bytearray
 
+    def export(self):
+        """
+        export dictionary with values
+        """
+        data = {}
+        for key in self._specification:
+            data[key] = self[key]
+        return data
+
     def __getitem__(self, key):
         """
         Get a specific db field
@@ -322,8 +331,10 @@ class DB_Row(object):
         """
         assert(isinstance(self._bytearray, DB))
         assert(self.row_size >= 0)
+
         db_nr = self._bytearray.db_number
-        data = self.get_bytearray()[self.db_offset:self.row_size]
+        offset = self.db_offset
+        data = self.get_bytearray()[offset:offset+self.row_size]
         client.db_write(db_nr, self.db_offset, self.row_size, data)
 
     def read(self, client):
@@ -335,7 +346,7 @@ class DB_Row(object):
         db_nr = self._bytearray.db_number
         _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
 
-        data = self.get_bytearray()[self.db_offset:self.row_size]
+        data = self.get_bytearray()
         # replace data in bytearray
         for i, b in enumerate(_bytearray):
             data[i+self.db_offset] = b

@@ -122,6 +122,14 @@ class TestS7util(unittest.TestCase):
         row = db.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(row['testDword'] == 869486148)
 
+    def test_export(self):
+        test_array = bytearray(_bytearray)
+        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        data = row.export()
+        self.assertTrue('testDword' in data)
+        self.assertTrue('testbool1' in data)
+        self.assertTrue(data['testbool5'] == 0)
+
 
 def print_row(data):
     """print a single db row in chr and str
