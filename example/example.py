@@ -121,7 +121,7 @@ def open_and_close_db1():
     all_data = client.db_upload(1)
 
     print 'getting all data took: ', time.time() - t
-    db1 = s7util.db.DB(all_data, rc_if_db_1_layout,
+    db1 = s7util.db.DB(1, all_data, rc_if_db_1_layout,
                        126, 450, id_field='RC_IF_NAME',
                        layout_offset=4,
                        db_offset=4)
@@ -152,7 +152,7 @@ def open_and_close_db1():
 def read_tank_db():
 
     tank_data = client.db_upload(73)
-    db73 = s7util.db.DB(tank_data, tank_rc_if_db_layout,
+    db73 = s7util.db.DB(73, tank_data, tank_rc_if_db_layout,
                         238, 2, id_field='RC_IF_NAME')
     print len(db73)
     for x, (name, row) in enumerate(db73):
