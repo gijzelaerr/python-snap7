@@ -14,7 +14,6 @@ from snap7.common import load_library, check_error, ipv4
 from snap7.types import S7Object
 
 logger = logging.getLogger(__name__)
-clib = load_library()
 
 
 def error_wrap(func):
@@ -30,6 +29,7 @@ class Partner(object):
     A snap7 partner.
     """
     def __init__(self, active=False):
+        self.library = load_library()
         self.pointer = self.create(active)
 
     def as_b_send(self):
@@ -38,7 +38,7 @@ class Partner(object):
         it terminates immediately, a completion method is needed to know when
         the transfer is complete.
         """
-        return clib.Par_AsBSend(self.pointer)
+        return self.library.Par_AsBSend(self.pointer)
 
     def b_recv(self):
         """
@@ -46,20 +46,20 @@ class Partner(object):
         synchronous, it waits until a packet is received or the timeout
         supplied expires.
         """
-        return clib.Par_BRecv(self.pointer)
+        return self.library.Par_BRecv(self.pointer)
 
     def b_send(self):
         """
         Sends a data packet to the partner. This function is synchronous, i.e.
         it terminates when the transfer job (send+ack) is complete.
         """
-        return clib.Par_BSend(self.pointer)
+        return self.library.Par_BSend(self.pointer)
 
     def check_as_b_recv_completion(self):
         """
         Checks if a packed received was received.
         """
-        return clib.Par_CheckAsBRecvCompletion(self.pointer)
+        return self.library.Par_CheckAsBRecvCompletion(self.pointer)
 
     def check_as_b_send_completion(self):
         """
@@ -67,7 +67,7 @@ class Partner(object):
         immediately.
         """
         op_result = ctypes.c_int32()
-        result = clib.Par_CheckAsBSendCompletion(self.pointer,
+        result = self.library.Par_CheckAsBSendCompletion(self.pointer,
                                                  ctypes.byref(op_result))
         return_values = {
             0: "job complete",
@@ -84,7 +84,7 @@ class Partner(object):
         :param active: 0
         :returns: a pointer to the partner object
         """
-        return S7Object(clib.Par_Create(int(active)))
+        return S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -92,14 +92,14 @@ class Partner(object):
         Before destruction the Partner is stopped, all clients disconnected and
         all shared memory blocks released.
         """
-        return clib.Par_Destroy(ctypes.byref(self.pointer))
+        return self.library.Par_Destroy(ctypes.byref(self.pointer))
 
     def get_last_error(self):
         """
         Returns the last job result.
         """
         error = ctypes.c_int32()
-        result = clib.Par_GetLastError(self.pointer, ctypes.byref(error))
+        result = self.library.Par_GetLastError(self.pointer, ctypes.byref(error))
         check_error(result, "partner")
         return error
 
@@ -107,7 +107,7 @@ class Partner(object):
         """
         Reads an internal Partner object parameter.
         """
-        return clib.Par_GetParam(self.pointer)
+        return self.library.Par_GetParam(self.pointer)
 
     def get_stats(self):
         """
@@ -119,7 +119,7 @@ class Partner(object):
         recv = ctypes.c_uint32()
         send_errors = ctypes.c_uint32()
         recv_errors = ctypes.c_uint32()
-        result = clib.Par_GetStats(self.pointer, ctypes.byref(sent),
+        result = self.library.Par_GetStats(self.pointer, ctypes.byref(sent),
                                    ctypes.byref(recv),
                                    ctypes.byref(send_errors),
                                    ctypes.byref(recv_errors))
@@ -131,7 +131,7 @@ class Partner(object):
         Returns the Partner status.
         """
         status = ctypes.c_int32()
-        result = clib.Par_GetStatus(self.pointer, ctypes.byref(status))
+        result = self.library.Par_GetStatus(self.pointer, ctypes.byref(status))
         check_error(result, "partner")
         return status
 
@@ -141,7 +141,7 @@ class Partner(object):
         """
         send_time = ctypes.c_int32()
         recv_time = ctypes.c_int32()
-        result = clib.Par_GetTimes(self.pointer, ctypes.byref(send_time),
+        result = self.library.Par_GetTimes(self.pointer, ctypes.byref(send_time),
                                    ctypes.byref(recv_time))
         check_error(result, "partner")
         return send_time, recv_time
@@ -150,21 +150,21 @@ class Partner(object):
         """
         Sets an internal Partner object parameter.
         """
-        return clib.Par_SetParam(self.pointer)
+        return self.library.Par_SetParam(self.pointer)
 
     def set_recv_callback(self):
         """
         Sets the user callback that the Partner object has to call when a data
         packet is incoming.
         """
-        return clib.Par_SetRecvCallback(self.pointer)
+        return self.library.Par_SetRecvCallback(self.pointer)
 
     def set_send_callback(self):
         """
         Sets the user callback that the Partner object has to call when the
         asynchronous data sent is complete.
         """
-        return clib.Par_SetSendCallback(self.pointer)
+        return self.library.Par_SetSendCallback(self.pointer)
 
     @error_wrap
     def start(self):
@@ -172,7 +172,7 @@ class Partner(object):
         Starts the Partner and binds it to the specified IP address and the
         IsoTCP port.
         """
-        return clib.Par_Start(self.pointer)
+        return self.library.Par_Start(self.pointer)
 
     @error_wrap
     def start_to(self, ip):
@@ -182,17 +182,17 @@ class Partner(object):
         """
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)
-        return clib.Par_StartTo(self.pointer, ip)
+        return self.library.Par_StartTo(self.pointer, ip)
 
     def stop(self):
         """
         Stops the Partner, disconnects gracefully the remote partner.
         """
-        return clib.Par_Stop(self.pointer)
+        return self.library.Par_Stop(self.pointer)
 
     def wait_as_b_send_completion(self):
         """
         Waits until the current asynchronous send job is done or the timeout
         expires.
         """
-        return clib.Par_WaitAsBSendCompletion(self.pointer)
+        return self.library.Par_WaitAsBSendCompletion(self.pointer)

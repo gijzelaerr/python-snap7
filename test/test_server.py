@@ -10,7 +10,8 @@ class TestServer(unittest.TestCase):
         self.server.start()
 
     def tearDown(self):
-        del self.server
+        self.server.stop()
+        self.server.destroy()
 
     def test_register_area(self):
         db1_type = ctypes.c_char * 1024
@@ -25,7 +26,7 @@ class TestServer(unittest.TestCase):
 
     def test_event(self):
         event = snap7.server.SrvEvent()
-        snap7.server.event_text(event)
+        self.server.event_text(event)
 
     def test_get_status(self):
         server, cpu, num_clients = self.server.get_status()

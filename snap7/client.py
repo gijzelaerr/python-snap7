@@ -10,7 +10,6 @@ from snap7.types import wordlen_to_ctypes, BlocksList
 from snap7.common import check_error, load_library
 
 logger = logging.getLogger(__name__)
-clib = load_library()
 
 
 def error_wrap(func):
@@ -44,8 +43,9 @@ class Client(object):
 
         :returns: A Snap7Client object
         """
+        self.library = load_library()
         logger.info("creating snap7 client")
-        self.pointer = S7Object(clib.Cli_Create())
+        self.pointer = S7Object(self.library.Cli_Create())
         # local buffer used by test for now..
 
     def destroy(self):
@@ -53,7 +53,7 @@ class Client(object):
         destroy a client.
         """
         logger.info("destroying snap7 client")
-        return clib.Cli_Destroy(byref(self.pointer))
+        return self.library.Cli_Destroy(byref(self.pointer))
 
     @error_wrap
     def disconnect(self):
@@ -61,7 +61,7 @@ class Client(object):
         disconnect a client.
         """
         logger.info("disconnecting snap7 client")
-        return clib.Cli_Disconnect(self.pointer)
+        return self.library.Cli_Disconnect(self.pointer)
 
     @error_wrap
     def connect(self, address, rack, slot):
@@ -73,7 +73,7 @@ class Client(object):
         :param slot: slot on server.
         """
         logger.info("connecting to %s rack %s slot %s" % (address, rack, slot))
-        return clib.Cli_ConnectTo(self.pointer, c_char_p(address),
+        return self.library.Cli_ConnectTo(self.pointer, c_char_p(address),
                                   c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
@@ -86,7 +86,7 @@ class Client(object):
 
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
-        result = (clib.Cli_DBRead(self.pointer, db_number, start, size,
+        result = (self.library.Cli_DBRead(self.pointer, db_number, start, size,
                                   byref(data)))
         check_error(result, context="client")
         return bytearray(data)
@@ -103,7 +103,7 @@ class Client(object):
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
                      (db_number, start, size, data))
 
-        return clib.Cli_DBWrite(self.pointer, db_number, start, size,
+        return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                 byref(_buffer))
 
     def db_full_upload(self, _type, block_num):
@@ -116,7 +116,7 @@ class Client(object):
         size = c_int(sizeof(_buffer))
         block_type = snap7.types.block_types[_type]
 
-        result = clib.Cli_FullUpload(self.pointer, block_type, block_num,
+        result = self.library.Cli_FullUpload(self.pointer, block_type, block_num,
                                      byref(_buffer), byref(size))
 
         check_error(result, context="client")
@@ -136,7 +136,7 @@ class Client(object):
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
-        result = clib.Cli_Upload(self.pointer, block_type, block_num,
+        result = self.library.Cli_Upload(self.pointer, block_type, block_num,
                                  byref(_buffer), byref(size))
 
         check_error(result, context="client")
@@ -153,7 +153,7 @@ class Client(object):
 
         _buffer = bytearray_to_buffer(data)
 
-        result = clib.Cli_Download(self.pointer, db_number,
+        result = self.library.Cli_Download(self.pointer, db_number,
                                    byref(_buffer), size)
         return result
 
@@ -162,7 +162,7 @@ class Client(object):
         """
         logging.debug("db_get db_number: %s" % db_number)
         _buffer = buffer_type()
-        result = clib.Cli_DBGet(self.pointer, db_number, byref(_buffer),
+        result = self.library.Cli_DBGet(self.pointer, db_number, byref(_buffer),
                                 byref(c_int(buffer_size)))
         check_error(result, context="client")
         return bytearray(_buffer)
@@ -175,7 +175,7 @@ class Client(object):
         logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
         data = (wordlen_to_ctypes[wordlen] * amount)()
-        result = clib.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
+        result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
                                    wordlen, byref(data))
         check_error(result, context="client")
         return data
@@ -193,7 +193,7 @@ class Client(object):
 
         _buffer = bytearray_to_buffer(data)
 
-        return clib.Cli_WriteArea(self.pointer, area, dbnumber, start, amount,
+        return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start, amount,
                                   wordlen, byref(_buffer))
 
     def list_blocks(self):
@@ -203,7 +203,7 @@ class Client(object):
         """
         logging.debug("listing blocks")
         blocksList = BlocksList()
-        result = clib.Cli_ListBlocks(self.pointer, byref(blocksList))
+        result = self.library.Cli_ListBlocks(self.pointer, byref(blocksList))
         check_error(result, context="client")
         logging.debug("blocks: %s" % blocksList)
         return blocksList
@@ -214,7 +214,7 @@ class Client(object):
                       (blocktype, size))
         data = (c_int * 10)()
         count = c_int(size)
-        result = clib.Cli_ListBlocksOfType(self.pointer, blocktype,
+        result = self.library.Cli_ListBlocksOfType(self.pointer, blocktype,
                                            byref(data),
                                            byref(count))
 
@@ -226,12 +226,12 @@ class Client(object):
     def set_session_password(self, password):
         """Send the password to the PLC to meet its security level."""
         assert len(password) <= 8, 'maximum password length is 8'
-        return clib.Cli_SetSessionPassword(self.pointer, c_char_p(password))
+        return self.library.Cli_SetSessionPassword(self.pointer, c_char_p(password))
 
     @error_wrap
     def clear_session_password(self):
         """Clears the password set for the current session (logout)."""
-        return clib.Cli_ClearSessionPassword(self.pointer)
+        return self.library.Cli_ClearSessionPassword(self.pointer)
 
 
 # TODO: implement

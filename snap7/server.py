@@ -9,7 +9,6 @@ from snap7.types import S7Object, longword, SrvEvent, server_statuses,\
 from snap7.common import check_error, load_library, ipv4
 
 logger = logging.getLogger(__name__)
-clib = load_library()
 
 
 def error_wrap(func):
@@ -18,21 +17,6 @@ def error_wrap(func):
         code = func(*args, **kw)
         check_error(code, context="server")
     return f
-
-
-def event_text(event):
-    """Returns a textual explanation of a given event object
-
-    :param event: an PSrvEvent struct object
-    :returns: the error string
-    """
-    logger.debug("error text for %s" % hex(event.EvtCode))
-    len_ = 1024
-    text_type = ctypes.c_char * len_
-    text = text_type()
-    error = clib.Srv_EventText(ctypes.byref(event), ctypes.byref(text), len_)
-    check_error(error)
-    return text.value
 
 
 class Server(object):
@@ -44,20 +28,31 @@ class Server(object):
         Create a fake S7 server. set log to false if you want to disable
         event logging to python logging.
         """
+        self.library = load_library() 
         self.pointer = self.create()
         if log:
             self._set_log_callback()
 
-    def __del__(self):
-        self.stop()
-        self.destroy()
+    def event_text(self, event):
+        """Returns a textual explanation of a given event object
+
+        :param event: an PSrvEvent struct object
+        :returns: the error string
+        """
+        logger.debug("error text for %s" % hex(event.EvtCode))
+        len_ = 1024
+        text_type = ctypes.c_char * len_
+        text = text_type()
+        error = self.library.Srv_EventText(ctypes.byref(event), ctypes.byref(text), len_)
+        check_error(error)
+        return text.value
 
     def create(self):
         """
         create the server.
         """
         logger.info("creating server")
-        return S7Object(clib.Srv_Create())
+        return S7Object(self.library.Srv_Create())
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
@@ -68,7 +63,7 @@ class Server(object):
         logger.info("registering area %s, index %s, size %s" % (area_code,
                                                                 index, size))
         size = ctypes.sizeof(userdata)
-        return clib.Srv_RegisterArea(self.pointer, area_code, index,
+        return self.library.Srv_RegisterArea(self.pointer, area_code, index,
                                      ctypes.byref(userdata), size)
 
     @error_wrap
@@ -87,18 +82,18 @@ class Server(object):
             :param size:
             :returns: should return an int
             """
-            logger.info("callback event: " + event_text(pevent.contents))
+            logger.info("callback event: " + self.event_text(pevent.contents))
             call_back(pevent.contents)
 
         self._callback = CALLBACK(wrapper)
-        return clib.Srv_SetEventsCallback(self.pointer, self._callback)
+        return self.library.Srv_SetEventsCallback(self.pointer, self._callback)
 
     def _set_log_callback(self):
         """Sets a callback that logs the events
         """
         logger.debug("setting up event logger")
         def log_callback(event):
-            logger.info("callback event: " + event_text(event))
+            logger.info("callback event: " + self.event_text(event))
         self.set_events_callback(log_callback)
 
     @error_wrap
@@ -107,7 +102,7 @@ class Server(object):
         start the server.
         """
         logger.info("starting server on 0.0.0.0:102")
-        return clib.Srv_Start(self.pointer)
+        return self.library.Srv_Start(self.pointer)
 
     @error_wrap
     def stop(self):
@@ -115,14 +110,14 @@ class Server(object):
         stop the server.
         """
         logger.info("stopping server")
-        return clib.Srv_Stop(self.pointer)
+        return self.library.Srv_Stop(self.pointer)
 
     def destroy(self):
         """
         destroy the server.
         """
         logger.info("destroying server")
-        clib.Srv_Destroy(ctypes.byref(self.pointer))
+        self.library.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self):
         """Reads the server status, the Virtual CPU status and the number of
@@ -134,7 +129,7 @@ class Server(object):
         server_status = ctypes.c_int()
         cpu_status = ctypes.c_int()
         clients_count = ctypes.c_int()
-        error = (clib.Srv_GetStatus(self.pointer, ctypes.byref(server_status),
+        error = (self.library.Srv_GetStatus(self.pointer, ctypes.byref(server_status),
                                     ctypes.byref(cpu_status),
                                     ctypes.byref(clients_count)))
         check_error(error)
@@ -150,21 +145,21 @@ class Server(object):
         """'Unshares' a memory area previously shared with Srv_RegisterArea().
         That memory block will be no longer visible by the clients.
         """
-        return clib.Srv_UnregisterArea(self.pointer, area_code, index)
+        return self.library.Srv_UnregisterArea(self.pointer, area_code, index)
 
     @error_wrap
     def unlock_area(self,  code, index):
         """Unlocks a previously locked shared memory area.
         """
         logging.debug("unlocking area code %s index %s" % (code, index))
-        return clib.Srv_UnlockArea(self.pointer, code, index)
+        return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
     def lock_area(self,  code, index):
         """Locks a shared memory area.
         """
         logging.debug("locking area code %s index %s" % (code, index))
-        return clib.Srv_UnlockArea(self.pointer, code, index)
+        return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
     def start_to(self, ip):
@@ -173,14 +168,14 @@ class Server(object):
         """
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)
-        return clib.Srv_Start(self.pointer, ip)
+        return self.library.Srv_Start(self.pointer, ip)
 
     @error_wrap
     def set_param(self, number, value):
         """Sets an internal Server object parameter.
         """
         logger.debug("setting param number %s to %s" % (number, value))
-        return clib.Srv_SetParam(self.pointer, number,
+        return self.library.Srv_SetParam(self.pointer, number,
                                  ctypes.byref(ctypes.c_int(value)))
 
     @error_wrap
@@ -188,7 +183,7 @@ class Server(object):
         """Writes the specified filter mask.
         """
         logger.debug("setting mask kind %s to %s" % (kind, mask))
-        return clib.Srv_SetMask(self.pointer, kind, mask)
+        return self.library.Srv_SetMask(self.pointer, kind, mask)
 
     @error_wrap
     def set_cpu_status(self, status):
@@ -196,7 +191,7 @@ class Server(object):
         """
         assert status in cpu_statuses, 'unknown cpu state %s' % status
         logger.debug("setting cpu status to %s" % status)
-        return clib.Srv_SetCpuStatus(self.pointer, status)
+        return self.library.Srv_SetCpuStatus(self.pointer, status)
 
     def pick_event(self):
         """Extracts an event (if available) from the Events queue.
@@ -204,7 +199,7 @@ class Server(object):
         logger.debug("checking event queue")
         event = SrvEvent()
         ready = ctypes.c_int32()
-        code = clib.Srv_PickEvent(self.pointer, ctypes.byref(event),
+        code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event),
                               ctypes.byref(ready))
         check_error(code)
         if ready:
@@ -219,7 +214,7 @@ class Server(object):
         """
         logger.debug("retreiving param number %s" % number)
         value = ctypes.c_int()
-        code = clib.Srv_GetParam(self.pointer, number, ctypes.byref(value))
+        code = self.library.Srv_GetParam(self.pointer, number, ctypes.byref(value))
         check_error(code)
         return value.value
 
@@ -228,7 +223,7 @@ class Server(object):
         """
         logger.debug("retrieving mask kind %s" % kind)
         mask = longword()
-        code = clib.Srv_GetMask(self.pointer, kind, ctypes.byref(mask))
+        code = self.library.Srv_GetMask(self.pointer, kind, ctypes.byref(mask))
         check_error(code)
         return mask
 
@@ -237,4 +232,4 @@ class Server(object):
         """Empties the Event queue.
         """
         logger.debug("clearing event queue")
-        return clib.Srv_ClearEvents(self.pointer)
+        return self.library.Srv_ClearEvents(self.pointer)

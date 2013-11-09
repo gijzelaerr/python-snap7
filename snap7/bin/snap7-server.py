@@ -20,7 +20,7 @@ def mainloop():
         while True:
             event = server.pick_event()
             if event:
-                logger.info(snap7.server.event_text(event))
+                logger.info(server.event_text(event))
             else:
                 break
         time.sleep(1)
