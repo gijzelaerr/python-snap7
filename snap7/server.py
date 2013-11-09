@@ -209,8 +209,6 @@ class Server(object):
 
     def get_param(self, number):
         """Reads an internal Server object parameter.
-
-        int Srv_GetParam(S7Object Server, int ParamNumber, void *pValue);
         """
         logger.debug("retreiving param number %s" % number)
         value = ctypes.c_int()

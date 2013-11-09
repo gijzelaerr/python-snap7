@@ -38,3 +38,11 @@ server tests need to run as root. To run all tests please run::
 If the test complain about missing Python modules make sure the source directory
 is in your PYTHONPATH environment variable, or the python-snap7 module is
 installed.
+
+Credits
+-------
+
+python-snap7 is created by Gijs Molenaar and Stephan Preeker.
+
+Special thanks to go to Davide Nardella for creating snap7, Thomas Hergenhahn
+for his libnodave and Thomas W for his S7comm wireshark plugin.
