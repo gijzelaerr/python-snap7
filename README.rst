@@ -35,9 +35,11 @@ There are also Ubuntu packages available.
 credits
 =======
 
-Stephan Preeker
-Gijs Molenaar
+- Gijs Molenaar
+- Stephan Preeker
 
-Davide Nardella for creating snap7
-thank Thomas Hergenhahn for his libnodave.
-thanks to Thomas W for his S7comm wireshark plugin
+Special thanks to:
+==================
+ - Davide Nardella for creating snap7
+ - Thomas Hergenhahn for his libnodave.
+ - Thomas W for his S7comm wireshark plugin
