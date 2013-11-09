@@ -35,8 +35,8 @@ There are also Ubuntu packages available.
 credits
 =======
 
-Stephan Preeker
-Gijs Molenaar
+- Gijs Molenaar
+- Stephan Preeker
 
 Special thanks to:
 ==================
