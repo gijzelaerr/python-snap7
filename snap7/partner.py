@@ -1,5 +1,11 @@
 """
-Snap7 code for partnering with a siemens 7 server
+Snap7 code for partnering with a siemens 7 server.
+
+This allows you to create a S7 peer to peer communication. Unlike the
+client-server model, where the client makes a request and the server replies to
+it, the peer to peer model sees two components with same rights, each of them
+can send data asynchronously. The only difference between them is the one who
+is requesting the connection.
 """
 import ctypes
 import logging
@@ -10,6 +16,7 @@ from snap7.types import S7Object
 logger = logging.getLogger(__name__)
 clib = load_library()
 
+
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
     def f(*args, **kw):
@@ -17,20 +24,41 @@ def error_wrap(func):
         check_error(code, context="partner")
     return f
 
+
 class Partner(object):
+    """
+    A snap7 partner.
+    """
     def __init__(self, active=False):
         self.pointer = self.create(active)
 
     def as_b_send(self):
+        """
+        Sends a data packet to the partner. This function is asynchronous, i.e.
+        it terminates immediately, a completion method is needed to know when
+        the transfer is complete.
+        """
         return clib.Par_AsBSend(self.pointer)
 
     def b_recv(self):
+        """
+        Receives a data packet from the partner. This function is
+        synchronous, it waits until a packet is received or the timeout
+        supplied expires.
+        """
         return clib.Par_BRecv(self.pointer)
 
     def b_send(self):
+        """
+        Sends a data packet to the partner. This function is synchronous, i.e.
+        it terminates when the transfer job (send+ack) is complete.
+        """
         return clib.Par_BSend(self.pointer)
 
     def check_as_b_recv_completion(self):
+        """
+        Checks if a packed received was received.
+        """
         return clib.Par_CheckAsBRecvCompletion(self.pointer)
 
     def check_as_b_send_completion(self):
@@ -52,21 +80,33 @@ class Partner(object):
         """
         Creates a Partner and returns its handle, which is the reference that
         you have to use every time you refer to that Partner.
+
         :param active: 0
         :returns: a pointer to the partner object
         """
         return S7Object(clib.Par_Create(int(active)))
 
     def destroy(self):
+        """
+        Destroy a Partner of given handle.
+        Before destruction the Partner is stopped, all clients disconnected and
+        all shared memory blocks released.
+        """
         return clib.Par_Destroy(ctypes.byref(self.pointer))
 
     def get_last_error(self):
+        """
+        Returns the last job result.
+        """
         error = ctypes.c_int32()
         result = clib.Par_GetLastError(self.pointer, ctypes.byref(error))
         check_error(result, "partner")
         return error
 
     def get_param(self):
+        """
+        Reads an internal Partner object parameter.
+        """
         return clib.Par_GetParam(self.pointer)
 
     def get_stats(self):
@@ -107,26 +147,52 @@ class Partner(object):
         return send_time, recv_time
 
     def set_param(self):
+        """
+        Sets an internal Partner object parameter.
+        """
         return clib.Par_SetParam(self.pointer)
 
     def set_recv_callback(self):
+        """
+        Sets the user callback that the Partner object has to call when a data
+        packet is incoming.
+        """
         return clib.Par_SetRecvCallback(self.pointer)
 
     def set_send_callback(self):
+        """
+        Sets the user callback that the Partner object has to call when the
+        asynchronous data sent is complete.
+        """
         return clib.Par_SetSendCallback(self.pointer)
 
     @error_wrap
     def start(self):
+        """
+        Starts the Partner and binds it to the specified IP address and the
+        IsoTCP port.
+        """
         return clib.Par_Start(self.pointer)
 
     @error_wrap
     def start_to(self, ip):
+        """
+        Starts the Partner and binds it to the specified IP address and the
+        IsoTCP port.
+        """
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)
-        return clib.Par_Start(self.pointer, ip)
+        return clib.Par_StartTo(self.pointer, ip)
 
     def stop(self):
+        """
+        Stops the Partner, disconnects gracefully the remote partner.
+        """
         return clib.Par_Stop(self.pointer)
 
     def wait_as_b_send_completion(self):
+        """
+        Waits until the current asynchronous send job is done or the timeout
+        expires.
+        """
         return clib.Par_WaitAsBSendCompletion(self.pointer)

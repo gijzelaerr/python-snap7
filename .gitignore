@@ -37,3 +37,6 @@ nosetests.xml
 
 # gdb core dump
 core
+
+# sphinx
+doc/_build/

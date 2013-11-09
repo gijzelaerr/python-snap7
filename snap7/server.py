@@ -36,6 +36,9 @@ def event_text(event):
 
 
 class Server(object):
+    """
+    A fake S7 server.
+    """
     def __init__(self, log=True):
         """
         Create a fake S7 server. set log to false if you want to disable
@@ -50,6 +53,9 @@ class Server(object):
         self.destroy()
 
     def create(self):
+        """
+        create the server.
+        """
         logger.info("creating server")
         return S7Object(clib.Srv_Create())
 
@@ -97,15 +103,24 @@ class Server(object):
 
     @error_wrap
     def start(self):
+        """
+        start the server.
+        """
         logger.info("starting server on 0.0.0.0:102")
         return clib.Srv_Start(self.pointer)
 
     @error_wrap
     def stop(self):
+        """
+        stop the server.
+        """
         logger.info("stopping server")
         return clib.Srv_Stop(self.pointer)
 
     def destroy(self):
+        """
+        destroy the server.
+        """
         logger.info("destroying server")
         clib.Srv_Destroy(ctypes.byref(self.pointer))
 
@@ -153,6 +168,9 @@ class Server(object):
 
     @error_wrap
     def start_to(self, ip):
+        """
+        start server on a specific interface.
+        """
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)
         return clib.Srv_Start(self.pointer, ip)

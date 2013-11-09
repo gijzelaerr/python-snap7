@@ -49,24 +49,35 @@ class Client(object):
         # local buffer used by test for now..
 
     def destroy(self):
+        """
+        destroy a client.
+        """
         logger.info("destroying snap7 client")
         return clib.Cli_Destroy(byref(self.pointer))
 
     @error_wrap
     def disconnect(self):
+        """
+        disconnect a client.
+        """
         logger.info("disconnecting snap7 client")
         return clib.Cli_Disconnect(self.pointer)
 
     @error_wrap
     def connect(self, address, rack, slot):
+        """
+        Connect to a S7 server.
+
+        :param address: IP address of server
+        :param rack: rack on server
+        :param slot: slot on server.
+        """
         logger.info("connecting to %s rack %s slot %s" % (address, rack, slot))
         return clib.Cli_ConnectTo(self.pointer, c_char_p(address),
                                   c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
         """This is a lean function of Cli_ReadArea() to read PLC DB.
-
-        :param type_: a ctypes type
 
         :returns: user buffer.
         """
@@ -83,8 +94,9 @@ class Client(object):
     @error_wrap
     def db_write(self, db_number, start, size, data):
         """
-        :param data: bytearray
+        Writes to a DB object.
 
+        :param data: bytearray
         """
         _buffer = bytearray_to_buffer(data)
 
@@ -110,7 +122,6 @@ class Client(object):
         check_error(result, context="client")
 
         return bytearray(_buffer), size.value
-
         #return bytearray(_buffer[:size.value])
 
     def db_upload(self, block_num):
