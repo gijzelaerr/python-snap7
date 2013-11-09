@@ -1,16 +1,16 @@
-
-
+"""
+Snap7 client used for connection to a siemens7 server.
+"""
 from ctypes import c_int, c_char_p, byref, sizeof
 import logging
 
 import snap7
-
 from snap7.types import S7Object, buffer_type, buffer_size
 from snap7.types import wordlen_to_ctypes, BlocksList
-from snap7.common import check_error, load_lib
+from snap7.common import check_error, load_library
 
 logger = logging.getLogger(__name__)
-clib = load_lib()
+clib = load_library()
 
 
 def error_wrap(func):
@@ -133,7 +133,7 @@ class Client(object):
         return bytearray(_buffer)
 
     @error_wrap
-    def db_download(self, db_number, data, size):
+    def download(self, db_number, data, size):
         """Downloads a DB data into the AG
         """
 
@@ -223,6 +223,7 @@ class Client(object):
         return clib.Cli_ClearSessionPassword(self.pointer)
 
 
+# TODO: implement
 """
 Cli_ABRead
 Cli_ABWrite
@@ -251,22 +252,13 @@ Cli_AsTMWrite
 Cli_AsUpload
 Cli_AsWriteArea
 Cli_CheckAsCompletion
-Cli_ClearSessionPassword
 Cli_Compress
 Cli_Connect
-Cli_ConnectTo
 Cli_CopyRamToRom
-Cli_Create
 Cli_CTRead
 Cli_CTWrite
 Cli_DBFill
-Cli_DBGet
-Cli_DBRead
-Cli_DBWrite
 Cli_Delete
-Cli_Destroy
-Cli_Disconnect
-Cli_Download
 Cli_EBRead
 Cli_EBWrite
 Cli_ErrorText
@@ -284,8 +276,6 @@ Cli_GetPlcDateTime
 Cli_GetPlcStatus
 Cli_GetProtection
 Cli_IsoExchangeBuffer
-Cli_ListBlocks
-Cli_ListBlocksOfType
 Cli_MBRead
 Cli_MBWrite
 Cli_PlcColdStart
@@ -302,8 +292,6 @@ Cli_SetPlcSystemDateTime
 Cli_SetSessionPassword
 Cli_TMRead
 Cli_TMWrite
-Cli_Upload
 Cli_WaitAsCompletion
-Cli_WriteArea
 Cli_WriteMultiVars
 """

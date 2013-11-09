@@ -1,10 +1,15 @@
+"""
+Snap7 server used for mimicking a siemens 7 server.
+"""
 import ctypes
 import logging
 import re
-from snap7.types import S7Object, longword, SrvEvent, server_statuses, cpu_statuses
-from snap7.common import check_error, clib, ipv4
+from snap7.types import S7Object, longword, SrvEvent, server_statuses,\
+    cpu_statuses
+from snap7.common import check_error, load_library, ipv4
 
 logger = logging.getLogger(__name__)
+clib = load_library()
 
 
 def error_wrap(func):
@@ -118,9 +123,10 @@ class Server(object):
                                     ctypes.byref(cpu_status),
                                     ctypes.byref(clients_count)))
         check_error(error)
-        logger.debug("status server %s cpu %s clients %s" % (server_status.value,
-                     cpu_status.value, clients_count.value))
-        return server_statuses[server_status.value],\
+        logger.debug("status server %s cpu %s clients %s" %
+                     (server_status.value, cpu_status.value,
+                      clients_count.value))
+        return server_statuses[server_status.value], \
                cpu_statuses[cpu_status.value],\
                clients_count.value
 

@@ -1,3 +1,6 @@
+"""
+Python equivalent for snap7 specific types.
+"""
 import ctypes
 
 S7Object = ctypes.c_uint

@@ -1,33 +1,10 @@
-import logging
+"""
+Snap7 library error codes.
 
-
-def check_error(code, client=False):
-    errors = error_parse(code, client)
-    if errors:
-        for error in errors:
-            logging.error(error)
-        raise Exception(", ".join(errors))
-
-
-def error_parse(code, client=True):
-    """
-    parse a error code as defined in the snap7 document.
-
-    If client is false server error codes are used.
-    """
-    errors = client_errors if client else server_errors
-    tcp_error = code & 0x0000FFFF
-    isotcp_error = code & 0x000F0000
-    s7_error = code & 0xFFF00000
-    parsed_errors = []
-    for suberror in (tcp_error, isotcp_error, s7_error):
-        if suberror in errors:
-            parsed_errors.append(errors[suberror])
-
-    if code and not len(errors):
-        raise Exception("unknown error %s" % hex(code))
-    return parsed_errors
-
+we define all error codes here, but we don't use them (yet/anymore).
+The error code formatting of the snap7 library as already quite good,
+so we are using that now. But maybe we will use this in the future again.
+"""
 
 s7_client_errors = {
     0x00100000: 'errNegotiatingPDU',

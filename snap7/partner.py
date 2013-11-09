@@ -1,10 +1,14 @@
+"""
+Snap7 code for partnering with a siemens 7 server
+"""
 import ctypes
 import logging
 import re
-from snap7.common import clib, check_error, ipv4
+from snap7.common import load_library, check_error, ipv4
 from snap7.types import S7Object
 
 logger = logging.getLogger(__name__)
+clib = load_library()
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
