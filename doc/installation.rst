@@ -36,7 +36,7 @@ documentation on the `snap7 website <http://snap7.sourceforge.net/>`_.
 snap7-python
 ------------
 
-python-snap7 is available on `PyPI <https://pypi.python.org>`_. You can install
+python-snap7 is available on `PyPI <https://pypi.python.org/pypi/python-snap7/>`_. You can install
 it by using pip::
 
   $ pip install python-snap7
