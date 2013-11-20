@@ -6,7 +6,7 @@ connection. Usefull for running the python-snap7 test suite.
 import time
 import logging
 import snap7
-import ctypes
+
 
 def mainloop():
     server = snap7.server.Server()
@@ -31,6 +31,12 @@ def check_root():
     check if uid of this process is root
     """
     import os
+    import platform
+
+    if platform.system() == 'Windows':
+        # We don't need root on Windows to use port 102
+        return True
+
     if os.getuid() == 0:
         return True
 

@@ -7,4 +7,4 @@ import snap7.error as error
 import snap7.types as types
 import snap7.common as common
 
-__version__ = '0.1'
+__version__ = '0.2'

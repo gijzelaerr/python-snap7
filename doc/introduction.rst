@@ -6,7 +6,8 @@ python-snap7 is a Python wrapper for the
 32/64 bit, multi-platform Ethernet communication suite for interfacing natively
 with Siemens S7 PLCs.
 
-Currently only Linux and Python 2.7 are supported, but support for Windows,
-Python 2.7 and Python 3+ is not far away.
+Python-snap7 is developer for snap7 1.1.0 and Python2.7. It is tested
+on Windows (8.1 64 bit) and Linux, but it may work on other operating
+systems. Python 2.6 and Python 3+ may work, but are not fully tested yet.
 
 The project development is centralized on `github <https://github.com/gijzelaerr/python-snap7>`_.

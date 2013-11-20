@@ -2,7 +2,13 @@
 CHANGES
 =======
 
+0.2
+---
+
+- Add support for Windows.
+
+
 0.1
 ---
 
-Initial release.
+- Initial release.

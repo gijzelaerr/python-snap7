@@ -18,6 +18,16 @@ If you are using Ubuntu you can use the Ubuntu packages from our
     $ sudo apt-get update
     $ sudo apt-get install snap71 snap7-dev
 
+Windows
+~~~~~~~
+
+Download the zip file from the
+`snap7 sourceforge page<http://sourceforge.net/projects/snap7/files>`_.
+Unzip the zip file, and copy* release\Windows\<Win64/Win32>\snap7.dll* somewhere
+in you system PATH, for example *C:\WINDOWS\system32*. Alternatively you can
+copy the file somewhere on your file system and adjust the system PATH.
+
+
 Compile from source
 ~~~~~~~~~~~~~~~~~~~
 
