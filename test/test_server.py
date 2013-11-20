@@ -1,6 +1,6 @@
 import unittest
 import ctypes
-
+import logging
 import snap7
 
 
@@ -76,13 +76,11 @@ class TestServer(unittest.TestCase):
     def test_events_callback(self):
         def event_call_back(event):
             logging.debug(event)
-
         self.server.set_events_callback(event_call_back)
 
     def test_read_events_callback(self):
         def read_events_call_back(event):
             logging.debug(event)
-
         self.server.set_read_events_callback(read_events_call_back)
 
     def test_pick_event(self):
