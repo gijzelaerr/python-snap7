@@ -5,8 +5,10 @@ CHANGES
 0.2
 ---
 
-- Add support for Windows.
-
+- Add support for Windows
+- Add functions added in Snap7 1.1.0
+- Add missing client functions
+- fix some partner functions
 
 0.1
 ---
