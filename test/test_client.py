@@ -1,6 +1,8 @@
 import unittest
-import snap7
 import logging
+
+import snap7
+
 
 logging.basicConfig()
 l = logging.getLogger()
@@ -42,8 +44,13 @@ class TestClient(unittest.TestCase):
         self.client.db_get(db_number=db_number)
 
     @unittest.skip('authorization required?')
-    def test_db_upload(self):
-        self.client.db_upload(block_num=db_number)
+    def test_upload(self):
+        self.client.upload(block_num=db_number)
+
+    @unittest.skip("TODO: fix the download and upload buffer")
+    def test_download(self):
+        data = bytearray(128)
+        self.client.download(block_num=db_number, data=data)
 
     def test_read_area(self):
         area = snap7.types.S7AreaDB
@@ -74,6 +81,124 @@ class TestClient(unittest.TestCase):
     def test_clear_session_password(self):
         self.client.clear_session_password()
 
+    def test_set_connection_params(self):
+        self.client.set_connection_params("10.0.0.2", 10, 10)
+
+    def test_set_connection_type(self):
+        self.client.set_connection_type(1)
+        self.client.set_connection_type(2)
+        self.client.set_connection_type(3)
+        self.client.set_connection_type(20)
+
+    def test_get_connected(self):
+        self.client.get_connected()
+
+    def test_ab_read(self):
+        self.client.ab_read()
+
+    def test_ab_write(self):
+        self.client.ab_write()
+
+    def test_as_ab_read(self):
+        self.client.as_ab_read()
+
+    def test_as_ab_write(self):
+        self.client.as_ab_write()
+
+    def test_as_compress(self):
+        self.client.as_compress()
+
+    def test_as_copy_ram_to_rom(self):
+        self.client.copy_ram_to_rom()
+
+    def test_as_ct_read(self):
+        self.client.as_ct_read()
+
+    def test_as_ct_write(self):
+        self.client.as_ct_write()
+
+    def test_as_db_fill(self):
+        self.client.as_db_fill()
+
+    def test_as_db_get(self):
+        self.client.as_db_get()
+
+    def test_as_db_read(self):
+        self.client.as_db_read()
+
+    def test_as_db_write(self):
+        self.client.as_db_write()
+
+    def test_as_download(self):
+        data = bytearray(128)
+        self.client.as_download(block_num=-1, data=data)
+
+    @unittest.skip("TODO: fix the download and upload buffer")
+    def test_download(self):
+        data = bytearray(128)
+        self.client.download(block_num=db_number, data=data)
+
 
 if __name__ == '__main__':
     unittest.main()
+
+
+# TODO: implement
+"""
+Cli_AsEBRead
+Cli_AsEBWrite
+Cli_AsFullUpload
+Cli_AsListBlocksOfType
+Cli_AsMBRead
+Cli_AsMBWrite
+Cli_AsReadArea
+Cli_AsReadSZL
+Cli_AsReadSZLList
+Cli_AsTMRead
+Cli_AsTMWrite
+Cli_AsUpload
+Cli_AsWriteArea
+Cli_CheckAsCompletion
+Cli_Compress
+Cli_Connect
+Cli_CopyRamToRom
+Cli_CTRead
+Cli_CTWrite
+Cli_DBFill
+Cli_Delete
+Cli_EBRead
+Cli_EBWrite
+Cli_ErrorText
+Cli_FullUpload
+Cli_GetAgBlockInfo
+Cli_GetCpInfo
+Cli_GetCpuInfo
+Cli_GetExecTime
+Cli_GetLastError
+Cli_GetOrderCode
+Cli_GetParam
+Cli_GetPduLength
+Cli_GetPgBlockInfo
+Cli_GetPlcDateTime
+Cli_GetPlcStatus
+Cli_GetProtection
+Cli_IsoExchangeBuffer
+Cli_MBRead
+Cli_MBWrite
+Cli_PlcColdStart
+Cli_PlcHotStart
+Cli_PlcStop
+Cli_ReadArea
+Cli_ReadMultiVars
+Cli_ReadSZL
+Cli_ReadSZLList
+Cli_SetAsCallback
+Cli_SetParam
+Cli_SetPlcDateTime
+Cli_SetPlcSystemDateTime
+Cli_SetSessionPassword
+Cli_TMRead
+Cli_TMWrite
+Cli_WaitAsCompletion
+Cli_WriteMultiVars
+"""

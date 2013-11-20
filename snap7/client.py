@@ -1,13 +1,15 @@
 """
 Snap7 client used for connection to a siemens7 server.
 """
-from ctypes import c_int, c_char_p, byref, sizeof
+import re
+from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32
 import logging
 
 import snap7
 from snap7.types import S7Object, buffer_type, buffer_size
 from snap7.types import wordlen_to_ctypes, BlocksList
-from snap7.common import check_error, load_library
+from snap7.common import check_error, load_library, ipv4
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,8 @@ def error_wrap(func):
 def bytearray_to_buffer(data):
     """Convert a byte arra to a ctypes / snap7 type
     """
+    #TODO: find out how to do this better, this doesn't seem to work correctly
+
     assert isinstance(data, bytearray)
     # creates a 65535 ctypes.c_ubyte buffer
 
@@ -106,29 +110,29 @@ class Client(object):
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                 byref(_buffer))
 
-    def db_full_upload(self, _type, block_num):
+    def full_upload(self, _type, block_num):
         """
-        Uploads a full block body from AG
+        Uploads a full block body from AG.
+        The whole block (including header and footer) is copied into the user
+        buffer.
+
+        :param block_num: Number of Block
         """
         _buffer = buffer_type()
-
-        #logger.debug("db_full_upload db_number:%s" % (block_num))
         size = c_int(sizeof(_buffer))
         block_type = snap7.types.block_types[_type]
-
-        result = self.library.Cli_FullUpload(self.pointer, block_type, block_num,
-                                     byref(_buffer), byref(size))
-
+        result = self.library.Cli_FullUpload(self.pointer, block_type,
+                                             block_num, byref(_buffer),
+                                             byref(size))
         check_error(result, context="client")
-
         return bytearray(_buffer), size.value
-        #return bytearray(_buffer[:size.value])
 
-    def db_upload(self, block_num):
-        """Uploads a block body from AG
+
+    def upload(self, block_num):
+        """
+        Uploads a block body from AG
 
         :param data: bytearray
-
         """
         logger.debug("db_upload block_num: %s" % (block_num))
 
@@ -137,24 +141,26 @@ class Client(object):
         size = c_int(sizeof(_buffer))
 
         result = self.library.Cli_Upload(self.pointer, block_type, block_num,
-                                 byref(_buffer), byref(size))
+                                         byref(_buffer), byref(size))
 
         check_error(result, context="client")
         logger.info('received %s bytes' % size)
         return bytearray(_buffer)
 
     @error_wrap
-    def download(self, db_number, data, size):
-        """Downloads a DB data into the AG
+    def download(self, data, block_num=-1):
         """
+        Downloads a DB data into the AG.
+        A whole block (including header and footer) must be available into the
+        user buffer.
 
-        #logger.debug("db_download block_num: %s, data: %s size: %s" %
-        #             (db_number, data[:100], size))
-
+        :param block_num: New Block number (or -1)
+        :param data: the user buffer
+        """
         _buffer = bytearray_to_buffer(data)
-
-        result = self.library.Cli_Download(self.pointer, db_number,
-                                   byref(_buffer), size)
+        size = c_int(sizeof(_buffer))
+        result = self.library.Cli_Download(self.pointer, block_num,
+                                           byref(_buffer), size)
         return result
 
     def db_get(self, db_number):
@@ -175,8 +181,8 @@ class Client(object):
         logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
         data = (wordlen_to_ctypes[wordlen] * amount)()
-        result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start, amount,
-                                   wordlen, byref(data))
+        result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
+                                           amount, wordlen, byref(data))
         check_error(result, context="client")
         return data
 
@@ -193,8 +199,8 @@ class Client(object):
 
         _buffer = bytearray_to_buffer(data)
 
-        return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start, amount,
-                                  wordlen, byref(_buffer))
+        return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
+                                          amount, wordlen, byref(_buffer))
 
     def list_blocks(self):
         """Returns the AG blocks amount divided by type.
@@ -226,83 +232,136 @@ class Client(object):
     def set_session_password(self, password):
         """Send the password to the PLC to meet its security level."""
         assert len(password) <= 8, 'maximum password length is 8'
-        return self.library.Cli_SetSessionPassword(self.pointer, c_char_p(password))
+        return self.library.Cli_SetSessionPassword(self.pointer,
+                                                   c_char_p(password))
 
     @error_wrap
     def clear_session_password(self):
         """Clears the password set for the current session (logout)."""
         return self.library.Cli_ClearSessionPassword(self.pointer)
 
+    def set_connection_params(self, address, local_tsap, remote_tsap):
+        """
+        Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
+        This function must be called just before Cli_Connect().
 
-# TODO: implement
-"""
-Cli_ABRead
-Cli_ABWrite
-Cli_AsABRead
-Cli_AsABWrite
-Cli_AsCompress
-Cli_AsCopyRamToRom
-Cli_AsCTRead
-Cli_AsCTWrite
-Cli_AsDBFill
-Cli_AsDBGet
-Cli_AsDBRead
-Cli_AsDBWrite
-Cli_AsDownload
-Cli_AsEBRead
-Cli_AsEBWrite
-Cli_AsFullUpload
-Cli_AsListBlocksOfType
-Cli_AsMBRead
-Cli_AsMBWrite
-Cli_AsReadArea
-Cli_AsReadSZL
-Cli_AsReadSZLList
-Cli_AsTMRead
-Cli_AsTMWrite
-Cli_AsUpload
-Cli_AsWriteArea
-Cli_CheckAsCompletion
-Cli_Compress
-Cli_Connect
-Cli_CopyRamToRom
-Cli_CTRead
-Cli_CTWrite
-Cli_DBFill
-Cli_Delete
-Cli_EBRead
-Cli_EBWrite
-Cli_ErrorText
-Cli_FullUpload
-Cli_GetAgBlockInfo
-Cli_GetCpInfo
-Cli_GetCpuInfo
-Cli_GetExecTime
-Cli_GetLastError
-Cli_GetOrderCode
-Cli_GetParam
-Cli_GetPduLength
-Cli_GetPgBlockInfo
-Cli_GetPlcDateTime
-Cli_GetPlcStatus
-Cli_GetProtection
-Cli_IsoExchangeBuffer
-Cli_MBRead
-Cli_MBWrite
-Cli_PlcColdStart
-Cli_PlcHotStart
-Cli_PlcStop
-Cli_ReadArea
-Cli_ReadMultiVars
-Cli_ReadSZL
-Cli_ReadSZLList
-Cli_SetAsCallback
-Cli_SetParam
-Cli_SetPlcDateTime
-Cli_SetPlcSystemDateTime
-Cli_SetSessionPassword
-Cli_TMRead
-Cli_TMWrite
-Cli_WaitAsCompletion
-Cli_WriteMultiVars
-"""
+        :param address: PLC/Equipment IPV4 Address, for example "192.168.1.12"
+        :param local_tsap: Local TSAP (PC TSAP)
+        :param remote_tsap: Remote TSAP (PLC TSAP)
+        """
+        assert re.match(ipv4, address), '%s is invalid ipv4' % address
+        result = self.library.Cli_SetConnectionParams(self.pointer, address,
+                                                      c_uint16(local_tsap),
+                                                      c_uint16(remote_tsap))
+        if result != 0:
+            raise Snap7Exception("The parameter was invalid")
+
+    def set_connection_type(self, connection_type):
+        """
+        Sets the connection resource type, i.e the way in which the Clients
+        connects to a PLC.
+
+        :param connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
+        """
+        result = self.library.Cli_SetConnectionType(self.pointer,
+                                                    c_uint16(connection_type))
+        if result != 0:
+            raise Snap7Exception("The parameter was invalid")
+
+    def get_connected(self):
+        """
+        Returns the connection status
+
+        :returns: a boolean that indicates if connected.
+        """
+        connected = c_int32()
+        result = self.library.Cli_GetConnected(self.pointer, byref(connected))
+        check_error(result, context="client")
+        return bool(connected)
+
+    def ab_read(self):
+        """
+        This is a lean function of Cli_ReadArea() to read PLC process outputs.
+        """
+        return self.library.Cli_ABRead(self.pointer)
+
+    def ab_write(self):
+        """
+
+        """
+        return self.library.Cli_ABWrite(self.pointer)
+
+    def as_ab_read(self):
+        """
+
+        """
+        return self.library.Cli_AsABRead(self.pointer)
+
+    def as_ab_write(self):
+        """
+
+        """
+        return self.library.Cli_AsABWrite(self.pointer)
+
+    def as_compress(self):
+        """
+
+        """
+        return self.library.Cli_AsCompress(self.pointer)
+
+    def copy_ram_to_rom(self):
+        """
+
+        """
+        return self.library.Cli_AsCopyRamToRom(self.pointer)
+
+    def as_ct_read(self):
+        """
+
+        """
+        return self.library.Cli_AsCTRead(self.pointer)
+
+    def as_ct_write(self):
+        """
+
+        """
+        return self.library.Cli_AsCTWrite(self.pointer)
+
+    def as_db_fill(self):
+        """
+
+        """
+        return self.library.Cli_AsDBFill(self.pointer)
+
+    def as_db_get(self):
+        """
+
+        """
+        return self.library.Cli_AsDBGet(self.pointer)
+
+    def as_db_read(self):
+        """
+
+        """
+        return self.library.Cli_AsDBRead(self.pointer)
+
+    def as_db_write(self):
+        """
+
+        """
+        return self.library.Cli_AsDBWrite(self.pointer)
+
+    @error_wrap
+    def as_download(self, data, block_num=-1):
+        """
+        Downloads a DB data into the AG asynchronously.
+        A whole block (including header and footer) must be available into the
+        user buffer.
+
+        :param block_num: New Block number (or -1)
+        :param data: the user buffer
+        """
+        _buffer = bytearray_to_buffer(data)
+        size = c_int(sizeof(_buffer))
+        return self.library.Cli_AsDownload(self.pointer, block_num,
+                                           byref(_buffer), size)

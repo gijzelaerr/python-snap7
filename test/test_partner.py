@@ -60,13 +60,14 @@ class TestPartner(unittest.TestCase):
         self.partner.start()
 
     def test_start_to(self):
-        self.partner.start_to('0.0.0.0')
+        self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0)
 
     def test_stop(self):
         self.partner.stop()
 
     def test_wait_as_b_send_completion(self):
         self.partner.wait_as_b_send_completion()
+
 
 if __name__ == '__main__':
     unittest.main()

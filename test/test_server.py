@@ -1,7 +1,7 @@
 import unittest
-import snap7
 import ctypes
-import logging
+
+import snap7
 
 
 class TestServer(unittest.TestCase):
@@ -73,10 +73,17 @@ class TestServer(unittest.TestCase):
         self.server.register_area(area_code, index, db1_type())
         self.server.unregister_area(area_code, index)
 
-    def test_callback(self):
+    def test_events_callback(self):
         def event_call_back(event):
             logging.debug(event)
+
         self.server.set_events_callback(event_call_back)
+
+    def test_read_events_callback(self):
+        def read_events_call_back(event):
+            logging.debug(event)
+
+        self.server.set_read_events_callback(read_events_call_back)
 
     def test_pick_event(self):
         event = self.server.pick_event()
@@ -110,5 +117,6 @@ class TestServer(unittest.TestCase):
 
 if __name__ == '__main__':
     import logging
+
     logging.basicConfig()
     unittest.main()

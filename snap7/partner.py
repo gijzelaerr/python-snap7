@@ -12,6 +12,7 @@ import logging
 import re
 from snap7.common import load_library, check_error, ipv4
 from snap7.types import S7Object
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,10 @@ class Partner(object):
             1: "job in progress",
             -2: "invalid handled supplied",
         }
+
+        if result == -2:
+            raise Snap7Exception("The Client parameter was invalid")
+
         return return_values[result], op_result
 
     def create(self, active=False):
@@ -175,14 +180,22 @@ class Partner(object):
         return self.library.Par_Start(self.pointer)
 
     @error_wrap
-    def start_to(self, ip):
+    def start_to(self, local_ip, remote_ip, local_tsap, remote_tsap):
         """
         Starts the Partner and binds it to the specified IP address and the
         IsoTCP port.
+
+        :param local_ip: PC host IPV4 Address. "0.0.0.0" is the default adapter
+        :param remote_ip: PLC IPV4 Address
+        :param local_tsap: Local TSAP
+        :param remote_tsap: PLC TSAP
         """
-        assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
-        logger.info("starting server to %s:102" % ip)
-        return self.library.Par_StartTo(self.pointer, ip)
+        assert re.match(ipv4, local_ip), '%s is invalid ipv4' % local_ip
+        assert re.match(ipv4, remote_ip), '%s is invalid ipv4' % remote_ip
+        logger.info("starting partnering from %s to %s" % (local_ip, remote_ip))
+        return self.library.Par_StartTo(self.pointer, local_ip, remote_ip,
+                                        ctypes.c_uint16(local_tsap),
+                                        ctypes.c_uint16(remote_tsap))
 
     def stop(self):
         """
