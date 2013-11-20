@@ -41,3 +41,6 @@ core
 
 # sphinx
 doc/_build/
+
+# pycharm
+.idea
