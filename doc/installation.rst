@@ -16,7 +16,7 @@ If you are using Ubuntu you can use the Ubuntu packages from our
 
     $ sudo sudo add-apt-repository ppa:gijzelaar/snap7
     $ sudo apt-get update
-    $ sudo apt-get install snap71 snap7-dev
+    $ sudo apt-get install libsnap71 libsnap7-dev
 
 Windows
 ~~~~~~~
