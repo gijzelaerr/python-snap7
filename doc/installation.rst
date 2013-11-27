@@ -22,7 +22,7 @@ Windows
 ~~~~~~~
 
 Download the zip file from the
-`snap7 sourceforge page<http://sourceforge.net/projects/snap7/files>`_.
+`sourceforce page <http://sourceforge.net/projects/snap7/files/>`_.
 Unzip the zip file, and copy* release\Windows\<Win64/Win32>\snap7.dll* somewhere
 in you system PATH, for example *C:\WINDOWS\system32*. Alternatively you can
 copy the file somewhere on your file system and adjust the system PATH.

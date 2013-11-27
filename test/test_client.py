@@ -30,15 +30,14 @@ class TestClient(unittest.TestCase):
         start = 0
         db = 1
         data = bytearray(40)
-        self.client.db_write(db_number=db, start=start, size=size, data=data)
+        self.client.db_write(db_number=db, start=start, data=data)
         result = self.client.db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
 
     def test_db_write(self):
         size = 40
-        data = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
-        data = bytearray(data)
-        self.client.db_write(db_number=1, start=0, size=size, data=data)
+        data = bytearray(size)
+        self.client.db_write(db_number=1, start=0, data=data)
 
     def test_db_get(self):
         self.client.db_get(db_number=db_number)
@@ -47,25 +46,24 @@ class TestClient(unittest.TestCase):
     def test_upload(self):
         self.client.upload(block_num=db_number)
 
-    @unittest.skip("TODO: fix the download and upload buffer")
     def test_download(self):
         data = bytearray(128)
         self.client.download(block_num=db_number, data=data)
 
     def test_read_area(self):
-        area = snap7.types.S7AreaDB
+        area = snap7.types.areas.DB
         dbnumber = 1
-        amount = 10
+        amount = 1
         start = 1
         self.client.read_area(area, dbnumber, start, amount)
 
     def test_write_area(self):
-        area = snap7.types.S7AreaDB
+        area = snap7.types.areas.DB
         dbnumber = 1
-        amount = 10
+        size = 1
         start = 1
-        data = bytearray(10)
-        self.client.write_area(area, dbnumber, start, amount, data)
+        data = bytearray(size)
+        self.client.write_area(area, dbnumber, start, data)
 
     def test_list_blocks(self):
         blockList = self.client.list_blocks()
@@ -93,25 +91,38 @@ class TestClient(unittest.TestCase):
     def test_get_connected(self):
         self.client.get_connected()
 
-    @unittest.skip("TODO: not yet fully implemented")
+    @unittest.skip("TODO: reading not available?")
     def test_ab_read(self):
-        self.client.ab_read()
+        start = 1
+        size = 1
+        data = bytearray(size)
+        self.client.ab_write(start=start, data=data)
+        self.client.ab_read(start=start, size=size)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_ab_write(self):
-        self.client.ab_write()
+        start = 1
+        size = 10
+        data = bytearray(size)
+        self.client.ab_write(start=start, data=data)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ab_read(self):
-        self.client.as_ab_read()
+        start = 1
+        size = 1
+        self.client.as_ab_read(start=start, size=size)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ab_write(self):
-        self.client.as_ab_write()
+        start = 1
+        size = 10
+        data = bytearray(size)
+        self.client.as_ab_write(start=start, data=data)
 
-    @unittest.skip("TODO: not yet fully implemented")
+    def test_compress(self):
+        time = 1000
+        self.client.compress(time)
+
     def test_as_compress(self):
-        self.client.as_compress()
+        time = 1000
+        self.client.as_compress(time)
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_copy_ram_to_rom(self):
@@ -129,26 +140,31 @@ class TestClient(unittest.TestCase):
     def test_as_db_fill(self):
         self.client.as_db_fill()
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_get(self):
-        self.client.as_db_get()
+        self.client.db_get(db_number=db_number)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_read(self):
-        self.client.as_db_read()
+        size = 40
+        start = 0
+        db = 1
+        data = bytearray(40)
+        self.client.db_write(db_number=db, start=start, data=data)
+        result = self.client.as_db_read(db_number=db, start=start, size=size)
+        self.assertEqual(data, result)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_write(self):
-        self.client.as_db_write()
+        size = 40
+        data = bytearray(size)
+        self.client.as_db_write(db_number=1, start=0, data=data)
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_download(self):
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
 
-    @unittest.skip("TODO: fix the download and upload buffer")
+    @unittest.skip("TODO: Invalid block size?")
     def test_download(self):
-        data = bytearray(128)
+        data = bytearray(1)
         self.client.download(block_num=db_number, data=data)
 
 
@@ -172,7 +188,6 @@ Cli_AsTMWrite
 Cli_AsUpload
 Cli_AsWriteArea
 Cli_CheckAsCompletion
-Cli_Compress
 Cli_Connect
 Cli_CopyRamToRom
 Cli_CTRead

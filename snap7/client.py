@@ -2,12 +2,12 @@
 Snap7 client used for connection to a siemens7 server.
 """
 import re
-from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32
+from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
 import logging
 
 import snap7
 from snap7.types import S7Object, buffer_type, buffer_size
-from snap7.types import wordlen_to_ctypes, BlocksList
+from snap7.types import wordlen_to_ctypes, BlocksList, areas
 from snap7.common import check_error, load_library, ipv4
 from snap7.exceptions import Snap7Exception
 
@@ -22,35 +22,21 @@ def error_wrap(func):
     return f
 
 
-def bytearray_to_buffer(data):
-    """Convert a byte arra to a ctypes / snap7 type
-    """
-    #TODO: find out how to do this better, this doesn't seem to work correctly
-
-    assert isinstance(data, bytearray)
-    # creates a 65535 ctypes.c_ubyte buffer
-
-    _buffer = snap7.types.buffer_type()
-
-    assert len(data) <= len(_buffer)
-
-    for i in range(len(data)):
-        _buffer[i] = data[i]
-
-    return _buffer
-
-
 class Client(object):
-    """A snap7 client"""
+    """
+    A snap7 client
+    """
     def __init__(self):
-        """Create a Client
-
-        :returns: A Snap7Client object
-        """
         self.library = load_library()
+        self.pointer = False
+        self.create()
+
+    def create(self):
+        """
+        create a SNAP7 client.
+        """
         logger.info("creating snap7 client")
         self.pointer = S7Object(self.library.Cli_Create())
-        # local buffer used by test for now..
 
     def destroy(self):
         """
@@ -96,19 +82,21 @@ class Client(object):
         return bytearray(data)
 
     @error_wrap
-    def db_write(self, db_number, start, size, data):
+    def db_write(self, db_number, start, data):
         """
         Writes to a DB object.
 
+        :param start: write offset
         :param data: bytearray
         """
-        _buffer = bytearray_to_buffer(data)
-
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        cdata = (type_ * size).from_buffer(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
                      (db_number, start, size, data))
-
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
-                                byref(_buffer))
+                                        byref(cdata))
 
     def full_upload(self, _type, block_num):
         """
@@ -157,10 +145,11 @@ class Client(object):
         :param block_num: New Block number (or -1)
         :param data: the user buffer
         """
-        _buffer = bytearray_to_buffer(data)
-        size = c_int(sizeof(_buffer))
+        type_ = c_byte
+        size = len(data)
+        cdata = (type_ * len(data)).from_buffer(data)
         result = self.library.Cli_Download(self.pointer, block_num,
-                                           byref(_buffer), size)
+                                           byref(cdata), size)
         return result
 
     def db_get(self, db_number):
@@ -173,34 +162,44 @@ class Client(object):
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def read_area(self, area, dbnumber, start, amount):
+    def read_area(self, area, dbnumber, start, size):
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+
+        :param dbnumber: The DB number, only used when area= S7AreaDB
+        :param start: offset to start writing
+        :param size: number of units to read
         """
+        assert area in snap7.types.areas.values()
         wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
-                      "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
-        data = (wordlen_to_ctypes[wordlen] * amount)()
+                      "wordlen: %s" % (area, dbnumber, start, size, wordlen))
+        data = (type_ * size)()
         result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
-                                           amount, wordlen, byref(data))
+                                           size, wordlen, byref(data))
         check_error(result, context="client")
         return data
 
     @error_wrap
-    def write_area(self, area, dbnumber, start, amount, data):
+    def write_area(self, area, dbnumber, start, data):
         """This is the main function to write data into a PLC. It's the
         complementary function of Cli_ReadArea(), the parameters and their
         meanings are the same. The only difference is that the data is
         transferred from the buffer pointed by pUsrData into PLC.
+
+        :param dbnumber: The DB number, only used when area= S7AreaDB
+        :param start: offset to start writing
+        :param data: a bytearray containing the payload
         """
         wordlen = snap7.types.S7WLByte
-        logging.debug("writing area: %s dbnumber: %s start: %s: amount %s: "
-                      "wordlen: %s" % (area, dbnumber, start, amount, wordlen))
-
-        _buffer = bytearray_to_buffer(data)
-
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        logging.debug("writing area: %s dbnumber: %s start: %s: size %s: "
+                      "type: %s" % (area, dbnumber, start, size, type_))
+        cdata = (type_ * len(data)).from_buffer(data)
         return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
-                                          amount, wordlen, byref(_buffer))
+                                          size, wordlen, byref(cdata))
 
     def list_blocks(self):
         """Returns the AG blocks amount divided by type.
@@ -279,35 +278,60 @@ class Client(object):
         check_error(result, context="client")
         return bool(connected)
 
-    def ab_read(self):
+    def ab_read(self, start, size):
         """
         This is a lean function of Cli_ReadArea() to read PLC process outputs.
         """
-        return self.library.Cli_ABRead(self.pointer)
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        data = (type_ * size)()
+        logging.debug("ab_read: start: %s: size %s: " % (start, size))
+        result = self.library.Cli_ABRead(self.pointer, start, size,
+                                         byref(data))
+        check_error(result, context="client")
+        return bytearray(data)
 
-    def ab_write(self):
+    def ab_write(self, start, data):
         """
+        This is a lean function of Cli_WriteArea() to Write PLC process outputs.
+        """
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        cdata = (type_ * size).from_buffer(data)
+        logging.debug("ab write: start: %s: size: %s: " % (start, size))
+        return self.library.Cli_ABWrite(self.pointer, start, size, byref(cdata))
 
+    def as_ab_read(self, start, size):
         """
-        return self.library.Cli_ABWrite(self.pointer)
+        This is the asynchronous counterpart of client.ab_read().
+        """
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        data = (type_ * size)()
+        logging.debug("ab_read: start: %s: size %s: " % (start, size))
+        result = self.library.Cli_AsABRead(self.pointer, start, size,
+                                         byref(data))
+        check_error(result, context="client")
+        return bytearray(data)
 
-    def as_ab_read(self):
+    def as_ab_write(self, start, data):
         """
+        This is the asynchronous counterpart of Cli_ABWrite.
+        """
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        cdata = (type_ * size).from_buffer(data)
+        logging.debug("ab write: start: %s: size: %s: " % (start, size))
+        return self.library.Cli_AsABWrite(self.pointer, start, size, byref(cdata))
 
+    @error_wrap
+    def as_compress(self, time):
         """
-        return self.library.Cli_AsABRead(self.pointer)
-
-    def as_ab_write(self):
+        This is the asynchronous counterpart of client.compress().
         """
-
-        """
-        return self.library.Cli_AsABWrite(self.pointer)
-
-    def as_compress(self):
-        """
-
-        """
-        return self.library.Cli_AsCompress(self.pointer)
+        return self.library.Cli_AsCompress(self.pointer, time)
 
     def copy_ram_to_rom(self):
         """
@@ -333,23 +357,46 @@ class Client(object):
         """
         return self.library.Cli_AsDBFill(self.pointer)
 
-    def as_db_get(self):
+    def as_db_get(self, db_number):
+        """
+        This is the asynchronous counterpart of Cli_DBGet.
+        """
+        logging.debug("db_get db_number: %s" % db_number)
+        _buffer = buffer_type()
+        result = self.library.Cli_AsDBGet(self.pointer, db_number,
+                                          byref(_buffer),
+                                          byref(c_int(buffer_size)))
+        check_error(result, context="client")
+        return bytearray(_buffer)
+
+    def as_db_read(self, db_number, start, size):
+        """
+        This is the asynchronous counterpart of Cli_DBRead.
+
+        :returns: user buffer.
+        """
+        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
+                     (db_number, start, size))
+
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        data = (type_ * size)()
+        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start,
+                                            size,  byref(data)))
+        check_error(result, context="client")
+        return bytearray(data)
+
+    def as_db_write(self, db_number, start, data):
         """
 
         """
-        return self.library.Cli_AsDBGet(self.pointer)
-
-    def as_db_read(self):
-        """
-
-        """
-        return self.library.Cli_AsDBRead(self.pointer)
-
-    def as_db_write(self):
-        """
-
-        """
-        return self.library.Cli_AsDBWrite(self.pointer)
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        cdata = (type_ * size).from_buffer(data)
+        logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
+                     (db_number, start, size, data))
+        return self.library.Cli_AsDBWrite(self.pointer, db_number, start, size,
+                                        byref(cdata))
 
     @error_wrap
     def as_download(self, data, block_num=-1):
@@ -361,7 +408,17 @@ class Client(object):
         :param block_num: New Block number (or -1)
         :param data: the user buffer
         """
-        _buffer = bytearray_to_buffer(data)
-        size = c_int(sizeof(_buffer))
+        size = len(data)
+        type_ = c_byte * len(data)
+        cdata = type_.from_buffer(data)
         return self.library.Cli_AsDownload(self.pointer, block_num,
-                                           byref(_buffer), size)
+                                           byref(cdata), size)
+
+    @error_wrap
+    def compress(self, time):
+        """
+        Performs the Memory compress action.
+
+        :param time: Maximum time expected to complete the operation (ms).
+        """
+        return self.library.Cli_Compress(self.pointer, time)

@@ -2,6 +2,10 @@
 Python equivalent for snap7 specific types.
 """
 import ctypes
+from snap7.common import ADict
+
+
+
 
 S7Object = ctypes.c_uint
 buffer_size = 65536
@@ -33,21 +37,30 @@ mkLog = 1
 
 
 # Area ID
-S7AreaPE   = 0x81
-S7AreaPA   = 0x82
-S7AreaMK   = 0x83
-S7AreaDB   = 0x84
-S7AreaCT   = 0x1C
-S7AreaTM   = 0x1D
+S7AreaPE = 0x81
+S7AreaPA = 0x82
+S7AreaMK = 0x83
+S7AreaDB = 0x84
+S7AreaCT = 0x1C
+S7AreaTM = 0x1D
+
+areas = ADict({
+    'PE': 0x81,
+    'PA': 0x82,
+    'MK': 0x83,
+    'DB': 0x84,
+    'CT': 0x1C,
+    'TM': 0x1D,
+})
 
 # Word Length
-S7WLBit     = 0x01
-S7WLByte    = 0x02
-S7WLWord    = 0x04
-S7WLDWord   = 0x06
-S7WLReal    = 0x08
+S7WLBit = 0x01
+S7WLByte = 0x01
+S7WLWord = 0x04
+S7WLDWord = 0x06
+S7WLReal = 0x08
 S7WLCounter = 0x1C
-S7WLTimer   = 0x1D
+S7WLTimer = 0x1D
 
 # Server Area ID  (use with Register/unregister - Lock/unlock Area)
 # NOTE: these are not the same for the client!!
@@ -58,16 +71,26 @@ srvAreaCT = 3
 srvAreaTM = 4
 srvAreaDB = 5
 
-wordlen_to_ctypes = {
+server_areas = ADict({
+    'PE': 0,
+    'PA': 1,
+    'MK': 2,
+    'CT': 3,
+    'TM': 4,
+    'DB': 5,
+})
+
+wordlen_to_ctypes = ADict({
+    S7WLBit: ctypes.c_int16,
     S7WLByte: ctypes.c_int8,
     S7WLWord: ctypes.c_int16,
     S7WLDWord: ctypes.c_int32,
     S7WLReal: ctypes.c_int32,
     S7WLCounter: ctypes.c_int16,
     S7WLTimer: ctypes.c_int16,
-}
+})
 
-block_types = {
+block_types = ADict({
     'OB': ctypes.c_int(0x38),
     'DB':  ctypes.c_int(0x41),
     'SDB': ctypes.c_int(0x42),
@@ -75,7 +98,7 @@ block_types = {
     'SFC': ctypes.c_int(0x44),
     'FB': ctypes.c_int(0x45),
     'SFB': ctypes.c_int(0x46),
-}
+})
 
 server_statuses = {
     0: 'SrvStopped',

@@ -10,6 +10,14 @@ logger = logging.getLogger(__name__)
 ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 
+class ADict(dict):
+    """
+    Accessing dict keys like an attribute.
+    """
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+
+
 class Snap7Library(object):
     """
     Snap7 loader and encapsulator. We make this a singleton to make
