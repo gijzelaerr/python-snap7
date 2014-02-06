@@ -14,7 +14,7 @@ Ubuntu
 If you are using Ubuntu you can use the Ubuntu packages from our
 `launchpad PPA <https://launchpad.net/~gijzelaar/+archive/snap7>`_. To install::
 
-    $ sudo sudo add-apt-repository ppa:gijzelaar/snap7
+    $ sudo add-apt-repository ppa:gijzelaar/snap7
     $ sudo apt-get update
     $ sudo apt-get install libsnap71 libsnap7-dev
 
