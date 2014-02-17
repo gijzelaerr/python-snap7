@@ -118,14 +118,8 @@ def write_data_db(dbnumber, all_data, size):
 
 def open_and_close_db1():
     t = time.time()
-    all_data = client.db_upload(1)
-
-    print 'getting all data took: ', time.time() - t
-    db1 = s7util.db.DB(1, all_data, rc_if_db_1_layout,
-                       126, 450, id_field='RC_IF_NAME',
-                       layout_offset=4,
-                       db_offset=4)
-
+    db1 = make_item_db(1)
+    all_data = db1._bytearray
     print 'row objects: ', len(db1.index)
 
     for x, (name, row) in enumerate(db1.index.items()):
@@ -150,19 +144,48 @@ def open_and_close_db1():
 
 
 def read_tank_db():
-
-    tank_data = client.db_upload(73)
-    db73 = s7util.db.DB(73, tank_data, tank_rc_if_db_layout,
-                        238, 2, id_field='RC_IF_NAME')
+    db73 = make_tank_db()
     print len(db73)
     for x, (name, row) in enumerate(db73):
         print row
 
 
-read_tank_db()
+def make_item_db(x):
+    t = time.time()
+    all_data = client.db_upload(x)
+    print 'getting all data took: ', time.time() - t
+    db1 = s7util.db.DB(x, all_data, rc_if_db_1_layout,
+                       126, 450, id_field='RC_IF_NAME',
+                       layout_offset=4,
+                       db_offset=4)
+    return db1
+
+
+def make_tank_db():
+    tank_data = client.db_upload(73)
+    db73 = s7util.db.DB(73, tank_data, tank_rc_if_db_layout,
+                        238, 2, id_field='RC_IF_NAME')
+    return db73
+
+
+def print_tag():
+    db1 = make_item_db(1)
+    print db1['5V315']
+
+
+def print_open():
+    db1 = make_item_db(1)
+    for x, (name, row) in enumerate(db1):
+        if row['BatchName']:
+            print row
+
+
+#read_tank_db()
 #open_and_close()
 #open_and_close_db1()
 #time.sleep(1)
 #show_row(2)
+print_tag()
+#print_open()
 
 client.disconnect()
