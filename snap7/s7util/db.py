@@ -334,8 +334,8 @@ class DB_Row(object):
 
         db_nr = self._bytearray.db_number
         offset = self.db_offset
-        data = self.get_bytearray()[offset:offset+self.row_size]
-        client.db_write(db_nr, self.db_offset, self.row_size, data)
+	data = self.get_bytearray()[offset:offset+self.row_size]
+	client.db_write(db_nr, self.db_offset, data)
 
     def read(self, client):
         """
