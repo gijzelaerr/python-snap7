@@ -74,7 +74,7 @@ def get_int(_bytearray, byte_index):
 
     int are represented in two bytes
     """
-    byte1 = _bytearray[byte_index+1]
+    byte1 = _bytearray[byte_index + 1]
     byte0 = _bytearray[byte_index]
     return byte1 + (byte0 << 8)
 
@@ -86,17 +86,18 @@ def set_real(_bytearray, byte_index, real):
     make 4 byte data from real
 
     """
+    real = float(real)
     real = struct.pack('>f', real)
     _bytes = struct.unpack('4B', real)
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index+i] = b
+        _bytearray[byte_index + i] = b
 
 
 def get_real(_bytearray, byte_index):
     """
     Get real value. create float from 4 bytes
     """
-    x = _bytearray[byte_index:byte_index+4]
+    x = _bytearray[byte_index:byte_index + 4]
     real = struct.unpack('>f', struct.pack('4B', *x))[0]
     return real
 
@@ -109,28 +110,28 @@ def set_string(_bytearray, byte_index, value):
     :params size: total possible string size
     """
     # set len count
-    _bytearray[byte_index+1] = len(value)
+    _bytearray[byte_index + 1] = len(value)
     i = 0
     # fill array which chr integers
     for i, c in enumerate(value):
-        _bytearray[byte_index+2+i] = ord(c)
+        _bytearray[byte_index + 2 + i] = ord(c)
 
     # fill the rest with empty space
     for r in range(i + 1, _bytearray[byte_index]):
-        _bytearray[byte_index+2+r] = ord(' ')
+        _bytearray[byte_index + 2 + r] = ord(' ')
 
 
 def get_string(_bytearray, byte_index):
     """
     parse string from bytearray
     """
-    size = _bytearray[byte_index+1]
-    data = map(chr, _bytearray[byte_index+2:byte_index+2+size])
+    size = _bytearray[byte_index + 1]
+    data = map(chr, _bytearray[byte_index + 2:byte_index + 2 + size])
     return "".join(data)
 
 
 def get_dword(_bytearray, byte_index):
-    data = _bytearray[byte_index:byte_index+4]
+    data = _bytearray[byte_index:byte_index + 4]
     dword = struct.unpack('I', struct.pack('4B', *data))[0]
     return dword
 
@@ -138,7 +139,7 @@ def get_dword(_bytearray, byte_index):
 def set_dword(_bytearray, byte_index, dword):
     _bytes = struct.unpack('4B', struct.pack('I', dword))
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index+i] = b
+        _bytearray[byte_index + i] = b
 
 
 class DB(object):
@@ -349,4 +350,4 @@ class DB_Row(object):
         data = self.get_bytearray()
         # replace data in bytearray
         for i, b in enumerate(_bytearray):
-            data[i+self.db_offset] = b
+            data[i + self.db_offset] = b
