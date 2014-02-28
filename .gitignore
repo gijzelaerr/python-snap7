@@ -44,3 +44,5 @@ doc/_build/
 
 # pycharm
 .idea
+
+.vagrant/
