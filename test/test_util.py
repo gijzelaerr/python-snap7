@@ -1,7 +1,8 @@
-
-from snap7.s7util import db
 import unittest
 import re
+
+from snap7 import util
+
 
 test_spec = """
 
@@ -38,12 +39,12 @@ class TestS7util(unittest.TestCase):
         """
         test_array = bytearray(_bytearray)
 
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(row['NAME'] == 'test')
 
     def test_write_string(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['NAME'] = 'abc'
         self.assertTrue(row['NAME'] == 'abc')
         row['NAME'] = ''
@@ -51,25 +52,25 @@ class TestS7util(unittest.TestCase):
 
     def test_get_int(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         x = row['ID']
         self.assertTrue(x == 0)
 
     def test_set_int(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['ID'] = 259
         self.assertTrue(row['ID'] == 259)
 
     def test_get_bool(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(row['testbool1'] == 1)
         self.assertTrue(row['testbool8'] == 0)
 
     def test_set_bool(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['testbool8'] = 1
         row['testbool1'] = 0
 
@@ -79,7 +80,7 @@ class TestS7util(unittest.TestCase):
     def test_db_creation(self):
         test_array = bytearray(_bytearray * 10)
 
-        test_db = db.DB(1, test_array, test_spec,
+        test_db = util.DB(1, test_array, test_spec,
                         row_size=len(_bytearray),
                         size=10,
                         layout_offset=4,
@@ -102,29 +103,29 @@ class TestS7util(unittest.TestCase):
 
     def test_get_real(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(0.01 > (row['testReal'] - 827.3) > -0.1)
 
     def test_set_real(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['testReal'] = 1337.1337
         self.assertTrue(0.01 > (row['testReal'] - 1337.1337) > -0.01)
 
     def test_set_dword(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['testDword'] = 9999999
         self.assertTrue(row['testDword'] == 9999999)
 
     def test_get_dword(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(row['testDword'] == 869486148)
 
     def test_export(self):
         test_array = bytearray(_bytearray)
-        row = db.DB_Row(test_array, test_spec, layout_offset=4)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
         data = row.export()
         self.assertTrue('testDword' in data)
         self.assertTrue('testbool1' in data)

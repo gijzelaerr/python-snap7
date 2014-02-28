@@ -35,7 +35,7 @@ def show_row(x):
 
     while True:
         data = get_db_row(1, 4 + x * row_size, row_size)
-        row = s7util.db.DB_Row(data, rc_if_db_1_layout,
+        row = snap7.util.DB_Row(data, rc_if_db_1_layout,
                                layout_offset=4)
         print 'name', row['RC_IF_NAME']
         print row['RC_IF_NAME']
@@ -48,7 +48,7 @@ def show_row(x):
 def get_row(x):
     row_size = 126
     data = get_db_row(1, 4 + x * row_size, row_size)
-    row = s7util.db.DB_Row(data, rc_if_db_1_layout,
+    row = snap7.util.DB_Row(data, rc_if_db_1_layout,
                            layout_offset=4)
     return row
 
@@ -154,7 +154,7 @@ def make_item_db(x):
     t = time.time()
     all_data = client.db_upload(x)
     print 'getting all data took: ', time.time() - t
-    db1 = s7util.db.DB(x, all_data, rc_if_db_1_layout,
+    db1 = snap7.util.DB(x, all_data, rc_if_db_1_layout,
                        126, 450, id_field='RC_IF_NAME',
                        layout_offset=4,
                        db_offset=4)
@@ -163,7 +163,7 @@ def make_item_db(x):
 
 def make_tank_db():
     tank_data = client.db_upload(73)
-    db73 = s7util.db.DB(73, tank_data, tank_rc_if_db_layout,
+    db73 = snap7.util.DB(73, tank_data, tank_rc_if_db_layout,
                         238, 2, id_field='RC_IF_NAME')
     return db73
 

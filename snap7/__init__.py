@@ -6,6 +6,6 @@ import snap7.client as client
 import snap7.error as error
 import snap7.types as types
 import snap7.common as common
-import snap7.s7util as s7util 
+import snap7.util as util
 
 __version__ = '0.2'
