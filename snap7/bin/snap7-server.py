@@ -45,6 +45,9 @@ root_msg = "it sucks, but you need to run this as root. The snap7 library is" \
            " hardcoded run on port 102, which requires root privileges."
 
 if __name__ == '__main__':
+    import sys
+    if len(sys.argv) > 1:
+        snap7.common.load_library(sys.argv[1])
     logging.basicConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
