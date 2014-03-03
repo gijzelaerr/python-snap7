@@ -13,6 +13,7 @@ but at the moment only Python 2.7 is supported.
 
 The full documentation is available on `Read The Docs <http://python-snap7.readthedocs.org/en/latest/>`_.
 
+see `python-snap7 in action <http://youtu.be/G-Gj_r2BQBk/>`_.
 
 Installation
 ============
