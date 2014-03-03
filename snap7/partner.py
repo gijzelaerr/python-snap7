@@ -89,6 +89,7 @@ class Partner(object):
         :param active: 0
         :returns: a pointer to the partner object
         """
+        self.library.Par_Create.restype = ctypes.c_void_p
         return S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):

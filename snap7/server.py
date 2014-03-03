@@ -56,6 +56,7 @@ class Server(object):
         create the server.
         """
         logger.info("creating server")
+        self.library.Srv_Create.restype = ctypes.c_void_p
         return S7Object(self.library.Srv_Create())
 
     @error_wrap

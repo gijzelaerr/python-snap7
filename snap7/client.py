@@ -2,7 +2,7 @@
 Snap7 client used for connection to a siemens7 server.
 """
 import re
-from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
+from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte, c_void_p
 import logging
 
 import snap7
@@ -36,6 +36,7 @@ class Client(object):
         create a SNAP7 client.
         """
         logger.info("creating snap7 client")
+        self.library.Cli_Create.restype = c_void_p
         self.pointer = S7Object(self.library.Cli_Create())
 
     def destroy(self):
