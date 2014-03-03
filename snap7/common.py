@@ -26,23 +26,26 @@ class Snap7Library(object):
     _instance = None
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
-            cls._instance = super(Snap7Library, cls).__new__(cls, *args,
-                                                             **kwargs)
+            cls._instance = object.__new__(cls)
+            cls._instance.lib_location = None
+            cls._instance.cdll = None
         return cls._instance
 
-    def __init__(self):
-        lib_location = find_library('snap7')
-        if not lib_location:
+    def __init__(self, lib_location=None):
+        if self.cdll:
+            return
+        self.lib_location = lib_location or self.lib_location or find_library('snap7')
+        if not self.lib_location:
             msg = "can't find snap7 library. If installed, try running ldconfig"
             raise Snap7Exception(msg)
-        self.cdll = cdll.LoadLibrary(lib_location)
+        self.cdll = cdll.LoadLibrary(self.lib_location)
 
 
-def load_library():
+def load_library(lib_location=None):
     """
-    :returns: a ctypes cdll object iwth the snap7 shared library loaded.
+    :returns: a ctypes cdll object with the snap7 shared library loaded.
     """
-    return Snap7Library().cdll
+    return Snap7Library(lib_location).cdll
 
 
 def check_error(code, context="client"):
