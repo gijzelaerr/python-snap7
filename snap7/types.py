@@ -7,7 +7,7 @@ from snap7.common import ADict
 
 
 
-S7Object = ctypes.c_uint
+S7Object = ctypes.c_void_p
 buffer_size = 65536
 buffer_type = ctypes.c_ubyte * buffer_size
 time_t = ctypes.c_uint64  # TODO: check if this is valid for all platforms
