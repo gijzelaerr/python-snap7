@@ -157,7 +157,7 @@ class DB(object):
 
     def __init__(self, db_number, _bytearray,
                  specification, row_size, size, id_field=None,
-                 db_offset=0, layout_offset=0):
+                 db_offset=0, layout_offset=0, row_offset=0):
 
         self.db_number = db_number
         self.size = size
@@ -216,11 +216,12 @@ class DB_Row(object):
     _specification = None  # row specification
 
     def __init__(self, _bytearray, _specification, row_size=0,
-                 db_offset=0, layout_offset=0):
+                 db_offset=0, layout_offset=0, row_offset=0):
 
         self.db_offset = db_offset          # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
         self.row_size = row_size
+        self.row_offset = row_offset        # start of writable part of row
 
         assert(isinstance(_bytearray, (bytearray, DB)))
         self._bytearray = _bytearray
@@ -335,8 +336,15 @@ class DB_Row(object):
 
         db_nr = self._bytearray.db_number
         offset = self.db_offset
-	data = self.get_bytearray()[offset:offset+self.row_size]
-	client.db_write(db_nr, self.db_offset, data)
+        data = self.get_bytearray()[offset:offset+self.row_size]
+        db_offset = self.db_offset
+
+        # indicate start of write only area of row!
+        if self.row_offset:
+            data = data[self.row_offset:]
+            db_offset += self.row_offset
+
+        client.db_write(db_nr, db_offset, data)
 
     def read(self, client):
         """
