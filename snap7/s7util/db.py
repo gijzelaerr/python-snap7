@@ -9,6 +9,7 @@ see test code test_s7util
 
 from collections import OrderedDict
 import struct
+import logging
 
 
 def parse_specification(db_specification):
@@ -153,7 +154,10 @@ class DB(object):
     layout_offset = None   # at which byte in row specification should
                            # we start reading the data
     db_offset = None       # at which byte in db should we start reading?
-                           # first fields could be used for something else
+                           # first fields could be be status data.
+                           # and only the last part could be control data
+                           # now you can be sure you will never overwrite
+                           # critical parts of db
 
     def __init__(self, db_number, _bytearray,
                  specification, row_size, size, id_field=None,
@@ -166,6 +170,8 @@ class DB(object):
 
         self.db_offset = db_offset
         self.layout_offset = layout_offset
+        self.row_offset = row_offset
+
         self._bytearray = _bytearray
         self.specification = specification
         # loop over bytearray. make rowObjects
@@ -187,10 +193,15 @@ class DB(object):
                          specification,
                          row_size=row_size,
                          db_offset=db_offset,
-                         layout_offset=layout_offset)
+                         layout_offset=layout_offset,
+                         row_offset=self.row_offset)
 
             # store row object
             key = row[id_field] if id_field else i
+            if key in self.index:
+                msg = '%s not unique!' % key
+                logging.error(msg)
+                print msg
             self.index[key] = row
 
     def __getitem__(self, key, default=None):
