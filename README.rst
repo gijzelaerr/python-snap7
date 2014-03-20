@@ -11,6 +11,8 @@ but at the moment only Python 2.7 is supported.
 .. image:: https://travis-ci.org/gijzelaerr/python-snap7.png?branch=master 
   :target: https://travis-ci.org/gijzelaerr/python-snap7
 
+[![Gitter chat](https://badges.gitter.im/gijzelaerr/python-snap7.png)](https://gitter.im/gijzelaerr/python-snap7)
+
 The full documentation is available on `Read The Docs <http://python-snap7.readthedocs.org/en/latest/>`_.
 
 see `python-snap7 in action <http://youtu.be/G-Gj_r2BQBk/>`_.
