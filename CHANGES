@@ -1,6 +1,12 @@
 CHANGES
 =======
 
+0.2.1
+-----
+
+Small fix, README.rst was not included in sdist
+
+
 0.2
 ---
 
