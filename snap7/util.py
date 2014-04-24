@@ -62,6 +62,8 @@ def set_int(_bytearray, byte_index, _int):
     """
     Set value in bytearray to int
     """
+    # make sure were dealing with an int
+    _int = int(_int)
     # int needs two be two bytes.
     byte0 = _int >> 8
     byte1 = _int - (byte0 << 8)
@@ -110,6 +112,7 @@ def set_string(_bytearray, byte_index, value):
     :params value: string data
     :params size: total possible string size
     """
+    assert isinstance(value, (str, unicode))
     # set len count
     _bytearray[byte_index + 1] = len(value)
     i = 0
@@ -138,6 +141,7 @@ def get_dword(_bytearray, byte_index):
 
 
 def set_dword(_bytearray, byte_index, dword):
+    dword = int(dword)
     _bytes = struct.unpack('4B', struct.pack('I', dword))
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
