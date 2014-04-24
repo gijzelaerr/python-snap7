@@ -198,7 +198,7 @@ class DB(object):
 
             # store row object
             key = row[id_field] if id_field else i
-            if key in self.index:
+            if key and key in self.index:
                 msg = '%s not unique!' % key
                 logging.error(msg)
                 print msg
