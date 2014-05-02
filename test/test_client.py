@@ -3,11 +3,7 @@ import logging
 
 import snap7
 
-
-logging.basicConfig()
-l = logging.getLogger()
-l.setLevel(logging.INFO)
-
+logging.basicConfig(level=logging.WARNING)
 
 ip = '127.0.0.1'
 tcpport = 1102

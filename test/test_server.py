@@ -6,6 +6,8 @@ import snap7.types
 import snap7.error
 import snap7.server
 
+logging.basicConfig(level=logging.WARNING)
+
 class TestServer(unittest.TestCase):
     def setUp(self):
         self.server = snap7.server.Server()

@@ -437,7 +437,7 @@ class Client(object):
                                          byref(type_(value)))
 
     def get_param(self, number):
-        """Reads an internal Server object parameter.
+        """Reads an internal Client object parameter.
         """
         logger.debug("retreiving param number %s" % number)
         type_ = param_types[number]

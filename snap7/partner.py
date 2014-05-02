@@ -11,7 +11,7 @@ import ctypes
 import logging
 import re
 from snap7.common import load_library, check_error, ipv4
-from snap7.types import S7Object
+import snap7.types
 from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class Partner(object):
         :returns: a pointer to the partner object
         """
         self.library.Par_Create.restype = ctypes.c_void_p
-        return S7Object(self.library.Par_Create(int(active)))
+        return snap7.types.S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -109,11 +109,17 @@ class Partner(object):
         check_error(result, "partner")
         return error
 
-    def get_param(self):
+    def get_param(self, number):
         """
         Reads an internal Partner object parameter.
         """
-        return self.library.Par_GetParam(self.pointer)
+        logger.debug("retreiving param number %s" % number)
+        type_ = snap7.types.param_types[number]
+        value = type_()
+        code = self.library.Par_GetParam(self.pointer, ctypes.c_int(number),
+                                         ctypes.byref(value))
+        check_error(code)
+        return value.value
 
     def get_stats(self):
         """
@@ -152,11 +158,13 @@ class Partner(object):
         check_error(result, "partner")
         return send_time, recv_time
 
-    def set_param(self):
+    @error_wrap
+    def set_param(self, number, value):
+        """Sets an internal Partner object parameter.
         """
-        Sets an internal Partner object parameter.
-        """
-        return self.library.Par_SetParam(self.pointer)
+        logger.debug("setting param number %s to %s" % (number, value))
+        return self.library.Par_SetParam(self.pointer, number,
+                                         ctypes.byref(ctypes.c_int(value)))
 
     def set_recv_callback(self):
         """

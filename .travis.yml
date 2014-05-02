@@ -12,7 +12,7 @@ before_install:
 install:
   - python setup.py install
 script:
-  - /home/travis/virtualenv/python2.7/bin/nosetests test/test_partner.py
+  - sudo /home/travis/virtualenv/python2.7/bin/nosetests test/test_partner.py
   - /home/travis/virtualenv/python2.7/bin/nosetests test/test_server.py
   - nohup /home/travis/virtualenv/python2.7/bin/snap7-server.py &
   - nosetests test/test_client.py
