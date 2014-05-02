@@ -1,13 +1,15 @@
 import unittest
 import ctypes
 import logging
-import snap7
 
+import snap7.types
+import snap7.error
+import snap7.server
 
 class TestServer(unittest.TestCase):
     def setUp(self):
         self.server = snap7.server.Server()
-        self.server.start()
+        self.server.start(tcpport=1102)
 
     def tearDown(self):
         self.server.stop()
@@ -25,7 +27,7 @@ class TestServer(unittest.TestCase):
             snap7.common.error_text(error, context="client")
 
     def test_event(self):
-        event = snap7.server.SrvEvent()
+        event = snap7.types.SrvEvent()
         self.server.event_text(event)
 
     def test_get_status(self):
@@ -85,7 +87,7 @@ class TestServer(unittest.TestCase):
 
     def test_pick_event(self):
         event = self.server.pick_event()
-        self.assertEqual(type(event), snap7.server.SrvEvent)
+        self.assertEqual(type(event), snap7.types.SrvEvent)
         event = self.server.pick_event()
         self.assertFalse(event)
 
@@ -93,10 +95,7 @@ class TestServer(unittest.TestCase):
         self.server.clear_events()
         self.assertFalse(self.server.clear_events())
 
-    def test_set_param(self):
-        param = snap7.types.MaxClients
-        # TODO: we can't set params for the server?
-        self.assertRaises(Exception, self.server.set_param, param, 2)
+
 
     def test_start_to(self):
         self.server.start_to('0.0.0.0')
@@ -104,13 +103,25 @@ class TestServer(unittest.TestCase):
 
     def test_get_param(self):
         # check the defaults
-        self.assertEqual(self.server.get_param(snap7.types.LocalPort), 102)
+        self.assertEqual(self.server.get_param(snap7.types.LocalPort), 1102)
         self.assertEqual(self.server.get_param(snap7.types.WorkInterval), 100)
         self.assertEqual(self.server.get_param(snap7.types.MaxClients), 1024)
 
         # invalid param for server
         self.assertRaises(Exception, self.server.get_param,
                           snap7.types.RemotePort)
+
+
+
+class TestServerBeforeStart(unittest.TestCase):
+    """
+    Tests for server before it is started
+    """
+    def setUp(self):
+        self.server = snap7.server.Server()
+
+    def test_set_param(self):
+        self.server.set_param(snap7.types.LocalPort, 1102)
 
 
 if __name__ == '__main__':

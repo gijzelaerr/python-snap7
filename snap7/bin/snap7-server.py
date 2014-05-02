@@ -7,6 +7,7 @@ import time
 import logging
 import snap7
 
+tcpport = 1102
 
 def mainloop():
     server = snap7.server.Server()
@@ -14,9 +15,8 @@ def mainloop():
     data = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
     server.register_area(snap7.types.srvAreaDB, 1, data)
 
-    server.start()
+    server.start(tcpport=tcpport)
     while True:
-        #logger.info("server: %s cpu: %s users: %s" % server.get_status())
         while True:
             event = server.pick_event()
             if event:
@@ -26,24 +26,6 @@ def mainloop():
         time.sleep(1)
 
 
-def check_root():
-    """
-    check if uid of this process is root
-    """
-    import os
-    import platform
-
-    if platform.system() == 'Windows':
-        # We don't need root on Windows to use port 102
-        return True
-
-    if os.getuid() == 0:
-        return True
-
-
-root_msg = "it sucks, but you need to run this as root. The snap7 library is" \
-           " hardcoded run on port 102, which requires root privileges."
-
 if __name__ == '__main__':
     import sys
     if len(sys.argv) > 1:
@@ -51,6 +33,4 @@ if __name__ == '__main__':
     logging.basicConfig()
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    if not check_root():
-        logging.error(root_msg)
     mainloop()
