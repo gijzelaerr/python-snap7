@@ -6,8 +6,7 @@ from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte, c_
 import logging
 
 import snap7
-from snap7.types import S7Object, buffer_type, buffer_size
-from snap7.types import wordlen_to_ctypes, BlocksList, areas
+from snap7.types import S7Object, buffer_type, buffer_size, BlocksList, param_types
 from snap7.common import check_error, load_library, ipv4
 from snap7.exceptions import Snap7Exception
 
@@ -55,7 +54,7 @@ class Client(object):
         return self.library.Cli_Disconnect(self.pointer)
 
     @error_wrap
-    def connect(self, address, rack, slot):
+    def connect(self, address, rack, slot, tcpport=102):
         """
         Connect to a S7 server.
 
@@ -63,9 +62,13 @@ class Client(object):
         :param rack: rack on server
         :param slot: slot on server.
         """
-        logger.info("connecting to %s rack %s slot %s" % (address, rack, slot))
+        logger.info("connecting to %s:%s rack %s slot %s" % (address, tcpport,
+                                                             rack, slot))
+
+        self.set_param(snap7.types.RemotePort, tcpport)
+
         return self.library.Cli_ConnectTo(self.pointer, c_char_p(address),
-                                  c_int(rack), c_int(slot))
+                                          c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
         """This is a lean function of Cli_ReadArea() to read PLC DB.
@@ -423,3 +426,23 @@ class Client(object):
         :param time: Maximum time expected to complete the operation (ms).
         """
         return self.library.Cli_Compress(self.pointer, time)
+
+    @error_wrap
+    def set_param(self, number, value):
+        """Sets an internal Server object parameter.
+        """
+        logger.debug("setting param number %s to %s" % (number, value))
+        type_ = param_types[number]
+        return self.library.Cli_SetParam(self.pointer, number,
+                                         byref(type_(value)))
+
+    def get_param(self, number):
+        """Reads an internal Server object parameter.
+        """
+        logger.debug("retreiving param number %s" % number)
+        type_ = param_types[number]
+        value = type_()
+        code = self.library.Cli_GetParam(self.pointer, c_int(number),
+                                         byref(value))
+        check_error(code)
+        return value.value

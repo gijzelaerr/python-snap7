@@ -8,8 +8,9 @@ logging.basicConfig()
 l = logging.getLogger()
 l.setLevel(logging.INFO)
 
-#ip = '192.168.200.24'
+
 ip = '127.0.0.1'
+tcpport = 1102
 db_number = 1
 rack = 1
 slot = 1
@@ -19,7 +20,7 @@ class TestClient(unittest.TestCase):
 
     def setUp(self):
         self.client = snap7.client.Client()
-        self.client.connect(ip, rack, slot)
+        self.client.connect(ip, rack, slot, tcpport)
 
     def tearDown(self):
         self.client.disconnect()
@@ -129,6 +130,45 @@ class TestClient(unittest.TestCase):
         time = 1000
         self.client.as_compress(time)
 
+    def test_set_param(self):
+        values = (
+            (snap7.types.PingTimeout, 800),
+            (snap7.types.SendTimeout, 15),
+            (snap7.types.RecvTimeout, 3500),
+            (snap7.types.SrcRef, 128),
+            (snap7.types.DstRef, 128),
+            (snap7.types.SrcTSap, 128),
+            (snap7.types.PDURequest, 470),
+        )
+        for param, value in values:
+            self.client.set_param(param, value)
+
+        self.assertRaises(Exception, self.client.set_param,
+                          snap7.types.RemotePort, 1)
+
+    def test_get_param(self):
+        expected = (
+            (snap7.types.RemotePort, tcpport),
+            (snap7.types.PingTimeout, 750),
+            (snap7.types.SendTimeout, 10),
+            (snap7.types.RecvTimeout, 3000),
+            (snap7.types.SrcRef, 256),
+            (snap7.types.DstRef, 0),
+            (snap7.types.SrcTSap, 256),
+            (snap7.types.PDURequest, 480),
+        )
+        for param, value in expected:
+            self.assertEqual(self.client.get_param(param), value)
+
+        non_client = snap7.types.LocalPort, snap7.types.WorkInterval,\
+                     snap7.types.MaxClients, snap7.types.BSendTimeout,\
+                     snap7.types.BRecvTimeout, snap7.types.RecoveryTime,\
+                     snap7.types.KeepAliveTime
+
+        # invalid param for client
+        for param in non_client:
+            self.assertRaises(Exception, self.client.get_param,  non_client)
+
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_copy_ram_to_rom(self):
         self.client.copy_ram_to_rom()
@@ -176,8 +216,36 @@ class TestClient(unittest.TestCase):
         self.client.download(block_num=db_number, data=data)
 
 
+class TestClientBeforeConnect(unittest.TestCase):
+    def setUp(self):
+        self.client = snap7.client.Client()
+
+    def test_set_param(self):
+        self.client.set_param(snap7.types.RemotePort, 1102)
+
+
+
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestClientBeforeConnect(unittest.TestCase):
+    def setUp(self):
+        self.client = snap7.client.Client()
+
+    def test_setparam(self):
+        values = (
+            (snap7.types.RemotePort, 1102),
+            (snap7.types.PingTimeout, 800),
+            (snap7.types.SendTimeout, 15),
+            (snap7.types.RecvTimeout, 3500),
+            (snap7.types.SrcRef, 128),
+            (snap7.types.DstRef, 128),
+            (snap7.types.SrcTSap, 128),
+            (snap7.types.PDURequest, 470),
+        )
+        for param, value in values:
+            self.client.set_param(param, value)
 
 
 # TODO: implement

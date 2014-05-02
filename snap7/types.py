@@ -4,9 +4,6 @@ Python equivalent for snap7 specific types.
 import ctypes
 from snap7.common import ADict
 
-
-
-
 S7Object = ctypes.c_void_p
 buffer_size = 65536
 buffer_type = ctypes.c_ubyte * buffer_size
@@ -15,21 +12,39 @@ word = ctypes.c_uint16
 longword = ctypes.c_uint32
 
 # // PARAMS LIST
-LocalPort       = 1
-RemotePort      = 2
-PingTimeout     = 3
-SendTimeout     = 4
-RecvTimeout     = 5
-WorkInterval    = 6
-SrcRef          = 7
-DstRef          = 8
-SrcTSap         = 9
-PDURequest      = 10
-MaxClients      = 11
-BSendTimeout    = 12
-BRecvTimeout    = 13
-RecoveryTime    = 14
-KeepAliveTime   = 15
+LocalPort = 1
+RemotePort = 2
+PingTimeout = 3
+SendTimeout = 4
+RecvTimeout = 5
+WorkInterval = 6
+SrcRef = 7
+DstRef = 8
+SrcTSap = 9
+PDURequest = 10
+MaxClients = 11
+BSendTimeout = 12
+BRecvTimeout = 13
+RecoveryTime = 14
+KeepAliveTime = 15
+
+param_types = ADict({
+    LocalPort: ctypes.c_uint16,
+    RemotePort: ctypes.c_uint16,
+    PingTimeout: ctypes.c_int32,
+    SendTimeout: ctypes.c_int32,
+    RecvTimeout: ctypes.c_int32,
+    WorkInterval: ctypes.c_int32,
+    SrcRef: ctypes.c_uint16,
+    DstRef: ctypes.c_uint16,
+    SrcTSap: ctypes.c_uint16,
+    PDURequest: ctypes.c_int32,
+    MaxClients: ctypes.c_int32,
+    BSendTimeout: ctypes.c_int32,
+    BRecvTimeout: ctypes.c_int32,
+    RecoveryTime: ctypes.c_uint32,
+    KeepAliveTime:  ctypes.c_uint32,
+})
 
 # mask types
 mkEvent = 0
@@ -147,5 +162,5 @@ class BlocksList(ctypes.Structure):
     def __str__(self):
         return "<block list count OB: %s FB: %s FC: %s SFB: %x SFC: %s DB: %s" \
                " SDB: %s>" % (self.OBCount, self.FBCount, self.FCCount,
-                             self.SFBCount, self.SFCCount, self.DBCount,
-                             self.SDBCount)
+                              self.SFBCount, self.SFCCount, self.DBCount,
+                              self.SDBCount)

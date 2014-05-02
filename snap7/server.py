@@ -4,8 +4,7 @@ Snap7 server used for mimicking a siemens 7 server.
 import ctypes
 import logging
 import re
-from snap7.types import S7Object, longword, SrvEvent, server_statuses, \
-    cpu_statuses
+import snap7.types
 from snap7.common import check_error, load_library, ipv4
 
 logger = logging.getLogger(__name__)
@@ -57,7 +56,7 @@ class Server(object):
         """
         logger.info("creating server")
         self.library.Srv_Create.restype = ctypes.c_void_p
-        return S7Object(self.library.Srv_Create())
+        return snap7.types.S7Object(self.library.Srv_Create())
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
@@ -78,7 +77,8 @@ class Server(object):
         """
         logger.info("setting event callback")
         CALLBACK = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
-                                    ctypes.POINTER(SrvEvent), ctypes.c_int)
+                                    ctypes.POINTER(snap7.types.SrvEvent),
+                                    ctypes.c_int)
 
         def wrapper(usrptr, pevent, size):
             """
@@ -106,7 +106,8 @@ class Server(object):
         """
         logger.info("setting read event callback")
         CALLBACK = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
-                                    ctypes.POINTER(SrvEvent), ctypes.c_int)
+                                    ctypes.POINTER(snap7.types.SrvEvent),
+                                    ctypes.c_int)
 
         def wrapper(usrptr, pevent, size):
             """
@@ -136,11 +137,14 @@ class Server(object):
         self.set_events_callback(log_callback)
 
     @error_wrap
-    def start(self):
+    def start(self, tcpport=102):
         """
         start the server.
         """
-        logger.info("starting server on 0.0.0.0:102")
+        if tcpport != 102:
+            logging.info("setting server TCP port to %s" % tcpport)
+            self.set_param(snap7.types.LocalPort, tcpport)
+        logger.info("starting server on 0.0.0.0:%s" % tcpport)
         return self.library.Srv_Start(self.pointer)
 
     @error_wrap
@@ -176,8 +180,8 @@ class Server(object):
         logger.debug("status server %s cpu %s clients %s" %
                      (server_status.value, cpu_status.value,
                       clients_count.value))
-        return server_statuses[server_status.value], \
-               cpu_statuses[cpu_status.value], \
+        return snap7.types.server_statuses[server_status.value], \
+               snap7.types.cpu_statuses[cpu_status.value], \
                clients_count.value
 
     @error_wrap
@@ -202,10 +206,13 @@ class Server(object):
         return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
-    def start_to(self, ip):
+    def start_to(self, ip, tcpport=102):
         """
         start server on a specific interface.
         """
+        if tcpport != 102:
+            logging.info("setting server TCP port to %s" % tcpport)
+            self.set_param(snap7.types.LocalPort, tcpport)
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)
         return self.library.Srv_Start(self.pointer, ip)
@@ -229,7 +236,7 @@ class Server(object):
     def set_cpu_status(self, status):
         """Sets the Virtual CPU status.
         """
-        assert status in cpu_statuses, 'unknown cpu state %s' % status
+        assert status in snap7.types.cpu_statuses, 'unknown cpu state %s' % status
         logger.debug("setting cpu status to %s" % status)
         return self.library.Srv_SetCpuStatus(self.pointer, status)
 
@@ -237,7 +244,7 @@ class Server(object):
         """Extracts an event (if available) from the Events queue.
         """
         logger.debug("checking event queue")
-        event = SrvEvent()
+        event = snap7.types.SrvEvent()
         ready = ctypes.c_int32()
         code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event),
                                           ctypes.byref(ready))
@@ -261,7 +268,7 @@ class Server(object):
         """Reads the specified filter mask.
         """
         logger.debug("retrieving mask kind %s" % kind)
-        mask = longword()
+        mask = snap7.types.longword()
         code = self.library.Srv_GetMask(self.pointer, kind, ctypes.byref(mask))
         check_error(code)
         return mask
