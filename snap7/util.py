@@ -136,13 +136,13 @@ def get_string(_bytearray, byte_index):
 
 def get_dword(_bytearray, byte_index):
     data = _bytearray[byte_index:byte_index + 4]
-    dword = struct.unpack('I', struct.pack('4B', *data))[0]
+    dword = struct.unpack('>I', struct.pack('4B', *data))[0]
     return dword
 
 
 def set_dword(_bytearray, byte_index, dword):
     dword = int(dword)
-    _bytes = struct.unpack('4B', struct.pack('I', dword))
+    _bytes = struct.unpack('4B', struct.pack('>I', dword))
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
 
