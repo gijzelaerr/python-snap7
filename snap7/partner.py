@@ -31,7 +31,8 @@ class Partner(object):
     """
     def __init__(self, active=False):
         self.library = load_library()
-        self.pointer = self.create(active)
+        self.pointer = None
+        self.create(active)
 
     def as_b_send(self):
         """
@@ -89,8 +90,8 @@ class Partner(object):
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self.library.Par_Create.restype = ctypes.c_void_p
-        return snap7.snap7types.S7Object(self.library.Par_Create(int(active)))
+        self.library.Par_Create.restype = snap7.snap7types.S7Object
+        self.pointer = snap7.snap7types.S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):
         """

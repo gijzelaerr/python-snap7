@@ -315,7 +315,7 @@ class Client(object):
         data = (type_ * size)()
         logging.debug("ab_read: start: %s: size %s: " % (start, size))
         result = self.library.Cli_AsABRead(self.pointer, start, size,
-                                         byref(data))
+                                           byref(data))
         check_error(result, context="client")
         return bytearray(data)
 

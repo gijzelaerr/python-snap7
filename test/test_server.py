@@ -8,6 +8,7 @@ import snap7.server
 
 logging.basicConfig(level=logging.WARNING)
 
+
 class TestServer(unittest.TestCase):
     def setUp(self):
         self.server = snap7.server.Server()
@@ -96,8 +97,6 @@ class TestServer(unittest.TestCase):
     def test_clear_events(self):
         self.server.clear_events()
         self.assertFalse(self.server.clear_events())
-
-
 
     def test_start_to(self):
         self.server.start_to('0.0.0.0')

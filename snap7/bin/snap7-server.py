@@ -1,13 +1,20 @@
 #!/usr/bin/env python
 """
 This is an example snap7 server. It doesn't do much, but accepts
-connection. Usefull for running the python-snap7 test suite.
+connection. Useful for running the python-snap7 test suite.
 """
 import time
 import logging
 import snap7
+import sys
+
+
+logging.basicConfig()
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 tcpport = 1102
+
 
 def mainloop():
     server = snap7.server.Server()
@@ -27,10 +34,6 @@ def mainloop():
 
 
 if __name__ == '__main__':
-    import sys
     if len(sys.argv) > 1:
         snap7.common.load_library(sys.argv[1])
-    logging.basicConfig()
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
     mainloop()
