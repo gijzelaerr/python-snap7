@@ -31,7 +31,7 @@ class Server(object):
         Create a fake S7 server. set log to false if you want to disable
         event logging to python logging.
         """
-        self.snap7server = None
+        self.pointer = None
         self._callback = None
         self.library = load_library()
         self.create()
@@ -61,7 +61,8 @@ class Server(object):
         create the server.
         """
         logger.info("creating server")
-        self.snap7server = snap7.snap7types.S7Object(self.library.Srv_Create())
+        self.library.Srv_Create.restype = snap7.snap7types.S7Object
+        self.pointer = snap7.snap7types.S7Object(self.library.Srv_Create())
 
     @error_wrap
     def register_area(self, area_code, index, userdata):
@@ -72,7 +73,7 @@ class Server(object):
         logger.info("registering area %s, index %s, size %s" % (area_code,
                                                                 index, size))
         size = ctypes.sizeof(userdata)
-        return self.library.Srv_RegisterArea(self.snap7server, area_code, index,
+        return self.library.Srv_RegisterArea(self.pointer, area_code, index,
                                              ctypes.byref(userdata), size)
 
     @error_wrap
@@ -100,7 +101,7 @@ class Server(object):
 
         self._callback = callback_wrap(wrapper)
         usrPtr = ctypes.c_void_p()
-        return self.library.Srv_SetEventsCallback(self.snap7server, self._callback, usrPtr)
+        return self.library.Srv_SetEventsCallback(self.pointer, self._callback, usrPtr)
 
     @error_wrap
     def set_read_events_callback(self, call_back):
@@ -129,7 +130,7 @@ class Server(object):
             return 0
 
         self._read_callback = callback_wrapper(wrapper)
-        return self.library.Srv_SetReadEventsCallback(self.snap7server,
+        return self.library.Srv_SetReadEventsCallback(self.pointer,
                                                       self._read_callback)
 
     def _set_log_callback(self):
@@ -151,7 +152,7 @@ class Server(object):
             logging.info("setting server TCP port to %s" % tcpport)
             self.set_param(snap7.snap7types.LocalPort, tcpport)
         logger.info("starting server on 0.0.0.0:%s" % tcpport)
-        return self.library.Srv_Start(self.snap7server)
+        return self.library.Srv_Start(self.pointer)
 
     @error_wrap
     def stop(self):
@@ -159,14 +160,14 @@ class Server(object):
         stop the server.
         """
         logger.info("stopping server")
-        return self.library.Srv_Stop(self.snap7server)
+        return self.library.Srv_Stop(self.pointer)
 
     def destroy(self):
         """
         destroy the server.
         """
         logger.info("destroying server")
-        self.library.Srv_Destroy(ctypes.byref(self.snap7server))
+        self.library.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self):
         """Reads the server status, the Virtual CPU status and the number of
@@ -178,7 +179,7 @@ class Server(object):
         server_status = ctypes.c_int()
         cpu_status = ctypes.c_int()
         clients_count = ctypes.c_int()
-        error = self.library.Srv_GetStatus(self.snap7server, ctypes.byref(server_status),
+        error = self.library.Srv_GetStatus(self.pointer, ctypes.byref(server_status),
                                            ctypes.byref(cpu_status),
                                            ctypes.byref(clients_count))
         check_error(error)
@@ -194,21 +195,21 @@ class Server(object):
         """'Unshares' a memory area previously shared with Srv_RegisterArea().
         That memory block will be no longer visible by the clients.
         """
-        return self.library.Srv_UnregisterArea(self.snap7server, area_code, index)
+        return self.library.Srv_UnregisterArea(self.pointer, area_code, index)
 
     @error_wrap
     def unlock_area(self, code, index):
         """Unlocks a previously locked shared memory area.
         """
         logging.debug("unlocking area code %s index %s" % (code, index))
-        return self.library.Srv_UnlockArea(self.snap7server, code, index)
+        return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
     def lock_area(self, code, index):
         """Locks a shared memory area.
         """
         logging.debug("locking area code %s index %s" % (code, index))
-        return self.library.Srv_UnlockArea(self.snap7server, code, index)
+        return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
     def start_to(self, ip, tcpport=102):
@@ -220,14 +221,14 @@ class Server(object):
             self.set_param(snap7.snap7types.LocalPort, tcpport)
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)
-        return self.library.Srv_Start(self.snap7server, ip)
+        return self.library.Srv_Start(self.pointer, ip)
 
     @error_wrap
     def set_param(self, number, value):
         """Sets an internal Server object parameter.
         """
         logger.debug("setting param number %s to %s" % (number, value))
-        return self.library.Srv_SetParam(self.snap7server, number,
+        return self.library.Srv_SetParam(self.pointer, number,
                                          ctypes.byref(ctypes.c_int(value)))
 
     @error_wrap
@@ -235,7 +236,7 @@ class Server(object):
         """Writes the specified filter mask.
         """
         logger.debug("setting mask kind %s to %s" % (kind, mask))
-        return self.library.Srv_SetMask(self.snap7server, kind, mask)
+        return self.library.Srv_SetMask(self.pointer, kind, mask)
 
     @error_wrap
     def set_cpu_status(self, status):
@@ -243,7 +244,7 @@ class Server(object):
         """
         assert status in snap7.snap7types.cpu_statuses, 'unknown cpu state %s' % status
         logger.debug("setting cpu status to %s" % status)
-        return self.library.Srv_SetCpuStatus(self.snap7server, status)
+        return self.library.Srv_SetCpuStatus(self.pointer, status)
 
     def pick_event(self):
         """Extracts an event (if available) from the Events queue.
@@ -251,7 +252,7 @@ class Server(object):
         logger.debug("checking event queue")
         event = snap7.snap7types.SrvEvent()
         ready = ctypes.c_int32()
-        code = self.library.Srv_PickEvent(self.snap7server, ctypes.byref(event),
+        code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event),
                                           ctypes.byref(ready))
         check_error(code)
         if ready:
@@ -264,7 +265,7 @@ class Server(object):
         """
         logger.debug("retreiving param number %s" % number)
         value = ctypes.c_int()
-        code = self.library.Srv_GetParam(self.snap7server, number,
+        code = self.library.Srv_GetParam(self.pointer, number,
                                          ctypes.byref(value))
         check_error(code)
         return value.value
@@ -274,7 +275,7 @@ class Server(object):
         """
         logger.debug("retrieving mask kind %s" % kind)
         mask = snap7.snap7types.longword()
-        code = self.library.Srv_GetMask(self.snap7server, kind, ctypes.byref(mask))
+        code = self.library.Srv_GetMask(self.pointer, kind, ctypes.byref(mask))
         check_error(code)
         return mask
 
@@ -283,4 +284,4 @@ class Server(object):
         """Empties the Event queue.
         """
         logger.debug("clearing event queue")
-        return self.library.Srv_ClearEvents(self.snap7server)
+        return self.library.Srv_ClearEvents(self.pointer)
