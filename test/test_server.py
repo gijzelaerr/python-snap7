@@ -2,7 +2,7 @@ import unittest
 import ctypes
 import logging
 
-import snap7.types
+import snap7.snap7types
 import snap7.error
 import snap7.server
 
@@ -19,7 +19,7 @@ class TestServer(unittest.TestCase):
 
     def test_register_area(self):
         db1_type = ctypes.c_char * 1024
-        self.server.register_area(snap7.types.srvAreaDB, 3, db1_type())
+        self.server.register_area(snap7.snap7types.srvAreaDB, 3, db1_type())
 
     def test_error(self):
         self.server.error_text()
@@ -29,20 +29,20 @@ class TestServer(unittest.TestCase):
             snap7.common.error_text(error, context="client")
 
     def test_event(self):
-        event = snap7.types.SrvEvent()
+        event = snap7.snap7types.SrvEvent()
         self.server.event_text(event)
 
     def test_get_status(self):
         server, cpu, num_clients = self.server.get_status()
 
     def test_get_mask(self):
-        self.server.get_mask(snap7.types.mkEvent)
-        self.server.get_mask(snap7.types.mkLog)
+        self.server.get_mask(snap7.snap7types.mkEvent)
+        self.server.get_mask(snap7.snap7types.mkLog)
         # invalid kind
         self.assertRaises(Exception, self.server.get_mask, 3)
 
     def test_lock_area(self):
-        area_code = snap7.types.srvAreaDB
+        area_code = snap7.snap7types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
         # we need to register first
@@ -56,10 +56,10 @@ class TestServer(unittest.TestCase):
         self.assertRaises(AssertionError, self.server.set_cpu_status, -1)
 
     def test_set_mask(self):
-        self.server.set_mask(kind=snap7.types.mkEvent, mask=10)
+        self.server.set_mask(kind=snap7.snap7types.mkEvent, mask=10)
 
     def test_unlock_area(self):
-        area_code = snap7.types.srvAreaDB
+        area_code = snap7.snap7types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
 
@@ -71,7 +71,7 @@ class TestServer(unittest.TestCase):
         self.server.unlock_area(area_code, index)
 
     def test_unregister_area(self):
-        area_code = snap7.types.srvAreaDB
+        area_code = snap7.snap7types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
         self.server.register_area(area_code, index, db1_type())
@@ -89,7 +89,7 @@ class TestServer(unittest.TestCase):
 
     def test_pick_event(self):
         event = self.server.pick_event()
-        self.assertEqual(type(event), snap7.types.SrvEvent)
+        self.assertEqual(type(event), snap7.snap7types.SrvEvent)
         event = self.server.pick_event()
         self.assertFalse(event)
 
@@ -105,13 +105,13 @@ class TestServer(unittest.TestCase):
 
     def test_get_param(self):
         # check the defaults
-        self.assertEqual(self.server.get_param(snap7.types.LocalPort), 1102)
-        self.assertEqual(self.server.get_param(snap7.types.WorkInterval), 100)
-        self.assertEqual(self.server.get_param(snap7.types.MaxClients), 1024)
+        self.assertEqual(self.server.get_param(snap7.snap7types.LocalPort), 1102)
+        self.assertEqual(self.server.get_param(snap7.snap7types.WorkInterval), 100)
+        self.assertEqual(self.server.get_param(snap7.snap7types.MaxClients), 1024)
 
         # invalid param for server
         self.assertRaises(Exception, self.server.get_param,
-                          snap7.types.RemotePort)
+                          snap7.snap7types.RemotePort)
 
 
 
@@ -123,7 +123,7 @@ class TestServerBeforeStart(unittest.TestCase):
         self.server = snap7.server.Server()
 
     def test_set_param(self):
-        self.server.set_param(snap7.types.LocalPort, 1102)
+        self.server.set_param(snap7.snap7types.LocalPort, 1102)
 
 
 if __name__ == '__main__':

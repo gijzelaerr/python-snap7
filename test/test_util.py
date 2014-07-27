@@ -160,9 +160,9 @@ def print_row(data):
         c = c + (w - 1) * ' ' + ','
         chr_line2 += c
 
-    print index_line
-    print pri_line1
-    print chr_line2
+    print(index_line)
+    print(pri_line1)
+    print(chr_line2)
 
 
 if __name__ == '__main__':

@@ -11,8 +11,8 @@ import ctypes
 import logging
 import re
 from snap7.common import load_library, check_error, ipv4
-import snap7.types
-from snap7.exceptions import Snap7Exception
+import snap7.snap7types
+from snap7.snap7exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class Partner(object):
         :returns: a pointer to the partner object
         """
         self.library.Par_Create.restype = ctypes.c_void_p
-        return snap7.types.S7Object(self.library.Par_Create(int(active)))
+        return snap7.snap7types.S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -114,7 +114,7 @@ class Partner(object):
         Reads an internal Partner object parameter.
         """
         logger.debug("retreiving param number %s" % number)
-        type_ = snap7.types.param_types[number]
+        type_ = snap7.snap7types.param_types[number]
         value = type_()
         code = self.library.Par_GetParam(self.pointer, ctypes.c_int(number),
                                          ctypes.byref(value))
@@ -212,9 +212,10 @@ class Partner(object):
         """
         return self.library.Par_Stop(self.pointer)
 
-    def wait_as_b_send_completion(self):
+    @error_wrap
+    def wait_as_b_send_completion(self, timeout=0):
         """
         Waits until the current asynchronous send job is done or the timeout
         expires.
         """
-        return self.library.Par_WaitAsBSendCompletion(self.pointer)
+        return self.library.Par_WaitAsBSendCompletion(self.pointer, timeout)

@@ -31,12 +31,12 @@ class Client(unittest2.TestCase):
         size = 40
         start = 0
         db = db_number
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         self.client.db_read(db_number=db, start=start, type_=type_,
                             size=size)
 
     def test_db_write(self):
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = self.client.db_read(db_number=db_number, start=0,
                                    type_=type_, size=100)
         self.client.db_write(db_number=db_number, start=0,
@@ -49,11 +49,11 @@ class Client(unittest2.TestCase):
         self.client.db_upload(block_num=db_number)
 
     def test_read_area(self):
-        area = snap7.types.S7AreaDB
+        area = snap7.snap7types.S7AreaDB
         dbnumber = 1
         amount = 128
         start = 1
-        wordlen = snap7.types.S7WLByte
+        wordlen = snap7.snap7types.S7WLByte
         data = self.client.read_area(area, dbnumber, start, amount, wordlen)
         print data
 

@@ -51,14 +51,14 @@ class TestClient(unittest.TestCase):
 
     @unittest.skip("TODO: this crashes the fake server")
     def test_read_area(self):
-        area = snap7.types.areas.DB
+        area = snap7.snap7types.areas.DB
         dbnumber = 1
         amount = 1
         start = 1
         self.client.read_area(area, dbnumber, start, amount)
 
     def test_write_area(self):
-        area = snap7.types.areas.DB
+        area = snap7.snap7types.areas.DB
         dbnumber = 1
         size = 1
         start = 1
@@ -67,10 +67,9 @@ class TestClient(unittest.TestCase):
 
     def test_list_blocks(self):
         blockList = self.client.list_blocks()
-        print blockList
 
     def test_list_blocks_of_type(self):
-        self.client.list_blocks_of_type(snap7.types.block_types['DB'], 10)
+        self.client.list_blocks_of_type(snap7.snap7types.block_types['DB'], 10)
 
     def test_set_session_password(self):
         password = 'abcdefgh'
@@ -128,38 +127,38 @@ class TestClient(unittest.TestCase):
 
     def test_set_param(self):
         values = (
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
+            (snap7.snap7types.PingTimeout, 800),
+            (snap7.snap7types.SendTimeout, 15),
+            (snap7.snap7types.RecvTimeout, 3500),
+            (snap7.snap7types.SrcRef, 128),
+            (snap7.snap7types.DstRef, 128),
+            (snap7.snap7types.SrcTSap, 128),
+            (snap7.snap7types.PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)
 
         self.assertRaises(Exception, self.client.set_param,
-                          snap7.types.RemotePort, 1)
+                          snap7.snap7types.RemotePort, 1)
 
     def test_get_param(self):
         expected = (
-            (snap7.types.RemotePort, tcpport),
-            (snap7.types.PingTimeout, 750),
-            (snap7.types.SendTimeout, 10),
-            (snap7.types.RecvTimeout, 3000),
-            (snap7.types.SrcRef, 256),
-            (snap7.types.DstRef, 0),
-            (snap7.types.SrcTSap, 256),
-            (snap7.types.PDURequest, 480),
+            (snap7.snap7types.RemotePort, tcpport),
+            (snap7.snap7types.PingTimeout, 750),
+            (snap7.snap7types.SendTimeout, 10),
+            (snap7.snap7types.RecvTimeout, 3000),
+            (snap7.snap7types.SrcRef, 256),
+            (snap7.snap7types.DstRef, 0),
+            (snap7.snap7types.SrcTSap, 256),
+            (snap7.snap7types.PDURequest, 480),
         )
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
-        non_client = snap7.types.LocalPort, snap7.types.WorkInterval,\
-                     snap7.types.MaxClients, snap7.types.BSendTimeout,\
-                     snap7.types.BRecvTimeout, snap7.types.RecoveryTime,\
-                     snap7.types.KeepAliveTime
+        non_client = snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval,\
+                     snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout,\
+                     snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime,\
+                     snap7.snap7types.KeepAliveTime
 
         # invalid param for client
         for param in non_client:
@@ -217,7 +216,7 @@ class TestClientBeforeConnect(unittest.TestCase):
         self.client = snap7.client.Client()
 
     def test_set_param(self):
-        self.client.set_param(snap7.types.RemotePort, 1102)
+        self.client.set_param(snap7.snap7types.RemotePort, 1102)
 
 
 
@@ -231,14 +230,14 @@ class TestClientBeforeConnect(unittest.TestCase):
 
     def test_setparam(self):
         values = (
-            (snap7.types.RemotePort, 1102),
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
+            (snap7.snap7types.RemotePort, 1102),
+            (snap7.snap7types.PingTimeout, 800),
+            (snap7.snap7types.SendTimeout, 15),
+            (snap7.snap7types.RecvTimeout, 3500),
+            (snap7.snap7types.SrcRef, 128),
+            (snap7.snap7types.DstRef, 128),
+            (snap7.snap7types.SrcTSap, 128),
+            (snap7.snap7types.PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)

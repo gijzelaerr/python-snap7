@@ -6,9 +6,10 @@ from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte, c_
 import logging
 
 import snap7
-from snap7.types import S7Object, buffer_type, buffer_size, BlocksList, param_types
+from snap7 import six
+from snap7.snap7types import S7Object, buffer_type, buffer_size, BlocksList, param_types
 from snap7.common import check_error, load_library, ipv4
-from snap7.exceptions import Snap7Exception
+from snap7.snap7exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +66,8 @@ class Client(object):
         logger.info("connecting to %s:%s rack %s slot %s" % (address, tcpport,
                                                              rack, slot))
 
-        self.set_param(snap7.types.RemotePort, tcpport)
-
-        return self.library.Cli_ConnectTo(self.pointer, c_char_p(address),
+        self.set_param(snap7.snap7types.RemotePort, tcpport)
+        return self.library.Cli_ConnectTo(self.pointer, c_char_p(six.b(address)),
                                           c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
@@ -78,7 +78,7 @@ class Client(object):
         logger.debug("db_read, db_number:%s, start:%s, size:%s" %
                      (db_number, start, size))
 
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_DBRead(self.pointer, db_number, start, size,
                                   byref(data)))
@@ -93,8 +93,8 @@ class Client(object):
         :param start: write offset
         :param data: bytearray
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
@@ -112,7 +112,7 @@ class Client(object):
         """
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
-        block_type = snap7.types.block_types[_type]
+        block_type = snap7.snap7types.block_types[_type]
         result = self.library.Cli_FullUpload(self.pointer, block_type,
                                              block_num, byref(_buffer),
                                              byref(size))
@@ -128,7 +128,7 @@ class Client(object):
         """
         logger.debug("db_upload block_num: %s" % (block_num))
 
-        block_type = snap7.types.block_types['DB']
+        block_type = snap7.snap7types.block_types['DB']
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
@@ -174,9 +174,9 @@ class Client(object):
         :param start: offset to start writing
         :param size: number of units to read
         """
-        assert area in snap7.types.areas.values()
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        assert area in snap7.snap7types.areas.values()
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, size, wordlen))
         data = (type_ * size)()
@@ -196,8 +196,8 @@ class Client(object):
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         logging.debug("writing area: %s dbnumber: %s start: %s: size %s: "
                       "type: %s" % (area, dbnumber, start, size, type_))
@@ -236,7 +236,7 @@ class Client(object):
         """Send the password to the PLC to meet its security level."""
         assert len(password) <= 8, 'maximum password length is 8'
         return self.library.Cli_SetSessionPassword(self.pointer,
-                                                   c_char_p(password))
+                                                   c_char_p(six.b(password)))
 
     @error_wrap
     def clear_session_password(self):
@@ -286,8 +286,8 @@ class Client(object):
         """
         This is a lean function of Cli_ReadArea() to read PLC process outputs.
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
         logging.debug("ab_read: start: %s: size %s: " % (start, size))
         result = self.library.Cli_ABRead(self.pointer, start, size,
@@ -299,8 +299,8 @@ class Client(object):
         """
         This is a lean function of Cli_WriteArea() to Write PLC process outputs.
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
         logging.debug("ab write: start: %s: size: %s: " % (start, size))
@@ -310,8 +310,8 @@ class Client(object):
         """
         This is the asynchronous counterpart of client.ab_read().
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
         logging.debug("ab_read: start: %s: size %s: " % (start, size))
         result = self.library.Cli_AsABRead(self.pointer, start, size,
@@ -323,8 +323,8 @@ class Client(object):
         """
         This is the asynchronous counterpart of Cli_ABWrite.
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
         logging.debug("ab write: start: %s: size: %s: " % (start, size))
@@ -382,7 +382,7 @@ class Client(object):
         logger.debug("db_read, db_number:%s, start:%s, size:%s" %
                      (db_number, start, size))
 
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_AsDBRead(self.pointer, db_number, start,
                                             size,  byref(data)))
@@ -393,8 +393,8 @@ class Client(object):
         """
 
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
