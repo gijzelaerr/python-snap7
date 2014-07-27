@@ -1,7 +1,8 @@
 import unittest
 import logging
-
 import snap7
+from snap7.snap7exceptions import Snap7Exception
+
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -22,7 +23,6 @@ class TestClient(unittest.TestCase):
         self.client.disconnect()
         self.client.destroy()
 
-    @unittest.skip("TODO: this crashes the fake server")
     def test_db_read(self):
         size = 40
         start = 0
@@ -37,19 +37,21 @@ class TestClient(unittest.TestCase):
         data = bytearray(size)
         self.client.db_write(db_number=1, start=0, data=data)
 
-    @unittest.skip("TODO: this crashes the fake server")
     def test_db_get(self):
         self.client.db_get(db_number=db_number)
 
-    @unittest.skip('authorization required?')
     def test_upload(self):
-        self.client.upload(block_num=db_number)
+        """
+        this raises an exception due to missing authorization? maybe not
+        implemented in server emulator
+        """
+        self.assertRaises(Snap7Exception, self.client.upload, db_number)
 
+    @unittest.skip("TODO: invalid block size")
     def test_download(self):
-        data = bytearray(128)
+        data = bytearray(1024)
         self.client.download(block_num=db_number, data=data)
 
-    @unittest.skip("TODO: this crashes the fake server")
     def test_read_area(self):
         area = snap7.snap7types.areas.DB
         dbnumber = 1
@@ -90,7 +92,7 @@ class TestClient(unittest.TestCase):
     def test_get_connected(self):
         self.client.get_connected()
 
-    @unittest.skip("TODO: reading not available?")
+    @unittest.skip("TODO: item not available?")
     def test_ab_read(self):
         start = 1
         size = 1
@@ -104,7 +106,6 @@ class TestClient(unittest.TestCase):
         data = bytearray(size)
         self.client.ab_write(start=start, data=data)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ab_read(self):
         start = 1
         size = 1
@@ -180,11 +181,9 @@ class TestClient(unittest.TestCase):
     def test_as_db_fill(self):
         self.client.as_db_fill()
 
-    @unittest.skip("TODO: crashes the fake server")
     def test_as_db_get(self):
         self.client.db_get(db_number=db_number)
 
-    @unittest.skip("TODO: crashes the fake server")
     def test_as_db_read(self):
         size = 40
         start = 0
@@ -194,21 +193,14 @@ class TestClient(unittest.TestCase):
         result = self.client.as_db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
 
-    @unittest.skip("TODO: crashes the fake server")
     def test_as_db_write(self):
         size = 40
         data = bytearray(size)
         self.client.as_db_write(db_number=1, start=0, data=data)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_download(self):
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
-
-    @unittest.skip("TODO: Invalid block size?")
-    def test_download(self):
-        data = bytearray(1)
-        self.client.download(block_num=db_number, data=data)
 
 
 class TestClientBeforeConnect(unittest.TestCase):
