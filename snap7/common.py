@@ -1,8 +1,14 @@
 from ctypes import c_char
-from ctypes import cdll
 from ctypes.util import find_library
 import logging
-from snap7.exceptions import Snap7Exception
+from snap7.snap7exceptions import Snap7Exception
+
+import platform
+if platform.system() == 'Windows':
+    from ctypes import windll as cdll
+else:
+    from ctypes import cdll
+
 
 logger = logging.getLogger(__name__)
 
