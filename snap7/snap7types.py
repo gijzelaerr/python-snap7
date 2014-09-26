@@ -70,7 +70,7 @@ areas = ADict({
 
 # Word Length
 S7WLBit = 0x01
-S7WLByte = 0x01
+S7WLByte = 0x02
 S7WLWord = 0x04
 S7WLDWord = 0x06
 S7WLReal = 0x08
