@@ -46,6 +46,13 @@ class Client(object):
         logger.info("destroying snap7 client")
         return self.library.Cli_Destroy(byref(self.pointer))
 
+    def plc_stop(self):
+	"""
+	stops a client 
+	"""
+	logger.info("stopping plc")
+	return self.library.Cli_PlcStop(self.pointer)
+
     @error_wrap
     def disconnect(self):
         """
