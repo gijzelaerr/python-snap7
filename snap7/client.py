@@ -67,8 +67,9 @@ class Client(object):
                                                              rack, slot))
 
         self.set_param(snap7.snap7types.RemotePort, tcpport)
-        return self.library.Cli_ConnectTo(self.pointer, c_char_p(six.b(address)),
-                                          c_int(rack), c_int(slot))
+        return self.library.Cli_ConnectTo(
+            self.pointer, c_char_p(six.b(address)),
+            c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
         """This is a lean function of Cli_ReadArea() to read PLC DB.
@@ -80,8 +81,9 @@ class Client(object):
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
-        result = (self.library.Cli_DBRead(self.pointer, db_number, start, size,
-                                  byref(data)))
+        result = (self.library.Cli_DBRead(
+            self.pointer, db_number, start, size,
+            byref(data)))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -118,7 +120,6 @@ class Client(object):
                                              byref(size))
         check_error(result, context="client")
         return bytearray(_buffer), size.value
-
 
     def upload(self, block_num):
         """
@@ -161,8 +162,9 @@ class Client(object):
         """
         logging.debug("db_get db_number: %s" % db_number)
         _buffer = buffer_type()
-        result = self.library.Cli_DBGet(self.pointer, db_number, byref(_buffer),
-                                byref(c_int(buffer_size)))
+        result = self.library.Cli_DBGet(
+            self.pointer, db_number, byref(_buffer),
+            byref(c_int(buffer_size)))
         check_error(result, context="client")
         return bytearray(_buffer)
 
@@ -183,7 +185,7 @@ class Client(object):
         result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
                                            size, wordlen, byref(data))
         check_error(result, context="client")
-        return data
+        return bytearray(data)
 
     @error_wrap
     def write_area(self, area, dbnumber, start, data):
@@ -223,9 +225,10 @@ class Client(object):
                       (blocktype, size))
         data = (c_int * 10)()
         count = c_int(size)
-        result = self.library.Cli_ListBlocksOfType(self.pointer, blocktype,
-                                           byref(data),
-                                           byref(count))
+        result = self.library.Cli_ListBlocksOfType(
+            self.pointer, blocktype,
+            byref(data),
+            byref(count))
 
         logging.debug("number of items found: %s" % count)
         check_error(result, context="client")
@@ -297,14 +300,16 @@ class Client(object):
 
     def ab_write(self, start, data):
         """
-        This is a lean function of Cli_WriteArea() to Write PLC process outputs.
+        This is a lean function of Cli_WriteArea() to write PLC process
+        outputs
         """
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
         logging.debug("ab write: start: %s: size: %s: " % (start, size))
-        return self.library.Cli_ABWrite(self.pointer, start, size, byref(cdata))
+        return self.library.Cli_ABWrite(
+            self.pointer, start, size, byref(cdata))
 
     def as_ab_read(self, start, size):
         """
@@ -328,7 +333,8 @@ class Client(object):
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
         logging.debug("ab write: start: %s: size: %s: " % (start, size))
-        return self.library.Cli_AsABWrite(self.pointer, start, size, byref(cdata))
+        return self.library.Cli_AsABWrite(
+            self.pointer, start, size, byref(cdata))
 
     @error_wrap
     def as_compress(self, time):
@@ -399,8 +405,9 @@ class Client(object):
         cdata = (type_ * size).from_buffer(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
                      (db_number, start, size, data))
-        return self.library.Cli_AsDBWrite(self.pointer, db_number, start, size,
-                                        byref(cdata))
+        return self.library.Cli_AsDBWrite(
+            self.pointer, db_number, start, size,
+            byref(cdata))
 
     @error_wrap
     def as_download(self, data, block_num=-1):
