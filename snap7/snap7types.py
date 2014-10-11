@@ -164,3 +164,15 @@ class BlocksList(ctypes.Structure):
                " SDB: %s>" % (self.OBCount, self.FBCount, self.FCCount,
                               self.SFBCount, self.SFCCount, self.DBCount,
                               self.SDBCount)
+
+class S7DataItem(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('Area', ctypes.c_int32),
+        ('WordLen', ctypes.c_int32),
+        ('Result', ctypes.c_int32),
+        ('DBNumber', ctypes.c_int32),
+        ('Start', ctypes.c_int32),
+        ('Amount', ctypes.c_int32),
+        ('pData', ctypes.POINTER(ctypes.c_uint8))
+    ]

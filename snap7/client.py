@@ -228,6 +228,17 @@ class Client(object):
         return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
                                           size, wordlen, byref(cdata))
 
+    def read_multi_vars(self, items):
+        """This function read multiple variables from the PLC.
+
+        :param items: list of S7DataItem objects
+        :returns: a tuple with the return code and a list of data items
+        """
+        result = self.library.Cli_ReadMultiVars(self.pointer, byref(items),
+                                                c_int32(len(items)))
+        check_error(result, context="client")
+        return result, items
+
     def list_blocks(self):
         """Returns the AG blocks amount divided by type.
 

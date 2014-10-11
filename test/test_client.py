@@ -1,3 +1,5 @@
+import ctypes
+import struct
 import unittest
 import logging
 import time
@@ -5,6 +7,7 @@ from subprocess import Popen
 from os import path, kill
 import snap7
 from snap7.snap7exceptions import Snap7Exception
+from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -53,6 +56,75 @@ class TestClient(unittest.TestCase):
 
     def test_db_get(self):
         self.client.db_get(db_number=db_number)
+
+    def test_read_multi_vars(self):
+        db = 1
+
+        # build and write test values
+        test_value_1 = 129.5
+        test_bytes_1 = bytearray(struct.pack('>f', test_value_1))
+        self.client.db_write(db, 0, test_bytes_1)
+
+        test_value_2 = -129.5
+        test_bytes_2 = bytearray(struct.pack('>f', test_value_2))
+        self.client.db_write(db, 4, test_bytes_2)
+
+        test_value_3 = -123
+        test_bytes_3 = bytearray(struct.pack('>h', test_value_3))
+        self.client.db_write(db, 8, test_bytes_3)
+
+        test_values = [test_value_1, test_value_2, test_value_3]
+
+        # build up our requests
+        data_items = (S7DataItem * 3)()
+
+        data_items[0].Area = ctypes.c_int32(S7AreaDB)
+        data_items[0].WordLen = ctypes.c_int32(S7WLByte)
+        data_items[0].Result = ctypes.c_int32(0)
+        data_items[0].DBNumber = ctypes.c_int32(db)
+        data_items[0].Start = ctypes.c_int32(0)
+        data_items[0].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
+
+        data_items[1].Area = ctypes.c_int32(S7AreaDB)
+        data_items[1].WordLen = ctypes.c_int32(S7WLByte)
+        data_items[1].Result = ctypes.c_int32(0)
+        data_items[1].DBNumber = ctypes.c_int32(db)
+        data_items[1].Start = ctypes.c_int32(4)
+        data_items[1].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
+
+        data_items[2].Area = ctypes.c_int32(S7AreaDB)
+        data_items[2].WordLen = ctypes.c_int32(S7WLByte)
+        data_items[2].Result = ctypes.c_int32(0)
+        data_items[2].DBNumber = ctypes.c_int32(db)
+        data_items[2].Start = ctypes.c_int32(8)
+        data_items[2].Amount = ctypes.c_int32(2)  # reading an INT, 2 bytes
+
+        # create buffers to receive the data
+        # use the Amount attribute on each item to size the buffer
+        for di in data_items:
+            # create the buffer
+            dataBuffer = ctypes.create_string_buffer(di.Amount)
+            # get a pointer to the buffer
+            pBuffer = ctypes.cast(ctypes.pointer(dataBuffer),
+                                  ctypes.POINTER(ctypes.c_uint8))
+            di.pData = pBuffer
+
+        result, data_items = self.client.read_multi_vars(data_items)
+
+        result_values = []
+        # struct formats to match data_items[] above
+        fmts = ['>f', '>f', '>h']
+        # unpack and test the result of each read
+        for i in xrange(0, len(data_items)):
+            fmt = fmts[i]
+            di = data_items[i]
+            bytes_str = ''.join([chr(di.pData[j]) for j in range(0, di.Amount)])
+            result_values.append(struct.unpack(fmt, bytes_str)[0])
+
+        self.assertEqual(result_values[0], test_values[0])
+        self.assertEqual(result_values[1], test_values[1])
+        self.assertEqual(result_values[2], test_values[2])
+
 
     def test_upload(self):
         """
