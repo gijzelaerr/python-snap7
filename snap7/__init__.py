@@ -8,4 +8,4 @@ import snap7.snap7types as types
 import snap7.common as common
 import snap7.util as util
 
-__version__ = '0.3.1'
+__version__ = '0.4'
