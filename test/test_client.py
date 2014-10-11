@@ -206,25 +206,24 @@ class TestClient(unittest.TestCase):
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
 
+    def test_plc_stop(self):
+        self.client.plc_stop()
+
+    def test_plc_hot_start(self):
+        self.client.plc_hot_start()
+
+    def test_plc_cold_start(self):
+        self.client.plc_cold_start()
+
 
 class TestClientBeforeConnect(unittest.TestCase):
+    """
+    Test suite of items that should run without an open connection.
+    """
     def setUp(self):
         self.client = snap7.client.Client()
 
     def test_set_param(self):
-        self.client.set_param(snap7.snap7types.RemotePort, 1102)
-
-
-
-if __name__ == '__main__':
-    unittest.main()
-
-
-class TestClientBeforeConnect(unittest.TestCase):
-    def setUp(self):
-        self.client = snap7.client.Client()
-
-    def test_setparam(self):
         values = (
             (snap7.snap7types.RemotePort, 1102),
             (snap7.snap7types.PingTimeout, 800),
@@ -237,6 +236,10 @@ class TestClientBeforeConnect(unittest.TestCase):
         )
         for param, value in values:
             self.client.set_param(param, value)
+
+
+if __name__ == '__main__':
+    unittest.main()
 
 
 # TODO: implement
@@ -280,9 +283,6 @@ Cli_GetProtection
 Cli_IsoExchangeBuffer
 Cli_MBRead
 Cli_MBWrite
-Cli_PlcColdStart
-Cli_PlcHotStart
-Cli_PlcStop
 Cli_ReadArea
 Cli_ReadMultiVars
 Cli_ReadSZL
