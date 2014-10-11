@@ -1,5 +1,8 @@
 import unittest
 import logging
+import time
+from subprocess import Popen
+from os import path, kill
 import snap7
 from snap7.snap7exceptions import Snap7Exception
 
@@ -14,6 +17,17 @@ slot = 1
 
 
 class TestClient(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        server_path = path.join(path.dirname(path.realpath(snap7.__file__)),
+                                "bin/snap7-server.py")
+        cls.server_pid = Popen([server_path]).pid
+        time.sleep(2)  # wait for server to start
+
+    @classmethod
+    def tearDownClass(cls):
+        kill(cls.server_pid, 1)
 
     def setUp(self):
         self.client = snap7.client.Client()
