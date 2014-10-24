@@ -20,6 +20,7 @@ def parse_specification(db_specification):
     is specified
     """
     parsed_db_specification = OrderedDict()
+
     for line in db_specification.split('\n'):
         if line and not line.startswith('#'):
             row = line.split('#')[0]  # remove trailing comment
@@ -106,19 +107,24 @@ def get_real(_bytearray, byte_index):
     return real
 
 
-def set_string(_bytearray, byte_index, value):
+def set_string(_bytearray, byte_index, value, max_size):
     """
     Set string value
 
     :params value: string data
-    :params size: total possible string size
+    :params max_size: total possible string size
     """
     if six.PY2:
         assert isinstance(value, (str, unicode))
     else:
         assert isinstance(value, str)
-    # set len count
+
+    size = len(value)
+    # FAIL HARD WHEN trying to write too much data into PLC
+    assert size <= max_size
+    # set len count on first position
     _bytearray[byte_index + 1] = len(value)
+
     i = 0
     # fill array which chr integers
     for i, c in enumerate(value):
@@ -129,11 +135,21 @@ def set_string(_bytearray, byte_index, value):
         _bytearray[byte_index + 2 + r] = ord(' ')
 
 
-def get_string(_bytearray, byte_index):
+def get_string(_bytearray, byte_index, max_size):
     """
     parse string from bytearray
     """
     size = _bytearray[byte_index + 1]
+
+    if max_size < size:
+        print '*' * 80
+        print
+        print "WRONG SIZED STRING ENCOUNTERD"
+        print "the string is to big for the size encountered in specification"
+        print '*' * 80
+        logging.error("WRONG SIZED STRING ENCOUNTERED")
+        size = max_size
+
     data = map(chr, _bytearray[byte_index + 2:byte_index + 2 + size])
     return "".join(data)
 
@@ -308,7 +324,8 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            return get_string(_bytearray, byte_index)
+            max_size = int(_type[7:9])
+            return get_string(_bytearray, byte_index, max_size)
 
         if _type == 'REAL':
             return get_real(_bytearray, byte_index)
@@ -332,7 +349,8 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            return set_string(_bytearray, byte_index, value)
+            max_size = int(_type[7:9])
+            return set_string(_bytearray, byte_index, value, max_size)
 
         if _type == 'REAL':
             return set_real(_bytearray, byte_index, value)
