@@ -7,7 +7,7 @@ from snap7 import util
 test_spec = """
 
 4	    ID	         INT
-6	    NAME	     STRING[4]
+6	    NAME	 STRING[4]
 
 12.0	testbool1    BOOL
 12.1	testbool2    BOOL
@@ -27,7 +27,7 @@ _bytearray = bytearray([
     128*0 + 64*0 + 32*0 + 16*0 +
     8*1 + 4*1 + 2*1 + 1*1,                         # test bools
     68, 78, 211, 51,                               # test real
-    68, 78, 211, 51                                # test dword
+    255, 255, 255, 255                             # test dword
     ])
 
 
@@ -48,6 +48,12 @@ class TestS7util(unittest.TestCase):
         row['NAME'] = 'abc'
         self.assertTrue(row['NAME'] == 'abc')
         row['NAME'] = ''
+        self.assertTrue(row['NAME'] == '')
+        try:
+            row['NAME'] = 'waaaaytoobig'
+        except ValueError:
+            pass
+        # value should still be empty
         self.assertTrue(row['NAME'] == '')
 
     def test_get_int(self):
@@ -81,10 +87,10 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray * 10)
 
         test_db = util.DB(1, test_array, test_spec,
-                        row_size=len(_bytearray),
-                        size=10,
-                        layout_offset=4,
-                        db_offset=0)
+                          row_size=len(_bytearray),
+                          size=10,
+                          layout_offset=4,
+                          db_offset=0)
 
         self.assertTrue(len(test_db.index) == 10)
 
@@ -115,13 +121,14 @@ class TestS7util(unittest.TestCase):
     def test_set_dword(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        # The range of numbers is 0 to 4294967295.
         row['testDword'] = 9999999
         self.assertTrue(row['testDword'] == 9999999)
 
     def test_get_dword(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
-        self.assertTrue(row['testDword'] == 869486148)
+        self.assertTrue(row['testDword'] == 4294967295)
 
     def test_export(self):
         test_array = bytearray(_bytearray)
@@ -147,7 +154,7 @@ def print_row(data):
             i = str(i)
             index_line += diff * ' '
             index_line += i
-            #i = i + (ws - len(i)) * ' ' + ','
+            # i = i + (ws - len(i)) * ' ' + ','
 
         # byte array line
         str_v = str(xi)
