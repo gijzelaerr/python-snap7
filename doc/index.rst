@@ -18,6 +18,8 @@ Contents:
    server
    partner
 
+   util
+
 
 
 Indices and tables

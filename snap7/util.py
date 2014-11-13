@@ -1,28 +1,69 @@
 """
-Utility functions to work with DB objects
-
-example:
-
-see test code test_util.py
+Utility functions to work with plc DB objects
+and bytearray data for examples see code test_util.py and example.py
+in example folder.
 
 A db specification is the specification of a DB object in the
-plc.
+plc you can make it using the dataview option on a DB object in PCS7
 
-example spec:
+example spec::
 
-4	    ID	         INT
-6	    NAME	 STRING[4]
+    Byte index    Variable name  Datatype
 
-12.0	testbool1    BOOL
-12.1	testbool2    BOOL
-12.2	testbool3    BOOL
-12.3	testbool4    BOOL
-12.4	testbool5    BOOL
-12.5	testbool6    BOOL
-12.6	testbool7    BOOL
-12.7	testbool8    BOOL
-13      testReal     REAL
-17      testDword    DWORD
+    4	          ID             INT
+    6             NAME	         STRING[6]
+
+    12.0          testbool1      BOOL
+    12.1          testbool2      BOOL
+    12.2          testbool3      BOOL
+    12.3          testbool4      BOOL
+    12.4          testbool5      BOOL
+    12.5          testbool6      BOOL
+    12.6          testbool7      BOOL
+    12.7          testbool8      BOOL
+    13            testReal       REAL
+    17            testDword      DWORD
+
+
+    client = snap7.client.Client()
+    client.connect('192.168.200.24', 0, 3)
+
+    all_data = client.db_upload(db_number)
+
+    simple:
+
+    db1 = snap7.util.DB(
+        db_number,              # the db we use
+        all_data,               # bytearray from the plc
+        layout,                 # layout specification
+        17+2,                   # size of the specification 17 is start
+                                # of last value
+                                # which is a DWORD which is 2 bytes,
+        1,                      # number of row's / specifocations
+        id_field='ID',          # field we can use to identify a row
+                                # default index is used
+        layout_offset=4,        # sometimes specification does not start a 0
+                                # like in our example
+        db_offset=0             # At which point in 'all_data' should we start
+                                # reading. if could be that the specification
+                                # does not start at 0
+    )
+
+    Now we can use db1 in python as a dict. if Name contains
+    the 'test'
+
+    db1['test']['testbool1'] = 0
+
+    If we do not specify a id_field this should work to read out the 
+    same data.
+
+    db1[0]['testbool1']
+
+    to read and write from the plc
+
+    db1['test'].write()
+
+    db1['test'].read()
 
 
 """
@@ -37,7 +78,7 @@ import re
 
 def parse_specification(db_specification):
     """
-    create a db specification derived from a
+    Create a db specification derived from a
     dataview of a db in which the byte layout
     is specified
     """
@@ -134,7 +175,7 @@ def set_string(_bytearray, byte_index, value, max_size):
     Set string value
 
     :params value: string data
-    :params max_size: total possible string size
+    :params max_size: max possible string size
     """
     if six.PY2:
         assert isinstance(value, (str, unicode))
@@ -192,7 +233,7 @@ def set_dword(_bytearray, byte_index, dword):
 
 class DB(object):
     """
-    provide a simple API for a DB bytearray block given a row
+    Provide a simple API for a DB bytearray block given a row
     specification
     """
     _bytearray = None      # data from plc
