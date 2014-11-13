@@ -28,7 +28,7 @@ credits
 =======
 
 - Gijs Molenaar
-- Stephan Preeker
+- Stephan Preeker. I'm ailable for consulting work to help you do integration with siemens PLC's. stephan at preeker dot net.
 
 
 Special thanks to
