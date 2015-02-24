@@ -257,8 +257,15 @@ class Client(object):
 
     def list_blocks_of_type(self, blocktype, size):
         """This function returns the AG list of a specified block type."""
+
+        blocktype = snap7.snap7types.block_types.get(blocktype)
+
+        if not blocktype:
+            raise Snap7Exception("The blocktype parameter was invalid")
+
         logging.debug("listing blocks of type: %s size: %s" %
                       (blocktype, size))
+
         data = (c_int * 10)()
         count = c_int(size)
         result = self.library.Cli_ListBlocksOfType(
@@ -267,11 +274,17 @@ class Client(object):
             byref(count))
 
         logging.debug("number of items found: %s" % count)
+
         check_error(result, context="client")
         return data
 
     def get_block_info(self, blocktype, db_number):
         """Returns the block information for the specified datablock."""
+
+        blocktype = snap7.snap7types.block_types.get('DB')
+
+        if not blocktype:
+            raise Snap7Exception("The blocktype parameter was invalid")
 
         logging.debug("retrieving block info for block %s of type %s" %
                       (db_number, blocktype))

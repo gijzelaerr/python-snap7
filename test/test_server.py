@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.WARNING)
 
 
 class TestServer(unittest.TestCase):
+
     def setUp(self):
         self.server = snap7.server.Server()
         self.server.start(tcpport=1102)
@@ -21,9 +22,6 @@ class TestServer(unittest.TestCase):
     def test_register_area(self):
         db1_type = ctypes.c_char * 1024
         self.server.register_area(snap7.snap7types.srvAreaDB, 3, db1_type())
-
-    def test_error(self):
-        self.server.error_text()
 
     def test_error(self):
         for error in snap7.error.server_errors:
