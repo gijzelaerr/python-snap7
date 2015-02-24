@@ -164,7 +164,7 @@ class BlocksList(ctypes.Structure):
                " SDB: %s>" % (self.OBCount, self.FBCount, self.FCCount,
                               self.SFBCount, self.SFCCount, self.DBCount,
                               self.SDBCount)
-import ctypes	
+
 class TS7BlockInfo(ctypes.Structure):
 	_fields_ = [
 	('BlkType', ctypes.c_int32),
