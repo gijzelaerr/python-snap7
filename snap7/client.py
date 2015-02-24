@@ -265,6 +265,14 @@ class Client(object):
         logging.debug("number of items found: %s" % count)
         check_error(result, context="client")
         return data
+    
+    def get_block_info(self, blocktype, db_number):
+        """This function returns the block information for the specified datablock."""
+        logging.debug("retrieving block info for block %s of type %s" % (db_number, blocktype)
+        data = TS7BlockInfo()
+        result = library.Cli_GetAgBlockInfo(self.pointer, blocktype, db_number, byref(data))
+        check_error(result, context="client")
+        return data
 
     @error_wrap
     def set_session_password(self, password):
