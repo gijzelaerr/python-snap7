@@ -28,7 +28,7 @@ example spec::
     client = snap7.client.Client()
     client.connect('192.168.200.24', 0, 3)
 
-    all_data = client.db_upload(db_number)
+    all_data = client.upload(db_number)
 
     simple:
 
@@ -39,7 +39,7 @@ example spec::
         17+2,                   # size of the specification 17 is start
                                 # of last value
                                 # which is a DWORD which is 2 bytes,
-        1,                      # number of row's / specifocations
+        1,                      # number of row's / specifications
         id_field='ID',          # field we can use to identify a row
                                 # default index is used
         layout_offset=4,        # sometimes specification does not start a 0
@@ -52,9 +52,12 @@ example spec::
     Now we can use db1 in python as a dict. if Name contains
     the 'test'
 
+    To test of you layout matches the data from the plc you can
+    just print db1[0] or db['test'] in the example
+
     db1['test']['testbool1'] = 0
 
-    If we do not specify a id_field this should work to read out the 
+    If we do not specify a id_field this should work to read out the
     same data.
 
     db1[0]['testbool1']
@@ -233,8 +236,16 @@ def set_dword(_bytearray, byte_index, dword):
 
 class DB(object):
     """
-    Provide a simple API for a DB bytearray block given a row
-    specification
+    Manage a DB bytearray block given a specification
+    of the Layout.
+
+    It is possible to have many repetitive instances of
+    a specification this is called a "row".
+
+    probably most usecases there is just one row
+
+    db1[0]['testbool1'] = test
+    db1.write()   # puts data in plc
     """
     _bytearray = None      # data from plc
     specification = None   # layout of db rows
