@@ -164,6 +164,28 @@ class BlocksList(ctypes.Structure):
                " SDB: %s>" % (self.OBCount, self.FBCount, self.FCCount,
                               self.SFBCount, self.SFCCount, self.DBCount,
                               self.SDBCount)
+import ctypes	
+class TS7BlockInfo(ctypes.Structure):
+	_fields_ = [
+	('BlkType', ctypes.c_int32),
+	('BlkNumber', ctypes.c_int32),
+	('BlkLang', ctypes.c_int32),
+	('BlkFlags', ctypes.c_int32),
+	('MC7Size', ctypes.c_int32),
+	('LoadSize', ctypes.c_int32),
+	('LocalData', ctypes.c_int32),
+	('SBBLength', ctypes.c_int32),
+	('CheckSum', ctypes.c_int32),
+	('Version', ctypes.c_int32),
+	('CodeDate', ctypes.c_char * 11),
+	('IntfDate', ctypes.c_char * 11),
+	('Author', ctypes.c_char * 9),
+	('Family', ctypes.c_char * 9),
+	('Header', ctypes.c_char * 9),
+	]
+
+	def __str__(self):
+		return "Block type: %s Block number: %s Block language: %s Block flags: %s MC7Size: %s Load memory size: %s Local data: %s SBB Length: %s Checksum: %s Version: %s Code date: %s Interface date: %s Author: %s Family: %s Header: %s" % (self.BlkType, self.BlkNumber, self.BlkLang, self.BlkFlags, self.MC7Size, self.LoadSize, self.LocalData, self.SBBLength, self.CheckSum, self.Version, self.CodeDate, self.IntfDate, self.Author, self.Family, self.Header)
 
 class S7DataItem(ctypes.Structure):
     _pack_ = 1
