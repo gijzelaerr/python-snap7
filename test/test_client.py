@@ -125,7 +125,6 @@ class TestClient(unittest.TestCase):
         self.assertEqual(result_values[1], test_values[1])
         self.assertEqual(result_values[2], test_values[2])
 
-
     def test_upload(self):
         """
         this raises an exception due to missing authorization? maybe not
@@ -157,7 +156,18 @@ class TestClient(unittest.TestCase):
         blockList = self.client.list_blocks()
 
     def test_list_blocks_of_type(self):
-        self.client.list_blocks_of_type(snap7.snap7types.block_types['DB'], 10)
+        self.client.list_blocks_of_type('DB', 10)
+
+        self.assertRaises(Exception, self.client.list_blocks_of_type,
+                          'NOblocktype', 10)
+
+    @unittest.skip("TODO: item not available?")
+    def test_get_block_info(self):
+        """test Cli_GetAgBlockInfo"""
+        self.client.get_block_info('DB', 10)
+
+        # self.assertRaises(Exception, self.client.get_block_info, 'NOblocktype',
+        #                  10)
 
     def test_set_session_password(self):
         password = 'abcdefgh'
