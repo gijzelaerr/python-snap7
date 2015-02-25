@@ -186,7 +186,7 @@ class TS7BlockInfo(ctypes.Structure):
     ]
 
     def __str__(self):
-        return """"
+        return """\
     Block type: %s
     Block number: %s
     Block language: %s
