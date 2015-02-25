@@ -279,9 +279,9 @@ class Client(object):
         return data
 
     def get_block_info(self, blocktype, db_number):
-        """Returns the block information for the specified datablock."""
+        """Returns the block information for the specified block."""
 
-        blocktype = snap7.snap7types.block_types.get('DB')
+        blocktype = snap7.snap7types.block_types.get(datablock)
 
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
