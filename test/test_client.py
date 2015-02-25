@@ -161,14 +161,17 @@ class TestClient(unittest.TestCase):
         self.assertRaises(Exception, self.client.list_blocks_of_type,
                           'NOblocktype', 10)
 
-    @unittest.skip("TODO: item not available?")
     def test_get_block_info(self):
         """test Cli_GetAgBlockInfo"""
-        self.client.get_block_info('DB', 10)
+        self.client.get_block_info('DB', 1)
 
-        # self.assertRaises(Exception, self.client.get_block_info, 'NOblocktype',
-        #                  10)
+        self.assertRaises(Exception, self.client.get_block_info, 'NOblocktype', 10)
+        self.assertRaises(Exception, self.client.get_block_info, 'DB', 10)
 
+    def test_get_cpu_state(self):
+        """this tests the get_cpu_state function"""
+        self.client.get_cpu_state()
+        
     def test_set_session_password(self):
         password = 'abcdefgh'
         self.client.set_session_password(password)
