@@ -10,7 +10,7 @@ import logging
 import snap7
 from snap7 import six
 from snap7.snap7types import S7Object, buffer_type, buffer_size, BlocksList
-from snap7.snap7types import TS7BlockInfo, param_types
+from snap7.snap7types import TS7BlockInfo, param_types, cpu_statuses
 
 from snap7.common import check_error, load_library, ipv4
 from snap7.snap7exceptions import Snap7Exception
@@ -70,6 +70,24 @@ class Client(object):
         """
         logger.info("hot starting plc")
         return self.library.Cli_PlcColdStart(self.pointer)
+
+    def get_cpu_state(self):
+        """
+        Retrieves CPU state from client
+        """
+        state = c_int(0)
+        self.library.Cli_GetPlcStatus(self.pointer,byref(state))
+        
+        try:
+            status_string = cpu_statuses[state.value]
+        except KeyError:
+            status_string = None
+        
+        if not status_string:
+            raise Snap7Exception("The cpu state (%s) is invalid" % state.value)
+        
+        logging.debug("CPU state is %s" % status_string)
+        return status_string
 
     @error_wrap
     def disconnect(self):
@@ -279,9 +297,9 @@ class Client(object):
         return data
 
     def get_block_info(self, blocktype, db_number):
-        """Returns the block information for the specified datablock."""
+        """Returns the block information for the specified block."""
 
-        blocktype = snap7.snap7types.block_types.get('DB')
+        blocktype = snap7.snap7types.block_types.get(blocktype)
 
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
