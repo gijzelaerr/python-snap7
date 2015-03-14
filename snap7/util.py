@@ -1,15 +1,20 @@
 """
-Utility functions to work with plc DB objects
-and bytearray data for examples see code test_util.py and example.py
+Utility functions for PLC DB objects
+and raw bytearray data. snap7 functions returns
+raw  data. In order to work with this data you need
+to make python able to work with the plc data.
+
+Here you can find functions to help you do that.
+For examples see code test_util.py and example.py
 in example folder.
 
 A db specification is the specification of a DB object in the
 plc you can make it using the dataview option on a DB object in PCS7
 
-example spec::
+example spec/DB layout::
 
-    Byte index    Variable name  Datatype
-
+    # Byte index    Variable name  Datatype
+    layout=\"\"\"
     4	          ID             INT
     6             NAME	         STRING[6]
 
@@ -23,10 +28,13 @@ example spec::
     12.7          testbool8      BOOL
     13            testReal       REAL
     17            testDword      DWORD
-
+    \"\"\"
 
     client = snap7.client.Client()
     client.connect('192.168.200.24', 0, 3)
+
+    # this looks confusing but this means uploading from the PLC to YOU
+    # so downloading in the PC world :)
 
     all_data = client.upload(db_number)
 
@@ -35,12 +43,14 @@ example spec::
     db1 = snap7.util.DB(
         db_number,              # the db we use
         all_data,               # bytearray from the plc
-        layout,                 # layout specification
+        layout,                 # layout specification DB variable data
         17+2,                   # size of the specification 17 is start
                                 # of last value
                                 # which is a DWORD which is 2 bytes,
+
         1,                      # number of row's / specifications
-        id_field='ID',          # field we can use to identify a row
+
+        id_field='ID',          # field we can use to identify a row.
                                 # default index is used
         layout_offset=4,        # sometimes specification does not start a 0
                                 # like in our example
@@ -49,8 +59,8 @@ example spec::
                                 # does not start at 0
     )
 
-    Now we can use db1 in python as a dict. if Name contains
-    the 'test'
+    Now we can use db1 in python as a dict. if 'ID' contains
+    the 'test' we can identify the 'test' row in the all_data bytearray
 
     To test of you layout matches the data from the plc you can
     just print db1[0] or db['test'] in the example
@@ -62,7 +72,7 @@ example spec::
 
     db1[0]['testbool1']
 
-    to read and write from the plc
+    to read and write a single Row from the plc. takes like 5ms!
 
     db1['test'].write()
 
