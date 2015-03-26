@@ -1,6 +1,6 @@
 import time
 import snap7
-from snap7 import s7util
+from snap7 import util
 from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
@@ -31,7 +31,7 @@ def get_db1():
         row_size = 130                   # size of item
         index = i * row_size
         offset = index + row_size        # end of row in db
-        s7util.print_row(all_data[index:offset])
+        util.print_row(all_data[index:offset])
 
 
 def get_db_row(db, start, size):

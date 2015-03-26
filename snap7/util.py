@@ -1,17 +1,15 @@
 """
-Utility functions for PLC DB objects
-and raw bytearray data. snap7 functions returns
-raw  data. In order to work with this data you need
-to make python able to work with the plc data.
+This module contains utility functions for working with PLC DB objects.
+There are functions to work with the raw bytearray data snap7 functions return
+In order to work with this data you need to make python able to work with the
+PLC bytearray data.
 
-Here you can find functions to help you do that.
-For examples see code test_util.py and example.py
-in example folder.
+For example code see test_util.py and example.py in the example folder.
 
-A db specification is the specification of a DB object in the
-plc you can make it using the dataview option on a DB object in PCS7
 
-example spec/DB layout::
+example::
+
+    spec/DB layout
 
     # Byte index    Variable name  Datatype
     layout=\"\"\"
@@ -44,6 +42,10 @@ example spec/DB layout::
         db_number,              # the db we use
         all_data,               # bytearray from the plc
         layout,                 # layout specification DB variable data
+                                # A DB specification is the specification of a
+                                # DB object in the PLC you can find it using
+                                # the dataview option on a DB object in PCS7
+
         17+2,                   # size of the specification 17 is start
                                 # of last value
                                 # which is a DWORD which is 2 bytes,
@@ -87,23 +89,6 @@ import logging
 from snap7 import six
 
 import re
-
-
-def parse_specification(db_specification):
-    """
-    Create a db specification derived from a
-    dataview of a db in which the byte layout
-    is specified
-    """
-    parsed_db_specification = OrderedDict()
-
-    for line in db_specification.split('\n'):
-        if line and not line.startswith('#'):
-            row = line.split('#')[0]  # remove trailing comment
-            index, var_name, _type = row.split()
-            parsed_db_specification[var_name] = (index, _type)
-
-    return parsed_db_specification
 
 
 def get_bool(_bytearray, byte_index, bool_index):
@@ -242,6 +227,23 @@ def set_dword(_bytearray, byte_index, dword):
     _bytes = struct.unpack('4B', struct.pack('>I', dword))
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
+
+
+def parse_specification(db_specification):
+    """
+    Create a db specification derived from a
+    dataview of a db in which the byte layout
+    is specified
+    """
+    parsed_db_specification = OrderedDict()
+
+    for line in db_specification.split('\n'):
+        if line and not line.startswith('#'):
+            row = line.split('#')[0]  # remove trailing comment
+            index, var_name, _type = row.split()
+            parsed_db_specification[var_name] = (index, _type)
+
+    return parsed_db_specification
 
 
 class DB(object):
