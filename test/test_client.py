@@ -3,11 +3,13 @@ import struct
 import unittest
 import logging
 import time
+
 from subprocess import Popen
 from os import path, kill
 import snap7
 from snap7.snap7exceptions import Snap7Exception
 from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem
+from snap7 import util
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -69,8 +71,9 @@ class TestClient(unittest.TestCase):
         test_bytes_2 = bytearray(struct.pack('>f', test_value_2))
         self.client.db_write(db, 4, test_bytes_2)
 
-        test_value_3 = -123
-        test_bytes_3 = bytearray(struct.pack('>h', test_value_3))
+        test_value_3 = 123
+        test_bytes_3 = bytearray([0, 0])
+        util.set_int(test_bytes_3, 0, test_value_3)
         self.client.db_write(db, 8, test_bytes_3)
 
         test_values = [test_value_1, test_value_2, test_value_3]
@@ -112,14 +115,15 @@ class TestClient(unittest.TestCase):
         result, data_items = self.client.read_multi_vars(data_items)
 
         result_values = []
-        # struct formats to match data_items[] above
-        fmts = ['>f', '>f', '>h']
+        # function to cast bytes to match data_types[] above
+        byte_to_value = [util.get_real, util.get_real, util.get_int]
+
         # unpack and test the result of each read
         for i in range(0, len(data_items)):
-            fmt = fmts[i]
+            btv = byte_to_value[i]
             di = data_items[i]
-            bytes_str = ''.join([chr(di.pData[j]) for j in range(0, di.Amount)])
-            result_values.append(struct.unpack(fmt, bytes_str)[0])
+            value = btv(di.pData, 0)
+            result_values.append(value)
 
         self.assertEqual(result_values[0], test_values[0])
         self.assertEqual(result_values[1], test_values[1])
@@ -165,13 +169,14 @@ class TestClient(unittest.TestCase):
         """test Cli_GetAgBlockInfo"""
         self.client.get_block_info('DB', 1)
 
-        self.assertRaises(Exception, self.client.get_block_info, 'NOblocktype', 10)
+        self.assertRaises(Exception, self.client.get_block_info,
+                          'NOblocktype', 10)
         self.assertRaises(Exception, self.client.get_block_info, 'DB', 10)
 
     def test_get_cpu_state(self):
         """this tests the get_cpu_state function"""
         self.client.get_cpu_state()
-        
+
     def test_set_session_password(self):
         password = 'abcdefgh'
         self.client.set_session_password(password)
@@ -258,9 +263,9 @@ class TestClient(unittest.TestCase):
             self.assertEqual(self.client.get_param(param), value)
 
         non_client = snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval,\
-                     snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout,\
-                     snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime,\
-                     snap7.snap7types.KeepAliveTime
+            snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout,\
+            snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime,\
+            snap7.snap7types.KeepAliveTime
 
         # invalid param for client
         for param in non_client:
