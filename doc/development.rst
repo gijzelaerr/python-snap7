@@ -24,16 +24,13 @@ Test suite
 ----------
 
 python-snap7 comes with a test suite with 100% coverage. This test suite
-verifies that the code actually works and makes development much easier. For now
-the client tests require a running fake server. Due to the design of the snap7
-library the server needs to run on TCP port 102. On unix all ports in the range
-from 0 to 1023 need to as root, so also this process needs to as root. Also the
-server tests need to run as root. To run all tests please run::
+verifies that the code actually works and makes development much easier.  To run
+all tests please run from the source::
 
-    $ sudo python test/test_partner.py
-    $ sudo python test/test_server.py
-    $ nohup sudo snap7/bin/snap7-server.py &  # this runs a snap7 in the background
-    $ python test/test_client.py              # the client tests don't need to run as root
+    $ ./run_tests.sh
+
+Note that some tests require to run as root, since snap7 needs to bind on a
+privileged TCP port.
 
 If the test complain about missing Python modules make sure the source directory
 is in your PYTHONPATH environment variable, or the python-snap7 module is
