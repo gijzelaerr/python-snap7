@@ -115,7 +115,7 @@ class TestClient(unittest.TestCase):
         # struct formats to match data_items[] above
         fmts = ['>f', '>f', '>h']
         # unpack and test the result of each read
-        for i in xrange(0, len(data_items)):
+        for i in range(0, len(data_items)):
             fmt = fmts[i]
             di = data_items[i]
             bytes_str = ''.join([chr(di.pData[j]) for j in range(0, di.Amount)])

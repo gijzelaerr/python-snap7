@@ -87,8 +87,9 @@ from collections import OrderedDict
 import struct
 import logging
 from snap7 import six
-
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def get_bool(_bytearray, byte_index, bool_index):
@@ -204,11 +205,7 @@ def get_string(_bytearray, byte_index, max_size):
     size = _bytearray[byte_index + 1]
 
     if max_size < size:
-        print '*' * 80
-        print
-        print "WRONG SIZED STRING ENCOUNTERD"
-        print "the string is to big for the size encountered in specification"
-        print '*' * 80
+        logging.error("the string is to big for the size encountered in specification")
         logging.error("WRONG SIZED STRING ENCOUNTERED")
         size = max_size
 
