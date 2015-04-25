@@ -530,7 +530,7 @@ class Client(object):
         type_ = param_types[number]
         return self.library.Cli_SetParam(self.pointer, number,
                                          byref(type_(value)))
-	
+
     def get_param(self, number):
         """Reads an internal Client object parameter.
         """
@@ -541,6 +541,3 @@ class Client(object):
                                          byref(value))
         check_error(code)
         return value.value
-
-
-		
