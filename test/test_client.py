@@ -185,7 +185,11 @@ class TestClient(unittest.TestCase):
         self.client.clear_session_password()
 
     def test_set_connection_params(self):
-        self.client.set_connection_params("10.0.0.2", 10, 10)
+        self.client.set_connection_params("10.0.0.2", 0x1000, 0x1000)
+
+    def test_connect(self):
+        """ This tests the connect for s7-200/logo PLCs """
+        self.client.connect()
 
     def test_set_connection_type(self):
         self.client.set_connection_type(1)

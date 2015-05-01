@@ -114,6 +114,13 @@ class Client(object):
             self.pointer, c_char_p(six.b(address)),
             c_int(rack), c_int(slot))
 
+    def connect(self):
+		"""To connect to these PLC you need to call set_connection_params() and then 
+		connect().  S7-200/Logo PLCs requiring TSAPs
+		"""
+		logger.debug("connecting using set_connection_params")
+		return self.library.Cli_Connect(self.pointer)
+
     def db_read(self, db_number, start, size):
         """This is a lean function of Cli_ReadArea() to read PLC DB.
 
