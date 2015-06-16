@@ -34,13 +34,21 @@ class Partner(object):
         self.pointer = None
         self.create(active)
 
-    def as_b_send(self):
+    def as_b_send(self, data):
         """
         Sends a data packet to the partner. This function is asynchronous, i.e.
         it terminates immediately, a completion method is needed to know when
         the transfer is complete.
         """
-        return self.library.Par_AsBSend(self.pointer)
+        rId = ctypes.c_int32(1)
+        size = len(data)
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        cdata = (type_ * size).from_buffer(data)
+        result = self.library.Par_AsBSend(self.pointer, rId, ctypes.byref(cdata), size)
+        check_error(result, context="partner")
+
+        return result
 
     def b_recv(self):
         """
@@ -48,14 +56,30 @@ class Partner(object):
         synchronous, it waits until a packet is received or the timeout
         supplied expires.
         """
-        return self.library.Par_BRecv(self.pointer)
+        rId = ctypes.c_int32(1)
+        buffer = (ctypes.c_uint8 * snap7.snap7types.buffer_size)()
+        bufferSize  =  ctypes.c_uint32(0)
+        timeOut = ctypes.c_uint32(snap7.snap7types.RecvTimeout)
+        result = self.library.Par_BRecv(self.pointer, ctypes.byref(rId), ctypes.byref(buffer), ctypes.byref(bufferSize), ctypes.byref(timeOut))
+        check_error(result, context="partner")
+        msg = bytearray(buffer[:bufferSize.value])
 
-    def b_send(self):
+        return msg
+
+    def b_send(self, data):
         """
         Sends a data packet to the partner. This function is synchronous, i.e.
         it terminates when the transfer job (send+ack) is complete.
         """
-        return self.library.Par_BSend(self.pointer)
+        rId = ctypes.c_int32(1)
+        size = len(data)
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        cdata = (type_ * size).from_buffer(data)
+        result = self.library.Par_BSend(self.pointer, rId, ctypes.byref(cdata), size)
+        check_error(result, context="partner")
+
+        return result
 
     def check_as_b_recv_completion(self):
         """
