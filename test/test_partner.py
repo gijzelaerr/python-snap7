@@ -22,9 +22,9 @@ class TestPartner(unittest.TestCase):
     
     def setUp(self):
         self.passive = snap7.partner.Partner(False)  # set as passive partner 
-        self.passive.start_to("0.0.0.0", "127.0.0.1", long(1002), long(1000))
+        self.passive.start_to("0.0.0.0", "127.0.0.1", 1002, 1000)
         self.partner = snap7.partner.Partner(True)  # set as active partner
-        self.partner.start_to("0.0.0.0", "127.0.0.1", long(1000), long(1002))
+        self.partner.start_to("0.0.0.0", "127.0.0.1", 1000, 1002)
 
         time.sleep(1)  # give some time to initiate connection.
         if self.passive.get_status().value != 3:
@@ -36,7 +36,7 @@ class TestPartner(unittest.TestCase):
         self.partner.destroy()
         self.passive.destroy()
 
-    def test_as_b_send(self):
+    def test_as_b_send_recv(self):
         test_string="test pass"
         self.partner.as_b_send(bytearray(test_string))
         self.partner.wait_as_b_send_completion(1)  # 1 second should be enough to pass message
