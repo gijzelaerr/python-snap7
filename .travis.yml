@@ -13,10 +13,10 @@ before_install:
 install:
   - python setup.py install
 script:
-  - sudo -E nosetests test/test_partner.py
-  - nosetests test/test_server.py
-  - nosetests test/test_client.py
-  - nosetests test/test_util.py
+  - sudo -E nosetests --with-coverage test/test_partner.py
+  - nosetests --with-coverage test/test_server.py
+  - nosetests --with-coverage test/test_client.py
+  - nosetests --with-coverage test/test_util.py
 after_success:
   - codecov
 notifications:
