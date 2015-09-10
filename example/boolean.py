@@ -14,6 +14,10 @@ The example code
 
 https://github.com/gijzelaerr/python-snap7/blob/master/example/
 """
+import snap7
+
+plc = snap7.client.Client()
+plc.connect('192.168.200.24', 0, 3)
 
 # In this example boolean in DB 31 at byte 120 and bit 5 is changed. = 120.5 
 
