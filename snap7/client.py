@@ -534,3 +534,15 @@ class Client(object):
                                          byref(value))
         check_error(code)
         return value.value
+
+    def get_pdu_length(self):
+        """
+        Returns info about the PDU length.
+        """
+        logger.info("getting PDU length")
+        requested_ = c_uint16()
+        negotiated_ = c_uint16()
+        code = self.library.Cli_GetPduLength(self.pointer, byref(requested_), byref(negotiated_))
+        check_error(code)
+
+        return negotiated_.value

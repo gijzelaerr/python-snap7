@@ -320,6 +320,13 @@ class TestClient(unittest.TestCase):
         self.client.plc_cold_start()
 
 
+    def test_get_pdu_length(self):
+        pduRequested = self.client.get_param(10)
+        pduSize = self.client.get_pdu_length()
+        self.assertEqual(pduSize, pduRequested)
+        
+
+
 class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.
