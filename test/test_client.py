@@ -324,6 +324,18 @@ class TestClient(unittest.TestCase):
         pduRequested = self.client.get_param(10)
         pduSize = self.client.get_pdu_length()
         self.assertEqual(pduSize, pduRequested)
+    
+    def test_get_cpu_info(self):
+        expected = (
+            ('ModuleTypeName', 'CPU 315-2 PN/DP'),
+            ('SerialNumber', 'S C-C2UR28922012'),
+            ('ASName', 'SNAP7-SERVER'),
+            ('Copyright', 'Original Siemens Equipment'),
+            ('ModuleName', 'CPU 315-2 PN/DP')
+        )
+        cpuInfo = self.client.get_cpu_info()
+        for param, value in expected:
+            self.assertEqual(getattr(cpuInfo, param).decode('utf-8'), value)
         
 
 
@@ -381,7 +393,6 @@ Cli_ErrorText
 Cli_FullUpload
 Cli_GetAgBlockInfo
 Cli_GetCpInfo
-Cli_GetCpuInfo
 Cli_GetExecTime
 Cli_GetLastError
 Cli_GetOrderCode
