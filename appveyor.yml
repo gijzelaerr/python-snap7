@@ -24,6 +24,14 @@ install:
   - ECHO "Installed SDKs:"
   - ps: "ls \"C:/Program Files/Microsoft SDKs/Windows\""
 
+  - ps: Start-FileDownload 'http://downloads.sourceforge.net/project/snap7/1.4.0/snap7-full-1.4.0.zip?r=&ts=1441190932&use_mirror=kent'
+
+  - ps: "ls"
+
+  - ps: "7z e snap7-full-1.4.0.zip"
+
+  - "SET PATH=C:\\projects\\python-snap7\\
+
   # Install Python (from the official .msi of http://python.org) and pip when
   # not already installed.
   - ps: if (-not(Test-Path($env:PYTHON))) { & appveyor\install.ps1 }
