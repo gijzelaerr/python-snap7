@@ -89,6 +89,15 @@ class Client(object):
         logging.debug("CPU state is %s" % status_string)
         return status_string
 
+    def get_cpu_info(self):
+        """
+        Retrieves CPU info from client
+        """
+        info = snap7.snap7types.S7CpuInfo()
+        result = self.library.Cli_GetCpuInfo(self.pointer, byref(info))
+        check_error(result, context="client")
+        return info
+
     @error_wrap
     def disconnect(self):
         """

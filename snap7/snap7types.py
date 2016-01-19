@@ -229,3 +229,12 @@ class S7DataItem(ctypes.Structure):
         ('Amount', ctypes.c_int32),
         ('pData', ctypes.POINTER(ctypes.c_uint8))
     ]
+
+class S7CpuInfo(ctypes.Structure):
+    _fields_ = [
+        ('ModuleTypeName', ctypes.c_char*33),
+        ('SerialNumber', ctypes.c_char*25),
+        ('ASName', ctypes.c_char*25),
+        ('Copyright', ctypes.c_char*27),
+        ('ModuleName', ctypes.c_char*25)
+    ]
