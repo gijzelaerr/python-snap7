@@ -69,7 +69,7 @@ class Client(object):
         hot starts a client
         """
         logger.info("hot starting plc")
-        return self.library.Cli_PlcColdStart(self.pointer)
+        return self.library.Cli_PlcHotStart(self.pointer)
 
     def get_cpu_state(self):
         """
@@ -293,7 +293,10 @@ class Client(object):
         logging.debug("listing blocks of type: %s size: %s" %
                       (blocktype, size))
 
-        data = (c_int * 10)()
+        if (size == 0):
+            return 0
+		
+        data = (c_uint16 * size)()
         count = c_int(size)
         result = self.library.Cli_ListBlocksOfType(
             self.pointer, blocktype,
