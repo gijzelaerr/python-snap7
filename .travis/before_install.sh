@@ -9,10 +9,10 @@ fi
 
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
 	sudo apt-get update -qq
-	sudo apt-get install software-properties-common python-nose
+	sudo apt-get install -y software-properties-common
 	sudo add-apt-repository -y ppa:gijzelaar/snap7
 	sudo apt-get update -qq
-	sudo apt-get install libsnap7-dev libsnap71
-	pip install -r test/requirements.txt --use-mirrors
-	pip install codecov
+	sudo apt-get install -y libsnap7-dev libsnap71
 fi
+
+pip install -r test/requirements.txt
