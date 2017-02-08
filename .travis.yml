@@ -28,6 +28,7 @@ before_install:
 install:
   - python${PYENV} setup.py install
 script:
+  - env
   - sudo -i ${VENVBIN}/nosetests --with-coverage test/test_partner.py
   - nosetests --with-coverage test/test_server.py
   - nosetests --with-coverage test/test_client.py
