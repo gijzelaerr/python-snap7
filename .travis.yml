@@ -24,7 +24,7 @@ before_install:
 install:
   - python${PYENV} setup.py install
 script:
-  - sudo -E nosetests --with-coverage test/test_partner.py
+  - sudo -i nosetests --with-coverage test/test_partner.py
   - nosetests --with-coverage test/test_server.py
   - nosetests --with-coverage test/test_client.py
   - nosetests --with-coverage test/test_util.py
