@@ -10,9 +10,9 @@ matrix:
         - os: linux
           sudo: required
           python: 3.6
-		- os: linux
-		  sudo: required
-		  python: 2.7
+        - os: linux
+          sudo: required
+          python: 2.7
         - os: osx
           language: generic
           env: PYENV=py2
