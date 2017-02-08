@@ -4,15 +4,19 @@ matrix:
         - os: linux
           sudo: required
           python: 3.4
+          env: VENVBIN=/home/travis/virtualenv/bin
         - os: linux
           sudo: required
           python: 3.5
+          env: VENVBIN=/home/travis/virtualenv/bin
         - os: linux
           sudo: required
           python: 3.6
+          env: VENVBIN=/home/travis/virtualenv/bin
         - os: linux
           sudo: required
           python: 2.7
+          env: VENVBIN=/home/travis/virtualenv/bin
         - os: osx
           language: generic
           env: PYENV=2
@@ -24,7 +28,7 @@ before_install:
 install:
   - python${PYENV} setup.py install
 script:
-  - sudo -i nosetests --with-coverage test/test_partner.py
+  - sudo -i ${VENVBIN}/nosetests --with-coverage test/test_partner.py
   - nosetests --with-coverage test/test_server.py
   - nosetests --with-coverage test/test_client.py
   - nosetests --with-coverage test/test_util.py
