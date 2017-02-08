@@ -1,13 +1,24 @@
 language: python
-sudo: true
-os:
-  - linux
-  - osx
-python:
-  - '2.7'
-  - '3.4'
-  - '3.5'
-  - '3.6'
+matrix:
+    include:
+        - os: linux
+          sudo: required
+          python: 3.4
+        - os: linux
+          sudo: required
+          python: 3.5
+        - os: linux
+          sudo: required
+          python: 3.6
+		- os: linux
+		  sudo: required
+		  python: 2.7
+        - os: osx
+          language: generic
+          env: PYENV=py2
+        - os: osx
+          language: generic
+          env: PYENV=py3
 before_install:
   - .travis/before_install.sh
 install:

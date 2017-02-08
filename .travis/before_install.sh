@@ -4,7 +4,14 @@ set -e
 set -x
 
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
-	brew install snap7 python python3
+    case "${PYENV}" in
+        py2)
+            brew install snap7 python
+            ;;
+        py3)
+            brew install snap7 python3
+            ;;
+    esac
 fi
 
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
