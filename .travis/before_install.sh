@@ -5,10 +5,10 @@ set -x
 
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
     case "${PYENV}" in
-        py2)
+        2)
             brew install snap7 python
             ;;
-        py3)
+        3)
             brew install snap7 python3
             ;;
     esac
@@ -22,4 +22,4 @@ if [ "$TRAVIS_OS_NAME" = "linux" ]; then
 	sudo apt-get install -y libsnap7-dev libsnap71
 fi
 
-pip install -r test/requirements.txt
+pip${PYENV} install -r test/requirements.txt

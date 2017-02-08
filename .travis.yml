@@ -15,14 +15,14 @@ matrix:
           python: 2.7
         - os: osx
           language: generic
-          env: PYENV=py2
+          env: PYENV=2
         - os: osx
           language: generic
-          env: PYENV=py3
+          env: PYENV=3
 before_install:
   - .travis/before_install.sh
 install:
-  - python setup.py install
+  - python${PYENV} setup.py install
 script:
   - sudo -E nosetests --with-coverage test/test_partner.py
   - nosetests --with-coverage test/test_server.py
