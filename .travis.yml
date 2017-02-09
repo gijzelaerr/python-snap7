@@ -24,11 +24,7 @@ before_install:
 install:
   - python${PYENV} setup.py install
 script:
-  - env
-  - sudo -i ${VIRTUAL_ENV}/nosetests --with-coverage test/test_partner.py
-  - nosetests --with-coverage test/test_server.py
-  - nosetests --with-coverage test/test_client.py
-  - nosetests --with-coverage test/test_util.py
+  - .travis/script.sh
 after_success:
   - codecov
 notifications:
