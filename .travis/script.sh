@@ -9,6 +9,7 @@ else
 fi
 
 sudo ${NOSETESTS} --with-coverage test/test_partner.py
+sudo chown travis .coverage
 nosetests --with-coverage test/test_server.py
 nosetests --with-coverage test/test_client.py
 nosetests --with-coverage test/test_util.py
