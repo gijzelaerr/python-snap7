@@ -1,22 +1,30 @@
 language: python
-python:
-  - '2.7'
-  - '3.4'
+matrix:
+    include:
+        - os: linux
+          sudo: required
+          python: 3.4
+        - os: linux
+          sudo: required
+          python: 3.5
+        - os: linux
+          sudo: required
+          python: 3.6
+        - os: linux
+          sudo: required
+          python: 2.7
+        - os: osx
+          language: generic
+          env: PYENV=2
+        - os: osx
+          language: generic
+          env: PYENV=3
 before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install software-properties-common python-nose
-  - sudo add-apt-repository -y ppa:gijzelaar/snap7
-  - sudo apt-get update -qq
-  - sudo apt-get install libsnap7-dev libsnap71
-  - pip install -r test/requirements.txt --use-mirrors
-  - pip install codecov
+  - .travis/before_install.sh
 install:
-  - python setup.py install
+  - python${PYENV} setup.py install
 script:
-  - sudo -E nosetests --with-coverage test/test_partner.py
-  - nosetests --with-coverage test/test_server.py
-  - nosetests --with-coverage test/test_client.py
-  - nosetests --with-coverage test/test_util.py
+  - .travis/script.sh
 after_success:
   - codecov
 notifications:
