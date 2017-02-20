@@ -2,25 +2,52 @@ import logging
 import unittest as unittest
 import snap7.partner
 from snap7.snap7exceptions import Snap7Exception
+import time
 
 
 logging.basicConfig(level=logging.WARNING)
 
+connectionStatusCodes = {
+    0: {"func": "par_stopped", "desc": "Stopped."},
+    1: {"func": "par_connecting", "desc": "Running, active and trying to connect."},
+    2: {"func": "par_waiting", "desc": "Running, passive and waiting for a connection"},
+    3: {"func": "par_connected", "desc": "Connected."},
+    4: {"func": "par_sending", "desc": "Sending data."},
+    5: {"func": "par_receiving", "desc": "Receiving data."},
+    6: {"func": "par_binderror", "desc": "Error starting passive partner."},
+}
+
 
 class TestPartner(unittest.TestCase):
+    
     def setUp(self):
-        self.partner = snap7.partner.Partner()
-        self.partner.start()
+        self.passive = snap7.partner.Partner(False)  # set as passive partner 
+        self.passive.start_to("0.0.0.0", "127.0.0.1", 1002, 1000)
+        self.partner = snap7.partner.Partner(True)  # set as active partner
+        self.partner.start_to("0.0.0.0", "127.0.0.1", 1000, 1002)
 
-    def test_as_b_send(self):
-        self.partner.as_b_send()
+        time.sleep(1)  # give some time to initiate connection.
+        if self.passive.get_status().value != 3:
+            logging.error("Passive Partner: %s" % connectionStatusCodes[self.passive.get_status().value]['desc'])
+        if self.partner.get_status().value != 3:
+            logging.error("Active Partner: %s" % connectionStatusCodes[self.partner.get_status().value]['desc'])
 
-    @unittest.skip("we don't recv something yet")
-    def test_b_recv(self):
-        self.partner.b_recv()
+    def tearDown(self):
+        self.partner.destroy()
+        self.passive.destroy()
 
-    def test_b_send(self):
-        self.partner.b_send()
+    def test_as_b_send_recv(self):
+        test_string="test pass"
+        self.partner.as_b_send(bytearray(test_string))
+        self.partner.wait_as_b_send_completion(1)  # 1 second should be enough to pass message
+        recv_msg = self.passive.b_recv()
+        self.assertEqual(recv_msg, test_string, "Sent and Received message must match.")
+
+    def test_b_send_recv(self):
+        test_string="test pass"
+        self.partner.b_send(bytearray(test_string))
+        recv_msg = self.passive.b_recv()
+        self.assertEqual(recv_msg, test_string, "Sent and Received message must match.")
 
     def test_check_as_b_recv_completion(self):
         self.partner.check_as_b_recv_completion()
@@ -42,14 +69,13 @@ class TestPartner(unittest.TestCase):
 
     def test_get_param(self):
         expected = (
-            (snap7.snap7types.LocalPort, 0),
             (snap7.snap7types.RemotePort, 102),
             (snap7.snap7types.PingTimeout, 750),
             (snap7.snap7types.SendTimeout, 10),
             (snap7.snap7types.RecvTimeout, 3000),
             (snap7.snap7types.SrcRef, 256),
             (snap7.snap7types.DstRef, 0),
-            (snap7.snap7types.SrcTSap, 0),
+            (snap7.snap7types.SrcTSap, 1000),
             (snap7.snap7types.PDURequest, 480),
             (snap7.snap7types.WorkInterval, 100),
             (snap7.snap7types.BSendTimeout, 3000),
