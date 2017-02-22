@@ -30,10 +30,13 @@ class Partner(object):
     A snap7 partner.
     """
     def __init__(self, active=False):
-        self.library = load_library()
         self.pointer = None
+        self.library = load_library()
         self.create(active)
 
+    def __del__(self):
+        self.destroy()
+        
     def as_b_send(self):
         """
         Sends a data packet to the partner. This function is asynchronous, i.e.
