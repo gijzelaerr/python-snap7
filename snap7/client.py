@@ -31,10 +31,13 @@ class Client(object):
     A snap7 client
     """
     def __init__(self):
-        self.library = load_library()
         self.pointer = False
+        self.library = load_library()
         self.create()
 
+    def __del__(self):
+        self.destroy()
+        
     def create(self):
         """
         create a SNAP7 client.
