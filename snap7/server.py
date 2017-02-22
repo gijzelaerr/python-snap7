@@ -37,6 +37,9 @@ class Server(object):
         self.create()
         if log:
             self._set_log_callback()
+    
+    def __del__(self):
+        self.destroy()
 
     def event_text(self, event):
         """Returns a textual explanation of a given event object
