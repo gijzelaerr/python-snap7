@@ -1,6 +1,7 @@
 import unittest
 import ctypes
 import logging
+import mock
 
 import snap7.snap7types
 import snap7.error
@@ -121,6 +122,32 @@ class TestServerBeforeStart(unittest.TestCase):
 
     def test_set_param(self):
         self.server.set_param(snap7.snap7types.LocalPort, 1102)
+
+class TestLibraryIntegration(unittest.TestCase):
+    def setUp(self):
+        # replace the function load_library with a mock
+        self.loadlib_patch = mock.patch('snap7.server.load_library')
+        self.loadlib_func = self.loadlib_patch.start()
+
+        # have load_library return another mock
+        self.mocklib = mock.MagicMock()
+        self.loadlib_func.return_value = self.mocklib
+
+        # have the Srv_Create of the mock return None
+        self.mocklib.Srv_Create.return_value = None
+
+    def tearDown(self):
+        # restore load_library
+        self.loadlib_patch.stop()
+
+    def test_create(self):
+        server = snap7.server.Server(log=False)
+        self.mocklib.Srv_Create.assert_called_once()
+
+    def test_gc(self):
+        server = snap7.server.Server(log=False)
+        del server
+        self.mocklib.Srv_Destroy.assert_called_once()
 
 
 if __name__ == '__main__':
