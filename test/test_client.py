@@ -3,6 +3,7 @@ import struct
 import unittest
 import logging
 import time
+import mock
 
 from subprocess import Popen
 from os import path, kill
@@ -324,7 +325,7 @@ class TestClient(unittest.TestCase):
         pduRequested = self.client.get_param(10)
         pduSize = self.client.get_pdu_length()
         self.assertEqual(pduSize, pduRequested)
-    
+
     def test_get_cpu_info(self):
         expected = (
             ('ModuleTypeName', 'CPU 315-2 PN/DP'),
@@ -336,7 +337,7 @@ class TestClient(unittest.TestCase):
         cpuInfo = self.client.get_cpu_info()
         for param, value in expected:
             self.assertEqual(getattr(cpuInfo, param).decode('utf-8'), value)
-        
+
 
 
 class TestClientBeforeConnect(unittest.TestCase):
@@ -360,24 +361,30 @@ class TestClientBeforeConnect(unittest.TestCase):
         for param, value in values:
             self.client.set_param(param, value)
 
-import mock
 class TestLibraryIntegration(unittest.TestCase):
+    def setUp(self):
+        # replace the function load_library with a mock
+        self.loadlib_patch = mock.patch('snap7.client.load_library')
+        self.loadlib_func = self.loadlib_patch.start()
 
-    @mock.patch('snap7.client.load_library')
-    def setUp(self, loadlib):
+        # have load_library return another mock
         self.mocklib = mock.MagicMock()
-        # loadlib returns a MagicMock instead of a snap7 library
-        loadlib.return_value = self.mocklib
+        self.loadlib_func.return_value = self.mocklib
 
+        # have the Cli_Create of the mock return None
         self.mocklib.Cli_Create.return_value = None
-        self.client = snap7.client.Client()
-        self.mocklib.Cli_Create.assert_called_once()
 
     def tearDown(self):
-        pass
+        # restore load_library
+        self.loadlib_patch.stop()
+
+    def test_create(self):
+        client = snap7.client.Client()
+        self.mocklib.Cli_Create.assert_called_once()
 
     def test_gc(self):
-        del self.client
+        client = snap7.client.Client()
+        del client
         self.mocklib.Cli_Destroy.assert_called_once()
 
 if __name__ == '__main__':
