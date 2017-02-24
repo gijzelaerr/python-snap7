@@ -360,6 +360,25 @@ class TestClientBeforeConnect(unittest.TestCase):
         for param, value in values:
             self.client.set_param(param, value)
 
+import mock
+class TestLibraryIntegration(unittest.TestCase):
+
+    @mock.patch('snap7.client.load_library')
+    def setUp(self, loadlib):
+        self.mocklib = mock.MagicMock()
+        # loadlib returns a MagicMock instead of a snap7 library
+        loadlib.return_value = self.mocklib
+
+        self.mocklib.Cli_Create.return_value = None
+        self.client = snap7.client.Client()
+        self.mocklib.Cli_Create.assert_called_once()
+
+    def tearDown(self):
+        pass
+
+    def test_gc(self):
+        del self.client
+        self.mocklib.Cli_Destroy.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()
