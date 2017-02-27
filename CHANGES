@@ -1,6 +1,29 @@
 CHANGES
 =======
 
+0.6
+---
+
+* Add __del__ to client, server and partner (#69)
+* Add files via upload (#59)
+
+0.5
+---
+
+* adding some missing functions
+* fixing Python3 support (issue #43)
+* improving the documentation
+
+0.4
+---
+
+More functions added:
+
+* client.plc_stop
+* client.plc_cold_start
+* client.plc_hot_start
+* client.read_multi_vars
+
 0.2.1
 -----
 
