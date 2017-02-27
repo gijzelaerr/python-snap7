@@ -1,5 +1,6 @@
 import logging
 import unittest as unittest
+import mock
 import snap7.partner
 from snap7.snap7exceptions import Snap7Exception
 
@@ -110,6 +111,33 @@ class TestPartner(unittest.TestCase):
 
     def test_wait_as_b_send_completion(self):
         self.assertRaises(Snap7Exception, self.partner.wait_as_b_send_completion)
+
+
+class TestLibraryIntegration(unittest.TestCase):
+    def setUp(self):
+        # replace the function load_library with a mock
+        self.loadlib_patch = mock.patch('snap7.partner.load_library')
+        self.loadlib_func = self.loadlib_patch.start()
+
+        # have load_library return another mock
+        self.mocklib = mock.MagicMock()
+        self.loadlib_func.return_value = self.mocklib
+
+        # have the Par_Create of the mock return None
+        self.mocklib.Par_Create.return_value = None
+
+    def tearDown(self):
+        # restore load_library
+        self.loadlib_patch.stop()
+
+    def test_create(self):
+        partner = snap7.partner.Partner()
+        self.mocklib.Par_Create.assert_called_once()
+
+    def test_gc(self):
+        partner = snap7.partner.Partner()
+        del partner
+        self.mocklib.Par_Destroy.assert_called_once()
 
 
 if __name__ == '__main__':
