@@ -40,39 +40,39 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray)
 
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
-        self.assertTrue(row['NAME'] == 'test')
+        self.assertEqual(row['NAME'], 'test')
 
     def test_write_string(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['NAME'] = 'abc'
-        self.assertTrue(row['NAME'] == 'abc')
+        self.assertEqual(row['NAME'], 'abc')
         row['NAME'] = ''
-        self.assertTrue(row['NAME'] == '')
+        self.assertEqual(row['NAME'], '')
         try:
             row['NAME'] = 'waaaaytoobig'
         except ValueError:
             pass
         # value should still be empty
-        self.assertTrue(row['NAME'] == '')
+        self.assertEqual(row['NAME'], '')
 
     def test_get_int(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         x = row['ID']
-        self.assertTrue(x == 0)
+        self.assertEqual(x, 0)
 
     def test_set_int(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['ID'] = 259
-        self.assertTrue(row['ID'] == 259)
+        self.assertEqual(row['ID'], 259)
 
     def test_get_bool(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
-        self.assertTrue(row['testbool1'] == 1)
-        self.assertTrue(row['testbool8'] == 0)
+        self.assertEqual(row['testbool1'], 1)
+        self.assertEqual(row['testbool8'], 0)
 
     def test_set_bool(self):
         test_array = bytearray(_bytearray)
@@ -80,8 +80,8 @@ class TestS7util(unittest.TestCase):
         row['testbool8'] = 1
         row['testbool1'] = 0
 
-        self.assertTrue(row['testbool8'] == 1)
-        self.assertTrue(row['testbool1'] == 0)
+        self.assertEqual(row['testbool8'], 1)
+        self.assertEqual(row['testbool1'], 0)
 
     def test_db_creation(self):
         test_array = bytearray(_bytearray * 10)
@@ -92,20 +92,20 @@ class TestS7util(unittest.TestCase):
                           layout_offset=4,
                           db_offset=0)
 
-        self.assertTrue(len(test_db.index) == 10)
+        self.assertEqual(len(test_db.index), 10)
 
         for i, row in test_db:
             # print row
-            self.assertTrue(row['testbool1'] == 1)
-            self.assertTrue(row['testbool2'] == 1)
-            self.assertTrue(row['testbool3'] == 1)
-            self.assertTrue(row['testbool4'] == 1)
+            self.assertEqual(row['testbool1'], 1)
+            self.assertEqual(row['testbool2'], 1)
+            self.assertEqual(row['testbool3'], 1)
+            self.assertEqual(row['testbool4'], 1)
 
-            self.assertTrue(row['testbool5'] == 0)
-            self.assertTrue(row['testbool6'] == 0)
-            self.assertTrue(row['testbool7'] == 0)
-            self.assertTrue(row['testbool8'] == 0)
-            self.assertTrue(row['NAME'] == 'test')
+            self.assertEqual(row['testbool5'], 0)
+            self.assertEqual(row['testbool6'], 0)
+            self.assertEqual(row['testbool7'], 0)
+            self.assertEqual(row['testbool8'], 0)
+            self.assertEqual(row['NAME'], 'test')
 
     def test_get_real(self):
         test_array = bytearray(_bytearray)
@@ -123,20 +123,20 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 4294967295.
         row['testDword'] = 9999999
-        self.assertTrue(row['testDword'] == 9999999)
+        self.assertEqual(row['testDword'], 9999999)
 
     def test_get_dword(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
-        self.assertTrue(row['testDword'] == 4294967295)
+        self.assertEqual(row['testDword'], 4294967295)
 
     def test_export(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         data = row.export()
-        self.assertTrue('testDword' in data)
-        self.assertTrue('testbool1' in data)
-        self.assertTrue(data['testbool5'] == 0)
+        self.assertIn('testDword', data)
+        self.assertIn('testbool1', data)
+        self.assertEqual(data['testbool5'], 0)
 
 
 def print_row(data):
