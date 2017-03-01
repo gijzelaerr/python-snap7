@@ -197,7 +197,6 @@ class TestClient(unittest.TestCase):
     def test_get_connected(self):
         self.client.get_connected()
 
-    @unittest.skip("TODO: item not available?")
     def test_ab_read(self):
         start = 1
         size = 1

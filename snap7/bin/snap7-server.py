@@ -19,8 +19,10 @@ tcpport = 1102
 def mainloop():
     server = snap7.server.Server()
     size = 100
-    data = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
-    server.register_area(snap7.snap7types.srvAreaDB, 1, data)
+    DBdata = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
+    PAdata = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
+    server.register_area(snap7.snap7types.srvAreaDB, 1, DBdata)
+    server.register_area(snap7.snap7types.srvAreaPA, 1, PAdata)
 
     server.start(tcpport=tcpport)
     while True:
