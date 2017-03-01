@@ -134,11 +134,8 @@ def set_int(_bytearray, byte_index, _int):
     """
     # make sure were dealing with an int
     _int = int(_int)
-    # int needs two be two bytes.
-    byte0 = _int >> 8
-    byte1 = _int - (byte0 << 8)
-    _bytearray[byte_index] = byte0
-    _bytearray[byte_index + 1] = byte1
+    _bytes = struct.unpack('2B', struct.pack('>h', _int))
+    _bytearray[byte_index:2] = _bytes
 
 
 def get_int(_bytearray, byte_index):
@@ -147,9 +144,9 @@ def get_int(_bytearray, byte_index):
 
     int are represented in two bytes
     """
-    byte1 = _bytearray[byte_index + 1]
-    byte0 = _bytearray[byte_index]
-    return byte1 + (byte0 << 8)
+    data = _bytearray[byte_index:2]
+    value = struct.unpack('>h', struct.pack('2B', *data))[0]
+    return value
 
 
 def set_real(_bytearray, byte_index, real):

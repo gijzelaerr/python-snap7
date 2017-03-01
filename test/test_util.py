@@ -68,6 +68,25 @@ class TestS7util(unittest.TestCase):
         row['ID'] = 259
         self.assertTrue(row['ID'] == 259)
 
+    def test_get_int_values(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        for value in (
+                    -32768,
+                    -16385,
+                    -256,
+                    -128,
+                    -127,
+                    0,
+                    127,
+                    128,
+                    255,
+                    256,
+                    16384,
+                    32767):
+            row['ID'] = value
+            self.assertEqual(row['ID'], value)
+
     def test_get_bool(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
