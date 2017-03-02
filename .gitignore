@@ -46,3 +46,7 @@ doc/_build/
 .idea
 
 .vagrant/
+.virtualenv/
+.virtualenv3/
+.venv/
+.venv3/

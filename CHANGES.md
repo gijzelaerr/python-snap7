@@ -1,11 +1,22 @@
 CHANGES
 =======
 
+0.7
+---
+
+* util.get_int() broken (#65, #71)
+* fix Add files via upload bug (#59)
+
+Special thanks to Pelle van der Heide for solving issues
+
+
 0.6
 ---
 
 * Add __del__ to client, server and partner (#69)
 * Add files via upload (#59)
+
+Special thanks to xybsoft for solving issues
 
 0.5
 ---

@@ -1,12 +1,12 @@
 import os
 from distutils.core import setup
-from snap7 import __version__
+
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name='python-snap7',
-      version=__version__,
+      version='0.7',
       description='Python wrapper for the snap7 library',
       author='Gijs Molenaar',
       author_email='gijs@pythonic.nl',
