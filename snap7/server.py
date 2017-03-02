@@ -152,7 +152,7 @@ class Server(object):
         start the server.
         """
         if tcpport != 102:
-            logging.info("setting server TCP port to %s" % tcpport)
+            logger.info("setting server TCP port to %s" % tcpport)
             self.set_param(snap7.snap7types.LocalPort, tcpport)
         logger.info("starting server on 0.0.0.0:%s" % tcpport)
         return self.library.Srv_Start(self.pointer)
@@ -204,14 +204,14 @@ class Server(object):
     def unlock_area(self, code, index):
         """Unlocks a previously locked shared memory area.
         """
-        logging.debug("unlocking area code %s index %s" % (code, index))
+        logger.debug("unlocking area code %s index %s" % (code, index))
         return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
     def lock_area(self, code, index):
         """Locks a shared memory area.
         """
-        logging.debug("locking area code %s index %s" % (code, index))
+        logger.debug("locking area code %s index %s" % (code, index))
         return self.library.Srv_UnlockArea(self.pointer, code, index)
 
     @error_wrap
@@ -220,7 +220,7 @@ class Server(object):
         start server on a specific interface.
         """
         if tcpport != 102:
-            logging.info("setting server TCP port to %s" % tcpport)
+            logger.info("setting server TCP port to %s" % tcpport)
             self.set_param(snap7.snap7types.LocalPort, tcpport)
         assert re.match(ipv4, ip), '%s is invalid ipv4' % ip
         logger.info("starting server to %s:102" % ip)

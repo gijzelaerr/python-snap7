@@ -208,8 +208,8 @@ def get_string(_bytearray, byte_index, max_size):
     size = _bytearray[byte_index + 1]
 
     if max_size < size:
-        logging.error("the string is to big for the size encountered in specification")
-        logging.error("WRONG SIZED STRING ENCOUNTERED")
+        logger.error("the string is to big for the size encountered in specification")
+        logger.error("WRONG SIZED STRING ENCOUNTERED")
         size = max_size
 
     data = map(chr, _bytearray[byte_index + 2:byte_index + 2 + size])
@@ -311,7 +311,7 @@ class DB(object):
             key = row[id_field] if id_field else i
             if key and key in self.index:
                 msg = '%s not unique!' % key
-                logging.error(msg)
+                logger.error(msg)
             self.index[key] = row
 
     def __getitem__(self, key, default=None):
