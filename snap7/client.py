@@ -89,7 +89,7 @@ class Client(object):
         if not status_string:
             raise Snap7Exception("The cpu state (%s) is invalid" % state.value)
         
-        logging.debug("CPU state is %s" % status_string)
+        logger.debug("CPU state is %s" % status_string)
         return status_string
 
     def get_cpu_info(self):
@@ -215,7 +215,7 @@ class Client(object):
     def db_get(self, db_number):
         """Uploads a DB from AG.
         """
-        logging.debug("db_get db_number: %s" % db_number)
+        logger.debug("db_get db_number: %s" % db_number)
         _buffer = buffer_type()
         result = self.library.Cli_DBGet(
             self.pointer, db_number, byref(_buffer),
@@ -234,7 +234,7 @@ class Client(object):
         assert area in snap7.snap7types.areas.values()
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        logging.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
+        logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, size, wordlen))
         data = (type_ * size)()
         result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
@@ -256,7 +256,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
-        logging.debug("writing area: %s dbnumber: %s start: %s: size %s: "
+        logger.debug("writing area: %s dbnumber: %s start: %s: size %s: "
                       "type: %s" % (area, dbnumber, start, size, type_))
         cdata = (type_ * len(data)).from_buffer(data)
         return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
@@ -278,11 +278,11 @@ class Client(object):
 
         :returns: a snap7.types.BlocksList object.
         """
-        logging.debug("listing blocks")
+        logger.debug("listing blocks")
         blocksList = BlocksList()
         result = self.library.Cli_ListBlocks(self.pointer, byref(blocksList))
         check_error(result, context="client")
-        logging.debug("blocks: %s" % blocksList)
+        logger.debug("blocks: %s" % blocksList)
         return blocksList
 
     def list_blocks_of_type(self, blocktype, size):
@@ -293,7 +293,7 @@ class Client(object):
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
 
-        logging.debug("listing blocks of type: %s size: %s" %
+        logger.debug("listing blocks of type: %s size: %s" %
                       (blocktype, size))
 
         if (size == 0):
@@ -306,7 +306,7 @@ class Client(object):
             byref(data),
             byref(count))
 
-        logging.debug("number of items found: %s" % count)
+        logger.debug("number of items found: %s" % count)
 
         check_error(result, context="client")
         return data
@@ -319,7 +319,7 @@ class Client(object):
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
 
-        logging.debug("retrieving block info for block %s of type %s" %
+        logger.debug("retrieving block info for block %s of type %s" %
                       (db_number, blocktype))
 
         data = TS7BlockInfo()
@@ -388,7 +388,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
-        logging.debug("ab_read: start: %s: size %s: " % (start, size))
+        logger.debug("ab_read: start: %s: size %s: " % (start, size))
         result = self.library.Cli_ABRead(self.pointer, start, size,
                                          byref(data))
         check_error(result, context="client")
@@ -403,7 +403,7 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
-        logging.debug("ab write: start: %s: size: %s: " % (start, size))
+        logger.debug("ab write: start: %s: size: %s: " % (start, size))
         return self.library.Cli_ABWrite(
             self.pointer, start, size, byref(cdata))
 
@@ -414,7 +414,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
-        logging.debug("ab_read: start: %s: size %s: " % (start, size))
+        logger.debug("ab_read: start: %s: size %s: " % (start, size))
         result = self.library.Cli_AsABRead(self.pointer, start, size,
                                            byref(data))
         check_error(result, context="client")
@@ -428,7 +428,7 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer(data)
-        logging.debug("ab write: start: %s: size: %s: " % (start, size))
+        logger.debug("ab write: start: %s: size: %s: " % (start, size))
         return self.library.Cli_AsABWrite(
             self.pointer, start, size, byref(cdata))
 
@@ -467,7 +467,7 @@ class Client(object):
         """
         This is the asynchronous counterpart of Cli_DBGet.
         """
-        logging.debug("db_get db_number: %s" % db_number)
+        logger.debug("db_get db_number: %s" % db_number)
         _buffer = buffer_type()
         result = self.library.Cli_AsDBGet(self.pointer, db_number,
                                           byref(_buffer),
