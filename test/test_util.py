@@ -28,7 +28,7 @@ _bytearray = bytearray([
     128*0 + 64*0 + 32*0 + 16*0 +
     8*1 + 4*1 + 2*1 + 1*1,                         # test bools
     68, 78, 211, 51,                               # test real
-    255, 255, 255, 255                             # test dword
+    255, 255, 255, 255,                            # test dword
     0, 0,                                          # test int 2
     ])
 
