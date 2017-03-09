@@ -144,7 +144,7 @@ def get_int(_bytearray, byte_index):
 
     int are represented in two bytes
     """
-    data = _bytearray[byte_index:2]
+    data = _bytearray[byte_index:byte_index + 2]
     value = struct.unpack('>h', struct.pack('2B', *data))[0]
     return value
 
