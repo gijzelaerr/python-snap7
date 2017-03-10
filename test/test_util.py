@@ -19,6 +19,7 @@ test_spec = """
 12.7	testbool8    BOOL
 13      testReal     REAL
 17      testDword    DWORD
+21      testint2     INT
 """
 
 _bytearray = bytearray([
@@ -27,7 +28,8 @@ _bytearray = bytearray([
     128*0 + 64*0 + 32*0 + 16*0 +
     8*1 + 4*1 + 2*1 + 1*1,                         # test bools
     68, 78, 211, 51,                               # test real
-    255, 255, 255, 255                             # test dword
+    255, 255, 255, 255,                            # test dword
+    0, 0,                                          # test int 2
     ])
 
 
@@ -60,8 +62,10 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         x = row['ID']
+        y = row['testint2']
         self.assertEqual(x, 0)
-
+        self.assertEqual(y, 0)
+        
     def test_set_int(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
