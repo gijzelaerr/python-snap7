@@ -153,7 +153,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
-        cdata = (type_ * size).from_buffer(data)
+        cdata = (type_ * size).from_buffer_copy(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
                      (db_number, start, size, data))
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
@@ -207,7 +207,7 @@ class Client(object):
         """
         type_ = c_byte
         size = len(data)
-        cdata = (type_ * len(data)).from_buffer(data)
+        cdata = (type_ * len(data)).from_buffer_copy(data)
         result = self.library.Cli_Download(self.pointer, block_num,
                                            byref(cdata), size)
         return result
@@ -258,7 +258,7 @@ class Client(object):
         size = len(data)
         logger.debug("writing area: %s dbnumber: %s start: %s: size %s: "
                       "type: %s" % (area, dbnumber, start, size, type_))
-        cdata = (type_ * len(data)).from_buffer(data)
+        cdata = (type_ * len(data)).from_buffer_copy(data)
         return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
                                           size, wordlen, byref(cdata))
 
@@ -402,7 +402,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
-        cdata = (type_ * size).from_buffer(data)
+        cdata = (type_ * size).from_buffer_copy(data)
         logger.debug("ab write: start: %s: size: %s: " % (start, size))
         return self.library.Cli_ABWrite(
             self.pointer, start, size, byref(cdata))
@@ -427,7 +427,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
-        cdata = (type_ * size).from_buffer(data)
+        cdata = (type_ * size).from_buffer_copy(data)
         logger.debug("ab write: start: %s: size: %s: " % (start, size))
         return self.library.Cli_AsABWrite(
             self.pointer, start, size, byref(cdata))
@@ -498,7 +498,7 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
-        cdata = (type_ * size).from_buffer(data)
+        cdata = (type_ * size).from_buffer_copy(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
                      (db_number, start, size, data))
         return self.library.Cli_AsDBWrite(
@@ -517,7 +517,7 @@ class Client(object):
         """
         size = len(data)
         type_ = c_byte * len(data)
-        cdata = type_.from_buffer(data)
+        cdata = type_.from_buffer_copy(data)
         return self.library.Cli_AsDownload(self.pointer, block_num,
                                            byref(cdata), size)
 
