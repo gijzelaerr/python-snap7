@@ -337,6 +337,113 @@ class TestClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(getattr(cpuInfo, param).decode('utf-8'), value)
 
+    def test_db_write_with_byte_literal_does_not_throw(self):
+        mock_write = mock.MagicMock()
+        mock_write.return_value = None
+        original = self.client.library.Cli_DBWrite
+        self.client.library.Cli_DBWrite = mock_write
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.db_write(db_number=1, start=0, data=data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_DBWrite = original
+
+    def test_download_with_byte_literal_does_not_throw(self):
+        mock_download = mock.MagicMock()
+        mock_download.return_value = None
+        original = self.client.library.Cli_Download
+        self.client.library.Cli_Download = mock_download
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.download(block_num=db_number, data=data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_Download = original
+
+    def test_write_area_with_byte_literal_does_not_throw(self):
+        mock_writearea = mock.MagicMock()
+        mock_writearea.return_value = None
+        original = self.client.library.Cli_WriteArea
+        self.client.library.Cli_WriteArea = mock_writearea
+
+        area = snap7.snap7types.areas.DB
+        dbnumber = 1
+        size = 4
+        start = 1
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.write_area(area, dbnumber, start, data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_WriteArea = original
+
+    def test_ab_write_with_byte_literal_does_not_throw(self):
+        mock_write = mock.MagicMock()
+        mock_write.return_value = None
+        original = self.client.library.Cli_ABWrite
+        self.client.library.Cli_ABWrite = mock_write
+
+        start = 1
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.ab_write(start=start, data=data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_ABWrite = original
+
+    def test_as_ab_write_with_byte_literal_does_not_throw(self):
+        mock_write = mock.MagicMock()
+        mock_write.return_value = None
+        original = self.client.library.Cli_AsABWrite
+        self.client.library.Cli_AsABWrite = mock_write
+
+        start = 1
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.as_ab_write(start=start, data=data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_AsABWrite = original
+
+    def test_as_db_write_with_byte_literal_does_not_throw(self):
+        mock_write = mock.MagicMock()
+        mock_write.return_value = None
+        original = self.client.library.Cli_AsDBWrite
+        self.client.library.Cli_AsDBWrite = mock_write
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.db_write(db_number=1, start=0, data=data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_AsDBWrite = original
+
+    def test_as_download_with_byte_literal_does_not_throw(self):
+        mock_download = mock.MagicMock()
+        mock_download.return_value = None
+        original = self.client.library.Cli_AsDownload
+        self.client.library.Cli_AsDownload = mock_download
+        data = b'\xDE\xAD\xBE\xEF'
+
+        try:
+            self.client.as_download(block_num=db_number, data=data)
+        except TypeError as e:
+            self.fail(str(e))
+        finally:
+            self.client.library.Cli_AsDownload = original
+
 
 
 class TestClientBeforeConnect(unittest.TestCase):
