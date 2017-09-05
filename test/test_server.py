@@ -42,12 +42,26 @@ class TestServer(unittest.TestCase):
         self.assertRaises(Exception, self.server.get_mask, 3)
 
     def test_lock_area(self):
+        from threading import Thread
         area_code = snap7.snap7types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
         # we need to register first
         self.server.register_area(area_code, index, db1_type())
         self.server.lock_area(code=area_code, index=index)
+
+        def second_locker():
+            self.server.lock_area(code=area_code, index=index)
+            self.server.unlock_area(code=area_code, index=index)
+
+        thread = Thread(target=second_locker)
+        thread.daemon = True
+        thread.start()
+        thread.join(timeout=1)
+        self.assertTrue(thread.is_alive())
+        self.server.unlock_area(code=area_code, index=index)
+        thread.join(timeout=1)
+        self.assertFalse(thread.is_alive())
 
     def test_set_cpu_status(self):
         self.server.set_cpu_status(0)
