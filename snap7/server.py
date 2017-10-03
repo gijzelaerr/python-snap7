@@ -212,7 +212,7 @@ class Server(object):
         """Locks a shared memory area.
         """
         logger.debug("locking area code %s index %s" % (code, index))
-        return self.library.Srv_UnlockArea(self.pointer, code, index)
+        return self.library.Srv_LockArea(self.pointer, code, index)
 
     @error_wrap
     def start_to(self, ip, tcpport=102):
