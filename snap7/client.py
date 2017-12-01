@@ -158,7 +158,18 @@ class Client(object):
                      (db_number, start, size, data))
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
-
+    def delete(self, block_type, block_num):
+        """
+        Deletes a block
+        
+        :param block_type: Type of block
+        :param block_num: Bloc number
+        """
+        logger.info("deleting block")
+        blocktype = snap7.snap7types.block_types[block_type]
+        result = self.library.Cli_Delete(self.pointer, blocktype, block_num)
+        return result
+      
     def full_upload(self, _type, block_num):
         """
         Uploads a full block body from AG.
