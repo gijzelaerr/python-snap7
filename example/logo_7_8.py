@@ -12,7 +12,7 @@ Logo_7 = True
 
 logger = logging.getLogger(__name__)
 
-plc = snap7.logo.Client()
+plc = snap7.logo.Logo()
 plc.connect("192.168.0.41",0x1000,0x2000)
 
 if plc.get_connected():
