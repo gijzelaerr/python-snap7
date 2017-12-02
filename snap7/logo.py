@@ -18,18 +18,19 @@ from snap7.snap7exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
+# error_wrap decorator removed. Reason: The sphinx documentation generator can not handle decorators.
+# There is a workaround available for the function name, but the parameters are not printed in the documentation.
 
-def error_wrap(func):
-    """Parses a s7 error code returned the decorated function."""
-    def f(*args, **kw):
-        code = func(*args, **kw)
-        check_error(code, context="client")
-    return f
-
-
-class Client(object):
+class Logo(object):
     """
-    A snap7 client
+    A snap7 Siemens Logo client: There are two main comfort functions available :func:`Logo.read` and :func:`Logo.write`. 
+    This functions realize a high level access to the VM addresses of the Siemens Logo just use the form:
+    
+    * V10.3 for bit values
+    * V10 for the complete byte
+    * VW12 for a word (used for analog values)
+    
+    For more information see examples for Siemens Logo 7 and 8  
     """
     def __init__(self):
         self.pointer = False
@@ -54,45 +55,47 @@ class Client(object):
         logger.info("destroying snap7 client")
         return self.library.Cli_Destroy(byref(self.pointer))
 
-    @error_wrap
     def disconnect(self):
         """
         disconnect a client.
         """
         logger.info("disconnecting snap7 client")
-        return self.library.Cli_Disconnect(self.pointer)
+        result = self.library.Cli_Disconnect(self.pointer)
+        check_error(result, context="client") 
+        return result
 
-    @error_wrap
-    def connect(self, address, rack, slot, tcpport=102):
+    def connect(self, ip_address, tsap_snap7, tsap_logo, tcpport=102):
         """
-        Connect to a Siemens LOGO server.
+        Connect to a Siemens LOGO server. Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
 
-        :param address: IP address of server
-        :param rack: rack on server
-        :param slot: slot on server.
+        :param ip_address: IP ip_address of server
+        :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
+        :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
         """
-        logger.info("connecting to %s:%s rack %s slot %s" % (address, tcpport,
-                                                             rack, slot))
+        logger.info("connecting to %s:%s tsap_snap7 %s tsap_logo %s" % (ip_address, tcpport,
+                                                             tsap_snap7, tsap_logo))
         # special handling for Siemens Logo
         # 1st set connection params
         # 2nd connect without any parameters
         self.set_param(snap7.snap7types.RemotePort, tcpport)
-        self.set_connection_params(address, rack, slot)
-        return self.library.Cli_Connect(self.pointer)
+        self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
+        result = self.library.Cli_Connect(self.pointer)
+        check_error(result, context="client") 
+        return result
 
     def read(self, vm_address):
-        """Reads from VM addresses of Siemens Logo.
-        Examples: read("V40") / read("VW64") / read("V10.2") 
-        :param vm_address of Logo memory e.g. V30.1, VW32, V24
-        :returns: integer.
+        """
+        Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2") 
+        
+        :param vm_address: of Logo memory (e.g. V30.1, VW32, V24)
+        :returns: integer
         """
         area = snap7types.S7AreaDB
         db_number = 1
         size = 1
         start = 0
         wordlen = 0
-        logger.debug("read, vm_address:%s" %
-                     (vm_address))
+        logger.debug("read, vm_address:%s" % (vm_address))
         if re.match("V[0-9]{1,3}\.[0-7]{1}", vm_address):
             ## bit value
             logger.info("read, Bit address: " + vm_address)
@@ -139,7 +142,6 @@ class Client(object):
         if wordlen == snap7types.S7WLDWord:
             return struct.unpack_from(">l", data)[0]
 
-    @error_wrap
     def write (self, vm_address, value):
         """
         Writes to VM addresses of Siemens Logo.
@@ -207,9 +209,13 @@ class Client(object):
         return result
 
     def db_read(self, db_number, start, size):
-        """This is a lean function of Cli_ReadArea() to read PLC DB.
+        """
+        This is a lean function of Cli_ReadArea() to read PLC DB.
 
-        :returns: user buffer.
+        :param db_number: for Logo only DB=1
+        :param start: start address for Logo7 0..951 / Logo8 0..1469
+        :param size: in bytes
+        :returns: array of bytes
         """
         logger.debug("db_read, db_number:%s, start:%s, size:%s" %
                      (db_number, start, size))
@@ -222,12 +228,12 @@ class Client(object):
         check_error(result, context="client")
         return bytearray(data)
 
-    @error_wrap
     def db_write(self, db_number, start, data):
         """
         Writes to a DB object.
 
-        :param start: write offset
+        :param db_number: for Logo only DB=1
+        :param start: start address for Logo7 0..951 / Logo8 0..1469
         :param data: bytearray
         """
         wordlen = snap7.snap7types.S7WLByte
@@ -236,63 +242,24 @@ class Client(object):
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
                      (db_number, start, size, data))
-        return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
+        result = self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
+        check_error(result, context="client") 
+        return result
 
-
-    def read_area(self, area, dbnumber, start, size):
-        """This is the main function to read data from a PLC.
-        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
-
-        :param dbnumber: The DB number, only used when area= S7AreaDB
-        :param start: offset to start writing
-        :param size: number of units to read
-        """
-        assert area in snap7.snap7types.areas.values()
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
-                      "wordlen: %s" % (area, dbnumber, start, size, wordlen))
-        data = (type_ * size)()
-        result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
-                                           size, wordlen, byref(data))
-        check_error(result, context="client")
-        return bytearray(data)
-
-    @error_wrap
-    def write_area(self, area, dbnumber, start, data):
-        """This is the main function to write data into a PLC. It's the
-        complementary function of Cli_ReadArea(), the parameters and their
-        meanings are the same. The only difference is that the data is
-        transferred from the buffer pointed by pUsrData into PLC.
-
-        :param dbnumber: The DB number, only used when area= S7AreaDB
-        :param start: offset to start writing
-        :param data: a bytearray containing the payload
-        """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        size = len(data)
-        logger.debug("writing area: %s dbnumber: %s start: %s: size %s: "
-                      "type: %s" % (area, dbnumber, start, size, type_))
-        cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
-                                          size, wordlen, byref(cdata))
-
-
-    def set_connection_params(self, address, local_tsap, remote_tsap):
+    def set_connection_params(self, ip_address, tsap_snap7, tsap_logo):
         """
         Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
         This function must be called just before Cli_Connect().
 
-        :param address: PLC/Equipment IPV4 Address, for example "192.168.1.12"
-        :param local_tsap: Local TSAP (PC TSAP)
-        :param remote_tsap: Remote TSAP (PLC TSAP)
+        :param ip_address: IP ip_address of server
+        :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
+        :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
         """
-        assert re.match(ipv4, address), '%s is invalid ipv4' % address
-        result = self.library.Cli_SetConnectionParams(self.pointer, address,
-                                                      c_uint16(local_tsap),
-                                                      c_uint16(remote_tsap))
+        assert re.match(ipv4, ip_address), '%s is invalid ipv4' % ip_address
+        result = self.library.Cli_SetConnectionParams(self.pointer, ip_address,
+                                                      c_uint16(tsap_snap7),
+                                                      c_uint16(tsap_logo))
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
@@ -319,17 +286,24 @@ class Client(object):
         check_error(result, context="client")
         return bool(connected)
 
-    @error_wrap
     def set_param(self, number, value):
         """Sets an internal Server object parameter.
+        
+        :param number: Parameter type number
+        :param value: Parameter value
         """
         logger.debug("setting param number %s to %s" % (number, value))
         type_ = param_types[number]
-        return self.library.Cli_SetParam(self.pointer, number,
+        result = self.library.Cli_SetParam(self.pointer, number,
                                          byref(type_(value)))
+        check_error(result, context="client") 
+        return result
 
     def get_param(self, number):
-        """Reads an internal Client object parameter.
+        """Reads an internal Logo object parameter.
+        
+        :param number: Parameter type number
+        :returns: Parameter value
         """
         logger.debug("retreiving param number %s" % number)
         type_ = param_types[number]

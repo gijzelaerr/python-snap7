@@ -17,6 +17,7 @@ Contents:
    client
    server
    partner
+   logo
 
    util
 
