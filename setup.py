@@ -6,7 +6,7 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(name='python-snap7',
-      version='0.8',
+      version='0.9',
       description='Python wrapper for the snap7 library',
       author='Gijs Molenaar',
       author_email='gijs@pythonic.nl',
