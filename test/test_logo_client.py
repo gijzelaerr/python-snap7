@@ -30,7 +30,7 @@ class TestLogoClient(unittest.TestCase):
         kill(cls.server_pid, 1)
 
     def setUp(self):
-        self.client = snap7.logo.Client()
+        self.client = snap7.logo.Logo()
         self.client.connect(ip, rack, slot, tcpport)
 
     def tearDown(self):
@@ -48,21 +48,6 @@ class TestLogoClient(unittest.TestCase):
         vm_address = "V20"
         value = 8
         self.client.write(vm_address, value)
-
-    def test_read_area(self):
-        area = snap7.snap7types.areas.DB
-        dbnumber = 1
-        amount = 1
-        start = 1
-        self.client.read_area(area, dbnumber, start, amount)
-
-    def test_write_area(self):
-        area = snap7.snap7types.areas.DB
-        dbnumber = 1
-        size = 1
-        start = 20
-        data = bytearray(size)
-        self.client.write_area(area, dbnumber, start, data)
 
     def test_get_connected(self):
         self.client.get_connected()
