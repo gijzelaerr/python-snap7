@@ -156,7 +156,6 @@ class Logo(object):
         amount = 1
         wordlen = 0
         data = bytearray(0)
-        print(data)
         logger.debug("write, vm_address:%s, value:%s" %
                      (vm_address, value))
         if re.match("^V[0-9]{1,4}\.[0-7]{1}$", vm_address):
