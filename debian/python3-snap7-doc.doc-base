@@ -1,0 +1,10 @@
+Document: python3-snap7-doc
+Title: Python snap7 documentation
+Author: Gijs Molenaar, Stephan Preeker
+Abstract: Snap7 is an open source, 32/64 bit, multi-platform Ethernet
+ communication suite for interfacing natively with Siemens S7 PLCs.
+Section: Programming/Python
+
+Format: HTML
+Index: /usr/share/doc/python3-snap7-doc/html/index.html
+Files: /usr/share/doc/python3-snap7-doc/html/*.html

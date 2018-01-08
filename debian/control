@@ -1,0 +1,37 @@
+Source: python-snap7
+Section: python
+Priority: optional
+Maintainer: Lukas Wunner <lukas@wunner.de>
+Build-Depends: debhelper (>= 9), dh-python, python-all, python3-all,
+ python3-sphinx
+Standards-Version: 3.9.8
+X-Python-Version: >= 2.7
+X-Python3-Version: >= 3.4
+Homepage: https://github.com/gijzelaerr/python-snap7
+Vcs-Git: https://github.com/gijzelaerr/python-snap7
+Vcs-Browser: https://github.com/gijzelaerr/python-snap7
+
+Package: python-snap7
+Architecture: all
+Depends: libsnap71, ${python:Depends}, ${misc:Depends}
+Suggests: python3-snap7-doc
+Description: Python wrapper for snap7
+ Snap7 is an open source, 32/64 bit, multi-platform Ethernet communication
+ suite for interfacing natively with Siemens S7 PLCs.
+
+Package: python3-snap7
+Architecture: all
+Depends: libsnap71, ${python3:Depends}, ${misc:Depends}
+Suggests: python3-snap7-doc
+Description: Python wrapper for snap7
+ Snap7 is an open source, 32/64 bit, multi-platform Ethernet communication
+ suite for interfacing natively with Siemens S7 PLCs.
+
+Package: python3-snap7-doc
+Architecture: all
+Section: doc
+Depends: ${misc:Depends}, ${sphinxdoc:Depends}
+Recommends: python3-snap7
+Description: Python wrapper for snap7 (doc)
+ Snap7 is an open source, 32/64 bit, multi-platform Ethernet communication
+ suite for interfacing natively with Siemens S7 PLCs.
