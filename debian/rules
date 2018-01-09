@@ -1,0 +1,17 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+export PYBUILD_NAME=snap7
+
+%:
+	dh $@ --with python2,python3,sphinxdoc --buildsystem=pybuild
+
+override_dh_auto_install:
+	dh_auto_install
+	rm -f debian/python-snap7/usr/bin/snap7-server.py \
+	      debian/python3-snap7/usr/bin/snap7-server.py
+
+override_dh_auto_build:
+	dh_auto_build
+	PYTHON=. http_proxy='127.0.0.1:9' sphinx-build -N -bhtml doc/ build/html

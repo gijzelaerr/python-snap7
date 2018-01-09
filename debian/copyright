@@ -1,0 +1,7 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: python-snap7
+Source: https://github.com/gijzelaerr/python-snap7
+
+Files: *
+Copyright: 2013 Gijs Molenaar <gijs@pythonic.nl>, Stephan Preeker <stephan@preeker.net>
+License: MIT
