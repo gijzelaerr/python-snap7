@@ -135,7 +135,7 @@ def set_int(_bytearray, byte_index, _int):
     # make sure were dealing with an int
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>h', _int))
-    _bytearray[byte_index:2] = _bytes
+    _bytearray[byte_index:byte_index + 2] = _bytes
 
 
 def get_int(_bytearray, byte_index):
