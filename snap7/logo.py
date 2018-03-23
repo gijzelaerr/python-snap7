@@ -96,7 +96,7 @@ class Logo(object):
         start = 0
         wordlen = 0
         logger.debug("read, vm_address:%s" % (vm_address))
-        if re.match("V[0-9]{1,3}\.[0-7]{1}", vm_address):
+        if re.match("V[0-9]{1,4}\.[0-7]{1}", vm_address):
             ## bit value
             logger.info("read, Bit address: " + vm_address)
             address = vm_address[1:].split(".")
