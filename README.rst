@@ -13,9 +13,6 @@ python-snap7 support Python 2.7 and 3.4+, Windows Linux and OS X.
 .. image:: http://codecov.io/github/gijzelaerr/python-snap7/coverage.svg?branch=master
   :target: http://codecov.io/github/gijzelaerr/python-snap7?branch=master
 
-.. image:: https://badges.gitter.im/gijzelaerr/python-snap7.png
-  :target: https://gitter.im/gijzelaerr/python-snap7
-
 The full documentation is available on `Read The Docs <http://python-snap7.readthedocs.org/en/latest/>`_.
 
 see `python-snap7 in action <http://youtu.be/G-Gj_r2BQBk/>`_.
