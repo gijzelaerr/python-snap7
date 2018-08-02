@@ -4,6 +4,7 @@ set -x
 
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
     brew install snap7 python3
+    pip install nose mock 
 fi
 
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
