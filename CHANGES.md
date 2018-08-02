@@ -1,6 +1,15 @@
 CHANGES
 =======
 
+0.10
+----
+
+ * Fix OSX travis build #99
+ * util.get_int() broken #101
+ * Compatibility issue with Python3 #109
+ * Logo 8 improvements bug #105
+
+
 0.7
 ---
 
