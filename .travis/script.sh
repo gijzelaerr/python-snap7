@@ -5,7 +5,7 @@ set -x
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
     NOSETESTS=${VIRTUAL_ENV}/bin/nosetests
 else
-    NOSETESTS=/usr/local/bin/nosetests
+    NOSETESTS=nosetests
 fi
 
 sudo ${NOSETESTS} --with-coverage test/test_partner.py
