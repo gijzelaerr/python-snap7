@@ -128,24 +128,28 @@ def set_bool(_bytearray, byte_index, bool_index, value):
         _bytearray[byte_index] -= index_value
 
 
-def set_int(_bytearray, byte_index, _int):
+def set_int(bytearray_, byte_index, _int):
     """
     Set value in bytearray to int
     """
     # make sure were dealing with an int
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>h', _int))
-    _bytearray[byte_index:byte_index + 2] = _bytes
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
 
 
-def get_int(_bytearray, byte_index):
+def get_int(bytearray_, byte_index):
     """
     Get int value from bytearray.
 
     int are represented in two bytes
     """
-    data = _bytearray[byte_index:byte_index + 2]
-    value = struct.unpack('>h', struct.pack('2B', *data))[0]
+    data = bytearray_[byte_index:byte_index + 2]
+    data[1] = data[1] & 0xff
+    data[0] = data[0] & 0xff
+    packed = struct.pack('2B', *data)
+    value = struct.unpack('>h', packed)[0]
     return value
 
 
