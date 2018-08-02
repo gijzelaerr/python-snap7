@@ -29,8 +29,10 @@ class Partner(object):
     """
     A snap7 partner.
     """
+    pointer = None
+    library = None
+
     def __init__(self, active=False):
-        self.pointer = None
         self.library = load_library()
         self.create(active)
 
@@ -102,7 +104,8 @@ class Partner(object):
         Before destruction the Partner is stopped, all clients disconnected and
         all shared memory blocks released.
         """
-        return self.library.Par_Destroy(ctypes.byref(self.pointer))
+        if self.library:
+            return self.library.Par_Destroy(ctypes.byref(self.pointer))
 
     def get_last_error(self):
         """

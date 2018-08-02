@@ -25,14 +25,15 @@ class Server(object):
     """
     A fake S7 server.
     """
+    pointer = None
+    callback = None
+    library = None
 
     def __init__(self, log=True):
         """
         Create a fake S7 server. set log to false if you want to disable
         event logging to python logging.
         """
-        self.pointer = None
-        self._callback = None
         self.library = load_library()
         self.create()
         if log:
@@ -170,7 +171,8 @@ class Server(object):
         destroy the server.
         """
         logger.info("destroying server")
-        self.library.Srv_Destroy(ctypes.byref(self.pointer))
+        if self.library:
+            self.library.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self):
         """Reads the server status, the Virtual CPU status and the number of
