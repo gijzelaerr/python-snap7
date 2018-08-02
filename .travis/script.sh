@@ -5,11 +5,12 @@ set -x
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
     NOSETESTS=${VIRTUAL_ENV}/bin/nosetests
 else
-    NOSETESTS=nosetests
+    NOSETESTS="python -m nose"
 fi
 
+PYTHONPATH=.
+
+${NOSETESTS} --with-coverage test/test_server.py
+${NOSETESTS} --with-coverage test/test_client.py
+${NOSETESTS} --with-coverage test/test_util.py
 sudo ${NOSETESTS} --with-coverage test/test_partner.py
-sudo chown travis .coverage
-nosetests --with-coverage test/test_server.py
-nosetests --with-coverage test/test_client.py
-nosetests --with-coverage test/test_util.py
