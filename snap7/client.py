@@ -4,6 +4,7 @@ Snap7 client used for connection to a siemens7 server.
 import re
 from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
 from ctypes import c_void_p
+from datetime import datetime
 
 import logging
 
@@ -575,3 +576,41 @@ class Client(object):
         check_error(code)
 
         return negotiated_.value
+
+    def get_plc_datetime(self):
+        """
+        Get date and time from PLC.
+
+        :return: date and time as datetime
+        """
+        type_ = c_int32
+        buffer = (type_ * 9)()
+        result = self.library.Cli_GetPlcDateTime(self.pointer, ctypes.byref(buffer))
+        heck_error(result, context="client")
+
+        return datetime(
+            year = buffer[5] + 1900,
+            month = buffer[4] + 1,
+            day = buffer[3],
+            hour = buffer[2],
+            minute = buffer[1],
+            second = buffer[0]
+        )
+
+    @error_wrap 
+    def set_plc_datetime(self, dt):
+        """
+        Set date and time in PLC
+
+        :param dt: Date and time as datetime
+        """
+        type_ = c_int32
+        buffer = (type_ * 9)()
+        buffer[0] = dt.second
+        buffer[1] = dt.minute
+        buffer[2] = dt.hour
+        buffer[3] = dt.day
+        buffer[4] = dt.month - 1
+        buffer[5] = dt.year - 1900
+
+        return self.library.Cli_SetPlcDateTime(self.pointer, byref(buffer))
