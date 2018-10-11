@@ -585,8 +585,8 @@ class Client(object):
         """
         type_ = c_int32
         buffer = (type_ * 9)()
-        result = self.library.Cli_GetPlcDateTime(self.pointer, ctypes.byref(buffer))
-        heck_error(result, context="client")
+        result = self.library.Cli_GetPlcDateTime(self.pointer, byref(buffer))
+        check_error(result, context="client")
 
         return datetime(
             year = buffer[5] + 1900,
@@ -602,7 +602,7 @@ class Client(object):
         """
         Set date and time in PLC
 
-        :param dt: Date and time as datetime
+        :param dt: date and time as datetime
         """
         type_ = c_int32
         buffer = (type_ * 9)()
