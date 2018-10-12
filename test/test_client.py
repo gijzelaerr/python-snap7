@@ -5,6 +5,7 @@ import logging
 import time
 import mock
 
+from datetime import datetime
 from subprocess import Popen
 from os import path, kill
 import snap7
@@ -444,6 +445,14 @@ class TestClient(unittest.TestCase):
         finally:
             self.client.library.Cli_AsDownload = original
 
+    def test_get_plc_time(self):
+        self.assertEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime())
+
+    def test_set_plc_datetime(self):
+        new_dt = datetime(2011,1,1,1,1,1,0)
+        self.client.set_plc_datetime(new_dt)
+        # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
+        #self.assertEqual(new_dt, self.client.get_plc_datetime())
 
 
 class TestClientBeforeConnect(unittest.TestCase):
@@ -531,7 +540,6 @@ Cli_GetOrderCode
 Cli_GetParam
 Cli_GetPduLength
 Cli_GetPgBlockInfo
-Cli_GetPlcDateTime
 Cli_GetPlcStatus
 Cli_GetProtection
 Cli_IsoExchangeBuffer
@@ -543,7 +551,6 @@ Cli_ReadSZL
 Cli_ReadSZLList
 Cli_SetAsCallback
 Cli_SetParam
-Cli_SetPlcDateTime
 Cli_SetPlcSystemDateTime
 Cli_SetSessionPassword
 Cli_TMRead
