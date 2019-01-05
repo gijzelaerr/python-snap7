@@ -7,7 +7,7 @@ ADD . /snap7
 
 # install ubuntu packages
 RUN apt-get update
-RUN apt-get install -y software-properties-common python-software-properties python-nose
+RUN apt-get install -y software-properties-common python-nose
 
 # add the snap7 launchpad PPA
 RUN add-apt-repository ppa:gijzelaar/snap7
