@@ -273,11 +273,16 @@ class Client(object):
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        if area == snap7.snap7types.S7AreaTM:
+            wordlen = snap7.snap7types.S7WLTimer
+        elif area == snap7.snap7types.S7AreaCT:
+            wordlen = snap7.snap7types.S7WLCounter
+        else:
+            wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         size = len(data)
         logger.debug("writing area: %s dbnumber: %s start: %s: size %s: "
-                      "type: %s" % (area, dbnumber, start, size, type_))
+                     "wordlen %s type: %s" % (area, dbnumber, start, size, wordlen, type_))
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
                                           size, wordlen, byref(cdata))
