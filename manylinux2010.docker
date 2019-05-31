@@ -1,0 +1,15 @@
+FROM quay.io/pypa/manylinux2010_x86_64:latest
+RUN curl https://launchpad.net/~gijzelaar/+archive/ubuntu/snap7/+sourcefiles/snap7/1.4.2-3/snap7_1.4.2.orig.tar.xz -OL
+RUN yum install -y xz
+RUN tar Jxvf snap7_1.4.2.orig.tar.xz
+WORKDIR /snap7-1.4.2/build/unix
+RUN make -f x86_64_linux.mk install
+ADD . /code
+WORKDIR /code
+RUN /opt/python/cp27-cp27mu/bin/python ./setup.py bdist_wheel -d .
+RUN /opt/python/cp34-cp34m/bin/python ./setup.py bdist_wheel -d .
+RUN /opt/python/cp35-cp35m/bin/python ./setup.py bdist_wheel -d .
+RUN /opt/python/cp36-cp36m/bin/python ./setup.py bdist_wheel -d .
+RUN /opt/python/cp37-cp37m/bin/python ./setup.py bdist_wheel -d .
+#RUN auditwheel repair --plat manylinux2010_x86_64 -w /output *.whl
+
