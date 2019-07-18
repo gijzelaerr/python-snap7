@@ -152,6 +152,17 @@ def get_int(bytearray_, byte_index):
     value = struct.unpack('>h', packed)[0]
     return value
 
+def get_sint(bytearray_, byte_index):
+    """
+    Get int value from bytearray.
+
+    int are represented in two bytes
+    """
+    data = bytearray_[byte_index:byte_index+1]
+    data[0] = data[0] & 0xff
+    packed = struct.pack('B', *data)
+    value = struct.unpack('>b', packed)[0]
+    return value
 
 def set_real(_bytearray, byte_index, real):
     """
