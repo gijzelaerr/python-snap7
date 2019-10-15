@@ -242,8 +242,8 @@ def parse_specification(db_specification):
     parsed_db_specification = OrderedDict()
 
     for line in db_specification.split('\n'):
-        if line and not line.startswith('#'):
-            row = line.split('#')[0]  # remove trailing comment
+        row = line.lstrip().split('#')[0]   # remove trailing comment
+        if row:
             index, var_name, _type = row.split()
             parsed_db_specification[var_name] = (index, _type)
 
