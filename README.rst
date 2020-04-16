@@ -27,8 +27,10 @@ Please read the
 credits
 =======
 
-- Gijs Molenaar
-- Stephan Preeker.  *I'm available for consulting work to help you do integration with siemens PLC's. stephan at preeker dot net*
+- Gijs Molenaar (gijs at pythonic dot nl)
+- Stephan Preeker (stephan at preeker dot net)
+
+Both authors are available for contracting to improve python-snap7, please contact us at the email addres above if you have inquiries. 
 
 
 Special thanks to
