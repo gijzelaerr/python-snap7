@@ -5,7 +5,7 @@ set -x
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
     NOSETESTS=${VIRTUAL_ENV}/bin/nosetests
 else
-    NOSETESTS="python{PYENV} -m nose"
+    NOSETESTS="python${PYENV} -m nose"
 fi
 
 PYTHONPATH=.
