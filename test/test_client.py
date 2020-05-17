@@ -138,6 +138,13 @@ class TestClient(unittest.TestCase):
         """
         self.assertRaises(Snap7Exception, self.client.upload, db_number)
 
+    def test_full_upload(self):
+        """
+        this raises an exception due to missing authorization
+        this is not implemented in server emulator
+        """
+        self.assertRaises(Snap7Exception, self.client.full_upload, _type="DB", block_num=db_number)
+
     @unittest.skip("TODO: invalid block size")
     def test_download(self):
         data = bytearray(1024)

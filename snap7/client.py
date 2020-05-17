@@ -189,7 +189,7 @@ class Client(object):
                                              block_num, byref(_buffer),
                                              byref(size))
         check_error(result, context="client")
-        return bytearray(_buffer), size.value
+        return bytearray(_buffer)[:size.value], size.value
 
     def upload(self, block_num):
         """
