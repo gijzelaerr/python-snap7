@@ -138,6 +138,12 @@ class TestClient(unittest.TestCase):
         """
         self.assertRaises(Snap7Exception, self.client.upload, db_number)
 
+    def test_full_upload(self):
+        """
+
+        """
+        data, size = self.client.full_upload("DB", db_number)
+
     @unittest.skip("TODO: invalid block size")
     def test_download(self):
         data = bytearray(1024)
