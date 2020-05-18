@@ -232,6 +232,23 @@ def set_dword(_bytearray, byte_index, dword):
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
 
+def get_dint(_bytearray, byte_index):
+    """
+    Get dint value from bytearray.
+    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647    
+    """
+    data = _bytearray[byte_index:byte_index + 4]
+    dint = struct.unpack('>i', struct.pack('4B', *data))[0]
+    return dint
+
+def set_dint(_bytearray, byte_index, dint):
+    """
+    Set value in bytearray to dint    
+    """
+    dint = int(dint)
+    _bytes = struct.unpack('4B', struct.pack('>i', dint))
+    for i, b in enumerate(_bytes):
+        _bytearray[byte_index + i] = b
 
 def parse_specification(db_specification):
     """
@@ -425,6 +442,9 @@ class DB_Row(object):
         if _type == 'DWORD':
             return get_dword(_bytearray, byte_index)
 
+        if _type == 'DINT':
+            return get_dint(_bytearray, byte_index)
+
         if _type == 'INT':
             return get_int(_bytearray, byte_index)
 
@@ -450,6 +470,9 @@ class DB_Row(object):
 
         if _type == 'DWORD':
             return set_dword(_bytearray, byte_index, value)
+
+        if _type == 'DINT':
+            return set_dint(_bytearray, byte_index, value)
 
         if _type == 'INT':
             return set_int(_bytearray, byte_index, value)
