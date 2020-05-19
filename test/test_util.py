@@ -21,6 +21,7 @@ test_spec = """
 17      testDword    DWORD
 21      testint2     INT
 23      testDint     DINT
+27      testWord     WORD
 """
 
 _bytearray = bytearray([
@@ -32,6 +33,7 @@ _bytearray = bytearray([
     255, 255, 255, 255,                            # test dword
     0, 0,                                          # test int 2
     128, 0, 0, 0,                                  # test dint
+    255, 255,                                      # test word
     ])
 
 
@@ -175,6 +177,19 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4) 
         value = row.get_value(23, 'DINT') #get value 
         self.assertEqual(value, -2147483648)
+
+    def test_set_word(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        # The range of numbers is 0 to 65535
+        row.set_value(27, 'WORD', 0) #set value
+        self.assertEqual(row['testWord'], 0)
+
+    def test_get_word(self):
+        test_array = bytearray(_bytearray)       
+        row = util.DB_Row(test_array, test_spec, layout_offset=4) 
+        value = row.get_value(27, 'WORD') #get value 
+        self.assertEqual(value, 65535)
 
     def test_export(self):
         test_array = bytearray(_bytearray)
