@@ -40,7 +40,7 @@ class Client(object):
 
     def __del__(self):
         self.destroy()
-        
+
     def create(self):
         """
         create a SNAP7 client.
@@ -84,15 +84,15 @@ class Client(object):
         """
         state = c_int(0)
         self.library.Cli_GetPlcStatus(self.pointer,byref(state))
-        
+
         try:
             status_string = cpu_statuses[state.value]
         except KeyError:
             status_string = None
-        
+
         if not status_string:
             raise Snap7Exception("The cpu state (%s) is invalid" % state.value)
-        
+
         logger.debug("CPU state is %s" % status_string)
         return status_string
 
@@ -165,7 +165,7 @@ class Client(object):
     def delete(self, block_type, block_num):
         """
         Deletes a block
-        
+
         :param block_type: Type of block
         :param block_num: Bloc number
         """
@@ -173,7 +173,7 @@ class Client(object):
         blocktype = snap7.snap7types.block_types[block_type]
         result = self.library.Cli_Delete(self.pointer, blocktype, block_num)
         return result
-      
+
     def full_upload(self, _type, block_num):
         """
         Uploads a full block body from AG.
@@ -247,7 +247,12 @@ class Client(object):
         :param size: number of units to read
         """
         assert area in snap7.snap7types.areas.values()
-        wordlen = snap7.snap7types.S7WLByte
+        if area == snap7.snap7types.S7AreaTM:
+            wordlen = snap7.snap7types.S7WLTimer
+        elif area == snap7.snap7types.S7AreaCT:
+            wordlen = snap7.snap7types.S7WLCounter
+        else:
+            wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
                       "wordlen: %s" % (area, dbnumber, start, size, wordlen))
@@ -268,11 +273,16 @@ class Client(object):
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        if area == snap7.snap7types.S7AreaTM:
+            wordlen = snap7.snap7types.S7WLTimer
+        elif area == snap7.snap7types.S7AreaCT:
+            wordlen = snap7.snap7types.S7WLCounter
+        else:
+            wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         size = len(data)
         logger.debug("writing area: %s dbnumber: %s start: %s: size %s: "
-                      "type: %s" % (area, dbnumber, start, size, type_))
+                     "wordlen %s type: %s" % (area, dbnumber, start, size, wordlen, type_))
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
                                           size, wordlen, byref(cdata))
@@ -313,7 +323,7 @@ class Client(object):
 
         if (size == 0):
             return 0
-		
+
         data = (c_uint16 * size)()
         count = c_int(size)
         result = self.library.Cli_ListBlocksOfType(

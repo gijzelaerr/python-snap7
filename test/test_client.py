@@ -10,7 +10,7 @@ from subprocess import Popen
 from os import path, kill
 import snap7
 from snap7.snap7exceptions import Snap7Exception
-from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem
+from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem, S7AreaTM, S7AreaCT
 from snap7 import util
 
 
@@ -144,19 +144,41 @@ class TestClient(unittest.TestCase):
         self.client.download(block_num=db_number, data=data)
 
     def test_read_area(self):
-        area = snap7.snap7types.areas.DB
-        dbnumber = 1
         amount = 1
         start = 1
+        # Test read_area with a DB
+        area = snap7.snap7types.areas.DB
+        dbnumber = 1
+        self.client.read_area(area, dbnumber, start, amount)
+        # Test read_area with a TM
+        area = snap7.snap7types.areas.TM
+        dbnumber = 0
+        self.client.read_area(area, dbnumber, start, amount)
+        # Test read_area with a CT
+        area = snap7.snap7types.areas.CT
+        dbnumber = 0
         self.client.read_area(area, dbnumber, start, amount)
 
     def test_write_area(self):
+        # Test write area with a DB
         area = snap7.snap7types.areas.DB
         dbnumber = 1
         size = 1
         start = 1
         data = bytearray(size)
         self.client.write_area(area, dbnumber, start, data)
+        # Test write area with a TM
+        area = snap7.snap7types.areas.TM
+        dbnumber = 0
+        size = 2
+        timer = bytearray(size)
+        self.client.write_area(area, dbnumber, start, timer)
+        # Test write area with a CT
+        area = snap7.snap7types.areas.CT
+        dbnumber = 0
+        size = 2
+        timer = bytearray(size)
+        self.client.write_area(area, dbnumber, start, timer)
 
     def test_list_blocks(self):
         blockList = self.client.list_blocks()

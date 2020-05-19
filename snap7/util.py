@@ -127,6 +127,26 @@ def set_bool(_bytearray, byte_index, bool_index, value):
         # make sure index_v is NOT in current byte
         _bytearray[byte_index] -= index_value
 
+def set_word(bytearray_, byte_index, _int):
+    """
+    Set value in bytearray to word
+    """    
+    _int = int(_int)
+    _bytes = struct.unpack('2B', struct.pack('>H', _int))
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
+
+def get_word(bytearray_, byte_index):
+    """
+    Get word value from bytearray.
+    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535    
+    """
+    data = bytearray_[byte_index:byte_index + 2]
+    data[1] = data[1] & 0xff
+    data[0] = data[0] & 0xff
+    packed = struct.pack('2B', *data)
+    value = struct.unpack('>H', packed)[0]
+    return value
 
 def set_int(bytearray_, byte_index, _int):
     """
@@ -212,7 +232,7 @@ def get_string(_bytearray, byte_index, max_size):
     size = _bytearray[byte_index + 1]
 
     if max_size < size:
-        logger.error("the string is to big for the size encountered in specification")
+        logger.error("the string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         size = max_size
 
@@ -232,6 +252,23 @@ def set_dword(_bytearray, byte_index, dword):
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
 
+def get_dint(_bytearray, byte_index):
+    """
+    Get dint value from bytearray.
+    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647    
+    """
+    data = _bytearray[byte_index:byte_index + 4]
+    dint = struct.unpack('>i', struct.pack('4B', *data))[0]
+    return dint
+
+def set_dint(_bytearray, byte_index, dint):
+    """
+    Set value in bytearray to dint    
+    """
+    dint = int(dint)
+    _bytes = struct.unpack('4B', struct.pack('>i', dint))
+    for i, b in enumerate(_bytes):
+        _bytearray[byte_index + i] = b
 
 def parse_specification(db_specification):
     """
@@ -425,8 +462,14 @@ class DB_Row(object):
         if _type == 'DWORD':
             return get_dword(_bytearray, byte_index)
 
+        if _type == 'DINT':
+            return get_dint(_bytearray, byte_index)
+
         if _type == 'INT':
             return get_int(_bytearray, byte_index)
+
+        if _type == 'WORD':
+            return get_word(_bytearray, byte_index)
 
         raise ValueError
 
@@ -451,8 +494,14 @@ class DB_Row(object):
         if _type == 'DWORD':
             return set_dword(_bytearray, byte_index, value)
 
+        if _type == 'DINT':
+            return set_dint(_bytearray, byte_index, value)
+
         if _type == 'INT':
             return set_int(_bytearray, byte_index, value)
+
+        if _type == 'WORD':
+            return set_word(_bytearray, byte_index, value)
 
         raise ValueError
 

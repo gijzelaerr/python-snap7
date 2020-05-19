@@ -21,9 +21,12 @@ def mainloop():
     size = 100
     DBdata = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
     PAdata = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
+    TMdata = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
+    CTdata = (snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte] * size)()
     server.register_area(snap7.snap7types.srvAreaDB, 1, DBdata)
     server.register_area(snap7.snap7types.srvAreaPA, 1, PAdata)
-
+    server.register_area(snap7.snap7types.srvAreaTM, 1, TMdata)
+    server.register_area(snap7.snap7types.srvAreaCT, 1, CTdata)
     server.start(tcpport=tcpport)
     while True:
         while True:

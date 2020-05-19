@@ -1,6 +1,15 @@
 CHANGES
 =======
 
+0.11
+----
+
+ * Update read_multi.py (#132)
+ * Added fixes to snap7/client.py read_area function to allow for Counter and Timer Reads  (#121)
+ * Post to a public docker repository? (#119)
+ * Implementation of Cli_SetDateTime, Cli_GetDateTime enhancement (#114)
+
+
 0.10
 ----
 
