@@ -7,6 +7,7 @@ from ctypes import c_void_p
 from datetime import datetime
 
 import logging
+import asyncio
 
 import snap7
 from snap7 import six
@@ -21,9 +22,11 @@ logger = logging.getLogger(__name__)
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="client")
+
     return f
 
 
@@ -83,7 +86,7 @@ class Client(object):
         Retrieves CPU state from client
         """
         state = c_int(0)
-        self.library.Cli_GetPlcStatus(self.pointer,byref(state))
+        self.library.Cli_GetPlcStatus(self.pointer, byref(state))
 
         try:
             status_string = cpu_statuses[state.value]
@@ -162,6 +165,7 @@ class Client(object):
                      (db_number, start, size, data))
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
+
     def delete(self, block_type, block_num):
         """
         Deletes a block
@@ -195,9 +199,9 @@ class Client(object):
         """
         Uploads a block body from AG
 
-        :param data: bytearray
+        :param block_num: bytearray
         """
-        logger.debug("db_upload block_num: %s" % (block_num))
+        logger.debug("db_upload block_num: %s" % block_num)
 
         block_type = snap7.snap7types.block_types['DB']
         _buffer = buffer_type()
@@ -255,7 +259,7 @@ class Client(object):
             wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
-                      "wordlen: %s" % (area, dbnumber, start, size, wordlen))
+                     "wordlen: %s" % (area, dbnumber, start, size, wordlen))
         data = (type_ * size)()
         result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
                                            size, wordlen, byref(data))
@@ -319,9 +323,9 @@ class Client(object):
             raise Snap7Exception("The blocktype parameter was invalid")
 
         logger.debug("listing blocks of type: %s size: %s" %
-                      (blocktype, size))
+                     (blocktype, size))
 
-        if (size == 0):
+        if size == 0:
             return 0
 
         data = (c_uint16 * size)()
@@ -345,7 +349,7 @@ class Client(object):
             raise Snap7Exception("The blocktype parameter was invalid")
 
         logger.debug("retrieving block info for block %s of type %s" %
-                      (db_number, blocktype))
+                     (db_number, blocktype))
 
         data = TS7BlockInfo()
 
@@ -500,7 +504,12 @@ class Client(object):
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def as_db_read(self, db_number, start, size):
+    async def async_wait_loop(self):
+        temp = c_int(0)
+        while self.library.Cli_CheckAsCompletion(self.pointer, byref(temp)):
+            await asyncio.sleep(0)
+
+    async def as_db_read(self, db_number, start, size, timeout):
         """
         This is the asynchronous counterpart of Cli_DBRead.
 
@@ -511,8 +520,11 @@ class Client(object):
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
-        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start,
-                                            size,  byref(data)))
+        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
+        try:
+            await asyncio.wait_for(self.async_wait_loop(), timeout)
+        except asyncio.TimeoutError:
+            logger.warning(f"Request timeouted - db_nummer:{db_number}, start:{start}, size:{size}")
         check_error(result, context="client")
         return bytearray(data)
 
@@ -599,15 +611,15 @@ class Client(object):
         check_error(result, context="client")
 
         return datetime(
-            year = buffer[5] + 1900,
-            month = buffer[4] + 1,
-            day = buffer[3],
-            hour = buffer[2],
-            minute = buffer[1],
-            second = buffer[0]
+            year=buffer[5] + 1900,
+            month=buffer[4] + 1,
+            day=buffer[3],
+            hour=buffer[2],
+            minute=buffer[1],
+            second=buffer[0]
         )
 
-    @error_wrap 
+    @error_wrap
     def set_plc_datetime(self, dt):
         """
         Set date and time in PLC
