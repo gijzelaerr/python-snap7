@@ -13,7 +13,6 @@ from snap7.snap7exceptions import Snap7Exception
 from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem, S7AreaTM, S7AreaCT
 from snap7 import util
 
-
 logging.basicConfig(level=logging.WARNING)
 
 ip = '127.0.0.1'
@@ -285,14 +284,17 @@ class TestClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
-        non_client = snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval,\
-            snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout,\
-            snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime,\
-            snap7.snap7types.KeepAliveTime
+        non_client = snap7.snap7types.LocalPort, \
+                     snap7.snap7types.WorkInterval, \
+                     snap7.snap7types.MaxClients, \
+                     snap7.snap7types.BSendTimeout, \
+                     snap7.snap7types.BRecvTimeout, \
+                     snap7.snap7types.RecoveryTime, \
+                     snap7.snap7types.KeepAliveTime
 
         # invalid param for client
         for param in non_client:
-            self.assertRaises(Exception, self.client.get_param,  non_client)
+            self.assertRaises(Exception, self.client.get_param, non_client)
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_copy_ram_to_rom(self):
@@ -341,7 +343,6 @@ class TestClient(unittest.TestCase):
 
     def test_plc_cold_start(self):
         self.client.plc_cold_start()
-
 
     def test_get_pdu_length(self):
         pduRequested = self.client.get_param(10)
@@ -471,16 +472,17 @@ class TestClient(unittest.TestCase):
         self.assertEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime())
 
     def test_set_plc_datetime(self):
-        new_dt = datetime(2011,1,1,1,1,1,0)
+        new_dt = datetime(2011, 1, 1, 1, 1, 1, 0)
         self.client.set_plc_datetime(new_dt)
         # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
-        #self.assertEqual(new_dt, self.client.get_plc_datetime())
+        # self.assertEqual(new_dt, self.client.get_plc_datetime())
 
 
 class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.
     """
+
     def setUp(self):
         self.client = snap7.client.Client()
 
@@ -497,6 +499,7 @@ class TestClientBeforeConnect(unittest.TestCase):
         )
         for param, value in values:
             self.client.set_param(param, value)
+
 
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
@@ -524,9 +527,9 @@ class TestLibraryIntegration(unittest.TestCase):
         del client
         self.mocklib.Cli_Destroy.assert_called_once()
 
+
 if __name__ == '__main__':
     unittest.main()
-
 
 # TODO: implement
 """

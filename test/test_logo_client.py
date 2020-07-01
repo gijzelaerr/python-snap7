@@ -1,7 +1,7 @@
 import unittest
 import logging
 import time
-#import mock
+# import mock
 
 from subprocess import Popen
 from os import path, kill
@@ -90,8 +90,6 @@ class TestLogoClient(unittest.TestCase):
         # invalid param for client
         for param in non_client:
             self.assertRaises(Exception, self.client.get_param,  non_client)
-
-
 
 
 class TestClientBeforeConnect(unittest.TestCase):

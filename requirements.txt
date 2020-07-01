@@ -1,0 +1,3 @@
+mock
+python-snap7~=0.11
+setuptools~=47.3.1

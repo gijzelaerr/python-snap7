@@ -85,7 +85,7 @@ class _LazyDescr(object):
 
     def __get__(self, obj, tp):
         result = self._resolve()
-        setattr(obj, self.name, result) # Invokes __set__.
+        setattr(obj, self.name, result)  # Invokes __set__.
         # This is a bit ugly, but it avoids running this again.
         delattr(obj.__class__, self.name)
         return result
@@ -211,6 +211,7 @@ class _SixMetaPathImporter(object):
         self.__get_module(fullname)  # eventually raises ImportError
         return None
     get_source = get_code  # same as get_code
+
 
 _importer = _SixMetaPathImporter(__name__)
 
@@ -448,6 +449,7 @@ class Module_six_moves_urllib(types.ModuleType):
     def __dir__(self):
         return ['parse', 'error', 'request', 'response', 'robotparser']
 
+
 _importer._add_module(Module_six_moves_urllib(__name__ + ".moves.urllib"),
                       "moves.urllib")
 
@@ -569,6 +571,7 @@ _add_doc(iterlists,
 if PY3:
     def b(s):
         return s.encode("latin-1")
+
     def u(s):
         return s
     unichr = chr
@@ -588,16 +591,21 @@ else:
     def b(s):
         return s
     # Workaround for standalone backslash
+
     def u(s):
         return unicode(s.replace(r'\\', r'\\\\'), "unicode_escape")
     unichr = unichr
     int2byte = chr
+
     def byte2int(bs):
         return ord(bs[0])
+
     def indexbytes(buf, i):
         return ord(buf[i])
+
     def iterbytes(buf):
         return (ord(byte) for byte in buf)
+
     import StringIO
     StringIO = BytesIO = StringIO.StringIO
 _add_doc(b, """Byte literal""")
@@ -639,13 +647,12 @@ if print_ is None:
         fp = kwargs.pop("file", sys.stdout)
         if fp is None:
             return
+
         def write(data):
             if not isinstance(data, basestring):
                 data = str(data)
             # If the file has an encoding, encode unicode with it.
-            if (isinstance(fp, file) and
-                isinstance(data, unicode) and
-                fp.encoding is not None):
+            if (isinstance(fp, file) and isinstance(data, unicode) and fp.encoding is not None):
                 errors = getattr(fp, "errors", None)
                 if errors is None:
                     errors = "strict"
@@ -699,6 +706,7 @@ if sys.version_info[0:2] < (3, 4):
 else:
     wraps = functools.wraps
 
+
 def with_metaclass(meta, *bases):
     """Create a base class with a metaclass."""
     # This requires a bit of explanation: the basic idea is to make a dummy
@@ -728,6 +736,8 @@ def add_metaclass(metaclass):
 # Complete the moves implementation.
 # This code is at the end of this module to speed up module loading.
 # Turn this module into a package.
+
+
 __path__ = []  # required for PEP 302 and PEP 451
 __package__ = __name__  # see PEP 366 @ReservedAssignment
 if globals().get("__spec__") is not None:
@@ -741,8 +751,7 @@ if sys.meta_path:
         # be floating around. Therefore, we can't use isinstance() to check for
         # the six meta path importer, since the other six instance will have
         # inserted an importer with different class.
-        if (type(importer).__name__ == "_SixMetaPathImporter" and
-            importer.name == __name__):
+        if (type(importer).__name__ == "_SixMetaPathImporter" and importer.name == __name__):
             del sys.meta_path[i]
             break
     del i, importer

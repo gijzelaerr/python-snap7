@@ -5,7 +5,7 @@ This was tested against a S7-319 CPU
 """
 
 import ctypes
-import struct
+from snap7 import util
 
 import snap7
 from snap7.common import check_error

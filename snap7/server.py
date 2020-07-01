@@ -38,7 +38,9 @@ class Server(object):
         self.create()
         if log:
             self._set_log_callback()
-    
+        self._callback = None
+        self._read_callback = None
+
     def __del__(self):
         self.destroy()
 

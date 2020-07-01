@@ -126,7 +126,6 @@ class TestServer(unittest.TestCase):
                           snap7.snap7types.RemotePort)
 
 
-
 class TestServerBeforeStart(unittest.TestCase):
     """
     Tests for server before it is started
@@ -136,6 +135,7 @@ class TestServerBeforeStart(unittest.TestCase):
 
     def test_set_param(self):
         self.server.set_param(snap7.snap7types.LocalPort, 1102)
+
 
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):

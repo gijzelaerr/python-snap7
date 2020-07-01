@@ -16,14 +16,19 @@ from snap7.snap7types import TS7BlockInfo, param_types, cpu_statuses
 from snap7.common import check_error, load_library, ipv4
 from snap7.snap7exceptions import Snap7Exception
 
+import tracemalloc
+tracemalloc.start()
+
 logger = logging.getLogger(__name__)
 
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="client")
+
     return f
 
 
@@ -83,7 +88,7 @@ class Client(object):
         Retrieves CPU state from client
         """
         state = c_int(0)
-        self.library.Cli_GetPlcStatus(self.pointer,byref(state))
+        self.library.Cli_GetPlcStatus(self.pointer, byref(state))
 
         try:
             status_string = cpu_statuses[state.value]
@@ -118,6 +123,7 @@ class Client(object):
         """
         Connect to a S7 server.
 
+        :param tcpport: TCP Port, 102 is standard
         :param address: IP address of server
         :param rack: rack on server
         :param slot: slot on server.
@@ -151,6 +157,7 @@ class Client(object):
         """
         Writes to a DB object.
 
+        :param db_number: DB Number
         :param start: write offset
         :param data: bytearray
         """
@@ -162,6 +169,7 @@ class Client(object):
                      (db_number, start, size, data))
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
+
     def delete(self, block_type, block_num):
         """
         Deletes a block
@@ -180,6 +188,7 @@ class Client(object):
         The whole block (including header and footer) is copied into the user
         buffer.
 
+        :param _type:
         :param block_num: Number of Block
         """
         _buffer = buffer_type()
@@ -195,9 +204,9 @@ class Client(object):
         """
         Uploads a block body from AG
 
-        :param data: bytearray
+        :param block_num: bytearray
         """
-        logger.debug("db_upload block_num: %s" % (block_num))
+        logger.debug(f"db_upload block_num: %s", block_num)
 
         block_type = snap7.snap7types.block_types['DB']
         _buffer = buffer_type()
@@ -242,6 +251,7 @@ class Client(object):
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
+        :param area: Area Type
         :param dbnumber: The DB number, only used when area= S7AreaDB
         :param start: offset to start writing
         :param size: number of units to read
@@ -254,11 +264,9 @@ class Client(object):
         else:
             wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
-                      "wordlen: %s" % (area, dbnumber, start, size, wordlen))
+        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
         data = (type_ * size)()
-        result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
-                                           size, wordlen, byref(data))
+        result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start, size, wordlen, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -269,6 +277,7 @@ class Client(object):
         meanings are the same. The only difference is that the data is
         transferred from the buffer pointed by pUsrData into PLC.
 
+        :param area: Area Type
         :param dbnumber: The DB number, only used when area= S7AreaDB
         :param start: offset to start writing
         :param data: a bytearray containing the payload
@@ -318,10 +327,9 @@ class Client(object):
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
 
-        logger.debug("listing blocks of type: %s size: %s" %
-                      (blocktype, size))
+        logger.debug(f"listing blocks of type: {blocktype} size: {size}")
 
-        if (size == 0):
+        if size == 0:
             return 0
 
         data = (c_uint16 * size)()
@@ -344,8 +352,7 @@ class Client(object):
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
 
-        logger.debug("retrieving block info for block %s of type %s" %
-                      (db_number, blocktype))
+        logger.debug(f"retrieving block info for block {db_number} of type {blocktype}")
 
         data = TS7BlockInfo()
 
@@ -512,7 +519,7 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_AsDBRead(self.pointer, db_number, start,
-                                            size,  byref(data)))
+                                            size, byref(data)))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -599,15 +606,15 @@ class Client(object):
         check_error(result, context="client")
 
         return datetime(
-            year = buffer[5] + 1900,
-            month = buffer[4] + 1,
-            day = buffer[3],
-            hour = buffer[2],
-            minute = buffer[1],
-            second = buffer[0]
+            year=buffer[5] + 1900,
+            month=buffer[4] + 1,
+            day=buffer[3],
+            hour=buffer[2],
+            minute=buffer[1],
+            second=buffer[0]
         )
 
-    @error_wrap 
+    @error_wrap
     def set_plc_datetime(self, dt):
         """
         Set date and time in PLC
