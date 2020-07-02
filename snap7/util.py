@@ -201,10 +201,7 @@ def set_string(_bytearray, byte_index, value, max_size):
     :params value: string data
     :params max_size: max possible string size
     """
-    if six.PY2:
-        assert isinstance(value, (str, unicode))
-    else:
-        assert isinstance(value, str)
+    assert isinstance(value, str)
 
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC

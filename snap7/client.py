@@ -16,9 +16,6 @@ from snap7.snap7types import TS7BlockInfo, param_types, cpu_statuses
 from snap7.common import check_error, load_library, ipv4
 from snap7.snap7exceptions import Snap7Exception
 
-import tracemalloc
-tracemalloc.start()
-
 logger = logging.getLogger(__name__)
 
 
@@ -96,9 +93,9 @@ class Client(object):
             status_string = None
 
         if not status_string:
-            raise Snap7Exception("The cpu state (%s) is invalid" % state.value)
+            raise Snap7Exception("The cpu state (%s) is invalid",state.value)
 
-        logger.debug("CPU state is %s" % status_string)
+        logger.debug("CPU state is %s", status_string)
         return status_string
 
     def get_cpu_info(self):
@@ -128,12 +125,11 @@ class Client(object):
         :param rack: rack on server
         :param slot: slot on server.
         """
-        logger.info("connecting to %s:%s rack %s slot %s" % (address, tcpport,
-                                                             rack, slot))
+        logger.info("connecting to %s:%s rack %s slot %s", address, tcpport, rack, slot)
 
         self.set_param(snap7.snap7types.RemotePort, tcpport)
         return self.library.Cli_ConnectTo(
-            self.pointer, c_char_p(six.b(address)),
+            self.pointer, c_char_p(address.encode("latin-1")),
             c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
@@ -141,8 +137,7 @@ class Client(object):
 
         :returns: user buffer.
         """
-        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
-                     (db_number, start, size))
+        logger.debug("db_read, db_number: %s, start: %s, size: %s",db_number,start,size)
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
@@ -165,8 +160,7 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
-                     (db_number, start, size, data))
+        logger.debug("db_write db_number: %s start: %s size: %s data: %s", db_number,start,size,data)
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
 
@@ -206,7 +200,7 @@ class Client(object):
 
         :param block_num: bytearray
         """
-        logger.debug(f"db_upload block_num: %s", block_num)
+        logger.debug("db_upload block_num: %s", block_num)
 
         block_type = snap7.snap7types.block_types['DB']
         _buffer = buffer_type()
@@ -216,7 +210,7 @@ class Client(object):
                                          byref(_buffer), byref(size))
 
         check_error(result, context="client")
-        logger.info('received %s bytes' % size)
+        logger.info('received %s bytes', size)
         return bytearray(_buffer)
 
     @error_wrap
@@ -232,18 +226,15 @@ class Client(object):
         type_ = c_byte
         size = len(data)
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        result = self.library.Cli_Download(self.pointer, block_num,
-                                           byref(cdata), size)
+        result = self.library.Cli_Download(self.pointer, block_num, byref(cdata), size)
         return result
 
     def db_get(self, db_number):
         """Uploads a DB from AG.
         """
-        logger.debug("db_get db_number: %s" % db_number)
+        logger.debug("db_get db_number: %s", db_number)
         _buffer = buffer_type()
-        result = self.library.Cli_DBGet(
-            self.pointer, db_number, byref(_buffer),
-            byref(c_int(buffer_size)))
+        result = self.library.Cli_DBGet(self.pointer, db_number, byref(_buffer), byref(c_int(buffer_size)))
         check_error(result, context="client")
         return bytearray(_buffer)
 
@@ -264,7 +255,7 @@ class Client(object):
         else:
             wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
+        logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: wordlen: %s", area,dbnumber,start,size, wordlen)
         data = (type_ * size)()
         result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start, size, wordlen, byref(data))
         check_error(result, context="client")
@@ -290,11 +281,10 @@ class Client(object):
             wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         size = len(data)
-        logger.debug("writing area: %s dbnumber: %s start: %s: size %s: "
-                     "wordlen %s type: %s" % (area, dbnumber, start, size, wordlen, type_))
+        logger.debug("writing area: %s dbnumber: %s start: %s: size %s: wordlen %s type: %s",
+                     area,dbnumber,start,size,wordlen,type_)
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start,
-                                          size, wordlen, byref(cdata))
+        return self.library.Cli_WriteArea(self.pointer, area, dbnumber, start, size, wordlen, byref(cdata))
 
     def read_multi_vars(self, items):
         """This function read multiple variables from the PLC.
@@ -302,8 +292,7 @@ class Client(object):
         :param items: list of S7DataItem objects
         :returns: a tuple with the return code and a list of data items
         """
-        result = self.library.Cli_ReadMultiVars(self.pointer, byref(items),
-                                                c_int32(len(items)))
+        result = self.library.Cli_ReadMultiVars(self.pointer, byref(items), c_int32(len(items)))
         check_error(result, context="client")
         return result, items
 
@@ -316,7 +305,7 @@ class Client(object):
         blocksList = BlocksList()
         result = self.library.Cli_ListBlocks(self.pointer, byref(blocksList))
         check_error(result, context="client")
-        logger.debug("blocks: %s" % blocksList)
+        logger.debug("blocks: %s",blocksList)
         return blocksList
 
     def list_blocks_of_type(self, blocktype, size):
@@ -327,19 +316,16 @@ class Client(object):
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
 
-        logger.debug(f"listing blocks of type: {blocktype} size: {size}")
+        logger.debug("listing blocks of type: %s, size: %s", blocktype,size)
 
         if size == 0:
             return 0
 
         data = (c_uint16 * size)()
         count = c_int(size)
-        result = self.library.Cli_ListBlocksOfType(
-            self.pointer, blocktype,
-            byref(data),
-            byref(count))
+        result = self.library.Cli_ListBlocksOfType(self.pointer, blocktype, byref(data), byref(count))
 
-        logger.debug("number of items found: %s" % count)
+        logger.debug("number of items found: %s", count)
 
         check_error(result, context="client")
         return data
@@ -352,13 +338,11 @@ class Client(object):
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
 
-        logger.debug(f"retrieving block info for block {db_number} of type {blocktype}")
+        logger.debug("retrieving block info for block %s of type %s", db_number, blocktype)
 
         data = TS7BlockInfo()
 
-        result = self.library.Cli_GetAgBlockInfo(
-            self.pointer, blocktype,
-            db_number, byref(data))
+        result = self.library.Cli_GetAgBlockInfo(self.pointer, blocktype, db_number, byref(data))
         check_error(result, context="client")
         return data
 
@@ -367,7 +351,7 @@ class Client(object):
         """Send the password to the PLC to meet its security level."""
         assert len(password) <= 8, 'maximum password length is 8'
         return self.library.Cli_SetSessionPassword(self.pointer,
-                                                   c_char_p(six.b(password)))
+                                                   c_char_p(password.encode("latin-1")))
 
     @error_wrap
     def clear_session_password(self):
@@ -385,8 +369,7 @@ class Client(object):
         """
         assert re.match(ipv4, address), '%s is invalid ipv4' % address
         result = self.library.Cli_SetConnectionParams(self.pointer, address,
-                                                      c_uint16(local_tsap),
-                                                      c_uint16(remote_tsap))
+                                                      c_uint16(local_tsap), c_uint16(remote_tsap))
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
@@ -397,8 +380,7 @@ class Client(object):
 
         :param connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
         """
-        result = self.library.Cli_SetConnectionType(self.pointer,
-                                                    c_uint16(connection_type))
+        result = self.library.Cli_SetConnectionType(self.pointer, c_uint16(connection_type))
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
@@ -420,9 +402,8 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
-        logger.debug("ab_read: start: %s: size %s: " % (start, size))
-        result = self.library.Cli_ABRead(self.pointer, start, size,
-                                         byref(data))
+        logger.debug("ab_read: start: %s size: %s", start, size)
+        result = self.library.Cli_ABRead(self.pointer, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -435,9 +416,8 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug("ab write: start: %s: size: %s: " % (start, size))
-        return self.library.Cli_ABWrite(
-            self.pointer, start, size, byref(cdata))
+        logger.debug("ab write: start: %s : size: : ", start,size)
+        return self.library.Cli_ABWrite(self.pointer, start, size, byref(cdata))
 
     def as_ab_read(self, start, size):
         """
@@ -446,9 +426,8 @@ class Client(object):
         wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
-        logger.debug("ab_read: start: %s: size %s: " % (start, size))
-        result = self.library.Cli_AsABRead(self.pointer, start, size,
-                                           byref(data))
+        logger.debug("ab_read: start: %s : size: : ", start,size)
+        result = self.library.Cli_AsABRead(self.pointer, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -460,9 +439,8 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug("ab write: start: %s: size: %s: " % (start, size))
-        return self.library.Cli_AsABWrite(
-            self.pointer, start, size, byref(cdata))
+        logger.debug("ab write: start: %s : size: %s: ", start,size)
+        return self.library.Cli_AsABWrite(self.pointer, start, size, byref(cdata))
 
     @error_wrap
     def as_compress(self, time):
@@ -501,9 +479,7 @@ class Client(object):
         """
         logger.debug("db_get db_number: %s" % db_number)
         _buffer = buffer_type()
-        result = self.library.Cli_AsDBGet(self.pointer, db_number,
-                                          byref(_buffer),
-                                          byref(c_int(buffer_size)))
+        result = self.library.Cli_AsDBGet(self.pointer, db_number, byref(_buffer), byref(c_int(buffer_size)))
         check_error(result, context="client")
         return bytearray(_buffer)
 
@@ -513,13 +489,11 @@ class Client(object):
 
         :returns: user buffer.
         """
-        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
-                     (db_number, start, size))
+        logger.debug("db_read, db_number: %s, start:%s, size:%s", db_number, start, size)
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
-        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start,
-                                            size, byref(data)))
+        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -531,11 +505,8 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
-                     (db_number, start, size, data))
-        return self.library.Cli_AsDBWrite(
-            self.pointer, db_number, start, size,
-            byref(cdata))
+        logger.debug("db_write db_number:%s start:%s size:%s data:%s", db_number,start,size,data)
+        return self.library.Cli_AsDBWrite(self.pointer, db_number, start, size, byref(cdata))
 
     @error_wrap
     def as_download(self, data, block_num=-1):
@@ -550,8 +521,7 @@ class Client(object):
         size = len(data)
         type_ = c_byte * len(data)
         cdata = type_.from_buffer_copy(data)
-        return self.library.Cli_AsDownload(self.pointer, block_num,
-                                           byref(cdata), size)
+        return self.library.Cli_AsDownload(self.pointer, block_num, byref(cdata), size)
 
     @error_wrap
     def compress(self, time):
@@ -566,19 +536,17 @@ class Client(object):
     def set_param(self, number, value):
         """Sets an internal Server object parameter.
         """
-        logger.debug("setting param number %s to %s" % (number, value))
+        logger.debug("setting param number %s to %s", number, value)
         type_ = param_types[number]
-        return self.library.Cli_SetParam(self.pointer, number,
-                                         byref(type_(value)))
+        return self.library.Cli_SetParam(self.pointer, number, byref(type_(value)))
 
     def get_param(self, number):
         """Reads an internal Client object parameter.
         """
-        logger.debug("retreiving param number %s" % number)
+        logger.debug("retreiving param number %s", number)
         type_ = param_types[number]
         value = type_()
-        code = self.library.Cli_GetParam(self.pointer, c_int(number),
-                                         byref(value))
+        code = self.library.Cli_GetParam(self.pointer, c_int(number), byref(value))
         check_error(code)
         return value.value
 

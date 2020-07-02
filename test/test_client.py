@@ -13,6 +13,9 @@ from snap7.snap7exceptions import Snap7Exception
 from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem, S7AreaTM, S7AreaCT
 from snap7 import util
 
+import tracemalloc
+tracemalloc.start()
+
 logging.basicConfig(level=logging.WARNING)
 
 ip = '127.0.0.1'

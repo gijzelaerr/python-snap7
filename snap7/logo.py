@@ -101,7 +101,7 @@ class Logo(object):
         logger.debug("read, vm_address:{vm_address}")
         if re.match("^V[0-9]{1,4}\.[0-7]$", vm_address):
             ## bit value
-            logger.info(f"read, Bit address: {vm_address}")
+            logger.info("read, Bit address: %s", vm_address)
             address = vm_address[1:].split(".")
             # transform string to int
             address_byte = int(address[0])

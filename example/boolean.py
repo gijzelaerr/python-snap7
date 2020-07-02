@@ -21,9 +21,10 @@ from snap7.snap7types import areas
 
 plc = snap7.client.Client()
 plc.connect('192.168.200.24', 0, 3)
-value = 0  # Bit Value
 
-# In this example boolean in DB 31 at byte 120 and bit 5 is changed. = 120.5 
+# In this example boolean in DB 31 at byte 120 and bit 5 is changed. = 120.5
+
+value = 0  # <----Replace 0 with your wanted bool value (0,1,True,False)
 
 reading = plc.db_read(31, 120, 1)  # read 1 byte from db 31 staring from byte 120
 snap7.util.set_bool(reading, 0, 5, value)  # set a value of fifth bit with value

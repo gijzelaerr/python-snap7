@@ -1,19 +1,19 @@
 import logging
 import snap7
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
 # for setup the Logo connection please follow this link
 # http://snap7.sourceforge.net/logo.html
 
-
-logging.basicConfig(level=logging.INFO)
+logo_ip = ""    #  IP Adress of LOGO needed
 
 # Siemens LOGO devices Logo 8 is the default
 Logo_7 = True
-
-logger = logging.getLogger(__name__)
-
 plc = snap7.logo.Logo()
-plc.connect("192.168.0.41", 0x1000, 0x2000)
+plc.connect(logo_ip, 0x1000, 0x2000)
 
 if plc.get_connected():
     logger.info("connected")

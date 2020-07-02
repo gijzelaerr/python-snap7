@@ -13,7 +13,7 @@ else:
 logger = logging.getLogger(__name__)
 
 # regexp for checking if an ipv4 address is valid.
-ipv4 = r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
+ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 
 class ADict(dict):
@@ -74,7 +74,7 @@ def error_text(error, context="client"):
     :returns: the error string
     """
     assert context in ("client", "server", "partner")
-    logger.debug("error text for %s" % hex(error))
+    logger.debug("error text for %s", hex(error))
     len_ = 1024
     text_type = c_char * len_
     text = text_type()
