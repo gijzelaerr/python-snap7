@@ -633,12 +633,20 @@ class ClientAsync(Client):
     """
     This class expands the Client class with asyncio features for async s7comm requests.
     """
-    def __init__(self, args=None):
+    def __init__(self):
         super().__init__()
         self.as_check = None
-        self.as_check_args = args
 
     def set_as_check_mode(self, mode):
+        """
+        This methods sets the mode how async answers shall be handled, like mentioned in snap7 docs:
+        None - pass, like sync method
+        1 - Poll if result is available, otherwise do something else
+        2 - wait_idle, do something else and then wait until an answer receives (not implemented, better use 1)
+        3 - Callback a method/function if the answer receives (not implemented)
+        :param mode: Mode how an async answer shall be handled
+        :return:
+        """
         if mode not in [None, 1, 2, 3]:
             logger.warning("%s is not a legit mode. Has to be None, 1, 2 or 3", mode)
             return
@@ -648,6 +656,10 @@ class ClientAsync(Client):
             return
 
     async def async_wait_loop(self):
+        """
+        This loop checks if an answer received from an async request.
+        :return:
+        """
         temp = c_int(0)
         while self.library.Cli_CheckAsCompletion(self.pointer, byref(temp)):
             await asyncio.sleep(0)
