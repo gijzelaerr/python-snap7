@@ -652,7 +652,6 @@ class ClientAsync(Client):
         else:
             self.as_check = mode
             logger.debug("Async check mode changed to %s", mode)
-        return
 
     async def async_wait_loop(self):
         """
