@@ -504,12 +504,7 @@ class Client(object):
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    async def async_wait_loop(self):
-        temp = c_int(0)
-        while self.library.Cli_CheckAsCompletion(self.pointer, byref(temp)):
-            await asyncio.sleep(0)
-
-    async def as_db_read(self, db_number, start, size, timeout):
+    def as_db_read(self, db_number, start, size, timeout):
         """
         This is the asynchronous counterpart of Cli_DBRead.
 
@@ -521,10 +516,6 @@ class Client(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
-        try:
-            await asyncio.wait_for(self.async_wait_loop(), timeout)
-        except asyncio.TimeoutError:
-            logger.warning(f"Request timeouted - db_nummer:{db_number}, start:{start}, size:{size}")
         check_error(result, context="client")
         return bytearray(data)
 
@@ -636,3 +627,48 @@ class Client(object):
         buffer[5] = dt.year - 1900
 
         return self.library.Cli_SetPlcDateTime(self.pointer, byref(buffer))
+
+
+class ClientAsync(Client):
+    """
+    This class expands the Client class with asyncio features for async s7comm requests.
+    """
+    def __init__(self, args=None):
+        super().__init__()
+        self.as_check = None
+        self.as_check_args = args
+
+    def set_as_check_mode(self, mode):
+        if mode not in [None, 1, 2, 3]:
+            logger.warning("%s is not a legit mode. Has to be None, 1, 2 or 3", mode)
+            return
+        else:
+            self.as_check = mode
+            logger.debug("Async check mode changed to %s", mode)
+            return
+
+    async def async_wait_loop(self):
+        temp = c_int(0)
+        while self.library.Cli_CheckAsCompletion(self.pointer, byref(temp)):
+            await asyncio.sleep(0)
+
+    async def as_db_read(self, db_number, start, size, timeout):
+        """
+        This is the asynchronous counterpart of Cli_DBRead with asyncio features.
+        :returns: user buffer.
+        """
+        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
+                     (db_number, start, size))
+
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+        data = (type_ * size)()
+        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
+        if self.as_check == 1:
+            try:
+                await asyncio.wait_for(self.async_wait_loop(), timeout)
+            except asyncio.TimeoutError:
+                logger.warning(f"Request timeouted - db_nummer:{db_number}, start:{start}, size:{size}")
+        elif self.as_check == 2 or self.as_check == 3:
+            logger.warning("Not implemented feature, will continue without check")
+        check_error(result, context="client")
+        return bytearray(data)
