@@ -13,12 +13,6 @@ matrix:
         - os: linux
           sudo: required
           python: 3.8
-        - os: linux
-          sudo: required
-          python: 2.7
-        - os: osx
-          language: generic
-          env: PYENV=2
         - os: osx
           language: generic
           env: PYENV=3
