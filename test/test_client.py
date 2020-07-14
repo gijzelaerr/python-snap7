@@ -121,7 +121,7 @@ class TestClient(unittest.TestCase):
         byte_to_value = [util.get_real, util.get_real, util.get_int]
 
         # unpack and test the result of each read
-        for i in range(0, len(data_items)):
+        for i, _ in enumerate(data_items):
             btv = byte_to_value[i]
             di = data_items[i]
             value = btv(di.pData, 0)
@@ -202,8 +202,8 @@ class TestClient(unittest.TestCase):
         self.client.get_cpu_state()
 
     def test_set_session_password(self):
-        password = 'abcdefgh'
-        self.client.set_session_password(password)
+        pw = 'abcdefgh'
+        self.client.set_session_password(pw)
 
     def test_clear_session_password(self):
         self.client.clear_session_password()

@@ -625,4 +625,3 @@ class Client(object):
         buffer[5] = dt.year - 1900
 
         return self.library.Cli_SetPlcDateTime(self.pointer, byref(buffer))
-
