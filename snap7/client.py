@@ -127,7 +127,7 @@ class Client(object):
 
         self.set_param(snap7.snap7types.RemotePort, tcpport)
         return self.library.Cli_ConnectTo(
-            self.pointer, c_char_p(address.encode("ascii"),
+            self.pointer, c_char_p(address.encode("ascii")),
             c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
