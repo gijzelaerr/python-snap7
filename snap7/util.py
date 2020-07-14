@@ -92,7 +92,6 @@ except ImportError:
 
 import struct
 import logging
-from snap7 import six
 import re
 
 logger = logging.getLogger(__name__)
@@ -203,15 +202,12 @@ def set_string(_bytearray, byte_index, value, max_size):
     :params value: string data
     :params max_size: max possible string size
     """
-    if six.PY2:
-        assert isinstance(value, (str, unicode))
-    else:
-        assert isinstance(value, str)
+    assert isinstance(value, str)
 
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
-        raise ValueError('size %s > max_size %s %s' % (size, max_size, value))
+        raise ValueError(f'size {size} > max_size {max_size} {value}')
     # set len count on first position
     _bytearray[byte_index + 1] = len(value)
 
@@ -351,7 +347,7 @@ class DB(object):
             # store row object
             key = row[id_field] if id_field else i
             if key and key in self.index:
-                msg = '%s not unique!' % key
+                msg = f'{key} not unique!'
                 logger.error(msg)
             self.index[key] = row
 

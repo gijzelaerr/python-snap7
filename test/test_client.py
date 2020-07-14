@@ -121,7 +121,7 @@ class TestClient(unittest.TestCase):
         byte_to_value = [util.get_real, util.get_real, util.get_int]
 
         # unpack and test the result of each read
-        for i in range(0, len(data_items)):
+        for i in range(len(data_items)):
             btv = byte_to_value[i]
             di = data_items[i]
             value = btv(di.pData, 0)

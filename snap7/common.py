@@ -73,7 +73,7 @@ def error_text(error, context="client"):
     :returns: the error string
     """
     assert context in ("client", "server", "partner")
-    logger.debug("error text for %s" % hex(error))
+    logger.debug(f"error text for {hex(error)}")
     len_ = 1024
     text_type = c_char * len_
     text = text_type()

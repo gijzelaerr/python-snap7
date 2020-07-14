@@ -120,7 +120,7 @@ class Partner(object):
         """
         Reads an internal Partner object parameter.
         """
-        logger.debug("retreiving param number %s" % number)
+        logger.debug(f"retreiving param number {number}")
         type_ = snap7.snap7types.param_types[number]
         value = type_()
         code = self.library.Par_GetParam(self.pointer, ctypes.c_int(number),
@@ -169,7 +169,7 @@ class Partner(object):
     def set_param(self, number, value):
         """Sets an internal Partner object parameter.
         """
-        logger.debug("setting param number %s to %s" % (number, value))
+        logger.debug(f"setting param number {number} to {value}")
         return self.library.Par_SetParam(self.pointer, number,
                                          ctypes.byref(ctypes.c_int(value)))
 
@@ -206,9 +206,9 @@ class Partner(object):
         :param local_tsap: Local TSAP
         :param remote_tsap: PLC TSAP
         """
-        assert re.match(ipv4, local_ip), '%s is invalid ipv4' % local_ip
-        assert re.match(ipv4, remote_ip), '%s is invalid ipv4' % remote_ip
-        logger.info("starting partnering from %s to %s" % (local_ip, remote_ip))
+        assert re.match(ipv4, local_ip), f'{local_ip} is invalid ipv4'
+        assert re.match(ipv4, remote_ip), f'{remote_ip} is invalid ipv4'
+        logger.info(f"starting partnering from {local_ip} to {remote_ip}")
         return self.library.Par_StartTo(self.pointer, local_ip, remote_ip,
                                         ctypes.c_uint16(local_tsap),
                                         ctypes.c_uint16(remote_tsap))
