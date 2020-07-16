@@ -203,7 +203,7 @@ class TestClient(unittest.TestCase):
 
     def test_set_session_password(self):
         password = 'abcdefgh'
-        self.client.set_session_password(pw)
+        self.client.set_session_password(password)
 
     def test_clear_session_password(self):
         self.client.clear_session_password()

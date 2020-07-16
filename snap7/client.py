@@ -127,7 +127,7 @@ class Client(object):
 
         self.set_param(snap7.snap7types.RemotePort, tcpport)
         return self.library.Cli_ConnectTo(
-            self.pointer, c_char_p(address.encode("ascii")),
+            self.pointer, c_char_p(address.encode()),
             c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
@@ -361,7 +361,7 @@ class Client(object):
         """Send the password to the PLC to meet its security level."""
         assert len(password) <= 8, 'maximum password length is 8'
         return self.library.Cli_SetSessionPassword(self.pointer,
-                                                   c_char_p(password.encode("ascii")))
+                                                   c_char_p(password.encode()))
 
     @error_wrap
     def clear_session_password(self):
