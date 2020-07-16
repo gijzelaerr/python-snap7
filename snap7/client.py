@@ -5,11 +5,9 @@ import re
 from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
 from ctypes import c_void_p
 from datetime import datetime
-
 import logging
 
 import snap7
-from snap7 import six
 from snap7.snap7types import S7Object, buffer_type, buffer_size, BlocksList
 from snap7.snap7types import TS7BlockInfo, param_types, cpu_statuses
 
@@ -21,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="client")
+
     return f
 
 
@@ -83,7 +83,7 @@ class Client(object):
         Retrieves CPU state from client
         """
         state = c_int(0)
-        self.library.Cli_GetPlcStatus(self.pointer,byref(state))
+        self.library.Cli_GetPlcStatus(self.pointer, byref(state))
 
         try:
             status_string = cpu_statuses[state.value]
@@ -127,7 +127,7 @@ class Client(object):
 
         self.set_param(snap7.snap7types.RemotePort, tcpport)
         return self.library.Cli_ConnectTo(
-            self.pointer, c_char_p(six.b(address)),
+            self.pointer, c_char_p(address.encode()),
             c_int(rack), c_int(slot))
 
     def db_read(self, db_number, start, size):
@@ -162,6 +162,7 @@ class Client(object):
                      (db_number, start, size, data))
         return self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
+
     def delete(self, block_type, block_num):
         """
         Deletes a block
@@ -195,9 +196,9 @@ class Client(object):
         """
         Uploads a block body from AG
 
-        :param data: bytearray
+        :param block_num: bytearray
         """
-        logger.debug("db_upload block_num: %s" % (block_num))
+        logger.debug("db_upload block_num: %s" % block_num)
 
         block_type = snap7.snap7types.block_types['DB']
         _buffer = buffer_type()
@@ -255,7 +256,7 @@ class Client(object):
             wordlen = snap7.snap7types.S7WLByte
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logger.debug("reading area: %s dbnumber: %s start: %s: amount %s: "
-                      "wordlen: %s" % (area, dbnumber, start, size, wordlen))
+                     "wordlen: %s" % (area, dbnumber, start, size, wordlen))
         data = (type_ * size)()
         result = self.library.Cli_ReadArea(self.pointer, area, dbnumber, start,
                                            size, wordlen, byref(data))
@@ -319,9 +320,9 @@ class Client(object):
             raise Snap7Exception("The blocktype parameter was invalid")
 
         logger.debug("listing blocks of type: %s size: %s" %
-                      (blocktype, size))
+                     (blocktype, size))
 
-        if (size == 0):
+        if size == 0:
             return 0
 
         data = (c_uint16 * size)()
@@ -345,7 +346,7 @@ class Client(object):
             raise Snap7Exception("The blocktype parameter was invalid")
 
         logger.debug("retrieving block info for block %s of type %s" %
-                      (db_number, blocktype))
+                     (db_number, blocktype))
 
         data = TS7BlockInfo()
 
@@ -360,7 +361,7 @@ class Client(object):
         """Send the password to the PLC to meet its security level."""
         assert len(password) <= 8, 'maximum password length is 8'
         return self.library.Cli_SetSessionPassword(self.pointer,
-                                                   c_char_p(six.b(password)))
+                                                   c_char_p(password.encode()))
 
     @error_wrap
     def clear_session_password(self):
@@ -511,8 +512,7 @@ class Client(object):
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
-        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start,
-                                            size,  byref(data)))
+        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -599,15 +599,15 @@ class Client(object):
         check_error(result, context="client")
 
         return datetime(
-            year = buffer[5] + 1900,
-            month = buffer[4] + 1,
-            day = buffer[3],
-            hour = buffer[2],
-            minute = buffer[1],
-            second = buffer[0]
+            year=buffer[5] + 1900,
+            month=buffer[4] + 1,
+            day=buffer[3],
+            hour=buffer[2],
+            minute=buffer[1],
+            second=buffer[0]
         )
 
-    @error_wrap 
+    @error_wrap
     def set_plc_datetime(self, dt):
         """
         Set date and time in PLC

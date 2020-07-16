@@ -6,7 +6,6 @@ import logging
 import re
 import snap7.snap7types
 from snap7.common import check_error, load_library, ipv4
-from snap7 import six
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +54,7 @@ class Server(object):
         error = self.library.Srv_EventText(ctypes.byref(event),
                                            ctypes.byref(text), len_)
         check_error(error)
-        if six.PY2:
-            return text.value
-        else:
-            return text.value.decode('ascii')
+        return text.value.decode('ascii')
 
     def create(self):
         """
