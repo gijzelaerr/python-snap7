@@ -5,7 +5,6 @@ connection. Useful for running the python-snap7 test suite.
 """
 import time
 import logging
-from ..common import load_library
 import snap7
 import sys
 
@@ -39,5 +38,5 @@ def mainloop():
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
-        load_library(sys.argv[1])
+        snap7.common.load_library(sys.argv[1])
     mainloop()
