@@ -53,6 +53,7 @@ class ClientAsync(Client):
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
+
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))

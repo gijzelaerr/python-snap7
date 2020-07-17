@@ -196,7 +196,6 @@ class Client(object):
         :param block_num: bytearray
         """
         logger.debug(f"db_upload block_num: {block_num}")
-
         block_type = snap7.snap7types.block_types['DB']
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
@@ -339,7 +338,6 @@ class Client(object):
 
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
-
         logger.debug(f"retrieving block info for block {db_number} of type {blocktype}")
 
         data = TS7BlockInfo()
