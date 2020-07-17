@@ -207,7 +207,7 @@ def set_string(_bytearray, byte_index, value, max_size):
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
-        raise ValueError('size %s > max_size %s %s' % (size, max_size, value))
+        raise ValueError(f'size {size} > max_size {max_size} {value}')
     # set len count on first position
     _bytearray[byte_index + 1] = len(value)
 
@@ -347,7 +347,7 @@ class DB(object):
             # store row object
             key = row[id_field] if id_field else i
             if key and key in self.index:
-                msg = '%s not unique!' % key
+                msg = f'{key} not unique!'
                 logger.error(msg)
             self.index[key] = row
 
@@ -419,8 +419,7 @@ class DB_Row(object):
 
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = '%s\n%-20s %-10s' % (string, var_name,
-                                          self.get_value(index, _type))
+            string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
     def unchanged(self, _bytearray):

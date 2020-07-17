@@ -141,11 +141,9 @@ class SrvEvent(ctypes.Structure):
     ]
 
     def __str__(self):
-        return "<event time: %s sender: %s code: %s retcode: %s param1: " \
-               "%s param2:%s param3: %s param4: " \
-               "%s>" % (self.EvtTime, self.EvtSender, self.EvtCode,
-                        self.EvtRetCode, self.EvtParam1, self.EvtParam2,
-                        self.EvtParam3, self.EvtParam4)
+        return f"<event time: {self.EvtTime} sender: {self.EvtSender} code: {self.EvtCode} " \
+               f"retcode: {self.EvtRetCode} param1: {self.EvtParam1} param2:{self.EvtParam2} " \
+               f"param3: {self.EvtParam3} param4: {self.EvtParam4}>"
 
 
 class BlocksList(ctypes.Structure):
@@ -160,10 +158,8 @@ class BlocksList(ctypes.Structure):
     ]
 
     def __str__(self):
-        return "<block list count OB: %s FB: %s FC: %s SFB: %x SFC: %s DB: %s" \
-               " SDB: %s>" % (self.OBCount, self.FBCount, self.FCCount,
-                              self.SFBCount, self.SFCCount, self.DBCount,
-                              self.SDBCount)
+        return f"<block list count OB: {self.OBCount} FB: {self.FBCount} FC: {self.FCCount} SFB: {self.SFBCount} " \
+               f"SFC: {hex(self.SFCCount)} DB: {self.DBCount} SDB: {self.SDBCount}>"
 
 
 class TS7BlockInfo(ctypes.Structure):
@@ -186,36 +182,22 @@ class TS7BlockInfo(ctypes.Structure):
     ]
 
     def __str__(self):
-        return """\
-    Block type: %s
-    Block number: %s
-    Block language: %s
-    Block flags: %s
-    MC7Size: %s
-    Load memory size: %s
-    Local data: %s
-    SBB Length: %s
-    Checksum: %s
-    Version: %s
-    Code date: %s
-    Interface date: %s
-    Author: %s
-    Family: %s
-    Header: %s""" % (self.BlkType,
-                     self.BlkNumber,
-                     self.BlkLang,
-                     self.BlkFlags,
-                     self.MC7Size,
-                     self.LoadSize,
-                     self.LocalData,
-                     self.SBBLength,
-                     self.CheckSum,
-                     self.Version,
-                     self.CodeDate,
-                     self.IntfDate,
-                     self.Author,
-                     self.Family,
-                     self.Header)
+        return f"""\
+    Block type: {self.BlkType}
+    Block number: {self.BlkNumber}
+    Block language: {self.BlkLang}
+    Block flags: {self.BlkFlags}
+    MC7Size: {self.MC7Size}
+    Load memory size: {self.LoadSize}
+    Local data: {self.LocalData}
+    SBB Length: {self.SBBLength}
+    Checksum: {self.CheckSum}
+    Version: {self.Version}
+    Code date: {self.CodeDate}
+    Interface date: {self.IntfDate}
+    Author: {self.Author}
+    Family: {self.Family}
+    Header: {self.Header}"""
 
 
 class S7DataItem(ctypes.Structure):
@@ -229,6 +211,7 @@ class S7DataItem(ctypes.Structure):
         ('Amount', ctypes.c_int32),
         ('pData', ctypes.POINTER(ctypes.c_uint8))
     ]
+
 
 class S7CpuInfo(ctypes.Structure):
     _fields_ = [

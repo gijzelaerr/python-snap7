@@ -72,8 +72,7 @@ class Logo(object):
         :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
         :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
         """
-        logger.info("connecting to %s:%s tsap_snap7 %s tsap_logo %s" % (ip_address, tcpport,
-                                                             tsap_snap7, tsap_logo))
+        logger.info(f"connecting to {ip_address}:{tcpport} tsap_snap7 {tsap_snap7} tsap_logo {tsap_logo}")
         # special handling for Siemens Logo
         # 1st set connection params
         # 2nd connect without any parameters
@@ -95,10 +94,10 @@ class Logo(object):
         size = 1
         start = 0
         wordlen = 0
-        logger.debug("read, vm_address:%s" % (vm_address))
+        logger.debug(f"read, vm_address:{vm_address}")
         if re.match("V[0-9]{1,4}\.[0-7]{1}", vm_address):
             ## bit value
-            logger.info("read, Bit address: " + vm_address)
+            logger.info(f"read, Bit address: {vm_address}")
             address = vm_address[1:].split(".")
             # transform string to int
             address_byte = int(address[0])
@@ -107,17 +106,17 @@ class Logo(object):
             wordlen = snap7types.S7WLBit
         elif re.match("V[0-9]+", vm_address):
             ## byte value
-            logger.info("Byte address: " + vm_address)
+            logger.info(f"Byte address: {vm_address}")
             start = int(vm_address[1:])
             wordlen = snap7types.S7WLByte
         elif re.match("VW[0-9]+", vm_address):
             ## byte value
-            logger.info("Word address: " + vm_address)
+            logger.info(f"Word address: {vm_address}")
             start = int(vm_address[2:])
             wordlen = snap7types.S7WLWord
         elif re.match("VD[0-9]+", vm_address):
             ## byte value
-            logger.info("DWord address: " + vm_address)
+            logger.info(f"DWord address: {vm_address}")
             start = int(vm_address[2:])
             wordlen = snap7types.S7WLDWord
         else:
@@ -127,7 +126,7 @@ class Logo(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
 
-        logger.debug("start:%s, wordlen:%s, data-length:%s" % (start, wordlen, len(data)) )
+        logger.debug(f"start:{start}, wordlen:{wordlen}, data-length:{len(data)}")
 
         result = self.library.Cli_ReadArea(self.pointer, area, db_number, start,
                                            size, wordlen, byref(data))
@@ -156,11 +155,10 @@ class Logo(object):
         amount = 1
         wordlen = 0
         data = bytearray(0)
-        logger.debug("write, vm_address:%s, value:%s" %
-                     (vm_address, value))
+        logger.debug(f"write, vm_address:{vm_address}, value:{value}")
         if re.match("^V[0-9]{1,4}\.[0-7]{1}$", vm_address):
             ## bit value
-            logger.info("read, Bit address: " + vm_address)
+            logger.info(f"read, Bit address: {vm_address}")
             address = vm_address[1:].split(".")
             # transform string to int
             address_byte = int(address[0])
@@ -173,24 +171,24 @@ class Logo(object):
                 data = bytearray([0])
         elif re.match("^V[0-9]+$", vm_address):
             ## byte value
-            logger.info("Byte address: " + vm_address)
+            logger.info(f"Byte address: {vm_address}")
             start = int(vm_address[1:])
             wordlen = snap7types.S7WLByte
             data = bytearray(struct.pack(">B", value))
         elif re.match("^VW[0-9]+$", vm_address):
             ## byte value
-            logger.info("Word address: " + vm_address)
+            logger.info(f"Word address: {vm_address}")
             start = int(vm_address[2:])
             wordlen = snap7types.S7WLWord
             data = bytearray(struct.pack(">h", value))
         elif re.match("^VD[0-9]+$", vm_address):
             ## byte value
-            logger.info("DWord address: " + vm_address)
+            logger.info(f"DWord address: {vm_address}")
             start = int(vm_address[2:])
             wordlen = snap7types.S7WLDWord
             data = bytearray(struct.pack(">l", value))
         else:
-            logger.info("write, Unknown address format: " + vm_address)
+            logger.info(f"write, Unknown address format: {vm_address}")
             return 1
         
         if wordlen == snap7types.S7WLBit:
@@ -200,7 +198,7 @@ class Logo(object):
         
         cdata = (type_ * amount).from_buffer_copy(data)
 
-        logger.debug("write, vm_address:%s value:%s" % (vm_address, value))
+        logger.debug(f"write, vm_address:{vm_address} value:{value}")
 
         result = self.library.Cli_WriteArea(self.pointer, area, db_number, start,
                                           amount, wordlen, byref(cdata))
@@ -216,8 +214,7 @@ class Logo(object):
         :param size: in bytes
         :returns: array of bytes
         """
-        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
-                     (db_number, start, size))
+        logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
@@ -239,8 +236,7 @@ class Logo(object):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug("db_write db_number:%s start:%s size:%s data:%s" %
-                     (db_number, start, size, data))
+        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
         result = self.library.Cli_DBWrite(self.pointer, db_number, start, size,
                                         byref(cdata))
         check_error(result, context="client") 
@@ -255,7 +251,7 @@ class Logo(object):
         :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
         :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
         """
-        assert re.match(ipv4, ip_address), '%s is invalid ipv4' % ip_address
+        assert re.match(ipv4, ip_address), f'{ip_address} is invalid ipv4'
         result = self.library.Cli_SetConnectionParams(self.pointer, ip_address.encode(),
                                                       c_uint16(tsap_snap7),
                                                       c_uint16(tsap_logo))
@@ -291,7 +287,7 @@ class Logo(object):
         :param number: Parameter type number
         :param value: Parameter value
         """
-        logger.debug("setting param number %s to %s" % (number, value))
+        logger.debug(f"setting param number {number} to {value}")
         type_ = param_types[number]
         result = self.library.Cli_SetParam(self.pointer, number,
                                          byref(type_(value)))
@@ -304,7 +300,7 @@ class Logo(object):
         :param number: Parameter type number
         :returns: Parameter value
         """
-        logger.debug("retreiving param number %s" % number)
+        logger.debug(f"retreiving param number {number}")
         type_ = param_types[number]
         value = type_()
         code = self.library.Cli_GetParam(self.pointer, c_int(number),

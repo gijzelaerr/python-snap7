@@ -32,10 +32,10 @@ class ClientAsync(Client):
         :return:
         """
         if mode not in [None, 1, 2, 3]:
-            logger.warning("%s is not a legit mode. Has to be None, 1, 2 or 3", mode)
+            logger.warning(f"{mode} is not a legit mode. Has to be None, 1, 2 or 3")
         else:
             self.as_check = mode
-            logger.debug("Async check mode changed to %s", mode)
+            logger.debug(f"Async check mode changed to {mode}")
 
     async def async_wait_loop(self):
         """
@@ -51,8 +51,8 @@ class ClientAsync(Client):
         This is the asynchronous counterpart of Cli_DBRead with asyncio features.
         :returns: user buffer.
         """
-        logger.debug("db_read, db_number:%s, start:%s, size:%s" %
-                     (db_number, start, size))
+        logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
+
 
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
