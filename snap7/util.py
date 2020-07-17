@@ -419,8 +419,7 @@ class DB_Row(object):
 
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = '%s\n%-20s %-10s' % (string, var_name,
-                                          self.get_value(index, _type))
+            string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
     def unchanged(self, _bytearray):
