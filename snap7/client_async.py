@@ -34,9 +34,8 @@ class ClientAsync(Client):
         if mode not in [None, 1, 2]:
             logger.warning(f"{mode} is not a legit mode. Has to be None, 1 or 2!")
             raise Warning("Invalid check mode selected for async client")
-        else:
-            self.as_check = mode
-            logger.debug(f"Async check mode changed to {mode}")
+        self.as_check = mode
+        logger.debug(f"Async check mode changed to {mode}")
 
     async def async_wait_loop(self):
         """
@@ -85,5 +84,3 @@ class ClientAsync(Client):
                 logger.warning(f"Request timeouted - db_nummer:{db_number}, start:{start}, size:{size}")
                 return None
         return check
-
-
