@@ -44,7 +44,6 @@ class TestClient(unittest.TestCase):
         self.client.disconnect()
         self.client.destroy()
 
-#    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
     async def test_as_db_read(self):
         size = 40
         start = 0
@@ -53,3 +52,9 @@ class TestClient(unittest.TestCase):
         self.client.db_write(db_number=db, start=start, data=data)
         result = await self.client.as_db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
+
+    async def test_as_db_write(self):
+        size = 40
+        data = bytearray(size)
+        check = await self.client.as_db_write(db_number=1, start=0, data=data)
+        self.assertEqual(check, 0)
