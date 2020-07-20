@@ -31,11 +31,11 @@ class ClientAsync(Client):
         :param mode: Mode how an async answer shall be handled
         :return:
         """
-        if mode not in [None, 1, 2, 3]:
-            logger.warning(f"{mode} is not a legit mode. Has to be None, 1, 2 or 3")
-        else:
-            self.as_check = mode
-            logger.debug(f"Async check mode changed to {mode}")
+        if mode not in [None, 1, 2]:
+            logger.warning(f"{mode} is not a legit mode. Has to be None, 1 or 2!")
+            raise Warning("Invalid check mode selected for async client")
+        self.as_check = mode
+        logger.debug(f"Async check mode changed to {mode}")
 
     async def async_wait_loop(self):
         """
@@ -52,6 +52,7 @@ class ClientAsync(Client):
         :returns: user buffer.
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
+
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
@@ -65,3 +66,21 @@ class ClientAsync(Client):
             logger.warning("Not implemented feature, will continue without check")
         check_error(result, context="client")
         return bytearray(data)
+
+    async def as_db_write(self, db_number, start, data, timeout=1):
+        """
+        This is the asynchronous counterpart of Cli_DBWrite with asyncio features.
+        """
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        cdata = (type_ * size).from_buffer_copy(data)
+        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
+        check = self.library.Cli_AsDBWrite(self.pointer, db_number, start, size, byref(cdata))
+        if self.as_check == 1:
+            try:
+                await asyncio.wait_for(self.async_wait_loop(), timeout)
+            except asyncio.TimeoutError:
+                logger.warning(f"Request timeouted - db_nummer:{db_number}, start:{start}, size:{size}")
+                return None
+        return check
