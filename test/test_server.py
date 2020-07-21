@@ -112,7 +112,7 @@ class TestServer(unittest.TestCase):
         self.assertFalse(self.server.clear_events())
 
     def test_start_to(self):
-        self.server.start_to('127.0.0.1')
+        self.server.start_to('127.0.0.1', tcpport=1102)
         self.assertRaises(AssertionError, self.server.start_to, 'bogus')
 
     def test_get_param(self):
