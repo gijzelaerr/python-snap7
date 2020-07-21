@@ -43,7 +43,7 @@ class ClientAsync(Client):
         :param mode: Mode how an async answer shall be handled
         :return:
         """
-        if mode not in [None, 1, 2]:      
+        if mode not in [None, 1, 2]:
             logger.warning(f"{mode} is not a legit mode. Has to be 1 or 2!")
             raise Warning("Invalid check mode selected for async client")
         self.as_check = mode
@@ -174,4 +174,3 @@ class ClientAsync(Client):
         if request_in_time is False:
             return None
         return data
-

@@ -7,6 +7,7 @@ import re
 import snap7.snap7types
 from snap7.common import check_error, load_library, ipv4
 
+
 logger = logging.getLogger(__name__)
 
 

@@ -98,7 +98,7 @@ class Logo(object):
         start = 0
         wordlen = 0
         logger.debug(f"read, vm_address:{vm_address}")
-        if re.match("V[0-9]{1,4}\.[0-7]", vm_address):
+        if re.match(r"V[0-9]{1,4}\.[0-7]", vm_address):
             # bit value
             logger.info(f"read, Bit address: {vm_address}")
             address = vm_address[1:].split(".")
@@ -159,7 +159,7 @@ class Logo(object):
         wordlen = 0
         data = bytearray(0)
         logger.debug(f"write, vm_address:{vm_address}, value:{value}")
-        if re.match("^V[0-9]{1,4}\.[0-7]$", vm_address):
+        if re.match(r"^V[0-9]{1,4}\.[0-7]$", vm_address):
             # bit value
             logger.info(f"read, Bit address: {vm_address}")
             address = vm_address[1:].split(".")
