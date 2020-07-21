@@ -5,7 +5,7 @@ import snap7
 # http://snap7.sourceforge.net/logo.html
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 # Siemens LOGO devices Logo 8 is the default
 Logo_7 = True

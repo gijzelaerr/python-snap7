@@ -152,7 +152,7 @@ class Server(object):
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
             self.set_param(snap7.snap7types.LocalPort, tcpport)
-        logger.info(f"starting server on 0.0.0.0:{tcpport}")
+        logger.info(f"starting server on 127.0.0.1:{tcpport}")
         return self.library.Srv_Start(self.pointer)
 
     @error_wrap

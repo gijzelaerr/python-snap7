@@ -104,7 +104,7 @@ class TestPartner(unittest.TestCase):
         self.partner.start()
 
     def test_start_to(self):
-        self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0)
+        self.partner.start_to('127.0.0.1', '127.0.0.2', 0, 0)
 
     def test_stop(self):
         self.partner.stop()
