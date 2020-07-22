@@ -39,7 +39,7 @@ class TestClient(aiounittest.AsyncTestCase):
         kill(cls.server_pid, 1)
 
     def setUp(self):
-        self.client = snap7.client_async.Client()
+        self.client = snap7.client_async.ClientAsync()
         self.client.connect(ip, rack, slot, tcpport)
 
     def tearDown(self):
