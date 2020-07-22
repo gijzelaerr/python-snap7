@@ -5,6 +5,8 @@ import logging
 import time
 import mock
 
+import aiounittest
+
 from datetime import datetime
 from subprocess import Popen
 from os import path, kill
@@ -23,7 +25,7 @@ rack = 1
 slot = 1
 
 
-class TestClient(unittest.TestCase):
+class TestClient(aiounittest.AsyncTestCase):
 
     @classmethod
     def setUpClass(cls):
