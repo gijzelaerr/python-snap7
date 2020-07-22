@@ -57,7 +57,7 @@ class TestServer(unittest.TestCase):
         thread = Thread(target=second_locker)
         thread.daemon = True
         thread.start()
-        #thread.join(timeout=1)
+        thread.join(timeout=1)
         self.assertTrue(thread.is_alive())
         self.server.unlock_area(code=area_code, index=index)
         thread.join(timeout=1)
@@ -112,7 +112,7 @@ class TestServer(unittest.TestCase):
         self.assertFalse(self.server.clear_events())
 
     def test_start_to(self):
-        self.server.start_to('127.0.0.1', tcpport=1102)
+        self.server.start_to('0.0.0.0')
         self.assertRaises(AssertionError, self.server.start_to, 'bogus')
 
     def test_get_param(self):
