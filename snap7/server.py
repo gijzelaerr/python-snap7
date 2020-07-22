@@ -221,7 +221,7 @@ class Server(object):
             self.set_param(snap7.snap7types.LocalPort, tcpport)
         assert re.match(ipv4, ip), f'{ip} is invalid ipv4'
         logger.info(f"starting server to {ip}:102")
-        return self.library.Srv_Start(self.pointer, ip)
+        return self.library.Srv_StartTo(self.pointer, ip)
 
     @error_wrap
     def set_param(self, number, value):
