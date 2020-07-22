@@ -57,7 +57,7 @@ class TestServer(unittest.TestCase):
         thread = Thread(target=second_locker)
         thread.daemon = True
         thread.start()
-        thread.join(timeout=1)
+        #thread.join(timeout=1)
         self.assertTrue(thread.is_alive())
         self.server.unlock_area(code=area_code, index=index)
         thread.join(timeout=1)
