@@ -4,8 +4,8 @@ set -x
 
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
     brew install snap7
-    pip install nose mock coverage
-    pip3 install nose mock coverage
+    pip install nose mock coverage aiounittest
+    pip3 install nose mock coverage aiounittest
 fi
 
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
