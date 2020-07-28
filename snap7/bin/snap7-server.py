@@ -3,7 +3,6 @@
 This is an example snap7 server. It doesn't do much, but accepts
 connection. Useful for running the python-snap7 test suite.
 """
-help("modules")
 import time
 import logging
 import snap7
