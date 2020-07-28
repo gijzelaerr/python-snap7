@@ -74,8 +74,7 @@ class Partner(object):
         immediately.
         """
         op_result = ctypes.c_int32()
-        result = self.library.Par_CheckAsBSendCompletion(self.pointer,
-                                                 ctypes.byref(op_result))
+        result = self.library.Par_CheckAsBSendCompletion(self.pointer, ctypes.byref(op_result))
         return_values = {
             0: "job complete",
             1: "job in progress",
@@ -139,9 +138,9 @@ class Partner(object):
         send_errors = ctypes.c_uint32()
         recv_errors = ctypes.c_uint32()
         result = self.library.Par_GetStats(self.pointer, ctypes.byref(sent),
-                                   ctypes.byref(recv),
-                                   ctypes.byref(send_errors),
-                                   ctypes.byref(recv_errors))
+                                           ctypes.byref(recv),
+                                           ctypes.byref(send_errors),
+                                           ctypes.byref(recv_errors))
         check_error(result, "partner")
         return sent, recv, send_errors, recv_errors
 
@@ -160,8 +159,7 @@ class Partner(object):
         """
         send_time = ctypes.c_int32()
         recv_time = ctypes.c_int32()
-        result = self.library.Par_GetTimes(self.pointer, ctypes.byref(send_time),
-                                   ctypes.byref(recv_time))
+        result = self.library.Par_GetTimes(self.pointer, ctypes.byref(send_time), ctypes.byref(recv_time))
         check_error(result, "partner")
         return send_time, recv_time
 
