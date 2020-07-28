@@ -74,39 +74,51 @@ class TestClient(unittest.TestCase):
         data = bytearray(128)
         await self.client.as_download(block_num=-1, data=data)
 
-    async def test_read_area(self):
+    async def test_as_read_area(self):
         amount = 1
         start = 1
         # Test read_area with a DB
         area = snap7.snap7types.areas.DB
         dbnumber = 1
-        await self.client.read_area(area, dbnumber, start, amount)
+        res = await self.client.as_read_area(area, dbnumber, start, amount)
+        if res is None:
+            raise TimeoutError
         # Test read_area with a TM
         area = snap7.snap7types.areas.TM
         dbnumber = 0
-        await self.client.read_area(area, dbnumber, start, amount)
+        res = await self.client.as_read_area(area, dbnumber, start, amount)
+        if res is None:
+            raise TimeoutError
         # Test read_area with a CT
         area = snap7.snap7types.areas.CT
         dbnumber = 0
-        await self.client.read_area(area, dbnumber, start, amount)
+        res = await self.client.as_read_area(area, dbnumber, start, amount)
+        if res is None:
+            raise TimeoutError
 
-    async def test_write_area(self):
+    async def test_as_write_area(self):
         # Test write area with a DB
         area = snap7.snap7types.areas.DB
         dbnumber = 1
         size = 1
         start = 1
         data = bytearray(size)
-        await self.client.write_area(area, dbnumber, start, data)
+        res = await self.client.as_write_area(area, dbnumber, start, data)
+        if res is None:
+            raise TimeoutError
         # Test write area with a TM
         area = snap7.snap7types.areas.TM
         dbnumber = 0
         size = 2
         timer = bytearray(size)
-        await self.client.write_area(area, dbnumber, start, timer)
+        res = await self.client.as_write_area(area, dbnumber, start, timer)
+        if res is None:
+            raise TimeoutError
         # Test write area with a CT
         area = snap7.snap7types.areas.CT
         dbnumber = 0
         size = 2
         timer = bytearray(size)
-        await self.client.write_area(area, dbnumber, start, timer)
+        res = await self.client.as_write_area(area, dbnumber, start, timer)
+        if res is None:
+            raise TimeoutError
