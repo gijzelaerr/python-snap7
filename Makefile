@@ -13,10 +13,10 @@ venv/installed: venv/
 setup: venv/installed
 
 test: setup
-	sudo venv/bin/nosetests test/test_partner.py
-	venv/bin/nosetests test/test_server.py
-	venv/bin/nosetests test/test_client.py
-	venv/bin/nosetests test/test_util.py
+	sudo venv/bin/pytest test/test_partner.py
+	venv/bin/pytest test/test_server.py
+	venv/bin/pytest test/test_client.py
+	venv/bin/pytest test/test_util.py
 
 docker-doc:
 		docker build . -f .travis/doc.docker -t doc
