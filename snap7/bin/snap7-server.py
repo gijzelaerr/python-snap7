@@ -3,15 +3,11 @@
 This is an example snap7 server. It doesn't do much, but accepts
 connection. Useful for running the python-snap7 test suite.
 """
+help("modules")
 import time
 import logging
 import snap7
 import sys
-
-print("-------------------------HELP ME WITH MODULES-----------------------------")
-print(sys.path)
-print("-- - fffffffffffffffffffffffffffffffffff--- --- -- -")
-help("modules")
 
 
 logging.basicConfig(level=logging.INFO)
