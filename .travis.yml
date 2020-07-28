@@ -16,6 +16,10 @@ matrix:
       env: TARGET=pycodestyle
       services: [docker]
       sudo: true
+    - os: linux
+      env: TARGET=doc
+      services: [docker]
+      sudo: true
     - os: osx
       osx_image: xcode12
 
@@ -24,7 +28,7 @@ before_install:
   - .travis/before_install.sh
 
 install:
-  -.travis/install.sh
+  - .travis/install.sh
 
 script:
   - .travis/script.sh
