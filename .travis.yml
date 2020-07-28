@@ -9,15 +9,21 @@ matrix:
       services: [docker]
       sudo: true
     - os: linux
-      env: TARGET=mypy
+      env:
+        - TARGET=mypy
+        - NOSCRIPT=true
       services: [docker]
       sudo: true
     - os: linux
-      env: TARGET=pycodestyle
+      env:
+        - TARGET=pycodestyle
+        - NOSCRIPT=true
       services: [docker]
       sudo: true
     - os: linux
-      env: TARGET=doc
+      env:
+        - TARGET=doc
+        - NOSCRIPT=true
       services: [docker]
       sudo: true
     - os: osx

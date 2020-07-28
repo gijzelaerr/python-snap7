@@ -25,6 +25,7 @@ class Server(object):
     """
     A fake S7 server.
     """
+
     def __init__(self, log=True):
         """
         Create a fake S7 server. set log to false if you want to disable
@@ -38,7 +39,6 @@ class Server(object):
         self.create()
         if log:
             self._set_log_callback()
-
 
     def __del__(self):
         self.destroy()
