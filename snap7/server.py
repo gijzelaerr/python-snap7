@@ -187,11 +187,7 @@ class Server(object):
                                            ctypes.byref(clients_count))
         check_error(error)
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
-
-        return snap7.snap7types.server_statuses[server_status.value],\
-               snap7.snap7types.cpu_statuses[cpu_status.value],\
-
-               clients_count.value
+        return snap7.snap7types.server_statuses[server_status.value], snap7.snap7types.cpu_statuses[cpu_status.value], clients_count.value
 
     @error_wrap
     def unregister_area(self, area_code, index):
