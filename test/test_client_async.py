@@ -61,3 +61,23 @@ class TestClient(aiounittest.AsyncTestCase):
         data = bytearray(size)
         check = await self.client.as_db_write(db_number=1, start=0, data=data)
         self.assertEqual(check, 0)
+
+    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
+    async def test_as_ab_read(self):
+        start = 1
+        size = 1
+        await self.client.as_ab_read(start=start, size=size)
+
+    @unittest.skip("TODO: not yet fully implemented")
+    async def test_as_ab_write(self):
+        start = 1
+        size = 10
+        data = bytearray(size)
+        await self.client.as_ab_write(start=start, data=data)
+
+    async def test_as_db_get(self):
+        await self.client.db_get(db_number=db_number)
+
+    async def test_as_download(self):
+        data = bytearray(128)
+        await self.client.as_download(block_num=-1, data=data)
