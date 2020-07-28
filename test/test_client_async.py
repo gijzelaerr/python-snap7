@@ -73,3 +73,40 @@ class TestClient(unittest.TestCase):
     async def test_as_download(self):
         data = bytearray(128)
         await self.client.as_download(block_num=-1, data=data)
+
+    async def test_read_area(self):
+        amount = 1
+        start = 1
+        # Test read_area with a DB
+        area = snap7.snap7types.areas.DB
+        dbnumber = 1
+        await self.client.read_area(area, dbnumber, start, amount)
+        # Test read_area with a TM
+        area = snap7.snap7types.areas.TM
+        dbnumber = 0
+        await self.client.read_area(area, dbnumber, start, amount)
+        # Test read_area with a CT
+        area = snap7.snap7types.areas.CT
+        dbnumber = 0
+        await self.client.read_area(area, dbnumber, start, amount)
+
+    async def test_write_area(self):
+        # Test write area with a DB
+        area = snap7.snap7types.areas.DB
+        dbnumber = 1
+        size = 1
+        start = 1
+        data = bytearray(size)
+        await self.client.write_area(area, dbnumber, start, data)
+        # Test write area with a TM
+        area = snap7.snap7types.areas.TM
+        dbnumber = 0
+        size = 2
+        timer = bytearray(size)
+        await self.client.write_area(area, dbnumber, start, timer)
+        # Test write area with a CT
+        area = snap7.snap7types.areas.CT
+        dbnumber = 0
+        size = 2
+        timer = bytearray(size)
+        await self.client.write_area(area, dbnumber, start, timer)
