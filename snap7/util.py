@@ -94,6 +94,8 @@ import struct
 import logging
 from snap7 import six
 import re
+from datetime import timedelta, datetime
+
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +272,59 @@ def set_dint(_bytearray, byte_index, dint):
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
 
+def get_s5time(_bytearray, byte_index):
+    micro_to_milli = 1000
+    data_bytearray = _bytearray[byte_index:byte_index+2]
+    S5Time_data_int_like = list(data_bytearray.hex())
+    if S5Time_data_int_like[0]=='0':
+        # 10ms
+        time_base = 10
+    elif S5Time_data_int_like[0]=='1':
+        # 100ms
+        time_base = 100
+    elif S5Time_data_int_like[0]=='2':
+        # 1s
+        time_base = 1000
+    elif S5Time_data_int_like[0]=='3':
+        # 10s
+        time_base = 10000
+    else:
+        raise ValueError('This value should not be greater than 3')
+
+    s5time_bcd = int(S5Time_data_int_like[1])*100 \
+                 + int(S5Time_data_int_like[2])*10 \
+                 + int(S5Time_data_int_like[3])
+    s5time_microseconds = time_base * s5time_bcd
+    S5TIME = timedelta(microseconds=s5time_microseconds*micro_to_milli)
+    # here we must return a string like variable, otherwise nothing will return
+    return "".join(str(S5TIME))
+
+def get_dt(_bytearray, byte_index):
+    # 1990 - 1999, 2000 - 2089
+    data_bytearray = _bytearray[byte_index:byte_index+8]
+    dt_lst = list(data_bytearray.hex())
+    date_time_list = []
+    for i in range(0,len(dt_lst),2):
+        # last two bytearrays are the miliseconds and workday, they must be parsed together
+        if i != len(dt_lst) - 4:
+            if i == 0 and dt_lst[i] == '9':
+                date_time_list.append(int('19' + dt_lst[i] + dt_lst[i + 1]))
+            elif i == 0 and dt_lst[i] != '9':
+                date_time_list.append(int('20' + dt_lst[i] + dt_lst[i + 1]))
+            else:
+                date_time_list.append(int(dt_lst[i] + dt_lst[i + 1]))
+        else:
+            date_time_list.append(int(dt_lst[i] + dt_lst[i+1] + dt_lst[i+2]))
+            break
+    DATE_AND_TIME = datetime(date_time_list[0]
+                            ,date_time_list[1]
+                            ,date_time_list[2]
+                            ,date_time_list[3]
+                            ,date_time_list[4]
+                            ,date_time_list[5]
+                            ,date_time_list[6]*1000).isoformat(timespec='microseconds')
+    return DATE_AND_TIME
+
 def parse_specification(db_specification):
     """
     Create a db specification derived from a
@@ -279,9 +334,10 @@ def parse_specification(db_specification):
     parsed_db_specification = OrderedDict()
 
     for line in db_specification.split('\n'):
-        if line and not line.startswith('#'):
-            row = line.split('#')[0]  # remove trailing comment
-            index, var_name, _type = row.split()
+        #if (not line.isspace()) and (len(line) != 0):
+        if line and not (line.isspace() or line[0]==('#')):
+            #row = line.split('#')[0]  # remove trailing comment
+            index, var_name, _type = line.split('#')[0].split()
             parsed_db_specification[var_name] = (index, _type)
 
     return parsed_db_specification
@@ -437,7 +493,9 @@ class DB_Row(object):
         Calculate correct beginning position for a row
         the db_offset = row_size * index
         """
-        return int(byte_index) - self.layout_offset + self.db_offset
+        # add float typ to avoid error because of
+        # the variable address with decimal point(like 0.0 or 4.0)
+        return int(float(byte_index)) - self.layout_offset + self.db_offset
 
     def get_value(self, byte_index, _type):
         _bytearray = self.get_bytearray()
@@ -470,6 +528,25 @@ class DB_Row(object):
 
         if _type == 'WORD':
             return get_word(_bytearray, byte_index)
+
+        if _type == 'S5TIME':
+            data_s5time = get_s5time(_bytearray, byte_index)
+            return data_s5time
+
+        if _type == 'DATE_AND_TIME':
+            data_dt = get_dt(_bytearray, byte_index)
+            return data_dt
+
+        # add these three not implemented data typ to avoid
+        # 'Unable to get repr for class<snap7.util.DB_ROW>' error
+        if _type == 'TIME':
+            return 'read TIME not implemented'
+
+        if _type == 'DATE':
+            return 'read DATE not implemented'
+
+        if _type == 'TIME_OF_DAY':
+            return 'read TIME_OF_DAY not implemented'
 
         raise ValueError
 
