@@ -22,7 +22,12 @@ test_spec = """
 21      testint2     INT
 23      testDint     DINT
 27      testWord     WORD
+29      tests5time   S5TIME
+31      testdateandtime DATE_AND_TIME
 """
+
+#29      testS5TIME   S5TIME
+#31      testDT       DATE_AND_TIME
 
 _bytearray = bytearray([
     0, 0,                                          # test int
@@ -34,10 +39,34 @@ _bytearray = bytearray([
     0, 0,                                          # test int 2
     128, 0, 0, 0,                                  # test dint
     255, 255,                                      # test word
-    ])
-
+    0, 16,                                         # test s5time, 0 is the time base,
+                                                   # 16 is value, those two integers should be declared together
+    32, 7, 18, 23, 50, 2, 133, 65                  # these 8 values build the date and time
+                                                   # data typ together, for details under this link
+                                                   # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
+])
 
 class TestS7util(unittest.TestCase):
+
+    def test_get_s5time(self):
+        """
+        S5TIME extraction from bytearray
+        """
+        test_array = bytearray(_bytearray)
+
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+
+        self.assertEqual(row['tests5time'], '0:00:00.100000')
+
+    def test_get_dt(self):
+        """
+        DATE_AND_TIME extraction from bytearray
+        """
+        test_array = bytearray(_bytearray)
+
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+
+        self.assertEqual(row['testdateandtime'], '2020-07-12T17:32:02.854000')
 
     def test_get_string(self):
         """
