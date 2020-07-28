@@ -175,7 +175,7 @@ class ClientAsync(Client):
         return data
 
     async def as_read_area(self, area, dbnumber, start, size, timeout=1):
-        """This is the main function to read data from a PLC.
+        """This is the main async function to read data from a PLC, made asycnio compatible.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
         :param timeout: max time waiting for response, 1 Second default
@@ -202,11 +202,13 @@ class ClientAsync(Client):
         return bytearray(data)
 
     async def as_write_area(self, area, dbnumber, start, data, timeout=1):
-        """This is the main function to write data into a PLC. It's the
+        """This is the main async function to write data into a PLC, made asycnio compatible. It's the
         complementary function of Cli_ReadArea(), the parameters and their
         meanings are the same. The only difference is that the data is
         transferred from the buffer pointed by pUsrData into PLC.
 
+        :param timeout: max time waiting for response, 1 Second default
+        :param area: chosen memory_area
         :param dbnumber: The DB number, only used when area= S7AreaDB
         :param start: offset to start writing
         :param data: a bytearray containing the payload
