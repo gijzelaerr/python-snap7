@@ -8,6 +8,12 @@ import logging
 import snap7
 import sys
 
+print("-------------------------HELP ME WITH MODULES-----------------------------")
+print(sys.path)
+print("-- - fffffffffffffffffffffffffffffffffff--- --- -- -")
+help("modules")
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
