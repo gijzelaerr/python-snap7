@@ -1,11 +1,12 @@
-import unittest
 import ctypes
 import logging
-import mock
+import unittest
 
-import snap7.snap7types
+from unittest import mock
+
 import snap7.error
 import snap7.server
+import snap7.snap7types
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -94,11 +95,13 @@ class TestServer(unittest.TestCase):
     def test_events_callback(self):
         def event_call_back(event):
             logging.debug(event)
+
         self.server.set_events_callback(event_call_back)
 
     def test_read_events_callback(self):
         def read_events_call_back(event):
             logging.debug(event)
+
         self.server.set_read_events_callback(read_events_call_back)
 
     def test_pick_event(self):
@@ -126,16 +129,17 @@ class TestServer(unittest.TestCase):
                           snap7.snap7types.RemotePort)
 
 
-
 class TestServerBeforeStart(unittest.TestCase):
     """
     Tests for server before it is started
     """
+
     def setUp(self):
         self.server = snap7.server.Server()
 
     def test_set_param(self):
         self.server.set_param(snap7.snap7types.LocalPort, 1102)
+
 
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):

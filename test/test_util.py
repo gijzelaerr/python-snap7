@@ -1,8 +1,7 @@
-import unittest
 import re
+import unittest
 
 from snap7 import util, snap7types
-
 
 test_spec = """
 
@@ -25,16 +24,16 @@ test_spec = """
 """
 
 _bytearray = bytearray([
-    0, 0,                                          # test int
+    0, 0,  # test int
     4, 4, ord('t'), ord('e'), ord('s'), ord('t'),  # test string
-    128*0 + 64*0 + 32*0 + 16*0 +
-    8*1 + 4*1 + 2*1 + 1*1,                         # test bools
-    68, 78, 211, 51,                               # test real
-    255, 255, 255, 255,                            # test dword
-    0, 0,                                          # test int 2
-    128, 0, 0, 0,                                  # test dint
-    255, 255,                                      # test word
-    ])
+    128 * 0 + 64 * 0 + 32 * 0 + 16 * 0 +
+    8 * 1 + 4 * 1 + 2 * 1 + 1 * 1,  # test bools
+    68, 78, 211, 51,  # test real
+    255, 255, 255, 255,  # test dword
+    0, 0,  # test int 2
+    128, 0, 0, 0,  # test dint
+    255, 255,  # test word
+])
 
 
 class TestS7util(unittest.TestCase):
@@ -69,7 +68,7 @@ class TestS7util(unittest.TestCase):
         y = row['testint2']
         self.assertEqual(x, 0)
         self.assertEqual(y, 0)
-        
+
     def test_set_int(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
@@ -77,9 +76,9 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row['ID'], 259)
 
     def test_set_int_roundtrip(self):
-        DB1 = (snap7types.wordlen_to_ctypes[snap7types.S7WLByte]*4)()
+        DB1 = (snap7types.wordlen_to_ctypes[snap7types.S7WLByte] * 4)()
 
-        for i in range(-(2**15)+1, (2**15)-1):
+        for i in range(-(2 ** 15) + 1, (2 ** 15) - 1):
             util.set_int(DB1, 0, i)
             result = util.get_int(DB1, 0)
             self.assertEqual(i, result)
@@ -88,18 +87,18 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         for value in (
-                    -32768,
-                    -16385,
-                    -256,
-                    -128,
-                    -127,
-                    0,
-                    127,
-                    128,
-                    255,
-                    256,
-                    16384,
-                    32767):
+                -32768,
+                -16385,
+                -256,
+                -128,
+                -127,
+                0,
+                127,
+                128,
+                255,
+                256,
+                16384,
+                32767):
             row['ID'] = value
             self.assertEqual(row['ID'], value)
 
@@ -169,26 +168,26 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is -2147483648 to 2147483647 +
-        row.set_value(23, 'DINT', 2147483647) #set value
+        row.set_value(23, 'DINT', 2147483647)  # set value
         self.assertEqual(row['testDint'], 2147483647)
 
     def test_get_dint(self):
-        test_array = bytearray(_bytearray)       
-        row = util.DB_Row(test_array, test_spec, layout_offset=4) 
-        value = row.get_value(23, 'DINT') #get value 
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(23, 'DINT')  # get value
         self.assertEqual(value, -2147483648)
 
     def test_set_word(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 65535
-        row.set_value(27, 'WORD', 0) #set value
+        row.set_value(27, 'WORD', 0)  # set value
         self.assertEqual(row['testWord'], 0)
 
     def test_get_word(self):
-        test_array = bytearray(_bytearray)       
-        row = util.DB_Row(test_array, test_spec, layout_offset=4) 
-        value = row.get_value(27, 'WORD') #get value 
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(27, 'WORD')  # get value
         self.assertEqual(value, 65535)
 
     def test_export(self):

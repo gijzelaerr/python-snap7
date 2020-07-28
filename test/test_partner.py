@@ -1,9 +1,10 @@
 import logging
 import unittest as unittest
-import mock
+
+from unittest import mock
+
 import snap7.partner
 from snap7.snap7exceptions import Snap7Exception
-
 
 logging.basicConfig(level=logging.WARNING)
 

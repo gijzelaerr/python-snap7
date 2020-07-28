@@ -1,36 +1,35 @@
 language: python
 matrix:
-    include:
-        - os: linux
-          sudo: required
-          python: 3.6
-        - os: linux
-          sudo: required
-          python: 3.6
-        - os: linux
-          sudo: required
-          python: 3.7
-        - os: linux
-          sudo: required
-          python: 3.8
-        - os: osx
-          language: generic
-          env: PYENV=3
+  include:
+    - os: linux
+      env: TARGET=ubuntu1804
+      services: [docker]
+      sudo: true
+    - os: linux
+      env: TARGET=ubuntu2004
+      services: [docker]
+      sudo: true
+    - os: linux
+      env: TARGET=mypy
+      services: [docker]
+      sudo: true
+    - os: linux
+      env: TARGET=pycodestyle
+      services: [docker]
+      sudo: true
+    - os: osx
+      osx_image: xcode12
+
+
 before_install:
   - .travis/before_install.sh
+
 install:
-  - python${PYENV} setup.py install
+  -.travis/install.sh
+
 script:
   - .travis/script.sh
-after_success:
-  - codecov
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/aacaa796672a51d47850
-    on_success: change
-    on_failure: always
-    on_start: false
+
 deploy:
   provider: pypi
   user: gijzelaerr

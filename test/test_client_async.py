@@ -1,17 +1,10 @@
-import ctypes
-import struct
 import unittest
 import logging
 import time
-import mock
 
-from datetime import datetime
 from subprocess import Popen
 from os import path, kill
 import snap7
-from snap7.snap7exceptions import Snap7Exception
-from snap7.snap7types import S7AreaDB, S7WLByte, S7DataItem
-from snap7 import util
 
 
 logging.basicConfig(level=logging.WARNING)

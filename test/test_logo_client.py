@@ -1,10 +1,9 @@
-import unittest
 import logging
 import time
-#import mock
-
-from subprocess import Popen
+import unittest
 from os import path, kill
+from subprocess import Popen
+
 import snap7
 
 logging.basicConfig(level=logging.WARNING)
@@ -82,22 +81,21 @@ class TestLogoClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
-        non_client = snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval,\
-            snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout,\
-            snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime,\
-            snap7.snap7types.KeepAliveTime
+        non_client = snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval, \
+                     snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout, \
+                     snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime, \
+                     snap7.snap7types.KeepAliveTime
 
         # invalid param for client
         for param in non_client:
-            self.assertRaises(Exception, self.client.get_param,  non_client)
-
-
+            self.assertRaises(Exception, self.client.get_param, non_client)
 
 
 class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.
     """
+
     def setUp(self):
         self.client = snap7.client.Client()
 
@@ -118,4 +116,3 @@ class TestClientBeforeConnect(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
