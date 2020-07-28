@@ -9,7 +9,7 @@ else
 fi
 
 PYTHONPATH=.
-
+python3 -c 'print("öööööööööööööööööööööööööööö");help("modules");print("öööööööööööööööööööööööööööö")'
 ${NOSETESTS} --with-coverage test/test_server.py
 ${NOSETESTS} --with-coverage test/test_client.py
 ${NOSETESTS} --with-coverage test/test_client_async.py
