@@ -25,21 +25,20 @@ class Server(object):
     """
     A fake S7 server.
     """
-    pointer = None
-    callback = None
-    library = None
-
     def __init__(self, log=True):
         """
         Create a fake S7 server. set log to false if you want to disable
         event logging to python logging.
         """
+        self._read_callback = None
+        self._callback = None
+        self.pointer = None
+
         self.library = load_library()
         self.create()
         if log:
             self._set_log_callback()
-        self._read_callback = None
-        self._callback = None
+
 
     def __del__(self):
         self.destroy()

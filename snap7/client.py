@@ -30,10 +30,12 @@ class Client(object):
     """
     A snap7 client
     """
-    pointer = None
-    library = None
 
     def __init__(self):
+        self._read_callback = None
+        self._callback = None
+        self.pointer = None
+
         self.library = load_library()
         self.create()
 
@@ -53,8 +55,9 @@ class Client(object):
         destroy a client.
         """
         logger.info("destroying snap7 client")
-        if self.library:
+        if self.pointer:
             return self.library.Cli_Destroy(byref(self.pointer))
+        self.pointer = None
 
     def plc_stop(self):
         """
