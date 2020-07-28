@@ -2,6 +2,7 @@
 Python equivalent for snap7 specific types.
 """
 import ctypes
+
 from snap7.common import ADict
 
 S7Object = ctypes.c_void_p
@@ -43,13 +44,12 @@ param_types = ADict({
     BSendTimeout: ctypes.c_int32,
     BRecvTimeout: ctypes.c_int32,
     RecoveryTime: ctypes.c_uint32,
-    KeepAliveTime:  ctypes.c_uint32,
+    KeepAliveTime: ctypes.c_uint32,
 })
 
 # mask types
 mkEvent = 0
 mkLog = 1
-
 
 # Area ID
 S7AreaPE = 0x81
@@ -107,7 +107,7 @@ wordlen_to_ctypes = ADict({
 
 block_types = ADict({
     'OB': ctypes.c_int(0x38),
-    'DB':  ctypes.c_int(0x41),
+    'DB': ctypes.c_int(0x41),
     'SDB': ctypes.c_int(0x42),
     'FC': ctypes.c_int(0x43),
     'SFC': ctypes.c_int(0x44),
@@ -215,9 +215,9 @@ class S7DataItem(ctypes.Structure):
 
 class S7CpuInfo(ctypes.Structure):
     _fields_ = [
-        ('ModuleTypeName', ctypes.c_char*33),
-        ('SerialNumber', ctypes.c_char*25),
-        ('ASName', ctypes.c_char*25),
-        ('Copyright', ctypes.c_char*27),
-        ('ModuleName', ctypes.c_char*25)
+        ('ModuleTypeName', ctypes.c_char * 33),
+        ('SerialNumber', ctypes.c_char * 25),
+        ('ASName', ctypes.c_char * 25),
+        ('Copyright', ctypes.c_char * 27),
+        ('ModuleName', ctypes.c_char * 25)
     ]

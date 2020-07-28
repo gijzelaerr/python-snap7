@@ -4,9 +4,9 @@ Snap7 server used for mimicking a siemens 7 server.
 import ctypes
 import logging
 import re
+
 import snap7.snap7types
 from snap7.common import check_error, load_library, ipv4
-
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class Server(object):
             self._set_log_callback()
         self._read_callback = None
         self._callback = None
-    
+
     def __del__(self):
         self.destroy()
 
@@ -187,8 +187,8 @@ class Server(object):
                                            ctypes.byref(clients_count))
         check_error(error)
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
-        return snap7.snap7types.server_statuses[server_status.value],\
-               snap7.snap7types.cpu_statuses[cpu_status.value],\
+        return snap7.snap7types.server_statuses[server_status.value], \
+               snap7.snap7types.cpu_statuses[cpu_status.value], \
                clients_count.value
 
     @error_wrap

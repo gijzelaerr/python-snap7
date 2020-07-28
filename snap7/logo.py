@@ -1,22 +1,21 @@
 """
 Snap7 client used for connection to a siemens LOGO 7/8 server.
 """
+import logging
 import re
+import struct
 from ctypes import c_int, byref, c_uint16, c_int32
 from ctypes import c_void_p
 
-import logging
-import struct
-
 import snap7
 from snap7 import snap7types
+from snap7.common import check_error, load_library, ipv4
+from snap7.snap7exceptions import Snap7Exception
 from snap7.snap7types import S7Object
 from snap7.snap7types import param_types
 
-from snap7.common import check_error, load_library, ipv4
-from snap7.snap7exceptions import Snap7Exception
-
 logger = logging.getLogger(__name__)
+
 
 # error_wrap decorator removed. Reason: The sphinx documentation generator can not handle decorators.
 # There is a workaround available for the function name, but the parameters are not printed in the documentation.
@@ -34,6 +33,7 @@ class Logo(object):
     
     For more information see examples for Siemens Logo 7 and 8  
     """
+
     def __init__(self):
         self.pointer = None
         self.library = load_library()
@@ -41,7 +41,7 @@ class Logo(object):
 
     def __del__(self):
         self.destroy()
-        
+
     def create(self):
         """
         create a SNAP7 client.
@@ -63,7 +63,7 @@ class Logo(object):
         """
         logger.info("disconnecting snap7 client")
         result = self.library.Cli_Disconnect(self.pointer)
-        check_error(result, context="client") 
+        check_error(result, context="client")
         return result
 
     def connect(self, ip_address, tsap_snap7, tsap_logo, tcpport=102):
@@ -82,7 +82,7 @@ class Logo(object):
         self.set_param(snap7.snap7types.RemotePort, tcpport)
         self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
         result = self.library.Cli_Connect(self.pointer)
-        check_error(result, context="client") 
+        check_error(result, context="client")
         return result
 
     def read(self, vm_address):
@@ -105,7 +105,7 @@ class Logo(object):
             # transform string to int
             address_byte = int(address[0])
             address_bit = int(address[1])
-            start = (address_byte*8)+address_bit
+            start = (address_byte * 8) + address_bit
             wordlen = snap7types.S7WLBit
         elif re.match("V[0-9]+", vm_address):
             # byte value
@@ -125,7 +125,7 @@ class Logo(object):
         else:
             logger.info("Unknown address format")
             return 0
-             
+
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
 
@@ -166,10 +166,10 @@ class Logo(object):
             # transform string to int
             address_byte = int(address[0])
             address_bit = int(address[1])
-            start = (address_byte*8)+address_bit
+            start = (address_byte * 8) + address_bit
             wordlen = snap7types.S7WLBit
             if value > 0:
-                data = bytearray([1])    
+                data = bytearray([1])
             else:
                 data = bytearray([0])
         elif re.match("^V[0-9]+$", vm_address):
@@ -193,12 +193,12 @@ class Logo(object):
         else:
             logger.info(f"write, Unknown address format: {vm_address}")
             return 1
-        
+
         if wordlen == snap7types.S7WLBit:
             type_ = snap7.snap7types.wordlen_to_ctypes[snap7types.S7WLByte]
         else:
             type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        
+
         cdata = (type_ * amount).from_buffer_copy(data)
 
         logger.debug(f"write, vm_address:{vm_address} value:{value}")
@@ -240,7 +240,7 @@ class Logo(object):
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
         result = self.library.Cli_DBWrite(self.pointer, db_number, start, size, byref(cdata))
-        check_error(result, context="client") 
+        check_error(result, context="client")
         return result
 
     def set_connection_params(self, ip_address, tsap_snap7, tsap_logo):
@@ -291,7 +291,7 @@ class Logo(object):
         logger.debug(f"setting param number {number} to {value}")
         type_ = param_types[number]
         result = self.library.Cli_SetParam(self.pointer, number, byref(type_(value)))
-        check_error(result, context="client") 
+        check_error(result, context="client")
         return result
 
     def get_param(self, number):
@@ -307,4 +307,3 @@ class Logo(object):
                                          byref(value))
         check_error(code)
         return value.value
-

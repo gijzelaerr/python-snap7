@@ -10,8 +10,9 @@ is requesting the connection.
 import ctypes
 import logging
 import re
-from snap7.common import load_library, check_error, ipv4
+
 import snap7.snap7types
+from snap7.common import load_library, check_error, ipv4
 from snap7.snap7exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
@@ -19,9 +20,11 @@ logger = logging.getLogger(__name__)
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="partner")
+
     return f
 
 
@@ -38,7 +41,7 @@ class Partner(object):
 
     def __del__(self):
         self.destroy()
-        
+
     def as_b_send(self):
         """
         Sends a data packet to the partner. This function is asynchronous, i.e.

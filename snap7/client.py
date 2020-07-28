@@ -1,18 +1,17 @@
 """
 Snap7 client used for connection to a siemens7 server.
 """
+import logging
 import re
 from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
 from ctypes import c_void_p
 from datetime import datetime
-import logging
 
 import snap7
-from snap7.snap7types import S7Object, buffer_type, buffer_size, BlocksList
-from snap7.snap7types import TS7BlockInfo, param_types, cpu_statuses
-
 from snap7.common import check_error, load_library, ipv4
 from snap7.snap7exceptions import Snap7Exception
+from snap7.snap7types import S7Object, buffer_type, buffer_size, BlocksList
+from snap7.snap7types import TS7BlockInfo, param_types, cpu_statuses
 
 logger = logging.getLogger(__name__)
 

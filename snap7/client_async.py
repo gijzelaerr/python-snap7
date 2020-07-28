@@ -1,16 +1,14 @@
 """
 Snap7 async client used for connection to a siemens7 server.
 """
-from ctypes import c_int, byref, c_byte
-
-import logging
 import asyncio
+import logging
+from ctypes import c_int, byref, c_byte
 
 import snap7
 from snap7.common import check_error
-from .client import Client
 from snap7.snap7types import buffer_type, buffer_size
-
+from .client import Client
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +27,7 @@ class ClientAsync(Client):
     """
     This class expands the Client class with asyncio features for async s7comm requests.
     """
+
     def __init__(self):
         super().__init__()
         self.as_check = None
@@ -103,7 +102,7 @@ class ClientAsync(Client):
         if request_in_time is False:
             return None
         return check
-    
+
     async def as_ab_read(self, start, size, timeout=1):
         """
         This is the asynchronous counterpart of client.ab_read() with asyncio features.
@@ -114,12 +113,12 @@ class ClientAsync(Client):
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self.library.Cli_AsABRead(self.pointer, start, size,
                                            byref(data))
-        request_in_time = await self.as_check_and_wait(timeout) 
+        request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
         check_error(result, context="client")
         return bytearray(data)
-    
+
     async def as_check_and_wait(self, timeout):
         """
         This method handles asynchronous asyncio requests, depending on their as_check mode.
