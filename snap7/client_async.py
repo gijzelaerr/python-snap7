@@ -122,7 +122,7 @@ class ClientAsync(Client):
     async def as_check_and_wait(self, timeout):
         """
         This method handles asynchronous asyncio requests, depending on their as_check mode.
-        :param timeout: Max time the request is allowed to pending, until it will terminated. 
+        :param timeout: Max time the request is allowed to pending, until it will terminated.
         :return:
             - False - if Timeout happened
             - True - if request was made in time or with not implemented as_check mode

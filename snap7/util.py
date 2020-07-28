@@ -134,7 +134,7 @@ def set_word(bytearray_, byte_index, _int):
 def get_word(bytearray_, byte_index):
     """
     Get word value from bytearray.
-    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535    
+    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
     """
     data = bytearray_[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
@@ -249,7 +249,7 @@ def set_dword(_bytearray, byte_index, dword):
 def get_dint(_bytearray, byte_index):
     """
     Get dint value from bytearray.
-    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647    
+    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647
     """
     data = _bytearray[byte_index:byte_index + 4]
     dint = struct.unpack('>i', struct.pack('4B', *data))[0]
@@ -258,7 +258,7 @@ def get_dint(_bytearray, byte_index):
 
 def set_dint(_bytearray, byte_index, dint):
     """
-    Set value in bytearray to dint    
+    Set value in bytearray to dint
     """
     dint = int(dint)
     _bytes = struct.unpack('4B', struct.pack('>i', dint))
@@ -448,7 +448,7 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
+            max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
             return get_string(_bytearray, byte_index, max_size)
 
@@ -480,7 +480,7 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
+            max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
             return set_string(_bytearray, byte_index, value, max_size)
 

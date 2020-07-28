@@ -81,10 +81,9 @@ class TestLogoClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
-        non_client = snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval, \
-                     snap7.snap7types.MaxClients, snap7.snap7types.BSendTimeout, \
-                     snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime, \
-                     snap7.snap7types.KeepAliveTime
+        non_client = (snap7.snap7types.LocalPort, snap7.snap7types.WorkInterval, snap7.snap7types.MaxClients,
+                      snap7.snap7types.BSendTimeout, snap7.snap7types.BRecvTimeout, snap7.snap7types.RecoveryTime,
+                      snap7.snap7types.KeepAliveTime)
 
         # invalid param for client
         for param in non_client:

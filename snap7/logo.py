@@ -26,12 +26,12 @@ class Logo(object):
     A snap7 Siemens Logo client:
     There are two main comfort functions available :func:`Logo.read` and :func:`Logo.write`.
     This functions realize a high level access to the VM addresses of the Siemens Logo just use the form:
-    
+
     * V10.3 for bit values
     * V10 for the complete byte
     * VW12 for a word (used for analog values)
-    
-    For more information see examples for Siemens Logo 7 and 8  
+
+    For more information see examples for Siemens Logo 7 and 8
     """
 
     def __init__(self):
@@ -87,8 +87,8 @@ class Logo(object):
 
     def read(self, vm_address):
         """
-        Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2") 
-        
+        Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
+
         :param vm_address: of Logo memory (e.g. V30.1, VW32, V24)
         :returns: integer
         """
@@ -284,7 +284,7 @@ class Logo(object):
 
     def set_param(self, number, value):
         """Sets an internal Server object parameter.
-        
+
         :param number: Parameter type number
         :param value: Parameter value
         """
@@ -296,7 +296,7 @@ class Logo(object):
 
     def get_param(self, number):
         """Reads an internal Logo object parameter.
-        
+
         :param number: Parameter type number
         :returns: Parameter value
         """
