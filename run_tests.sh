@@ -1,12 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
+set -v
+set -e
 
 export PYTHONPATH=.
-echo "Running test_partner.py ----------------------------------------------\n\n"
-sudo nosetests test/test_partner.py
-echo "Running test_server.py  ----------------------------------------------\n\n"
+sudo venv/bin/nosetests test/test_partner.py
 nosetests test/test_server.py
-echo "Running test_client.py  ----------------------------------------------\n\n"
 nosetests test/test_client.py
-echo "Running test_util.py    ----------------------------------------------\n\n"
 nosetests test/test_util.py
 

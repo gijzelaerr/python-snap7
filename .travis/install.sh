@@ -3,10 +3,13 @@
 set -v
 set -e
 
+
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
-    brew install snap7
+    make setup
 fi
 
 if [ "$TRAVIS_OS_NAME" = "linux" ]; then
-    echo "nothing"
+     docker build . -f .travis/${TARGET}.docker -t python-snap7/${TARGET}
 fi
+
+

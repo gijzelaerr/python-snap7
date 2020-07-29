@@ -1,14 +1,14 @@
+import logging
+import platform
 from ctypes import c_char
 from ctypes.util import find_library
-import logging
-from snap7.snap7exceptions import Snap7Exception
 
-import platform
+from snap7.exceptions import Snap7Exception
+
 if platform.system() == 'Windows':
-    from ctypes import windll as cdll
+    from ctypes import windll as cdll  # type: ignore
 else:
     from ctypes import cdll
-
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class ADict(dict):
     __setattr__ = dict.__setitem__
 
 
-class Snap7Library(object):
+class Snap7Library:
     """
     Snap7 loader and encapsulator. We make this a singleton to make
     sure the library is loaded only once.

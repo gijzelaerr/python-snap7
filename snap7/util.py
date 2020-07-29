@@ -83,11 +83,10 @@ example::
 
 """
 
-from collections import OrderedDict
-
-import struct
 import logging
 import re
+import struct
+from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +124,7 @@ def set_bool(_bytearray, byte_index, bool_index, value):
 def set_word(bytearray_, byte_index, _int):
     """
     Set value in bytearray to word
-    """    
+    """
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>H', _int))
     bytearray_[byte_index:byte_index + 2] = _bytes
@@ -135,7 +134,7 @@ def set_word(bytearray_, byte_index, _int):
 def get_word(bytearray_, byte_index):
     """
     Get word value from bytearray.
-    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535    
+    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
     """
     data = bytearray_[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
@@ -250,7 +249,7 @@ def set_dword(_bytearray, byte_index, dword):
 def get_dint(_bytearray, byte_index):
     """
     Get dint value from bytearray.
-    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647    
+    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647
     """
     data = _bytearray[byte_index:byte_index + 4]
     dint = struct.unpack('>i', struct.pack('4B', *data))[0]
@@ -259,7 +258,7 @@ def get_dint(_bytearray, byte_index):
 
 def set_dint(_bytearray, byte_index, dint):
     """
-    Set value in bytearray to dint    
+    Set value in bytearray to dint
     """
     dint = int(dint)
     _bytes = struct.unpack('4B', struct.pack('>i', dint))
@@ -284,7 +283,7 @@ def parse_specification(db_specification):
     return parsed_db_specification
 
 
-class DB(object):
+class DB:
     """
     Manage a DB bytearray block given a specification
     of the Layout.
@@ -297,16 +296,17 @@ class DB(object):
     db1[0]['testbool1'] = test
     db1.write()   # puts data in plc
     """
-    _bytearray = None       # data from plc
-    specification = None    # layout of db rows
-    row_size = None         # bytes size of a db row
-    layout_offset = None    # at which byte in row specification should
-                            # we start reading the data
-    db_offset = None        # at which byte in db should we start reading?
-                            # first fields could be be status data.
-                            # and only the last part could be control data
-                            # now you can be sure you will never overwrite
-                            # critical parts of db
+    _bytearray = None  # data from plc
+    specification = None  # layout of db rows
+    row_size = None  # bytes size of a db row
+    layout_offset = None  # at which byte in row specification should
+    # we start reading the data
+    db_offset = None  # at which byte in db should we start reading?
+
+    # first fields could be be status data.
+    # and only the last part could be control data
+    # now you can be sure you will never overwrite
+    # critical parts of db
 
     def __init__(self, db_number, _bytearray,
                  specification, row_size, size, id_field=None,
@@ -363,26 +363,23 @@ class DB(object):
         return len(self.index)
 
     def set_data(self, _bytearray):
-        assert(isinstance(_bytearray, bytearray))
+        assert (isinstance(_bytearray, bytearray))
         self._bytearray = _bytearray
 
 
-class DB_Row(object):
+class DB_Row:
     """
     Provide ROW API for DB bytearray
     """
-    _bytearray = None      # data of reference to parent DB
-    _specification = None  # row specification
 
-    def __init__(self, _bytearray, _specification, row_size=0,
-                 db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(self, _bytearray, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
 
-        self.db_offset = db_offset          # start point of row data in db
+        self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
         self.row_size = row_size
-        self.row_offset = row_offset        # start of writable part of row
+        self.row_offset = row_offset  # start of writable part of row
 
-        assert(isinstance(_bytearray, (bytearray, DB)))
+        assert (isinstance(_bytearray, (bytearray, DB)))
         self._bytearray = _bytearray
         self._specification = parse_specification(_specification)
 
@@ -448,7 +445,7 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
+            max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
             return get_string(_bytearray, byte_index, max_size)
 
@@ -480,7 +477,7 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
+            max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
             return set_string(_bytearray, byte_index, value, max_size)
 
@@ -505,12 +502,12 @@ class DB_Row(object):
         """
         Write current data to db in plc
         """
-        assert(isinstance(self._bytearray, DB))
-        assert(self.row_size >= 0)
+        assert (isinstance(self._bytearray, DB))
+        assert (self.row_size >= 0)
 
         db_nr = self._bytearray.db_number
         offset = self.db_offset
-        data = self.get_bytearray()[offset:offset+self.row_size]
+        data = self.get_bytearray()[offset:offset + self.row_size]
         db_offset = self.db_offset
 
         # indicate start of write only area of row!
@@ -524,8 +521,8 @@ class DB_Row(object):
         """
         read current data of db row from plc
         """
-        assert(isinstance(self._bytearray, DB))
-        assert(self.row_size >= 0)
+        assert (isinstance(self._bytearray, DB))
+        assert (self.row_size >= 0)
         db_nr = self._bytearray.db_number
         _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
 

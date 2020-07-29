@@ -10,22 +10,25 @@ is requesting the connection.
 import ctypes
 import logging
 import re
+
+import snap7.types
 from snap7.common import load_library, check_error, ipv4
-import snap7.snap7types
-from snap7.snap7exceptions import Snap7Exception
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="partner")
+
     return f
 
 
-class Partner(object):
+class Partner:
     """
     A snap7 partner.
     """
@@ -38,7 +41,7 @@ class Partner(object):
 
     def __del__(self):
         self.destroy()
-        
+
     def as_b_send(self):
         """
         Sends a data packet to the partner. This function is asynchronous, i.e.
@@ -94,8 +97,8 @@ class Partner(object):
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self.library.Par_Create.restype = snap7.snap7types.S7Object
-        self.pointer = snap7.snap7types.S7Object(self.library.Par_Create(int(active)))
+        self.library.Par_Create.restype = snap7.types.S7Object
+        self.pointer = snap7.types.S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -120,7 +123,7 @@ class Partner(object):
         Reads an internal Partner object parameter.
         """
         logger.debug(f"retreiving param number {number}")
-        type_ = snap7.snap7types.param_types[number]
+        type_ = snap7.types.param_types[number]
         value = type_()
         code = self.library.Par_GetParam(self.pointer, ctypes.c_int(number),
                                          ctypes.byref(value))
