@@ -7,6 +7,4 @@ RUN apt-get update -qq
 RUN apt-get install -y libsnap7-dev libsnap7-1 python3-venv make
 ADD . /code
 WORKDIR /code
-RUN make setup
-ENV PATH="/code/venv/bin:$PATH"
-RUN pycodestyle test snap7
+RUN make pycodestyle

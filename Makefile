@@ -1,6 +1,8 @@
 # developer file, not intented for installing python-snap7
 
-all: test
+.PHONY: test
+
+allll: test
 
 venv/:
 	python3 -m venv venv
@@ -20,6 +22,12 @@ venv/bin/sphinx-build:  venv/
 
 doc: venv/bin/sphinx-build
 	cd doc && make html
+
+pycodestyle: venv/bin/pytest
+	venv/bin/pycodestyle snap7 test
+    
+mypy: venv/bin/pytest
+	venv/bin/mypy snap7 test
 
 test: venv/bin/pytest
 	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py
