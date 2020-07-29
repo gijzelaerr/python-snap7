@@ -1,10 +1,11 @@
 import logging
 import time
 import unittest
-from os import path, kill
-from subprocess import Popen
+from multiprocessing import Process
+from os import kill
 
 import snap7
+from snap7.server import mainloop
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -19,9 +20,8 @@ class TestLogoClient(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        server_path = path.join(path.dirname(path.realpath(snap7.__file__)),
-                                "bin/snap7-server.py")
-        cls.server_pid = Popen([server_path]).pid
+        cls.process = Process(target=mainloop)
+        cls.process.start()
         time.sleep(2)  # wait for server to start
 
     @classmethod

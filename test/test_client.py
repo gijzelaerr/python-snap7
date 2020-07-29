@@ -5,14 +5,14 @@ import struct
 import time
 import unittest
 from datetime import datetime
-from os import path, kill
 from multiprocessing import Process
+from os import kill
 from unittest import mock
 
 import snap7
 from snap7 import util
-from snap7.server import mainloop
 from snap7.exceptions import Snap7Exception
+from snap7.server import mainloop
 from snap7.types import S7AreaDB, S7WLByte, S7DataItem
 
 logging.basicConfig(level=logging.WARNING)
@@ -735,7 +735,6 @@ class TestLibraryIntegration(unittest.TestCase):
 
         # have the Cli_Create of the mock return None
         self.mocklib.Cli_Create.return_value = None
-
 
     def tearDown(self):
         # restore load_library
