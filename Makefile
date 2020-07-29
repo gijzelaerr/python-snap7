@@ -7,16 +7,23 @@ venv/:
 	venv/bin/pip install --upgrade pip wheel
 
 venv/installed: venv/
-	venv/bin/pip install -e ".[test,doc]"
+	venv/bin/pip install -e .
 	touch venv/installed
 
 setup: venv/installed
 
-test: setup
-	sudo venv/bin/pytest test/test_partner.py
-	venv/bin/pytest test/test_server.py
-	venv/bin/pytest test/test_client.py
-	venv/bin/pytest test/test_util.py
+venv/bin/pytest: venv/
+	venv/bin/pip install -e ".[test]"
+
+venv/bin/sphinx-build:  venv/
+	venv/bin/pip install -e ".[doc]"
+
+doc: venv/bin/sphinx-build
+	cd doc && make html
+
+test: venv/bin/pytest
+	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py
+	sudo venv/bin/pytest test/test_partner.py  # run this as last to prevent pytest cache dir creates as root
 
 docker-doc:
 		docker build . -f .travis/doc.docker -t doc

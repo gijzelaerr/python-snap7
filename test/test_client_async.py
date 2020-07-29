@@ -37,6 +37,7 @@ class TestClient(unittest.TestCase):
         self.client.disconnect()
         self.client.destroy()
 
+    @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_db_read' was never awaited")
     async def test_as_db_read(self):
         size = 40
         start = 0
@@ -46,6 +47,7 @@ class TestClient(unittest.TestCase):
         result = await self.client.as_db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
 
+    @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_db_write' was never awaited")
     async def test_as_db_write(self):
         size = 40
         data = bytearray(size)
@@ -68,6 +70,7 @@ class TestClient(unittest.TestCase):
     async def test_as_db_get(self):
         await self.client.db_get(db_number=db_number)
 
+    @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_download' was never awaited")
     async def test_as_download(self):
         data = bytearray(128)
         await self.client.as_download(block_num=-1, data=data)

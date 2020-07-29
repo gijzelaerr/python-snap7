@@ -7,7 +7,7 @@ from ctypes import c_int, byref, c_byte
 
 import snap7
 from snap7.common import check_error
-from snap7.snap7types import buffer_type, buffer_size
+from snap7.types import buffer_type, buffer_size
 from .client import Client
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ class ClientAsync(Client):
         :return:
         """
         temp = c_int(0)
-        while self.library.Cli_CheckAsCompletion(self.pointer, byref(temp)):
+        while self._library.Cli_CheckAsCompletion(self._pointer, byref(temp)):
             await asyncio.sleep(0)
 
     async def as_db_read(self, db_number, start, size, timeout=1):
@@ -64,9 +64,9 @@ class ClientAsync(Client):
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
-        result = (self.library.Cli_AsDBRead(self.pointer, db_number, start, size, byref(data)))
+        result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
@@ -77,12 +77,12 @@ class ClientAsync(Client):
         """
         This is the asynchronous counterpart of Cli_DBWrite with asyncio features.
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
-        check = self.library.Cli_AsDBWrite(self.pointer, db_number, start, size, byref(cdata))
+        check = self._library.Cli_AsDBWrite(self._pointer, db_number, start, size, byref(cdata))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
@@ -92,12 +92,12 @@ class ClientAsync(Client):
         """
         This is the asynchronous counterpart of Cli_ABWrite with asyncio features.
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
-        check = self.library.Cli_AsABWrite(self.pointer, start, size, byref(cdata))
+        check = self._library.Cli_AsABWrite(self._pointer, start, size, byref(cdata))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
@@ -107,12 +107,12 @@ class ClientAsync(Client):
         """
         This is the asynchronous counterpart of client.ab_read() with asyncio features.
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
-        result = self.library.Cli_AsABRead(self.pointer, start, size,
-                                           byref(data))
+        result = self._library.Cli_AsABRead(self._pointer, start, size,
+                                            byref(data))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
@@ -147,7 +147,7 @@ class ClientAsync(Client):
         """
         logger.debug(f"db_get db_number: {db_number}")
         _buffer = buffer_type()
-        result = self.library.Cli_AsDBGet(self.pointer, db_number, byref(_buffer), byref(c_int(buffer_size)))
+        result = self._library.Cli_AsDBGet(self._pointer, db_number, byref(_buffer), byref(c_int(buffer_size)))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
@@ -168,7 +168,7 @@ class ClientAsync(Client):
         size = len(data)
         type_ = c_byte * len(data)
         cdata = type_.from_buffer_copy(data)
-        data = self.library.Cli_AsDownload(self.pointer, block_num, byref(cdata), size)
+        data = self._library.Cli_AsDownload(self._pointer, block_num, byref(cdata), size)
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None

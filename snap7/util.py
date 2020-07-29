@@ -283,7 +283,7 @@ def parse_specification(db_specification):
     return parsed_db_specification
 
 
-class DB(object):
+class DB:
     """
     Manage a DB bytearray block given a specification
     of the Layout.
@@ -367,15 +367,12 @@ class DB(object):
         self._bytearray = _bytearray
 
 
-class DB_Row(object):
+class DB_Row:
     """
     Provide ROW API for DB bytearray
     """
-    _bytearray = None  # data of reference to parent DB
-    _specification = None  # row specification
 
-    def __init__(self, _bytearray, _specification, row_size=0,
-                 db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(self, _bytearray, _specification, row_size=0,db_offset=0, layout_offset=0, row_offset=0):
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout

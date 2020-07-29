@@ -3,7 +3,7 @@ import platform
 from ctypes import c_char
 from ctypes.util import find_library
 
-from snap7.snap7exceptions import Snap7Exception
+from snap7.exceptions import Snap7Exception
 
 if platform.system() == 'Windows':
     from ctypes import windll as cdll  # type: ignore
@@ -24,7 +24,7 @@ class ADict(dict):
     __setattr__ = dict.__setitem__
 
 
-class Snap7Library(object):
+class Snap7Library:
     """
     Snap7 loader and encapsulator. We make this a singleton to make
     sure the library is loaded only once.
