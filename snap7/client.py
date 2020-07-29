@@ -635,8 +635,7 @@ class Client:
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
         data = (type_ * size)()
-        result = self.library.Cli_AsReadArea(self.pointer, area, dbnumber, start,
-                                           size, wordlen, byref(data))
+        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -663,8 +662,7 @@ class Client:
         logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen} type: {type_}")
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self.library.Cli_AsWriteArea(self.pointer, area, dbnumber, start,
-                                          size, wordlen, byref(cdata))
+        return self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
 
     def asebread(self):
         # Cli_AsEBRead

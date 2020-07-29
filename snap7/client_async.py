@@ -194,7 +194,7 @@ class ClientAsync(Client):
         type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
         data = (type_ * size)()
-        result = self.library.Cli_AsReadArea(self.pointer, area, dbnumber, start, size, wordlen, byref(data))
+        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
@@ -224,7 +224,7 @@ class ClientAsync(Client):
         logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen} type: {type_}")
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        check = self.library.Cli_AsWriteArea(self.pointer, area, dbnumber, start, size, wordlen, byref(cdata))
+        check = self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
             return None
