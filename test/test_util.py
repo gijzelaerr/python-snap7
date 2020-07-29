@@ -74,7 +74,7 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row['NAME'], 'test')
 
-    def test_write_string(self):
+    def test_write_string(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['NAME'] = 'abc'
@@ -88,7 +88,7 @@ class TestS7util(unittest.TestCase):
         # value should still be empty
         self.assertEqual(row['NAME'], '')
 
-    def test_get_int(self):
+    def test_get_int(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         x = row['ID']
@@ -96,13 +96,13 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(x, 0)
         self.assertEqual(y, 0)
 
-    def test_set_int(self):
+    def test_set_int(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['ID'] = 259
         self.assertEqual(row['ID'], 259)
 
-    def test_set_int_roundtrip(self):
+    def test_set_int_roundtrip(self) -> None:
         DB1 = (types.wordlen_to_ctypes[types.S7WLByte] * 4)()
 
         for i in range(-(2 ** 15) + 1, (2 ** 15) - 1):
@@ -110,7 +110,7 @@ class TestS7util(unittest.TestCase):
             result = util.get_int(DB1, 0)
             self.assertEqual(i, result)
 
-    def test_get_int_values(self):
+    def test_get_int_values(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         for value in (
@@ -129,13 +129,13 @@ class TestS7util(unittest.TestCase):
             row['ID'] = value
             self.assertEqual(row['ID'], value)
 
-    def test_get_bool(self):
+    def test_get_bool(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row['testbool1'], 1)
         self.assertEqual(row['testbool8'], 0)
 
-    def test_set_bool(self):
+    def test_set_bool(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['testbool8'] = 1
@@ -144,7 +144,7 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row['testbool8'], 1)
         self.assertEqual(row['testbool1'], 0)
 
-    def test_db_creation(self):
+    def test_db_creation(self) -> None:
         test_array = bytearray(_bytearray * 10)
 
         test_db = util.DB(1, test_array, test_spec,
@@ -168,56 +168,56 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row['testbool8'], 0)
             self.assertEqual(row['NAME'], 'test')
 
-    def test_get_real(self):
+    def test_get_real(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(0.01 > (row['testReal'] - 827.3) > -0.1)
 
-    def test_set_real(self):
+    def test_set_real(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['testReal'] = 1337.1337
         self.assertTrue(0.01 > (row['testReal'] - 1337.1337) > -0.01)
 
-    def test_set_dword(self):
+    def test_set_dword(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 4294967295.
         row['testDword'] = 9999999
         self.assertEqual(row['testDword'], 9999999)
 
-    def test_get_dword(self):
+    def test_get_dword(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row['testDword'], 4294967295)
 
-    def test_set_dint(self):
+    def test_set_dint(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is -2147483648 to 2147483647 +
         row.set_value(23, 'DINT', 2147483647)  # set value
         self.assertEqual(row['testDint'], 2147483647)
 
-    def test_get_dint(self):
+    def test_get_dint(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(23, 'DINT')  # get value
         self.assertEqual(value, -2147483648)
 
-    def test_set_word(self):
+    def test_set_word(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 65535
         row.set_value(27, 'WORD', 0)  # set value
         self.assertEqual(row['testWord'], 0)
 
-    def test_get_word(self):
+    def test_get_word(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(27, 'WORD')  # get value
         self.assertEqual(value, 65535)
 
-    def test_export(self):
+    def test_export(self) -> None:
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         data = row.export()

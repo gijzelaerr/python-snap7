@@ -29,7 +29,6 @@ class Logo:
 
     For more information see examples for Siemens Logo 7 and 8
     """
-
     def __init__(self):
         self.pointer = None
         self.library = load_library()
@@ -38,7 +37,7 @@ class Logo:
     def __del__(self):
         self.destroy()
 
-    def create(self):
+    def create(self) -> None:
         """
         create a SNAP7 client.
         """
@@ -46,7 +45,7 @@ class Logo:
         self.library.Cli_Create.restype = c_void_p
         self.pointer = S7Object(self.library.Cli_Create())
 
-    def destroy(self):
+    def destroy(self) -> int:
         """
         destroy a client.
         """

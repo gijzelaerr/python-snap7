@@ -41,7 +41,7 @@ class Client:
     def __del__(self):
         self.destroy()
 
-    def create(self):
+    def create(self) -> None:
         """
         create a SNAP7 client.
         """
@@ -58,21 +58,21 @@ class Client:
             return self._library.Cli_Destroy(byref(self._pointer))
         self._pointer = None
 
-    def plc_stop(self):
+    def plc_stop(self) -> int:
         """
         stops a client
         """
         logger.info("stopping plc")
         return self._library.Cli_PlcStop(self._pointer)
 
-    def plc_cold_start(self):
+    def plc_cold_start(self) -> int:
         """
         cold starts a client
         """
         logger.info("cold starting plc")
         return self._library.Cli_PlcColdStart(self._pointer)
 
-    def plc_hot_start(self):
+    def plc_hot_start(self) -> int:
         """
         hot starts a client
         """
@@ -97,7 +97,7 @@ class Client:
         logger.debug(f"CPU state is {status_string}")
         return status_string
 
-    def get_cpu_info(self):
+    def get_cpu_info(self) -> snap7.types.S7CpuInfo:
         """
         Retrieves CPU info from client
         """
@@ -107,7 +107,7 @@ class Client:
         return info
 
     @error_wrap
-    def disconnect(self):
+    def disconnect(self) -> int:
         """
         disconnect a client.
         """
@@ -115,7 +115,7 @@ class Client:
         return self._library.Cli_Disconnect(self._pointer)
 
     @error_wrap
-    def connect(self, address, rack, slot, tcpport=102):
+    def connect(self, address: str, rack: int, slot: int, tcpport: int = 102) -> int:
         """
         Connect to a S7 server.
 
@@ -130,7 +130,7 @@ class Client:
             self._pointer, c_char_p(address.encode()),
             c_int(rack), c_int(slot))
 
-    def db_read(self, db_number, start, size):
+    def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """This is a lean function of Cli_ReadArea() to read PLC DB.
 
         :returns: user buffer.
@@ -157,11 +157,11 @@ class Client:
         type_ = snap7.types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
+        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data,!r}")
         return self._library.Cli_DBWrite(self._pointer, db_number, start, size,
                                          byref(cdata))
 
-    def delete(self, block_type, block_num):
+    def delete(self, block_type: str, block_num: int) -> int:
         """
         Deletes a block
 
@@ -173,7 +173,7 @@ class Client:
         result = self._library.Cli_Delete(self._pointer, blocktype, block_num)
         return result
 
-    def full_upload(self, _type, block_num):
+    def full_upload(self, _type: str, block_num: int):
         """
         Uploads a full block body from AG.
         The whole block (including header and footer) is copied into the user
@@ -190,7 +190,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(_buffer)[:size.value], size.value
 
-    def upload(self, block_num):
+    def upload(self, block_num: int) -> bytearray:
         """
         Uploads a block body from AG
 
@@ -225,7 +225,7 @@ class Client:
                                             byref(cdata), size)
         return result
 
-    def db_get(self, db_number):
+    def db_get(self, db_number: int) -> bytearray:
         """Uploads a DB from AG.
         """
         logger.debug(f"db_get db_number: {db_number}")
@@ -236,7 +236,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def read_area(self, area, dbnumber, start, size):
+    def read_area(self, area: int, dbnumber: int, start: int, size: int) -> bytearray:
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
@@ -260,7 +260,7 @@ class Client:
         return bytearray(data)
 
     @error_wrap
-    def write_area(self, area, dbnumber, start, data):
+    def write_area(self, area: int, dbnumber: int, start: int, data: bytes) -> int:
         """This is the main function to write data into a PLC. It's the
         complementary function of Cli_ReadArea(), the parameters and their
         meanings are the same. The only difference is that the data is
@@ -295,7 +295,7 @@ class Client:
         check_error(result, context="client")
         return result, items
 
-    def list_blocks(self):
+    def list_blocks(self) -> BlocksList:
         """Returns the AG blocks amount divided by type.
 
         :returns: a snap7.types.BlocksList object.
@@ -377,7 +377,7 @@ class Client:
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
-    def set_connection_type(self, connection_type):
+    def set_connection_type(self, connection_type: int) -> None:
         """
         Sets the connection resource type, i.e the way in which the Clients
         connects to a PLC.
@@ -389,7 +389,7 @@ class Client:
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
-    def get_connected(self):
+    def get_connected(self) -> bool:
         """
         Returns the connection status
 
@@ -400,7 +400,7 @@ class Client:
         check_error(result, context="client")
         return bool(connected)
 
-    def ab_read(self, start, size):
+    def ab_read(self, start: int, size: int) -> bytearray:
         """
         This is a lean function of Cli_ReadArea() to read PLC process outputs.
         """
@@ -413,7 +413,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    def ab_write(self, start, data):
+    def ab_write(self, start: int, data: bytes) -> int:
         """
         This is a lean function of Cli_WriteArea() to write PLC process
         outputs
@@ -426,7 +426,7 @@ class Client:
         return self._library.Cli_ABWrite(
             self._pointer, start, size, byref(cdata))
 
-    def as_ab_read(self, start, size):
+    def as_ab_read(self, start: int, size: int) -> bytearray:
         """
         This is the asynchronous counterpart of client.ab_read().
         """
@@ -439,7 +439,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    def as_ab_write(self, start, data):
+    def as_ab_write(self, start: int, data: bytes) -> int:
         """
         This is the asynchronous counterpart of Cli_ABWrite.
         """
@@ -482,7 +482,7 @@ class Client:
         """
         return self._library.Cli_AsDBFill(self._pointer)
 
-    def as_db_get(self, db_number):
+    def as_db_get(self, db_number: int) -> bytearray:
         """
         This is the asynchronous counterpart of Cli_DBGet.
         """
@@ -494,7 +494,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def as_db_read(self, db_number, start, size):
+    def as_db_read(self, db_number: int, start: int, size: int):  # -> bytearray:
         """
         This is the asynchronous counterpart of Cli_DBRead.
 
@@ -516,13 +516,13 @@ class Client:
         type_ = snap7.types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
+        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data,!r}")
         return self._library.Cli_AsDBWrite(
             self._pointer, db_number, start, size,
             byref(cdata))
 
     @error_wrap
-    def as_download(self, data, block_num=-1):
+    def as_download(self, data: bytes, block_num: int = -1) -> int:
         """
         Downloads a DB data into the AG asynchronously.
         A whole block (including header and footer) must be available into the
@@ -547,7 +547,7 @@ class Client:
         return self._library.Cli_Compress(self._pointer, time)
 
     @error_wrap
-    def set_param(self, number, value):
+    def set_param(self, number: int, value: int) -> int:
         """Sets an internal Server object parameter.
         """
         logger.debug(f"setting param number {number} to {value}")
@@ -578,7 +578,7 @@ class Client:
 
         return negotiated_.value
 
-    def get_plc_datetime(self):
+    def get_plc_datetime(self) -> datetime:
         """
         Get date and time from PLC.
 
@@ -599,7 +599,7 @@ class Client:
         )
 
     @error_wrap
-    def set_plc_datetime(self, dt):
+    def set_plc_datetime(self, dt: datetime) -> int:
         """
         Set date and time in PLC
 

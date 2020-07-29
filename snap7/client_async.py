@@ -3,12 +3,14 @@ Snap7 async client used for connection to a siemens7 server.
 """
 import asyncio
 import logging
+from abc import ABC
 from ctypes import c_int, byref, c_byte
 
 import snap7
 from snap7.common import check_error
 from snap7.types import buffer_type, buffer_size
 from .client import Client
+from typing import Union, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +25,11 @@ def error_wrap(func):
     return f
 
 
-class ClientAsync(Client):
+class ClientAsync(Client, ABC):
     """
     This class expands the Client class with asyncio features for async s7comm requests.
     """
-
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.as_check = None
 
@@ -48,7 +49,7 @@ class ClientAsync(Client):
         self.as_check = mode
         logger.debug(f"Async check mode changed to {mode}")
 
-    async def async_wait_loop(self):
+    async def async_wait_loop(self) -> None:
         """
         This loop checks if an answer received from an async request.
         :return:
@@ -57,7 +58,7 @@ class ClientAsync(Client):
         while self._library.Cli_CheckAsCompletion(self._pointer, byref(temp)):
             await asyncio.sleep(0)
 
-    async def as_db_read(self, db_number, start, size, timeout=1):
+    async def as_db_read(self, db_number: int, start: int, size: int, timeout: float = 1.):  # -> Optional[bytearray]:
         """
         This is the asynchronous counterpart of Cli_DBRead with asyncio features.
         :returns: user buffer.
@@ -73,7 +74,7 @@ class ClientAsync(Client):
         check_error(result, context="client")
         return bytearray(data)
 
-    async def as_db_write(self, db_number, start, data, timeout=1):
+    async def as_db_write(self, db_number, start, data, timeout=1.) -> Union[None, int]:
         """
         This is the asynchronous counterpart of Cli_DBWrite with asyncio features.
         """
@@ -81,7 +82,7 @@ class ClientAsync(Client):
         type_ = snap7.types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
+        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data,!r}")
         check = self._library.Cli_AsDBWrite(self._pointer, db_number, start, size, byref(cdata))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:

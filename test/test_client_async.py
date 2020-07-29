@@ -18,8 +18,11 @@ slot = 1
 
 class TestClient(unittest.TestCase):
 
+    process = None
+    server_pid = None
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.process = Process(target=mainloop)
         cls.process.start()
         time.sleep(2)  # wait for server to start
@@ -28,33 +31,33 @@ class TestClient(unittest.TestCase):
     def tearDownClass(cls):
         kill(cls.server_pid, 1)
 
-    def setUp(self):
-        self.client = snap7.client.Client()
+    def setUp(self) -> None:
+        self.client = snap7.client_async.ClientAsync()
         self.client.connect(ip, rack, slot, tcpport)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.client.disconnect()
         self.client.destroy()
 
     @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_db_read' was never awaited")
-    async def test_as_db_read(self):
+    async def test_as_db_read(self) -> None:
         size = 40
         start = 0
         db = 1
         data = bytearray(40)
         self.client.db_write(db_number=db, start=start, data=data)
-        result = await self.client.as_db_read(db_number=db, start=start, size=size)
+        result = await self.client.as_db_read(db, start, size)
         self.assertEqual(data, result)
 
     @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_db_write' was never awaited")
-    async def test_as_db_write(self):
+    async def test_as_db_write(self) -> None:
         size = 40
         data = bytearray(size)
         check = await self.client.as_db_write(db_number=1, start=0, data=data)
         self.assertEqual(check, 0)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    async def test_as_ab_read(self):
+    async def test_as_ab_read(self) -> None:
         start = 1
         size = 1
         await self.client.as_ab_read(start=start, size=size)
@@ -67,7 +70,7 @@ class TestClient(unittest.TestCase):
         await self.client.as_ab_write(start=start, data=data)
 
     async def test_as_db_get(self):
-        await self.client.db_get(db_number=db_number)
+        await self.client.as_db_get(db_number=db_number)
 
     @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_download' was never awaited")
     async def test_as_download(self):

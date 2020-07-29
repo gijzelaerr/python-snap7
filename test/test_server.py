@@ -13,36 +13,36 @@ logging.basicConfig(level=logging.WARNING)
 
 class TestServer(unittest.TestCase):
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.server = snap7.server.Server()
         self.server.start(tcpport=1102)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.server.stop()
         self.server.destroy()
 
-    def test_register_area(self):
+    def test_register_area(self) -> None:
         db1_type = ctypes.c_char * 1024
         self.server.register_area(snap7.types.srvAreaDB, 3, db1_type())
 
-    def test_error(self):
+    def test_error(self) -> None:
         for error in snap7.error.server_errors:
             snap7.common.error_text(error, context="client")
 
-    def test_event(self):
+    def test_event(self) -> None:
         event = snap7.types.SrvEvent()
         self.server.event_text(event)
 
-    def test_get_status(self):
+    def test_get_status(self) -> None:
         server, cpu, num_clients = self.server.get_status()
 
-    def test_get_mask(self):
+    def test_get_mask(self) -> None:
         self.server.get_mask(snap7.types.mkEvent)
         self.server.get_mask(snap7.types.mkLog)
         # invalid kind
         self.assertRaises(Exception, self.server.get_mask, 3)
 
-    def test_lock_area(self):
+    def test_lock_area(self) -> None:
         from threading import Thread
         area_code = snap7.types.srvAreaDB
         index = 1
@@ -64,16 +64,16 @@ class TestServer(unittest.TestCase):
         thread.join(timeout=1)
         self.assertFalse(thread.is_alive())
 
-    def test_set_cpu_status(self):
+    def test_set_cpu_status(self) -> None:
         self.server.set_cpu_status(0)
         self.server.set_cpu_status(4)
         self.server.set_cpu_status(8)
         self.assertRaises(AssertionError, self.server.set_cpu_status, -1)
 
-    def test_set_mask(self):
+    def test_set_mask(self) -> None:
         self.server.set_mask(kind=snap7.types.mkEvent, mask=10)
 
-    def test_unlock_area(self):
+    def test_unlock_area(self) -> None:
         area_code = snap7.types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
@@ -85,40 +85,40 @@ class TestServer(unittest.TestCase):
         self.server.lock_area(area_code, index)
         self.server.unlock_area(area_code, index)
 
-    def test_unregister_area(self):
+    def test_unregister_area(self) -> None:
         area_code = snap7.types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
         self.server.register_area(area_code, index, db1_type())
         self.server.unregister_area(area_code, index)
 
-    def test_events_callback(self):
+    def test_events_callback(self) -> None:
         def event_call_back(event):
             logging.debug(event)
 
         self.server.set_events_callback(event_call_back)
 
-    def test_read_events_callback(self):
+    def test_read_events_callback(self) -> None:
         def read_events_call_back(event):
             logging.debug(event)
 
         self.server.set_read_events_callback(read_events_call_back)
 
-    def test_pick_event(self):
+    def test_pick_event(self) -> None:
         event = self.server.pick_event()
         self.assertEqual(type(event), snap7.types.SrvEvent)
         event = self.server.pick_event()
         self.assertFalse(event)
 
-    def test_clear_events(self):
+    def test_clear_events(self) -> None:
         self.server.clear_events()
         self.assertFalse(self.server.clear_events())
 
-    def test_start_to(self):
+    def test_start_to(self) -> None:
         self.server.start_to('0.0.0.0')
         self.assertRaises(AssertionError, self.server.start_to, 'bogus')
 
-    def test_get_param(self):
+    def test_get_param(self) -> None:
         # check the defaults
         self.assertEqual(self.server.get_param(snap7.types.LocalPort), 1102)
         self.assertEqual(self.server.get_param(snap7.types.WorkInterval), 100)
@@ -134,15 +134,15 @@ class TestServerBeforeStart(unittest.TestCase):
     Tests for server before it is started
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.server = snap7.server.Server()
 
-    def test_set_param(self):
+    def test_set_param(self) -> None:
         self.server.set_param(snap7.types.LocalPort, 1102)
 
 
 class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         # replace the function load_library with a mock
         self.loadlib_patch = mock.patch('snap7.server.load_library')
         self.loadlib_func = self.loadlib_patch.start()
@@ -154,15 +154,15 @@ class TestLibraryIntegration(unittest.TestCase):
         # have the Srv_Create of the mock return None
         self.mocklib.Srv_Create.return_value = None
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # restore load_library
         self.loadlib_patch.stop()
 
-    def test_create(self):
+    def test_create(self) -> None:
         server = snap7.server.Server(log=False)
         self.mocklib.Srv_Create.assert_called_once()
 
-    def test_gc(self):
+    def test_gc(self) -> None:
         server = snap7.server.Server(log=False)
         del server
         self.mocklib.Srv_Destroy.assert_called_once()

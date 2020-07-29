@@ -26,8 +26,10 @@ slot = 1
 
 class TestClient(unittest.TestCase):
 
+    process = None
+
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.process = Process(target=mainloop)
         cls.process.start()
         time.sleep(2)  # wait for server to start
@@ -40,11 +42,11 @@ class TestClient(unittest.TestCase):
         self.client = snap7.client.Client()
         self.client.connect(ip, rack, slot, tcpport)
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.client.disconnect()
         self.client.destroy()
 
-    def test_db_read(self):
+    def test_db_read(self) -> None:
         size = 40
         start = 0
         db = 1
@@ -53,15 +55,15 @@ class TestClient(unittest.TestCase):
         result = self.client.db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
 
-    def test_db_write(self):
+    def test_db_write(self) -> None:
         size = 40
         data = bytearray(size)
         self.client.db_write(db_number=1, start=0, data=data)
 
-    def test_db_get(self):
+    def test_db_get(self) -> None:
         self.client.db_get(db_number=db_number)
 
-    def test_read_multi_vars(self):
+    def test_read_multi_vars(self) -> None:
         db = 1
 
         # build and write test values
@@ -131,7 +133,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(result_values[1], test_values[1])
         self.assertEqual(result_values[2], test_values[2])
 
-    def test_upload(self):
+    def test_upload(self) -> None:
         """
         this raises an exception due to missing authorization? maybe not
         implemented in server emulator
@@ -139,57 +141,57 @@ class TestClient(unittest.TestCase):
         self.assertRaises(Snap7Exception, self.client.upload, db_number)
 
     @unittest.skip("TODO: invalid block size")
-    def test_download(self):
+    def test_download(self) -> None:
         data = bytearray(1024)
         self.client.download(block_num=db_number, data=data)
 
-    def test_read_area(self):
+    def test_read_area(self) -> None:
         amount = 1
         start = 1
         # Test read_area with a DB
-        area = snap7.types.areas.DB
+        area = snap7.types.S7AreaDB
         dbnumber = 1
         self.client.read_area(area, dbnumber, start, amount)
         # Test read_area with a TM
-        area = snap7.types.areas.TM
+        area = snap7.types.S7AreaTM
         dbnumber = 0
         self.client.read_area(area, dbnumber, start, amount)
         # Test read_area with a CT
-        area = snap7.types.areas.CT
+        area = snap7.types.S7AreaCT
         dbnumber = 0
         self.client.read_area(area, dbnumber, start, amount)
 
-    def test_write_area(self):
+    def test_write_area(self) -> None:
         # Test write area with a DB
-        area = snap7.types.areas.DB
+        area = snap7.types.S7AreaDB
         dbnumber = 1
         size = 1
         start = 1
         data = bytearray(size)
         self.client.write_area(area, dbnumber, start, data)
         # Test write area with a TM
-        area = snap7.types.areas.TM
+        area = snap7.types.S7AreaTM
         dbnumber = 0
         size = 2
         timer = bytearray(size)
         self.client.write_area(area, dbnumber, start, timer)
         # Test write area with a CT
-        area = snap7.types.areas.CT
+        area = snap7.types.S7AreaCT
         dbnumber = 0
         size = 2
         timer = bytearray(size)
         self.client.write_area(area, dbnumber, start, timer)
 
-    def test_list_blocks(self):
+    def test_list_blocks(self) -> None:
         blockList = self.client.list_blocks()
 
-    def test_list_blocks_of_type(self):
+    def test_list_blocks_of_type(self) -> None:
         self.client.list_blocks_of_type('DB', 10)
 
         self.assertRaises(Exception, self.client.list_blocks_of_type,
                           'NOblocktype', 10)
 
-    def test_get_block_info(self):
+    def test_get_block_info(self) -> None:
         """test Cli_GetAgBlockInfo"""
         self.client.get_block_info('DB', 1)
 
@@ -197,30 +199,30 @@ class TestClient(unittest.TestCase):
                           'NOblocktype', 10)
         self.assertRaises(Exception, self.client.get_block_info, 'DB', 10)
 
-    def test_get_cpu_state(self):
+    def test_get_cpu_state(self) -> None:
         """this tests the get_cpu_state function"""
         self.client.get_cpu_state()
 
-    def test_set_session_password(self):
+    def test_set_session_password(self) -> None:
         password = 'abcdefgh'
         self.client.set_session_password(password)
 
-    def test_clear_session_password(self):
+    def test_clear_session_password(self) -> None:
         self.client.clear_session_password()
 
-    def test_set_connection_params(self):
+    def test_set_connection_params(self) -> None:
         self.client.set_connection_params("10.0.0.2", 10, 10)
 
-    def test_set_connection_type(self):
+    def test_set_connection_type(self) -> None:
         self.client.set_connection_type(1)
         self.client.set_connection_type(2)
         self.client.set_connection_type(3)
         self.client.set_connection_type(20)
 
-    def test_get_connected(self):
+    def test_get_connected(self) -> None:
         self.client.get_connected()
 
-    def test_ab_read(self):
+    def test_ab_read(self) -> None:
         start = 1
         size = 1
         data = bytearray(size)
@@ -228,34 +230,34 @@ class TestClient(unittest.TestCase):
         self.client.ab_read(start=start, size=size)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_ab_write(self):
+    def test_ab_write(self) -> None:
         start = 1
         size = 10
         data = bytearray(size)
         self.client.ab_write(start=start, data=data)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_as_ab_read(self):
+    def test_as_ab_read(self) -> None:
         start = 1
         size = 1
         self.client.as_ab_read(start=start, size=size)
 
     @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ab_write(self):
+    def test_as_ab_write(self) -> None:
         start = 1
         size = 10
         data = bytearray(size)
         self.client.as_ab_write(start=start, data=data)
 
-    def test_compress(self):
+    def test_compress(self) -> None:
         time = 1000
         self.client.compress(time)
 
-    def test_as_compress(self):
+    def test_as_compress(self) -> None:
         time = 1000
         self.client.as_compress(time)
 
-    def test_set_param(self):
+    def test_set_param(self) -> None:
         values = (
             (snap7.types.PingTimeout, 800),
             (snap7.types.SendTimeout, 15),
@@ -271,7 +273,7 @@ class TestClient(unittest.TestCase):
         self.assertRaises(Exception, self.client.set_param,
                           snap7.types.RemotePort, 1)
 
-    def test_get_param(self):
+    def test_get_param(self) -> None:
         expected = (
             (snap7.types.RemotePort, tcpport),
             (snap7.types.PingTimeout, 750),
@@ -294,26 +296,26 @@ class TestClient(unittest.TestCase):
             self.assertRaises(Exception, self.client.get_param, non_client)
 
     @unittest.skip("TODO: not yet fully implemented")
-    def test_as_copy_ram_to_rom(self):
+    def test_as_copy_ram_to_rom(self) -> None:
         self.client.copy_ram_to_rom()
 
     @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ct_read(self):
+    def test_as_ct_read(self) -> None:
         self.client.as_ct_read()
 
     @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ct_write(self):
+    def test_as_ct_write(self) -> None:
         self.client.as_ct_write()
 
     @unittest.skip("TODO: not yet fully implemented")
-    def test_as_db_fill(self):
+    def test_as_db_fill(self) -> None:
         self.client.as_db_fill()
 
-    def test_as_db_get(self):
+    def test_as_db_get(self) -> None:
         self.client.db_get(db_number=db_number)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_as_db_read(self):
+    def test_as_db_read(self) -> None:
         size = 40
         start = 0
         db = 1
@@ -323,30 +325,30 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, result)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_as_db_write(self):
+    def test_as_db_write(self) -> None:
         size = 40
         data = bytearray(size)
         self.client.as_db_write(db_number=1, start=0, data=data)
 
-    def test_as_download(self):
+    def test_as_download(self) -> None:
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
 
-    def test_plc_stop(self):
+    def test_plc_stop(self) -> None:
         self.client.plc_stop()
 
-    def test_plc_hot_start(self):
+    def test_plc_hot_start(self) -> None:
         self.client.plc_hot_start()
 
-    def test_plc_cold_start(self):
+    def test_plc_cold_start(self) -> None:
         self.client.plc_cold_start()
 
-    def test_get_pdu_length(self):
+    def test_get_pdu_length(self) -> None:
         pduRequested = self.client.get_param(10)
         pduSize = self.client.get_pdu_length()
         self.assertEqual(pduSize, pduRequested)
 
-    def test_get_cpu_info(self):
+    def test_get_cpu_info(self) -> None:
         expected = (
             ('ModuleTypeName', 'CPU 315-2 PN/DP'),
             ('SerialNumber', 'S C-C2UR28922012'),
@@ -358,7 +360,7 @@ class TestClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(getattr(cpuInfo, param).decode('utf-8'), value)
 
-    def test_db_write_with_byte_literal_does_not_throw(self):
+    def test_db_write_with_byte_literal_does_not_throw(self) -> None:
         mock_write = mock.MagicMock()
         mock_write.return_value = None
         original = self.client._library.Cli_DBWrite
@@ -372,7 +374,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_DBWrite = original
 
-    def test_download_with_byte_literal_does_not_throw(self):
+    def test_download_with_byte_literal_does_not_throw(self) -> None:
         mock_download = mock.MagicMock()
         mock_download.return_value = None
         original = self.client._library.Cli_Download
@@ -386,13 +388,13 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_Download = original
 
-    def test_write_area_with_byte_literal_does_not_throw(self):
+    def test_write_area_with_byte_literal_does_not_throw(self) -> None:
         mock_writearea = mock.MagicMock()
         mock_writearea.return_value = None
         original = self.client._library.Cli_WriteArea
         self.client._library.Cli_WriteArea = mock_writearea
 
-        area = snap7.types.areas.DB
+        area = snap7.types.S7AreaDB
         dbnumber = 1
         size = 4
         start = 1
@@ -405,7 +407,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_WriteArea = original
 
-    def test_ab_write_with_byte_literal_does_not_throw(self):
+    def test_ab_write_with_byte_literal_does_not_throw(self) -> None:
         mock_write = mock.MagicMock()
         mock_write.return_value = None
         original = self.client._library.Cli_ABWrite
@@ -421,7 +423,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_ABWrite = original
 
-    def test_as_ab_write_with_byte_literal_does_not_throw(self):
+    def test_as_ab_write_with_byte_literal_does_not_throw(self) -> None:
         mock_write = mock.MagicMock()
         mock_write.return_value = None
         original = self.client._library.Cli_AsABWrite
@@ -437,7 +439,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_AsABWrite = original
 
-    def test_as_db_write_with_byte_literal_does_not_throw(self):
+    def test_as_db_write_with_byte_literal_does_not_throw(self) -> None:
         mock_write = mock.MagicMock()
         mock_write.return_value = None
         original = self.client._library.Cli_AsDBWrite
@@ -451,7 +453,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_AsDBWrite = original
 
-    def test_as_download_with_byte_literal_does_not_throw(self):
+    def test_as_download_with_byte_literal_does_not_throw(self) -> None:
         mock_download = mock.MagicMock()
         mock_download.return_value = None
         original = self.client._library.Cli_AsDownload
@@ -465,10 +467,10 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_AsDownload = original
 
-    def test_get_plc_time(self):
+    def test_get_plc_time(self) -> None:
         self.assertEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime())
 
-    def test_set_plc_datetime(self):
+    def test_set_plc_datetime(self) -> None:
         new_dt = datetime(2011, 1, 1, 1, 1, 1, 0)
         self.client.set_plc_datetime(new_dt)
         # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
@@ -704,11 +706,10 @@ class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.
     """
-
-    def setUp(self):
+    def setUp(self) -> None:
         self.client = snap7.client.Client()
 
-    def test_set_param(self):
+    def test_set_param(self) -> None:
         values = (
             (snap7.types.RemotePort, 1102),
             (snap7.types.PingTimeout, 800),
@@ -724,7 +725,7 @@ class TestClientBeforeConnect(unittest.TestCase):
 
 
 class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         # replace the function load_library with a mock
         self.loadlib_patch = mock.patch('snap7.client.load_library')
         self.loadlib_func = self.loadlib_patch.start()
@@ -736,16 +737,16 @@ class TestLibraryIntegration(unittest.TestCase):
         # have the Cli_Create of the mock return None
         self.mocklib.Cli_Create.return_value = None
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # restore load_library
         self.loadlib_patch.stop()
 
-    def test_create(self):
+    def test_create(self) -> None:
         client = snap7.client.Client()
         self.mocklib.Cli_Create.assert_called_once()
 
     @mock.patch('snap7.client.byref')
-    def test_gc(self, byref_mock):
+    def test_gc(self, byref_mock) -> None:
         client = snap7.client.Client()
         client._pointer = 10
         del client

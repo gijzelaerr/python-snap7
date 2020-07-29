@@ -10,39 +10,39 @@ logging.basicConfig(level=logging.WARNING)
 
 
 class TestPartner(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.partner = snap7.partner.Partner()
         self.partner.start()
 
-    def test_as_b_send(self):
+    def test_as_b_send(self) -> None:
         self.partner.as_b_send()
 
     @unittest.skip("we don't recv something yet")
-    def test_b_recv(self):
+    def test_b_recv(self) -> None:
         self.partner.b_recv()
 
-    def test_b_send(self):
+    def test_b_send(self) -> None:
         self.partner.b_send()
 
-    def test_check_as_b_recv_completion(self):
+    def test_check_as_b_recv_completion(self) -> None:
         self.partner.check_as_b_recv_completion()
 
-    def test_check_as_b_send_completion(self):
+    def test_check_as_b_send_completion(self) -> None:
         self.partner.check_as_b_send_completion()
 
-    def test_create(self):
+    def test_create(self) -> None:
         self.partner.create()
 
-    def test_destroy(self):
+    def test_destroy(self) -> None:
         self.partner.destroy()
 
-    def test_error_text(self):
+    def test_error_text(self) -> None:
         snap7.common.error_text(0, context="partner")
 
-    def test_get_last_error(self):
+    def test_get_last_error(self) -> None:
         self.partner.get_last_error()
 
-    def test_get_param(self):
+    def test_get_param(self) -> None:
         expected = (
             (snap7.types.LocalPort, 0),
             (snap7.types.RemotePort, 102),
@@ -65,16 +65,16 @@ class TestPartner(unittest.TestCase):
         self.assertRaises(Exception, self.partner.get_param,
                           snap7.types.MaxClients)
 
-    def test_get_stats(self):
+    def test_get_stats(self) -> None:
         self.partner.get_stats()
 
-    def test_get_status(self):
+    def test_get_status(self) -> None:
         self.partner.get_status()
 
-    def test_get_times(self):
+    def test_get_times(self) -> None:
         self.partner.get_times()
 
-    def test_set_param(self):
+    def test_set_param(self) -> None:
         values = (
             (snap7.types.PingTimeout, 800),
             (snap7.types.SendTimeout, 15),
@@ -95,27 +95,27 @@ class TestPartner(unittest.TestCase):
         self.assertRaises(Exception, self.partner.set_param,
                           snap7.types.RemotePort, 1)
 
-    def test_set_recv_callback(self):
+    def test_set_recv_callback(self) -> None:
         self.partner.set_recv_callback()
 
-    def test_set_send_callback(self):
+    def test_set_send_callback(self) -> None:
         self.partner.set_send_callback()
 
-    def test_start(self):
+    def test_start(self) -> None:
         self.partner.start()
 
-    def test_start_to(self):
+    def test_start_to(self) -> None:
         self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0)
 
-    def test_stop(self):
+    def test_stop(self) -> None:
         self.partner.stop()
 
-    def test_wait_as_b_send_completion(self):
+    def test_wait_as_b_send_completion(self) -> None:
         self.assertRaises(Snap7Exception, self.partner.wait_as_b_send_completion)
 
 
 class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         # replace the function load_library with a mock
         self.loadlib_patch = mock.patch('snap7.partner.load_library')
         self.loadlib_func = self.loadlib_patch.start()
@@ -127,15 +127,15 @@ class TestLibraryIntegration(unittest.TestCase):
         # have the Par_Create of the mock return None
         self.mocklib.Par_Create.return_value = None
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         # restore load_library
         self.loadlib_patch.stop()
 
-    def test_create(self):
+    def test_create(self) -> None:
         partner = snap7.partner.Partner()
         self.mocklib.Par_Create.assert_called_once()
 
-    def test_gc(self):
+    def test_gc(self) -> None:
         partner = snap7.partner.Partner()
         del partner
         self.mocklib.Par_Destroy.assert_called_once()
