@@ -665,7 +665,7 @@ class Client:
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return self.library.Cli_AsWriteArea(self.pointer, area, dbnumber, start,
                                           size, wordlen, byref(cdata))
-        
+
     def asebread(self):
         # Cli_AsEBRead
         raise NotImplementedError
