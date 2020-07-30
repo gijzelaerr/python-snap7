@@ -73,9 +73,9 @@ class ClientAsync(Client, ABC):
         type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         data = (type_ * size)()
         result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
-        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
+        check_error(result, context="client")
         return bytearray(data)
 
     async def as_db_write(self, db_number, start, data, timeout=1):
@@ -106,9 +106,9 @@ class ClientAsync(Client, ABC):
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self._library.Cli_AsABRead(self._pointer, start, size,
                                             byref(data))
-        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
+        check_error(result, context="client")
         return bytearray(data)
 
     async def as_check_and_wait(self, timeout):
@@ -142,9 +142,9 @@ class ClientAsync(Client, ABC):
         result = self._library.Cli_AsDBGet(self._pointer, db_number,
                                            byref(_buffer),
                                            byref(c_int(buffer_size)))
-        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
+        check_error(result, context="client")
         return bytearray(_buffer)
 
     @error_wrap
@@ -176,9 +176,9 @@ class ClientAsync(Client, ABC):
         wordlen, data = self._as_read_area_prepare(area, size)
         logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
         result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
-        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
+        check_error(result, context="client")
         return bytearray(data)
 
     async def as_write_area(self, area, dbnumber, start, data, timeout=1):
