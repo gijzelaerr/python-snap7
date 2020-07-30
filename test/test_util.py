@@ -1,7 +1,7 @@
 import re
 import unittest
 
-from snap7 import util, types
+from snap7 import util, snap7types
 
 test_spec = """
 
@@ -103,7 +103,7 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row['ID'], 259)
 
     def test_set_int_roundtrip(self):
-        DB1 = (types.wordlen_to_ctypes[types.S7WLByte] * 4)()
+        DB1 = (snap7types.wordlen_to_ctypes[snap7types.S7WLByte] * 4)()
 
         for i in range(-(2 ** 15) + 1, (2 ** 15) - 1):
             util.set_int(DB1, 0, i)
