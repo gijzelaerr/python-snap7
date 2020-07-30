@@ -40,7 +40,7 @@ class TestClient(aiounittest.AsyncTestCase):
         self.client_async.disconnect()
         self.client_async.destroy()
 
-    @pytest.skip("TODO: Segmentation Error")
+    @pytest.mark.skip("TODO: FATAL: Segmentation Error -- Needs to be fixed")
     async def test_as_db_read(self):
         size = 40
         start = 0

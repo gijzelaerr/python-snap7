@@ -29,7 +29,6 @@ def error_wrap(func):
     return f
 
 
-
 class ClientAsync(Client):
     """
     This class expands the Client class with asyncio features for async s7comm requests.
