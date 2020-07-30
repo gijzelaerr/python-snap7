@@ -504,11 +504,6 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.asmbwrite()
 
-    def test_asreadarea(self):
-        # Cli_AsReadArea
-        with self.assertRaises(NotImplementedError):
-            self.client.asreadarea()
-
     def test_asreadszl(self):
         # Cli_AsReadSZL
         with self.assertRaises(NotImplementedError):
@@ -533,11 +528,6 @@ class TestClient(unittest.TestCase):
         # Cli_AsUpload
         with self.assertRaises(NotImplementedError):
             self.client.asupload()
-
-    def test_aswritearea(self):
-        # Cli_AsWriteArea
-        with self.assertRaises(NotImplementedError):
-            self.client.aswritearea()
 
     def test_checkascompletion(self):
         # Cli_CheckAsCompletion
