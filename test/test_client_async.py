@@ -1,6 +1,6 @@
 import logging
 import time
-import unittest
+import aiounittest
 from multiprocessing import Process
 from os import kill
 
@@ -16,7 +16,9 @@ rack = 1
 slot = 1
 
 
-class TestClient(unittest.IsolatedAsyncioTestCase):
+class TestClient(aiounittest.AsyncTestCase):
+
+    process = None
 
     @classmethod
     def setUpClass(cls):
@@ -26,7 +28,7 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        kill(cls.process, 1)
+        kill(cls.process.pid, 1)
 
     def setUp(self):
         self.client_async = snap7.client_async.ClientAsync()
@@ -36,7 +38,6 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
         self.client_async.disconnect()
         self.client_async.destroy()
 
-    @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_db_read' was never awaited")
     async def test_as_db_read(self):
         size = 40
         start = 0
@@ -46,20 +47,17 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
         result = await self.client_async.as_db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
 
-    @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_db_write' was never awaited")
     async def test_as_db_write(self):
         size = 40
         data = bytearray(size)
         check = await self.client_async.as_db_write(db_number=1, start=0, data=data)
         self.assertEqual(check, 0)
 
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
     async def test_as_ab_read(self):
         start = 1
         size = 1
         await self.client_async.as_ab_read(start=start, size=size)
 
-    @unittest.skip("TODO: not yet fully implemented")
     async def test_as_ab_write(self):
         start = 1
         size = 10
@@ -69,7 +67,6 @@ class TestClient(unittest.IsolatedAsyncioTestCase):
     async def test_as_db_get(self):
         await self.client_async.db_get(db_number=db_number)
 
-    @unittest.skip("TODO: RuntimeWarning: coroutine 'TestClient.test_as_download' was never awaited")
     async def test_as_download(self):
         data = bytearray(128)
         await self.client_async.as_download(block_num=-1, data=data)
