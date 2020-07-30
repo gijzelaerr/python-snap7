@@ -17,9 +17,15 @@ logger = logging.getLogger(__name__)
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
 
-    def f(*args, **kw):
-        code = func(*args, **kw)
-        check_error(code, context="client")
+    if asyncio.iscoroutinefunction(func):
+        async def f(*args, **kw):
+            code = await func(*args, **kw)
+            check_error(code, context="client")
+
+    else:
+        def f(*args, **kw):
+            code = func(*args, **kw)
+            check_error(code, context="client")
 
     return f
 

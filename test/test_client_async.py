@@ -65,7 +65,7 @@ class TestClient(aiounittest.AsyncTestCase):
         await self.client_async.as_ab_write(start=start, data=data)
 
     async def test_as_db_get(self):
-        await self.client_async.db_get(db_number=db_number)
+        await self.client_async.as_db_get(db_number=db_number)
 
     async def test_as_download(self):
         data = bytearray(128)
