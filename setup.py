@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 __version__ = "0.11"
 
-tests_require = ['pytest', 'mypy', 'pycodestyle']
+tests_require = ['pytest', 'mypy', 'pycodestyle', 'aiounittest']
 
 extras_require = {
     'test': tests_require,
