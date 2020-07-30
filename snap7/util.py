@@ -82,18 +82,11 @@ example::
 
 
 """
-try:
-    # try with the standard library
-    from collections import OrderedDict
-except ImportError:
-    # fallback to Python 2.6-2.4 back-port
-    from ordereddict import OrderedDict
-
 import struct
 import logging
-from snap7 import six
 import re
 from datetime import timedelta, datetime
+from collections import OrderedDict
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +134,7 @@ def set_word(bytearray_, byte_index, _int):
 def get_word(bytearray_, byte_index):
     """
     Get word value from bytearray.
-    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535    
+    WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
     """
     data = bytearray_[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
@@ -206,15 +199,12 @@ def set_string(_bytearray, byte_index, value, max_size):
     :params value: string data
     :params max_size: max possible string size
     """
-    if six.PY2:
-        assert isinstance(value, (str, unicode))
-    else:
-        assert isinstance(value, str)
+    assert isinstance(value, str)
 
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
-        raise ValueError('size %s > max_size %s %s' % (size, max_size, value))
+        raise ValueError(f'size {size} > max_size {max_size} {value}')
     # set len count on first position
     _bytearray[byte_index + 1] = len(value)
 
@@ -259,7 +249,7 @@ def set_dword(_bytearray, byte_index, dword):
 def get_dint(_bytearray, byte_index):
     """
     Get dint value from bytearray.
-    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647    
+    DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647
     """
     data = _bytearray[byte_index:byte_index + 4]
     dint = struct.unpack('>i', struct.pack('4B', *data))[0]
@@ -268,7 +258,7 @@ def get_dint(_bytearray, byte_index):
 
 def set_dint(_bytearray, byte_index, dint):
     """
-    Set value in bytearray to dint    
+    Set value in bytearray to dint
     """
     dint = int(dint)
     _bytes = struct.unpack('4B', struct.pack('>i', dint))
@@ -350,7 +340,7 @@ def parse_specification(db_specification):
     return parsed_db_specification
 
 
-class DB(object):
+class DB:
     """
     Manage a DB bytearray block given a specification
     of the Layout.
@@ -415,7 +405,7 @@ class DB(object):
             # store row object
             key = row[id_field] if id_field else i
             if key and key in self.index:
-                msg = '%s not unique!' % key
+                msg = f'{key} not unique!'
                 logger.error(msg)
             self.index[key] = row
 
@@ -434,15 +424,14 @@ class DB(object):
         self._bytearray = _bytearray
 
 
-class DB_Row(object):
+class DB_Row:
     """
     Provide ROW API for DB bytearray
     """
     _bytearray = None  # data of reference to parent DB
     _specification = None  # row specification
 
-    def __init__(self, _bytearray, _specification, row_size=0,
-                 db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(self, _bytearray, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
@@ -487,8 +476,7 @@ class DB_Row(object):
 
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = '%s\n%-20s %-10s' % (string, var_name,
-                                          self.get_value(index, _type))
+            string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
     def unchanged(self, _bytearray):
@@ -518,7 +506,7 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
+            max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
             return get_string(_bytearray, byte_index, max_size)
 
@@ -569,7 +557,7 @@ class DB_Row(object):
         byte_index = self.get_offset(byte_index)
 
         if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
+            max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
             return set_string(_bytearray, byte_index, value, max_size)
 

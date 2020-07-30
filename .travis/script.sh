@@ -1,16 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-set -x
+set -v
+set -e
 
-if [ "$TRAVIS_OS_NAME" = "linux" ]; then
-    NOSETESTS=${VIRTUAL_ENV}/bin/nosetests
-else
-    NOSETESTS="python${PYENV} -m nose"
+if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+  source venv/bin/activate
+  make test
 fi
 
-PYTHONPATH=.
-
-${NOSETESTS} --with-coverage test/test_server.py
-${NOSETESTS} --with-coverage test/test_client.py
-${NOSETESTS} --with-coverage test/test_util.py
-sudo ${NOSETESTS} --with-coverage test/test_partner.py
+if [ "$TRAVIS_OS_NAME" = "linux" ] && [ "$NOSCRIPT" != "true" ]; then
+    docker run python-snap7/${TARGET} make test
+fi

@@ -4,7 +4,7 @@ from snap7 import util
 from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
-print """
+print("""
 
 THIS IS EXAMPLE CODE MEANTH TO BE READ.
 
@@ -14,7 +14,7 @@ It is used to manipulate a large DB object with over
 You don't have a project and PLC like I have which I used
 to create the test code with.
 
-"""
+""")
 
 client = snap7.client.Client()
 client.connect('192.168.200.24', 0, 3)
@@ -43,7 +43,7 @@ def get_db_row(db, start, size):
         start (int): The index of where to start in db data
         size (int): The size of the db data to read
     """
-    type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+    type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
     data = client.db_read(db, start, type_, size)
     # print_row(data[:60])
     return data
@@ -73,8 +73,8 @@ def show_row(x):
         data = get_db_row(1, 4 + x * row_size, row_size)
         row = snap7.util.DB_Row(data, rc_if_db_1_layout,
                                 layout_offset=4)
-        print 'name', row['RC_IF_NAME']
-        print row['RC_IF_NAME']
+        print('name', row['RC_IF_NAME'])
+        print(row['RC_IF_NAME'])
         break
         # do some write action..
 
@@ -155,7 +155,7 @@ def set_part_db(start, size, _bytearray):
 
 
 def write_data_db(dbnumber, all_data, size):
-    area = snap7.snap7types.S7AreaDB
+    area = snap7.types.S7AreaDB
     dbnumber = 1
     client.write_area(area, dbnumber, 0, size, all_data)
 
@@ -164,7 +164,7 @@ def open_and_close_db1():
     t = time.time()
     db1 = make_item_db(1)
     all_data = db1._bytearray
-    print 'row objects: ', len(db1.index)
+    print(f'row objects: {len(db1.index)}')
 
     for x, (name, row) in enumerate(db1.index.items()):
         open_row(row)
@@ -172,33 +172,33 @@ def open_and_close_db1():
 
     t = time.time()
     write_data_db(1, all_data, 4 + 126 * 450)
-    print 'opening all valves took: ', time.time() - t
+    print(f'opening all valves took: {time.time() - t}')
 
-    print 'sleep...'
+    print('sleep...')
     time.sleep(5)
     for x, (name, row) in enumerate(db1):
         close_row(row)
         #set_part_db(4+x*126, 126, all_data)
 
-    print time.time() - t
+    print(time.time() - t)
 
     t = time.time()
     write_data_db(1, all_data, 4 + 126 * 450)
-    print 'closing all valves took: ', time.time() - t
+    print(f'closing all valves took: {time.time() - t}')
 
 
 def read_tank_db():
     db73 = make_tank_db()
-    print len(db73)
+    print(len(db73))
     for x, (name, row) in enumerate(db73):
-        print row
+        print(row)
 
 
 def make_item_db(db_number):
     t = time.time()
     all_data = client.db_upload(db_number)
 
-    print 'getting all data took: ', time.time() - t
+    print(f'getting all data took: {time.time() - t}')
 
     db1 = snap7.util.DB(
         db_number,              # the db we use
@@ -225,14 +225,14 @@ def make_tank_db():
 
 def print_tag():
     db1 = make_item_db(1)
-    print db1['5V315']
+    print(db1['5V315'])
 
 
 def print_open():
     db1 = make_item_db(1)
     for x, (name, row) in enumerate(db1):
         if row['BatchName']:
-            print row
+            print(row)
 
 
 #read_tank_db()

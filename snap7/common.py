@@ -1,19 +1,19 @@
+import logging
+import platform
 from ctypes import c_char
 from ctypes.util import find_library
-import logging
-from snap7.snap7exceptions import Snap7Exception
 
-import platform
+from snap7.exceptions import Snap7Exception
+
 if platform.system() == 'Windows':
-    from ctypes import windll as cdll
+    from ctypes import windll as cdll  # type: ignore
 else:
     from ctypes import cdll
-
 
 logger = logging.getLogger(__name__)
 
 # regexp for checking if an ipv4 address is valid.
-ipv4 = "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
+ipv4 = r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 
 class ADict(dict):
@@ -24,12 +24,13 @@ class ADict(dict):
     __setattr__ = dict.__setitem__
 
 
-class Snap7Library(object):
+class Snap7Library:
     """
     Snap7 loader and encapsulator. We make this a singleton to make
     sure the library is loaded only once.
     """
     _instance = None
+
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = object.__new__(cls)
@@ -73,7 +74,7 @@ def error_text(error, context="client"):
     :returns: the error string
     """
     assert context in ("client", "server", "partner")
-    logger.debug("error text for %s" % hex(error))
+    logger.debug(f"error text for {hex(error)}")
     len_ = 1024
     text_type = c_char * len_
     text = text_type()

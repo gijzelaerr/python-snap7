@@ -50,3 +50,4 @@ doc/_build/
 .virtualenv3/
 .venv/
 .venv3/
+venv/

@@ -1,0 +1,10 @@
+FROM ubuntu:20.04
+
+RUN apt-get update -qq
+RUN apt-get install -y software-properties-common
+RUN add-apt-repository -y ppa:gijzelaar/snap7
+RUN apt-get update -qq
+RUN apt-get install -y libsnap7-dev libsnap7-1 python3-venv make sudo
+ADD . /code
+WORKDIR /code
+RUN make test

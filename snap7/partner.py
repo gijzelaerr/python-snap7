@@ -10,22 +10,25 @@ is requesting the connection.
 import ctypes
 import logging
 import re
+
+import snap7.types
 from snap7.common import load_library, check_error, ipv4
-import snap7.snap7types
-from snap7.snap7exceptions import Snap7Exception
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="partner")
+
     return f
 
 
-class Partner(object):
+class Partner:
     """
     A snap7 partner.
     """
@@ -38,7 +41,7 @@ class Partner(object):
 
     def __del__(self):
         self.destroy()
-        
+
     def as_b_send(self):
         """
         Sends a data packet to the partner. This function is asynchronous, i.e.
@@ -74,8 +77,7 @@ class Partner(object):
         immediately.
         """
         op_result = ctypes.c_int32()
-        result = self.library.Par_CheckAsBSendCompletion(self.pointer,
-                                                 ctypes.byref(op_result))
+        result = self.library.Par_CheckAsBSendCompletion(self.pointer, ctypes.byref(op_result))
         return_values = {
             0: "job complete",
             1: "job in progress",
@@ -95,8 +97,8 @@ class Partner(object):
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self.library.Par_Create.restype = snap7.snap7types.S7Object
-        self.pointer = snap7.snap7types.S7Object(self.library.Par_Create(int(active)))
+        self.library.Par_Create.restype = snap7.types.S7Object
+        self.pointer = snap7.types.S7Object(self.library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -120,8 +122,8 @@ class Partner(object):
         """
         Reads an internal Partner object parameter.
         """
-        logger.debug("retreiving param number %s" % number)
-        type_ = snap7.snap7types.param_types[number]
+        logger.debug(f"retreiving param number {number}")
+        type_ = snap7.types.param_types[number]
         value = type_()
         code = self.library.Par_GetParam(self.pointer, ctypes.c_int(number),
                                          ctypes.byref(value))
@@ -139,9 +141,9 @@ class Partner(object):
         send_errors = ctypes.c_uint32()
         recv_errors = ctypes.c_uint32()
         result = self.library.Par_GetStats(self.pointer, ctypes.byref(sent),
-                                   ctypes.byref(recv),
-                                   ctypes.byref(send_errors),
-                                   ctypes.byref(recv_errors))
+                                           ctypes.byref(recv),
+                                           ctypes.byref(send_errors),
+                                           ctypes.byref(recv_errors))
         check_error(result, "partner")
         return sent, recv, send_errors, recv_errors
 
@@ -160,8 +162,7 @@ class Partner(object):
         """
         send_time = ctypes.c_int32()
         recv_time = ctypes.c_int32()
-        result = self.library.Par_GetTimes(self.pointer, ctypes.byref(send_time),
-                                   ctypes.byref(recv_time))
+        result = self.library.Par_GetTimes(self.pointer, ctypes.byref(send_time), ctypes.byref(recv_time))
         check_error(result, "partner")
         return send_time, recv_time
 
@@ -169,7 +170,7 @@ class Partner(object):
     def set_param(self, number, value):
         """Sets an internal Partner object parameter.
         """
-        logger.debug("setting param number %s to %s" % (number, value))
+        logger.debug(f"setting param number {number} to {value}")
         return self.library.Par_SetParam(self.pointer, number,
                                          ctypes.byref(ctypes.c_int(value)))
 
@@ -206,9 +207,9 @@ class Partner(object):
         :param local_tsap: Local TSAP
         :param remote_tsap: PLC TSAP
         """
-        assert re.match(ipv4, local_ip), '%s is invalid ipv4' % local_ip
-        assert re.match(ipv4, remote_ip), '%s is invalid ipv4' % remote_ip
-        logger.info("starting partnering from %s to %s" % (local_ip, remote_ip))
+        assert re.match(ipv4, local_ip), f'{local_ip} is invalid ipv4'
+        assert re.match(ipv4, remote_ip), f'{remote_ip} is invalid ipv4'
+        logger.info(f"starting partnering from {local_ip} to {remote_ip}")
         return self.library.Par_StartTo(self.pointer, local_ip, remote_ip,
                                         ctypes.c_uint16(local_tsap),
                                         ctypes.c_uint16(remote_tsap))

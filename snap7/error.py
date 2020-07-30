@@ -95,7 +95,6 @@ s7_server_errors = {
     0x00800000: 'errSrvCannotChangeParam',
 }
 
-
 client_errors = s7_client_errors.copy()
 client_errors.update(isotcp_errors)
 client_errors.update(tcp_errors)
@@ -103,5 +102,3 @@ client_errors.update(tcp_errors)
 server_errors = s7_server_errors.copy()
 server_errors.update(isotcp_errors)
 server_errors.update(tcp_errors)
-
-
