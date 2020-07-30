@@ -625,14 +625,14 @@ class Client:
         :param start: offset to start writing
         :param size: number of units to read
         """
-        assert area in snap7.types.areas.values()
-        if area == snap7.types.S7AreaTM:
-            wordlen = snap7.types.S7WLTimer
-        elif area == snap7.types.S7AreaCT:
-            wordlen = snap7.types.S7WLCounter
+        assert area in snap7.snap7types.areas.values()
+        if area == snap7.snap7types.S7AreaTM:
+            wordlen = snap7.snap7types.S7WLTimer
+        elif area == snap7.snap7types.S7AreaCT:
+            wordlen = snap7.snap7types.S7WLCounter
         else:
-            wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+            wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
         logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
         data = (type_ * size)()
         result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
@@ -652,13 +652,13 @@ class Client:
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        if area == snap7.types.S7AreaTM:
-            wordlen = snap7.types.S7WLTimer
-        elif area == snap7.types.S7AreaCT:
-            wordlen = snap7.types.S7WLCounter
+        if area == snap7.snap7types.S7AreaTM:
+            wordlen = snap7.snap7types.S7WLTimer
+        elif area == snap7.snap7types.S7AreaCT:
+            wordlen = snap7.snap7types.S7WLCounter
         else:
-            wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+            wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
         size = len(data)
         logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen} type: {type_}")
