@@ -44,7 +44,7 @@ class TestClient(aiounittest.AsyncTestCase):
         start = 0
         db = 1
         data = bytearray(40)
-        self.client_async.db_write(db_number=db, start=start, data=data)
+        await self.client_async.as_db_write(db_number=db, start=start, data=data)
         result = await self.client_async.as_db_read(db_number=db, start=start, size=size)
         self.assertEqual(data, result)
 
