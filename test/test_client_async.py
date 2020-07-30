@@ -32,6 +32,7 @@ class TestClient(aiounittest.AsyncTestCase):
 
     def setUp(self):
         self.client_async = snap7.client_async.ClientAsync()
+        self.client_async.set_as_check_mode(1)  # Todo: It should be possible to check all modes for all Tests in Future
         self.client_async.connect(ip, rack, slot, tcpport)
 
     def tearDown(self):
