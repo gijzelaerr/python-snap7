@@ -26,6 +26,8 @@ slot = 1
 
 class TestClient(unittest.TestCase):
 
+    process = None
+
     @classmethod
     def setUpClass(cls):
         cls.process = Process(target=mainloop)

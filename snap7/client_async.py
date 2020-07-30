@@ -3,7 +3,6 @@ Snap7 async client used for connection to a siemens7 server.
 """
 import asyncio
 import logging
-from abc import ABC
 from ctypes import c_int, byref
 
 from snap7.common import check_error
@@ -30,7 +29,8 @@ def error_wrap(func):
     return f
 
 
-class ClientAsync(Client, ABC):
+
+class ClientAsync(Client):
     """
     This class expands the Client class with asyncio features for async s7comm requests.
     """
