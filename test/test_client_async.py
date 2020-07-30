@@ -16,7 +16,7 @@ rack = 1
 slot = 1
 
 
-class TestClient(unittest.TestCase):
+class TestClient(unittest.IsolatedAsyncioTestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -26,7 +26,7 @@ class TestClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        kill(cls.server_pid, 1)
+        kill(cls.process, 1)
 
     def setUp(self):
         self.client_async = snap7.client_async.ClientAsync()
