@@ -7,7 +7,9 @@ from abc import ABC
 from ctypes import c_int, byref
 
 from snap7.common import check_error
+import snap7
 from .client import Client
+from .snap7types import buffer_type, buffer_size
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +63,14 @@ class ClientAsync(Client, ABC):
         This is the asynchronous counterpart of Cli_DBRead with asyncio features.
         :returns: user buffer.
         """
-        data = Client.as_db_read(self, db_number, start, size)
+        logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+        data = (type_ * size)()
+        result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
+        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
-        return data
+        return bytearray(data)
 
     async def as_db_write(self, db_number, start, data, timeout=1):
         """
@@ -88,10 +94,16 @@ class ClientAsync(Client, ABC):
         """
         This is the asynchronous counterpart of client.ab_read() with asyncio features.
         """
-        data = Client.as_ab_read(self, start, size)
+        wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        data = (type_ * size)()
+        logger.debug(f"ab_read: start: {start}: size {size}: ")
+        result = self._library.Cli_AsABRead(self._pointer, start, size,
+                                            byref(data))
+        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
-        return data
+        return bytearray(data)
 
     async def as_check_and_wait(self, timeout):
         """
@@ -119,10 +131,15 @@ class ClientAsync(Client, ABC):
         """
         This is the asynchronous counterpart of Cli_DBGet with asyncio features.
         """
-        _buffer = Client.as_db_get(self, db_number)
+        logger.debug(f"db_get db_number: {db_number}")
+        _buffer = buffer_type()
+        result = self._library.Cli_AsDBGet(self._pointer, db_number,
+                                           byref(_buffer),
+                                           byref(c_int(buffer_size)))
+        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
-        return _buffer
+        return bytearray(_buffer)
 
     @error_wrap
     async def as_download(self, data, block_num=-1, timeout=1):
@@ -150,10 +167,13 @@ class ClientAsync(Client, ABC):
         :param start: offset to start writing
         :param size: number of units to read
         """
-        data = Client.as_read_area(self, area, dbnumber, start, size)
+        wordlen, data = self._as_read_area_prepare(area, size)
+        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
+        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
+        check_error(result, context="client")
         if await self.as_check_and_wait(timeout) is False:
             return None
-        return data
+        return bytearray(data)
 
     async def as_write_area(self, area, dbnumber, start, data, timeout=1):
         """This is the main async function to write data into a PLC, made asycnio compatible. It's the
