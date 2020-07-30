@@ -645,7 +645,6 @@ class Client:
         data = (type_ * size)()
         return wordlen, data
 
-
     @error_wrap
     def as_write_area(self, area, dbnumber, start, data):
         """This is the main function to write data into a PLC. It's the
