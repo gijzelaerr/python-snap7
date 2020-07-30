@@ -48,7 +48,7 @@ class ClientAsync(Client):
         self.as_check = mode
         logger.debug(f"Async check mode changed to {mode}")
 
-    async def async_wait_loop(self):
+    async def wait_loop(self):
         """
         This loop checks if an answer received from an async request.
         :return:
@@ -129,7 +129,7 @@ class ClientAsync(Client):
         """
         if self.as_check == 1:
             try:
-                await asyncio.wait_for(self.async_wait_loop(), timeout)
+                await asyncio.wait_for(self.wait_loop(), timeout)
             except asyncio.TimeoutError:
                 logger.warning(f"A request was timeouted")
                 return False
@@ -184,16 +184,7 @@ class ClientAsync(Client):
         :param start: offset to start writing
         :param size: number of units to read
         """
-        assert area in snap7.snap7types.areas.values()
-        if area == snap7.snap7types.S7AreaTM:
-            wordlen = snap7.snap7types.S7WLTimer
-        elif area == snap7.snap7types.S7AreaCT:
-            wordlen = snap7.snap7types.S7WLCounter
-        else:
-            wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
-        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
-        data = (type_ * size)()
+        wordlen, type_, data = self._as_read_area_prepare(area, dbnumber, start, size)
         result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
@@ -213,17 +204,7 @@ class ClientAsync(Client):
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        if area == snap7.snap7types.S7AreaTM:
-            wordlen = snap7.snap7types.S7WLTimer
-        elif area == snap7.snap7types.S7AreaCT:
-            wordlen = snap7.snap7types.S7WLCounter
-        else:
-            wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
-        size = len(data)
-        logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
-                     f"wordlen {wordlen} type: {type_}")
-        cdata = (type_ * len(data)).from_buffer_copy(data)
+        area, dbnumber, start, size, wordlen, cdata = self._as_write_area_prepare(area, dbnumber, start, data)
         check = self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
         request_in_time = await self.as_check_and_wait(timeout)
         if request_in_time is False:
