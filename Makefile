@@ -17,6 +17,9 @@ setup: venv/installed
 venv/bin/pytest: venv/
 	venv/bin/pip install -e ".[test]"
 
+venv/bin/pytest-asyncio: venv/
+	venv/bin/pip install -e ".[test]"
+
 venv/bin/sphinx-build:  venv/
 	venv/bin/pip install -e ".[doc]"
 
@@ -25,7 +28,7 @@ doc: venv/bin/sphinx-build
 
 pycodestyle: venv/bin/pytest
 	venv/bin/pycodestyle snap7 test
-    
+
 mypy: venv/bin/pytest
 	venv/bin/mypy snap7 test
 
