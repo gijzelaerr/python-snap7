@@ -130,7 +130,7 @@ class Partner:
         check_error(code)
         return value.value
 
-    def get_stats(self):
+    def get_stats(self) -> tuple:
         """
         Returns some statistics.
 
@@ -147,7 +147,7 @@ class Partner:
         check_error(result, "partner")
         return sent, recv, send_errors, recv_errors
 
-    def get_status(self):
+    def get_status(self) -> ctypes.c_int32:
         """
         Returns the Partner status.
         """
@@ -156,7 +156,7 @@ class Partner:
         check_error(result, "partner")
         return status
 
-    def get_times(self):
+    def get_times(self) -> tuple:
         """
         Returns the last send and recv jobs execution time in milliseconds.
         """

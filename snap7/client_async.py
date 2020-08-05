@@ -33,7 +33,7 @@ class ClientAsync(Client, ABC):
         super().__init__()
         self.as_check = None
 
-    def set_as_check_mode(self, mode):
+    def set_as_check_mode(self, mode) -> None:
         """
         This methods sets the mode how async answers shall be handled, like mentioned in snap7 docs:
         None - pass, like sync method without a receive check
@@ -58,7 +58,7 @@ class ClientAsync(Client, ABC):
         while self._library.Cli_CheckAsCompletion(self._pointer, byref(temp)):
             await asyncio.sleep(0)
 
-    async def as_db_read(self, db_number: int, start: int, size: int, timeout: float = 1.):  # -> Optional[bytearray]:
+    async def as_db_read(self, db_number: int, start: int, size: int, timeout: float = 1.) -> Optional[bytearray]:
         """
         This is the asynchronous counterpart of Cli_DBRead with asyncio features.
         :returns: user buffer.
@@ -74,7 +74,7 @@ class ClientAsync(Client, ABC):
         check_error(result, context="client")
         return bytearray(data)
 
-    async def as_db_write(self, db_number, start, data, timeout=1.) -> Union[None, int]:
+    async def as_db_write(self, db_number, start, data, timeout=1.) -> Optional[int]:
         """
         This is the asynchronous counterpart of Cli_DBWrite with asyncio features.
         """
@@ -89,7 +89,7 @@ class ClientAsync(Client, ABC):
             return None
         return check
 
-    async def as_ab_write(self, start, data, timeout=1):
+    async def as_ab_write(self, start, data, timeout=1) -> Optional[int]:
         """
         This is the asynchronous counterpart of Cli_ABWrite with asyncio features.
         """
@@ -104,7 +104,7 @@ class ClientAsync(Client, ABC):
             return None
         return check
 
-    async def as_ab_read(self, start, size, timeout=1):
+    async def as_ab_read(self, start, size, timeout=1) -> Optional[bytearray]:
         """
         This is the asynchronous counterpart of client.ab_read() with asyncio features.
         """
@@ -120,7 +120,7 @@ class ClientAsync(Client, ABC):
         check_error(result, context="client")
         return bytearray(data)
 
-    async def as_check_and_wait(self, timeout):
+    async def as_check_and_wait(self, timeout) -> bool:
         """
         This method handles asynchronous asyncio requests, depending on their as_check mode.
         :param timeout: Max time the request is allowed to pending, until it will terminated.
@@ -142,7 +142,7 @@ class ClientAsync(Client, ABC):
             return True
         return True
 
-    async def as_db_get(self, db_number, timeout=1):
+    async def as_db_get(self, db_number, timeout=1) -> Optional[bytearray]:
         """
         This is the asynchronous counterpart of Cli_DBGet with asyncio features.
         """
@@ -156,7 +156,7 @@ class ClientAsync(Client, ABC):
         return bytearray(_buffer)
 
     @error_wrap
-    async def as_download(self, data, block_num=-1, timeout=1):
+    async def as_download(self, data, block_num=-1, timeout=1) -> Optional[int]:
         """
         Downloads a DB data into the AG asynchronously.
         A whole block (including header and footer) must be available into the

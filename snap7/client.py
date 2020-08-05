@@ -6,6 +6,7 @@ import re
 from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
 from ctypes import c_void_p
 from datetime import datetime
+from typing import Union, Optional
 
 import snap7
 from snap7.common import check_error, load_library, ipv4
@@ -49,7 +50,7 @@ class Client:
         self._library.Cli_Create.restype = c_void_p
         self._pointer = S7Object(self._library.Cli_Create())
 
-    def destroy(self):
+    def destroy(self) -> Optional[int]:
         """
         destroy a client.
         """
@@ -79,7 +80,7 @@ class Client:
         logger.info("hot starting plc")
         return self._library.Cli_PlcHotStart(self._pointer)
 
-    def get_cpu_state(self):
+    def get_cpu_state(self) -> str:
         """
         Retrieves CPU state from client
         """
@@ -173,7 +174,7 @@ class Client:
         result = self._library.Cli_Delete(self._pointer, blocktype, block_num)
         return result
 
-    def full_upload(self, _type: str, block_num: int):
+    def full_upload(self, _type: str, block_num: int) -> tuple:
         """
         Uploads a full block body from AG.
         The whole block (including header and footer) is copied into the user
@@ -284,7 +285,7 @@ class Client:
         return self._library.Cli_WriteArea(self._pointer, area, dbnumber, start,
                                            size, wordlen, byref(cdata))
 
-    def read_multi_vars(self, items):
+    def read_multi_vars(self, items) -> tuple:
         """This function read multiple variables from the PLC.
 
         :param items: list of S7DataItem objects
@@ -361,7 +362,7 @@ class Client:
         """Clears the password set for the current session (logout)."""
         return self._library.Cli_ClearSessionPassword(self._pointer)
 
-    def set_connection_params(self, address, local_tsap, remote_tsap):
+    def set_connection_params(self, address, local_tsap, remote_tsap) -> None:
         """
         Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
         This function must be called just before Cli_Connect().
@@ -494,7 +495,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def as_db_read(self, db_number: int, start: int, size: int):  # -> bytearray:
+    def as_db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """
         This is the asynchronous counterpart of Cli_DBRead.
 
