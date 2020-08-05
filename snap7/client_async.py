@@ -192,7 +192,19 @@ class ClientAsync(Client):
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        check = Client.as_write_area(self, area, dbnumber, start, data)
+
+        if area == snap7.snap7types.S7AreaTM:
+            wordlen = snap7.snap7types.S7WLTimer
+        elif area == snap7.snap7types.S7AreaCT:
+            wordlen = snap7.snap7types.S7WLCounter
+        else:
+            wordlen = snap7.snap7types.S7WLByte
+        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+        size = len(data)
+        logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
+                     f"wordlen {wordlen} type: {type_}")
+        cdata = (type_ * len(data)).from_buffer_copy(data)
+        check = self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
         if await self.as_check_and_wait(timeout) is False:
             return None
         return check
