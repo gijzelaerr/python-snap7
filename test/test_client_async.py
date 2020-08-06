@@ -38,7 +38,6 @@ def testclient():
     client_async.destroy()
 
 
-@pytest.mark.skip("TODO: FATAL: Segmentation Error -- Needs to be fixed")
 async def test_as_db_read(testserver, testclient):
     size = 40
     start = 0
@@ -49,7 +48,6 @@ async def test_as_db_read(testserver, testclient):
     assert data == result
 
 
-@pytest.mark.skip("TODO: FATAL: Segmentation Error -- Needs to be fixed")
 async def test_as_db_write(testserver, testclient):
     size = 40
     data = bytearray(size)
@@ -60,7 +58,10 @@ async def test_as_db_write(testserver, testclient):
 async def test_as_ab_read(testserver, testclient):
     start = 1
     size = 1
-    await testclient.as_ab_read(start=start, size=size)
+    data = bytearray(size)
+    await testclient.as_ab_write(start=start, data=data)
+    check = await testclient.as_ab_read(start=start, size=size)
+    assert check == data
 
 
 async def test_as_ab_write(testserver, testclient):
@@ -69,9 +70,9 @@ async def test_as_ab_write(testserver, testclient):
     data = bytearray(size)
     await testclient.as_ab_write(start=start, data=data)
 
-#    @pytest.mark.skip("TODO FATAL: Segmentation ERROR -- Needs to be fixed")
-#    async def test_as_db_get(self):
-#        await testclient.as_db_get(db_number=db_number)
+@pytest.mark.skip("TODO FATAL: Segmentation ERROR -- Needs to be fixed")
+async def test_as_db_get(testserver, testclient):
+    await testclient.as_db_get(db_number=db_number)
 
 
 async def test_as_download(testserver, testclient):
