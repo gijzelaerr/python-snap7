@@ -560,6 +560,9 @@ class DB_Row:
         if _type == 'USINT':
             return get_usint(_bytearray, byte_index)
 
+        if _type == 'SINT':
+            return 'read SINT not implemented'
+
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
         if _type == 'TIME':
@@ -605,6 +608,9 @@ class DB_Row:
 
         if _type == 'USINT':
             return set_usint(_bytearray, byte_index, value)
+
+        if _type == 'SINT':
+            return 'read SINT not implemented'
 
         raise ValueError
 
