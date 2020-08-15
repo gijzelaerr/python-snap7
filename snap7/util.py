@@ -324,19 +324,6 @@ def get_dt(_bytearray, byte_index):
     return date_and_time
 
 
-
-def get_small_int(bytearray_, byte_index):
-    """
-    Get small int value from bytearray.
-
-    small int is represented as 1 byte
-    """
-    data = bytearray_[byte_index] & 0xff
-    packed = struct.pack('B', data)
-    value = struct.unpack('>B', packed)[0]
-    return value
-
-
 def set_small_int(bytearray_, byte_index, _int):
     """
     Set value in bytearray to int
@@ -347,6 +334,16 @@ def set_small_int(bytearray_, byte_index, _int):
     _bytes = struct.unpack('B', struct.pack('>B', _int))
     bytearray_[byte_index] = _bytes[0]
     return bytearray_
+def get_small_int(bytearray_, byte_index):
+    """
+    Get small int value from bytearray.
+
+    small int is represented as 1 byte
+    """
+    data = bytearray_[byte_index] & 0xff
+    packed = struct.pack('B', data)
+    value = struct.unpack('>B', packed)[0]
+    return value
 
 
 def parse_specification(db_specification):
