@@ -324,6 +324,31 @@ def get_dt(_bytearray, byte_index):
     return date_and_time
 
 
+
+def get_small_int(bytearray_, byte_index):
+    """
+    Get small int value from bytearray.
+
+    small int is represented as 1 byte
+    """
+    data = bytearray_[byte_index] & 0xff
+    packed = struct.pack('B', data)
+    value = struct.unpack('>B', packed)[0]
+    return value
+
+
+def set_small_int(bytearray_, byte_index, _int):
+    """
+    Set value in bytearray to int
+
+    small int is represented as 1 byte
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('B', struct.pack('>B', _int))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
 def parse_specification(db_specification):
     """
     Create a db specification derived from a
@@ -531,7 +556,10 @@ class DB_Row:
 
         if _type == 'DATE_AND_TIME':
             data_dt = get_dt(_bytearray, byte_index)
-            return data_dt
+            return data_dt           
+
+        if _type == 'SINT':
+            return get_small_int(_bytearray, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
@@ -575,6 +603,9 @@ class DB_Row:
 
         if _type == 'WORD':
             return set_word(_bytearray, byte_index, value)
+
+        if _type == 'SINT':
+            return set_small_int(_bytearray, byte_index, value)
 
         raise ValueError
 

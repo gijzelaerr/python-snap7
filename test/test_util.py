@@ -23,6 +23,7 @@ test_spec = """
 27      testWord     WORD
 29      tests5time   S5TIME
 31      testdateandtime DATE_AND_TIME
+43      testsmallint0   SINT
 """
 
 _bytearray = bytearray([
@@ -37,9 +38,10 @@ _bytearray = bytearray([
     255, 255,                                      # test word
     0, 16,                                         # test s5time, 0 is the time base,
                                                    # 16 is value, those two integers should be declared together
-    32, 7, 18, 23, 50, 2, 133, 65                  # these 8 values build the date and time
+    32, 7, 18, 23, 50, 2, 133, 65,                  # these 8 values build the date and time 12 byte total 
                                                    # data typ together, for details under this link
                                                    # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
+    254, 254, 254, 254, 254                         # test small int
 ])
 
 
@@ -101,6 +103,19 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['ID'] = 259
         self.assertEqual(row['ID'], 259)
+
+    def test_get_small_int(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(43, 'SINT')  # get value
+        self.assertEqual(value, 254)
+
+    def test_set_small_int(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testsmallint0'] = 254
+        self.assertEqual(row['testsmallint0'], 254)
+        
 
     def test_set_int_roundtrip(self):
         DB1 = (types.wordlen_to_ctypes[types.S7WLByte] * 4)()
@@ -216,6 +231,8 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(27, 'WORD')  # get value
         self.assertEqual(value, 65535)
+
+ 
 
     def test_export(self):
         test_array = bytearray(_bytearray)
