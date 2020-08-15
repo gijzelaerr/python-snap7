@@ -557,7 +557,7 @@ class DB_Row:
             data_dt = get_dt(_bytearray, byte_index)
             return data_dt           
 
-        if _type == 'SINT':
+        if _type == 'USINT':
             return get_usint(_bytearray, byte_index)
 
         # add these three not implemented data typ to avoid
@@ -603,7 +603,7 @@ class DB_Row:
         if _type == 'WORD':
             return set_word(_bytearray, byte_index, value)
 
-        if _type == 'SINT':
+        if _type == 'USINT':
             return set_usint(_bytearray, byte_index, value)
 
         raise ValueError
