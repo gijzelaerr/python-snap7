@@ -325,11 +325,15 @@ def get_dt(_bytearray, byte_index):
 
 
 def set_usint(bytearray_, byte_index, _int):
-    """
-    Set value in bytearray to int
+    """set unsigned small int
 
-    unsigned small int is represented as 1 byte
-    where the 8th bit is the sign
+    Args:
+        bytearray_ (bytearray): bytearray
+        byte_index (int): index of the bytearray
+        _int (int): positive value to set (0 - 255)
+
+    Returns:
+        bytearray: bytearray of the db
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>B', _int))
@@ -338,22 +342,31 @@ def set_usint(bytearray_, byte_index, _int):
 
     
 def get_usint(bytearray_, byte_index):
-    """
-    Get small int value from bytearray.
+    """get the unsigned small int from the bytearray
 
-    small int is represented as 1 byte
-    where the 8th bit is the sign
+    Args:
+        bytearray_ (bytearray)
+        byte_index (int): index of the bytearray
+
+    Returns:
+        int: unsigned small int (0 - 255)
     """
     data = bytearray_[byte_index] & 0xff
     packed = struct.pack('B', data)
     value = struct.unpack('>B', packed)[0]
     return value
 
-def set_sint(bytearray_, byte_index, _int):
-    """
-    Set value in bytearray to small int
 
-    small int is represented as 1 byte  -128 to 128
+def set_sint(bytearray_, byte_index, _int):
+    """set small int
+
+    Args:
+        bytearray_ (bytearray)
+        byte_index (int): index of the bytearray
+        _int (int): small int (-128 - 127)
+
+    Returns:
+        bytearray
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>b', _int))
@@ -362,16 +375,19 @@ def set_sint(bytearray_, byte_index, _int):
 
 
 def get_sint(bytearray_, byte_index):
-    """
-    Get small int from bytearray
+    """get the small int
 
-    small int is represented as 1 byte -128 to 128
-    """   
+    Args:
+        bytearray_ (bytearray)
+        byte_index (int): index of the bytearray
+
+    Returns:
+        int: small int (-127 - 128)
+    """
     data = bytearray_[byte_index] 
     packed = struct.pack('B', data)
     value = struct.unpack('>b', packed)[0]
     return value
-
 
 
 def parse_specification(db_specification):
