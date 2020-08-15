@@ -39,10 +39,10 @@ _bytearray = bytearray([
     255, 255,                                      # test word
     0, 16,                                         # test s5time, 0 is the time base,
                                                    # 16 is value, those two integers should be declared together
-    32, 7, 18, 23, 50, 2, 133, 65,                  # these 8 values build the date and time 12 byte total 
+    32, 7, 18, 23, 50, 2, 133, 65,                 # these 8 values build the date and time 12 byte total 
                                                    # data typ together, for details under this link
                                                    # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
-    254, 254, 254, 254, 254, 127                        # test small int
+    254, 254, 254, 254, 254, 127                   # test small int
 ])
 
 
