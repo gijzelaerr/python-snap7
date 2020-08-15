@@ -361,7 +361,7 @@ def set_sint(bytearray_, byte_index, _int):
     return bytearray_
 
 
-def get_sint(bytearray_, byte_index, _int):
+def get_sint(bytearray_, byte_index):
     """
     Get small int from bytearray
 
