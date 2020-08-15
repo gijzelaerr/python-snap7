@@ -328,7 +328,8 @@ def set_usint(bytearray_, byte_index, _int):
     """
     Set value in bytearray to int
 
-    small int is represented as 1 byte
+    unsigned small int is represented as 1 byte
+    where the 8th bit is the sign
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>B', _int))
@@ -341,11 +342,36 @@ def get_usint(bytearray_, byte_index):
     Get small int value from bytearray.
 
     small int is represented as 1 byte
+    where the 8th bit is the sign
     """
     data = bytearray_[byte_index] & 0xff
     packed = struct.pack('B', data)
     value = struct.unpack('>B', packed)[0]
     return value
+
+def set_sint(bytearray_, byte_index, _int):
+    """
+    Set value in bytearray to small int
+
+    small int is represented as 1 byte  -128 to 128
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('B', struct.pack('>b', _int))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
+def get_sint(bytearray_, byte_index, _int):
+    """
+    Get small int from bytearray
+
+    small int is represented as 1 byte -128 to 128
+    """   
+    data = bytearray_[byte_index] 
+    packed = struct.pack('B', data)
+    value = struct.unpack('>b', packed)[0]
+    return value
+
 
 
 def parse_specification(db_specification):
@@ -561,7 +587,7 @@ class DB_Row:
             return get_usint(_bytearray, byte_index)
 
         if _type == 'SINT':
-            return 'read SINT not implemented'
+            return get_sint(_bytearray, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
@@ -610,7 +636,7 @@ class DB_Row:
             return set_usint(_bytearray, byte_index, value)
 
         if _type == 'SINT':
-            return 'read SINT not implemented'
+            return set_sint(_bytearray, byte_index, value)
 
         raise ValueError
 
