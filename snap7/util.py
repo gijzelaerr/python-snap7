@@ -334,6 +334,8 @@ def set_small_int(bytearray_, byte_index, _int):
     _bytes = struct.unpack('B', struct.pack('>B', _int))
     bytearray_[byte_index] = _bytes[0]
     return bytearray_
+
+    
 def get_small_int(bytearray_, byte_index):
     """
     Get small int value from bytearray.
