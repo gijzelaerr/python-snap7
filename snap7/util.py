@@ -324,7 +324,7 @@ def get_dt(_bytearray, byte_index):
     return date_and_time
 
 
-def set_small_int(bytearray_, byte_index, _int):
+def set_usint(bytearray_, byte_index, _int):
     """
     Set value in bytearray to int
 
@@ -336,7 +336,7 @@ def set_small_int(bytearray_, byte_index, _int):
     return bytearray_
 
     
-def get_small_int(bytearray_, byte_index):
+def get_usint(bytearray_, byte_index):
     """
     Get small int value from bytearray.
 
@@ -558,7 +558,7 @@ class DB_Row:
             return data_dt           
 
         if _type == 'SINT':
-            return get_small_int(_bytearray, byte_index)
+            return get_usint(_bytearray, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
@@ -604,7 +604,7 @@ class DB_Row:
             return set_word(_bytearray, byte_index, value)
 
         if _type == 'SINT':
-            return set_small_int(_bytearray, byte_index, value)
+            return set_usint(_bytearray, byte_index, value)
 
         raise ValueError
 
