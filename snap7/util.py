@@ -340,7 +340,7 @@ def set_usint(bytearray_, byte_index, _int):
     bytearray_[byte_index] = _bytes[0]
     return bytearray_
 
-    
+
 def get_usint(bytearray_, byte_index):
     """get the unsigned small int from the bytearray
 
@@ -384,7 +384,7 @@ def get_sint(bytearray_, byte_index):
     Returns:
         int: small int (-127 - 128)
     """
-    data = bytearray_[byte_index] 
+    data = bytearray_[byte_index]
     packed = struct.pack('B', data)
     value = struct.unpack('>b', packed)[0]
     return value
@@ -597,7 +597,7 @@ class DB_Row:
 
         if _type == 'DATE_AND_TIME':
             data_dt = get_dt(_bytearray, byte_index)
-            return data_dt           
+            return data_dt
 
         if _type == 'USINT':
             return get_usint(_bytearray, byte_index)
