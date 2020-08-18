@@ -677,8 +677,10 @@ class DB_Row:
             data = data[self.row_offset:]
             db_offset += self.row_offset
 
-        client.db_write(db_nr, db_offset, data)
-
+        if self.area == S7AreaDB:
+            client.db_write(db_nr, db_offset, data)
+        else:
+            client.write_area(self.area, db_nr, db_offset, data) # TODO test
     def read(self, client):
         """
         read current data of db row from plc
@@ -686,8 +688,10 @@ class DB_Row:
         assert (isinstance(self._bytearray, DB))
         assert (self.row_size >= 0)
         db_nr = self._bytearray.db_number
-        # TODO implementarlo para marcas | entradas | salidas
-        _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
+        if self.area == S7AreaDB:
+            _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
+        else:
+            _bytearray = client.area_read(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
 
         data = self.get_bytearray()
         # replace data in bytearray
