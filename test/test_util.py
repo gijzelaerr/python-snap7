@@ -23,6 +23,8 @@ test_spec = """
 27      testWord     WORD
 29      tests5time   S5TIME
 31      testdateandtime DATE_AND_TIME
+43      testusint0      USINT
+44      testsint0       SINT
 """
 
 _bytearray = bytearray([
@@ -37,9 +39,10 @@ _bytearray = bytearray([
     255, 255,                                      # test word
     0, 16,                                         # test s5time, 0 is the time base,
                                                    # 16 is value, those two integers should be declared together
-    32, 7, 18, 23, 50, 2, 133, 65                  # these 8 values build the date and time
+    32, 7, 18, 23, 50, 2, 133, 65,                 # these 8 values build the date and time 12 byte total
                                                    # data typ together, for details under this link
                                                    # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
+    254, 254, 254, 254, 254, 127                   # test small int
 ])
 
 
@@ -101,6 +104,30 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
         row['ID'] = 259
         self.assertEqual(row['ID'], 259)
+
+    def test_get_usint(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(43, 'USINT')  # get value
+        self.assertEqual(value, 254)
+
+    def test_set_usint(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testusint0'] = 255
+        self.assertEqual(row['testusint0'], 255)
+
+    def test_get_sint(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(44, 'SINT')  # get value
+        self.assertEqual(value, 127)
+
+    def test_set_sint(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testsint0'] = 127
+        self.assertEqual(row['testsint0'], 127)
 
     def test_set_int_roundtrip(self):
         DB1 = (types.wordlen_to_ctypes[types.S7WLByte] * 4)()

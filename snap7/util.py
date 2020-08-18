@@ -324,6 +324,72 @@ def get_dt(_bytearray, byte_index):
     return date_and_time
 
 
+def set_usint(bytearray_, byte_index, _int):
+    """set unsigned small int
+
+    Args:
+        bytearray_ (bytearray): bytearray
+        byte_index (int): index of the bytearray
+        _int (int): positive value to set (0 - 255)
+
+    Returns:
+        bytearray: bytearray of the db
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('B', struct.pack('>B', _int))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
+def get_usint(bytearray_, byte_index):
+    """get the unsigned small int from the bytearray
+
+    Args:
+        bytearray_ (bytearray)
+        byte_index (int): index of the bytearray
+
+    Returns:
+        int: unsigned small int (0 - 255)
+    """
+    data = bytearray_[byte_index] & 0xff
+    packed = struct.pack('B', data)
+    value = struct.unpack('>B', packed)[0]
+    return value
+
+
+def set_sint(bytearray_, byte_index, _int):
+    """set small int
+
+    Args:
+        bytearray_ (bytearray)
+        byte_index (int): index of the bytearray
+        _int (int): small int (-128 - 127)
+
+    Returns:
+        bytearray
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('B', struct.pack('>b', _int))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
+def get_sint(bytearray_, byte_index):
+    """get the small int
+
+    Args:
+        bytearray_ (bytearray)
+        byte_index (int): index of the bytearray
+
+    Returns:
+        int: small int (-127 - 128)
+    """
+    data = bytearray_[byte_index]
+    packed = struct.pack('B', data)
+    value = struct.unpack('>b', packed)[0]
+    return value
+
+
 def parse_specification(db_specification):
     """
     Create a db specification derived from a
@@ -533,6 +599,12 @@ class DB_Row:
             data_dt = get_dt(_bytearray, byte_index)
             return data_dt
 
+        if _type == 'USINT':
+            return get_usint(_bytearray, byte_index)
+
+        if _type == 'SINT':
+            return get_sint(_bytearray, byte_index)
+
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
         if _type == 'TIME':
@@ -575,6 +647,12 @@ class DB_Row:
 
         if _type == 'WORD':
             return set_word(_bytearray, byte_index, value)
+
+        if _type == 'USINT':
+            return set_usint(_bytearray, byte_index, value)
+
+        if _type == 'SINT':
+            return set_sint(_bytearray, byte_index, value)
 
         raise ValueError
 
