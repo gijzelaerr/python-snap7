@@ -78,7 +78,7 @@ example::
 
     db1['test'].write()
 
-    db1['test'].read()
+    db1['test'].read(client)
 
 
 """
@@ -87,7 +87,7 @@ import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
-from .types import S7AreaDB
+from snap7.types import S7AreaDB
 
 logger = logging.getLogger(__name__)
 
