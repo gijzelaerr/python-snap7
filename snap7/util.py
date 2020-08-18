@@ -506,6 +506,7 @@ class DB_Row:
         self.layout_offset = layout_offset  # start point of row data in layout
         self.row_size = row_size
         self.row_offset = row_offset  # start of writable part of row
+        self.area = area
 
         assert (isinstance(_bytearray, (bytearray, DB)))
         self._bytearray = _bytearray
