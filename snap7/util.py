@@ -434,12 +434,13 @@ class DB:
 
     def __init__(self, db_number, _bytearray,
                  specification, row_size, size, id_field=None,
-                 db_offset=0, layout_offset=0, row_offset=0):
+                 db_offset=0, layout_offset=0, row_offset=0, area=S7AreaDB):
 
         self.db_number = db_number
         self.size = size
         self.row_size = row_size
         self.id_field = id_field
+        self.area = area
 
         self.db_offset = db_offset
         self.layout_offset = layout_offset
@@ -467,7 +468,8 @@ class DB:
                          row_size=row_size,
                          db_offset=db_offset,
                          layout_offset=layout_offset,
-                         row_offset=self.row_offset)
+                         row_offset=self.row_offset,
+                         area=self.area)
 
             # store row object
             key = row[id_field] if id_field else i
@@ -498,7 +500,7 @@ class DB_Row:
     _bytearray = None  # data of reference to parent DB
     _specification = None  # row specification
 
-    def __init__(self, _bytearray, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(self, _bytearray, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0, area=S7AreaDB):
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
