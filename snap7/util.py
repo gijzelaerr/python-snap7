@@ -87,6 +87,7 @@ import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
+from .types import S7AreaDB
 
 logger = logging.getLogger(__name__)
 
@@ -682,6 +683,7 @@ class DB_Row:
         assert (isinstance(self._bytearray, DB))
         assert (self.row_size >= 0)
         db_nr = self._bytearray.db_number
+        # TODO implementarlo para marcas | entradas | salidas
         _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
 
         data = self.get_bytearray()
