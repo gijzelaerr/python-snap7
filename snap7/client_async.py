@@ -432,21 +432,6 @@ class ClientAsync:
         return self._library.Cli_ABWrite(
             self._pointer, start, size, byref(cdata))
 
-    @error_wrap
-    def as_download(self, data, block_num=-1):
-        """
-        Downloads a DB data into the AG asynchronously.
-        A whole block (including header and footer) must be available into the
-        user buffer.
-
-        :param block_num: New Block number (or -1)
-        :param data: the user buffer
-        """
-        size = len(data)
-        type_ = c_byte * len(data)
-        cdata = type_.from_buffer_copy(data)
-        return self._library.Cli_AsDownload(self._pointer, block_num,
-                                            byref(cdata), size)
 
     @error_wrap
     def compress(self, time):
