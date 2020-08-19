@@ -432,7 +432,6 @@ class ClientAsync:
         return self._library.Cli_ABWrite(
             self._pointer, start, size, byref(cdata))
 
-
     @error_wrap
     def compress(self, time):
         """
