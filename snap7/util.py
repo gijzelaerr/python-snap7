@@ -691,7 +691,8 @@ class DB_Row:
         if self.area == S7AreaDB:
             _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
-            _bytearray = client.area_read(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
+            _bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
+            # TODO el area debe ser (area, 0, 0, offset) donde offset tiene que ser el size del padre DB
 
         data = self.get_bytearray()
         # replace data in bytearray
