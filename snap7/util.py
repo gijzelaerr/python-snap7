@@ -680,7 +680,7 @@ class DB_Row:
         if self.area == S7AreaDB:
             client.db_write(db_nr, db_offset, data)
         else:
-            client.write_area(self.area, db_nr, db_offset, data) # TODO test
+            client.write_area(self.area, 0, db_offset, data) # TODO test
     def read(self, client):
         """
         read current data of db row from plc
