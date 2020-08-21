@@ -504,7 +504,7 @@ class DB_Row:
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
-        self.row_size = row_size
+        self.row_size = row_size # lenght of the read
         self.row_offset = row_offset  # start of writable part of row
         self.area = area
 
@@ -691,8 +691,9 @@ class DB_Row:
         if self.area == S7AreaDB:
             _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
-            _bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
-            # TODO el area debe ser (area, 0, 0, offset) donde offset tiene que ser el size del padre DB
+            _bytearray = client.read_area(self.area, 0, 0, self.row_size)
+            #_bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
+            # TODO the read area should be (area, 0, 0, lenght) where lenght if the size of the father DB
 
         data = self.get_bytearray()
         # replace data in bytearray
