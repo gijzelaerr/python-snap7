@@ -328,6 +328,8 @@ class TestClient(unittest.TestCase):
         data = bytearray(size)
         self.client.as_db_write(db_number=1, start=0, data=data)
 
+    @unittest.skip("as_download is not longer supported by client class -- "
+                   "ToDo: Implement to client_async tests")
     def test_as_download(self):
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
@@ -421,6 +423,8 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_ABWrite = original
 
+    @unittest.skip("as_ab_write is not longer supported by client class -- "
+                   "ToDo: Implement to client_async tests")
     def test_as_ab_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
@@ -451,6 +455,8 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_AsDBWrite = original
 
+    @unittest.skip("as_download is not longer supported by client class -- "
+                   "ToDo: Implement to client_async tests")
     def test_as_download_with_byte_literal_does_not_throw(self):
         mock_download = mock.MagicMock()
         mock_download.return_value = None

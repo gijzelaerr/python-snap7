@@ -457,7 +457,6 @@ class Client:
         """
         return self._library.Cli_AsDBFill(self._pointer)
 
-
     @error_wrap
     def compress(self, time):
         """
