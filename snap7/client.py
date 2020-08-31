@@ -426,31 +426,6 @@ class Client:
         return self._library.Cli_ABWrite(
             self._pointer, start, size, byref(cdata))
 
-    def as_ab_read(self, start, size):
-        """
-        This is the asynchronous counterpart of client.ab_read().
-        """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
-        data = (type_ * size)()
-        logger.debug(f"ab_read: start: {start}: size {size}: ")
-        result = self._library.Cli_AsABRead(self._pointer, start, size,
-                                            byref(data))
-        check_error(result, context="client")
-        return bytearray(data)
-
-    def as_ab_write(self, start, data):
-        """
-        This is the asynchronous counterpart of Cli_ABWrite.
-        """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
-        size = len(data)
-        cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug(f"ab write: start: {start}: size: {size}: ")
-        return self._library.Cli_AsABWrite(
-            self._pointer, start, size, byref(cdata))
-
     @error_wrap
     def as_compress(self, time):
         """
@@ -482,60 +457,6 @@ class Client:
         """
         return self._library.Cli_AsDBFill(self._pointer)
 
-    def as_db_get(self, db_number):
-        """
-        This is the asynchronous counterpart of Cli_DBGet.
-        """
-        logger.debug(f"db_get db_number: {db_number}")
-        _buffer = buffer_type()
-        result = self._library.Cli_AsDBGet(self._pointer, db_number,
-                                           byref(_buffer),
-                                           byref(c_int(buffer_size)))
-        check_error(result, context="client")
-        return bytearray(_buffer)
-
-    def as_db_read(self, db_number, start, size):
-        """
-        This is the asynchronous counterpart of Cli_DBRead.
-
-        :returns: user buffer.
-        """
-        logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
-
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
-        data = (type_ * size)()
-        result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
-        check_error(result, context="client")
-        return bytearray(data)
-
-    def as_db_write(self, db_number, start, data):
-        """
-
-        """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
-        size = len(data)
-        cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
-        return self._library.Cli_AsDBWrite(
-            self._pointer, db_number, start, size,
-            byref(cdata))
-
-    @error_wrap
-    def as_download(self, data, block_num=-1):
-        """
-        Downloads a DB data into the AG asynchronously.
-        A whole block (including header and footer) must be available into the
-        user buffer.
-
-        :param block_num: New Block number (or -1)
-        :param data: the user buffer
-        """
-        size = len(data)
-        type_ = c_byte * len(data)
-        cdata = type_.from_buffer_copy(data)
-        return self._library.Cli_AsDownload(self._pointer, block_num,
-                                            byref(cdata), size)
 
     @error_wrap
     def compress(self, time):
