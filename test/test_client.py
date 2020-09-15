@@ -492,6 +492,8 @@ class TestClient(unittest.TestCase):
         except Snap7Exception as s7_err:
             if s7_err.args[0] == b'CLI : Job Timeout':
                 self.fail(f"Request was timeouted after {timeout} seconds - FAIL")
+        except BaseException as pyt_err:
+            self.fail(f"Exception was thrown: {pyt_err}")
         self.assertEqual(bytearray(p_data), data)
 
         # ---test timeouted request---
@@ -501,8 +503,10 @@ class TestClient(unittest.TestCase):
         except Snap7Exception as s7_err:
             if not s7_err.args[0] == b'CLI : Job Timeout':
                 self.fail(f"While waiting another error appeared: {s7_err}")
+        except BaseException as pyt_err:
+            self.fail(f"Exception was thrown: {pyt_err}")
 
-    def test_check_as_completion(self):
+    def test_check_as_completion(self, timeout=5):
         # Cli_CheckAsCompletion
         check_status = ctypes.c_int(-1)
         pending_checked = False
@@ -519,21 +523,20 @@ class TestClient(unittest.TestCase):
         p_data = self.client.as_db_read(db, start, size)
         logging.warning("---------AS_CHECK_COMPLETION-TEST - Pending errors "
                         "(alias  TCP : Other Socket error (1)) are  happen here, but ignorable ---------")
+        start_time = time.time()
         while True:
             try:
-                check_result = self.client.check_as_completion(ctypes.byref(check_status))
-                if check_result == 0:
+                self.client.check_as_completion(ctypes.byref(check_status))
+                if check_status.value == 0:
                     data_result = bytearray(p_data)
                     self.assertEqual(data_result, data)
                     break
             except Snap7Exception as s7_err:
-                # This error is raised in case of pending job via check_error() method
-                # This error will be accepted/ignored, but others has to fail the test.
-                if s7_err.args[0] == b' TCP : Other Socket error (1)':
-                    pending_checked = True
-                    pass
-                else:
-                    self.fail(s7_err)
+                self.fail(f"Snap7Exception raised: {s7_err}")
+            except BaseException as python_err:
+                self.fail(f"Other exception raised: {python_err}")
+            if time.time()-start_time >= timeout:
+                self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
         if pending_checked is False:
             logging.warning("Pending was never reached, because Server was to fast,"
                             " but request to server was successfull.")
