@@ -619,13 +619,21 @@ class Client:
     def check_as_completion(self, p_value) -> bool:
         """
         Method to check Status of an async request
-        :param p_value: Pointer where result shall be written in case async request is complete.
-        Needs equal size as requested data.
+        :param p_value: Pointer where result of this check shall be written.
         :return: 0 - Job is done successfully
         :return: 1 - Job is either pending or contains s7errors
         """
         check_result = self._library.Cli_CheckAsCompletion(self._pointer, p_value)
-        check_error(check_result, context="client")
+        try:
+            check_error(check_result, context="client")
+        except Snap7Exception as s7_err:
+            # This error is raised in case of pending job via check_error() method
+            # This error will be accepted/ignored, but others has to fail the test.
+            if check_result == 1 and s7_err.args[0] == b' TCP : Other Socket error (1)':
+                logger.warning("Job is Pending - ignore upper \"TCP : Other Socket error (1)\" log")
+                pass
+            else:
+                raise s7_err
         return check_result
 
     def set_as_callback(self):
