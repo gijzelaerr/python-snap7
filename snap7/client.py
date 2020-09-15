@@ -630,7 +630,7 @@ class Client:
             # This error is raised in case of pending job via check_error() method
             # This error will be accepted/ignored, but others has to fail the test.
             if check_result == 1 and s7_err.args[0] == b' TCP : Other Socket error (1)':
-                logger.warning("Job is Pending - ignore upper \"TCP : Other Socket error (1)\" log")
+                logger.error("Job is Pending - ignore upper \"TCP : Other Socket error (1)\" log")
                 pass
             else:
                 raise s7_err
