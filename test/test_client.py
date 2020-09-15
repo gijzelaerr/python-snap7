@@ -517,8 +517,10 @@ class TestClient(unittest.TestCase):
         data = bytearray(40)
         try:
             self.client.db_write(db_number=db, start=start, data=data)
-        except:
-            self.fail("Error while preparing for as_check_completion")
+        except Snap7Exception as s7_err:
+            self.fail(f"Snap7Exception raised while preparing as_check_completion test: {s7_err}")
+        except BaseException as python_err:
+            self.fail(f"Other exception raised  while preparing as_check_completion test: {python_err}")
         # Execute test
         p_data = self.client.as_db_read(db, start, size)
         logging.warning("---------AS_CHECK_COMPLETION-TEST - Pending errors "
@@ -535,7 +537,7 @@ class TestClient(unittest.TestCase):
                 self.fail(f"Snap7Exception raised: {s7_err}")
             except BaseException as python_err:
                 self.fail(f"Other exception raised: {python_err}")
-            if time.time()-start_time >= timeout:
+            if time.time() - start_time >= timeout:
                 self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
         if pending_checked is False:
             logging.warning("Pending was never reached, because Server was to fast,"
