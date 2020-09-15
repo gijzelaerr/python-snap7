@@ -506,7 +506,7 @@ class Client:
         data = (type_ * size)()
         result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
         check_error(result, context="client")
-        return bytearray(data)
+        return data
 
     def as_db_write(self, db_number, start, data):
         """
