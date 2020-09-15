@@ -311,8 +311,9 @@ class TestClient(unittest.TestCase):
     def test_as_db_fill(self):
         self.client.as_db_fill()
 
+    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_get(self):
-        self.client.db_get(db_number=db_number)
+        self.client.as_db_get(db_number=db_number)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
     def test_as_db_read(self):
@@ -330,6 +331,7 @@ class TestClient(unittest.TestCase):
         data = bytearray(size)
         self.client.as_db_write(db_number=1, start=0, data=data)
 
+    @unittest.skip("TODO: not yet fully implemented")
     def test_as_download(self):
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
@@ -423,6 +425,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_ABWrite = original
 
+    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ab_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
@@ -439,6 +442,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_AsABWrite = original
 
+    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
@@ -453,6 +457,7 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_AsDBWrite = original
 
+    @unittest.skip("TODO: not yet fully implemented")
     def test_as_download_with_byte_literal_does_not_throw(self):
         mock_download = mock.MagicMock()
         mock_download.return_value = None
