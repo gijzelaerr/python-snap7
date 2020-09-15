@@ -26,6 +26,8 @@ slot = 1
 
 class TestClient(unittest.TestCase):
 
+    process = None
+
     @classmethod
     def setUpClass(cls):
         cls.process = Process(target=mainloop)
@@ -474,6 +476,69 @@ class TestClient(unittest.TestCase):
         # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
         # self.assertEqual(new_dt, self.client.get_plc_datetime())
 
+    def test_wait_as_completion(self, timeout=5):
+        # Cli_WaitAsCompletion
+        # prepare Server
+        area = snap7.types.areas.DB
+        dbnumber = 1
+        size = 1
+        start = 1
+        data = bytearray(size)
+        self.client.write_area(area, dbnumber, start, data)
+        # test correct request
+        p_data = self.client.as_db_read(dbnumber, start, size)
+        try:
+            self.client.wait_as_completion(ctypes.c_ulong(timeout))
+        except Snap7Exception as s7_err:
+            if s7_err.args[0] == b'CLI : Job Timeout':
+                self.fail(f"Request was timeouted after {timeout} seconds - FAIL")
+        self.assertEqual(bytearray(p_data), data)
+
+        # ---test timeouted request---
+        self.client.as_db_read(dbnumber, start, size)
+        try:
+            self.client.wait_as_completion(ctypes.c_ulong(0))
+        except Snap7Exception as s7_err:
+            if not s7_err.args[0] == b'CLI : Job Timeout':
+                self.fail(f"While waiting another error appeared: {s7_err}")
+
+    def test_check_as_completion(self):
+        # Cli_CheckAsCompletion
+        check_status = ctypes.c_int(-1)
+        pending_checked = False
+        # preparing Server values
+        size = 40
+        start = 0
+        db = 1
+        data = bytearray(40)
+        try:
+            self.client.db_write(db_number=db, start=start, data=data)
+        except:
+            self.fail("Error while preparing for as_check_completion")
+        # Execute test
+        p_data = self.client.as_db_read(db, start, size)
+        logging.warning("---------AS_CHECK_COMPLETION-TEST - Pending errors "
+                        "(alias  TCP : Other Socket error (1)) are  happen here, but ignorable ---------")
+        while True:
+            try:
+                check_result = self.client.check_as_completion(ctypes.byref(check_status))
+                if check_result == 0:
+                    data_result = bytearray(p_data)
+                    self.assertEqual(data_result, data)
+                    break
+            except Snap7Exception as s7_err:
+                # This error is raised in case of pending job via check_error() method
+                # This error will be accepted/ignored, but others has to fail the test.
+                if s7_err.args[0] == b' TCP : Other Socket error (1)':
+                    pending_checked = True
+                    pass
+                else:
+                    self.fail(s7_err)
+        if pending_checked is False:
+            logging.warning("Pending was never reached, because Server was to fast,"
+                            " but request to server was successfull.")
+        logging.warning("------------------------------------------------------------------------")
+
     def test_asebread(self):
         # Cli_AsEBRead
         with self.assertRaises(NotImplementedError):
@@ -538,11 +603,6 @@ class TestClient(unittest.TestCase):
         # Cli_AsWriteArea
         with self.assertRaises(NotImplementedError):
             self.client.aswritearea()
-
-    def test_checkascompletion(self):
-        # Cli_CheckAsCompletion
-        with self.assertRaises(NotImplementedError):
-            self.client.checkascompletion()
 
     def test_copyramtorom(self):
         # Cli_CopyRamToRom
@@ -659,11 +719,6 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.readszllist()
 
-    def test_setascallback(self):
-        # Cli_SetAsCallback
-        with self.assertRaises(NotImplementedError):
-            self.client.setascallback()
-
     def test_setparam(self):
         # Cli_SetParam
         with self.assertRaises(NotImplementedError):
@@ -688,11 +743,6 @@ class TestClient(unittest.TestCase):
         # Cli_TMWrite
         with self.assertRaises(NotImplementedError):
             self.client.tmwrite()
-
-    def test_waitascompletion(self):
-        # Cli_WaitAsCompletion
-        with self.assertRaises(NotImplementedError):
-            self.client.waitascompletion()
 
     def test_writemultivars(self):
         # Cli_WriteMultiVars
