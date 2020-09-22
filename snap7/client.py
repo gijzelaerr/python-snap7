@@ -618,23 +618,24 @@ class Client:
 
     def check_as_completion(self, p_value) -> bool:
         """
-        Method to check Status of an async request
+        Method to check Status of an async request. Result contains if the check was successful,
+        not the data value itself
         :param p_value: Pointer where result of this check shall be written.
         :return: 0 - Job is done successfully
         :return: 1 - Job is either pending or contains s7errors
         """
-        check_result = self._library.Cli_CheckAsCompletion(self._pointer, p_value)
+        result = self._library.Cli_CheckAsCompletion(self._pointer, p_value)
         try:
-            check_error(check_result, context="client")
+            check_error(result, context="client")
         except Snap7Exception as s7_err:
             # This error is raised in case of pending job via check_error() method
             # This error will be accepted/ignored, but others has to fail the test.
-            if check_result == 1 and s7_err.args[0] == b' TCP : Other Socket error (1)':
+            if result == 1 and s7_err.args[0] == b' TCP : Other Socket error (1)':
                 logger.error("Job is Pending - ignore upper \"TCP : Other Socket error (1)\" log")
                 pass
             else:
                 raise s7_err
-        return check_result
+        return result
 
     def set_as_callback(self):
         # Cli_SetAsCallback
@@ -642,14 +643,14 @@ class Client:
 
     def wait_as_completion(self, timeout: c_ulong) -> int:
         """
-        Snap7 Cli_WaitAsCompletion representative
+        Snap7 Cli_WaitAsCompletion representative.
         :param timeout: ms to wait for async job
         :return: Result of request in int format
         """
         # Cli_WaitAsCompletion
-        wait_result = self._library.Cli_WaitAsCompletion(self._pointer, timeout)
-        check_error(wait_result, context="client")
-        return wait_result
+        result = self._library.Cli_WaitAsCompletion(self._pointer, timeout)
+        check_error(result, context="client")
+        return result
 
     def asebread(self):
         # Cli_AsEBRead
