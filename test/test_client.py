@@ -481,16 +481,16 @@ class TestClient(unittest.TestCase):
         # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
         # self.assertEqual(new_dt, self.client.get_plc_datetime())
 
-    def test_wait_as_completion(self, timeout=5):
+    def test_wait_as_completion_pass(self, timeout=10):
         # Cli_WaitAsCompletion
-        # prepare Server
+        # prepare Server with values
         area = snap7.types.areas.DB
         dbnumber = 1
         size = 1
         start = 1
         data = bytearray(size)
         self.client.write_area(area, dbnumber, start, data)
-        # test correct request
+        # start as_request and test
         p_data = self.client.as_db_read(dbnumber, start, size)
         try:
             self.client.wait_as_completion(ctypes.c_ulong(timeout))
@@ -501,7 +501,16 @@ class TestClient(unittest.TestCase):
             self.fail(f"Exception was thrown: {pyt_err}")
         self.assertEqual(bytearray(p_data), data)
 
-        # ---test timeouted request---
+    def test_wait_as_completion_timeouted(self, timeout=0):
+        # Cli_WaitAsCompletion
+        # prepare Server
+        area = snap7.types.areas.DB
+        dbnumber = 1
+        size = 1
+        start = 1
+        data = bytearray(size)
+        self.client.write_area(area, dbnumber, start, data)
+        # start as_request and wait for zero seconds to trigger timeout
         self.client.as_db_read(dbnumber, start, size)
         try:
             self.client.wait_as_completion(ctypes.c_ulong(0))
@@ -530,20 +539,20 @@ class TestClient(unittest.TestCase):
         p_data = self.client.as_db_read(db, start, size)
         logging.warning("---------AS_CHECK_COMPLETION-TEST - Pending errors "
                         "(alias  TCP : Other Socket error (1)) are  happen here, but ignorable ---------")
-        start_time = time.time()
-        while True:
+        for i in range(10):
             try:
                 self.client.check_as_completion(ctypes.byref(check_status))
                 if check_status.value == 0:
                     data_result = bytearray(p_data)
                     self.assertEqual(data_result, data)
                     break
+                time.sleep(1)
             except Snap7Exception as s7_err:
                 self.fail(f"Snap7Exception raised: {s7_err}")
             except BaseException as python_err:
                 self.fail(f"Other exception raised: {python_err}")
-            if time.time() - start_time >= timeout:
-                self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
+        else:
+            self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
         if pending_checked is False:
             logging.warning("Pending was never reached, because Server was to fast,"
                             " but request to server was successfull.")
