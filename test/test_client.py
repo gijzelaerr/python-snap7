@@ -537,8 +537,6 @@ class TestClient(unittest.TestCase):
             self.fail(f"Other exception raised  while preparing as_check_completion test: {python_err}")
         # Execute test
         p_data = self.client.as_db_read(db, start, size)
-        logging.warning("---------AS_CHECK_COMPLETION-TEST - Pending errors "
-                        "(alias  TCP : Other Socket error (1)) are  happen here, but ignorable ---------")
         for i in range(10):
             try:
                 self.client.check_as_completion(ctypes.byref(check_status))
@@ -546,6 +544,7 @@ class TestClient(unittest.TestCase):
                     data_result = bytearray(p_data)
                     self.assertEqual(data_result, data)
                     break
+                pending_checked = True
                 time.sleep(1)
             except Snap7Exception as s7_err:
                 self.fail(f"Snap7Exception raised: {s7_err}")
@@ -556,7 +555,6 @@ class TestClient(unittest.TestCase):
         if pending_checked is False:
             logging.warning("Pending was never reached, because Server was to fast,"
                             " but request to server was successfull.")
-        logging.warning("------------------------------------------------------------------------")
 
     def test_asebread(self):
         # Cli_AsEBRead

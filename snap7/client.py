@@ -625,16 +625,7 @@ class Client:
         :return: 1 - Job is either pending or contains s7errors
         """
         result = self._library.Cli_CheckAsCompletion(self._pointer, p_value)
-        try:
-            check_error(result, context="client")
-        except Snap7Exception as s7_err:
-            # This error is raised in case of pending job via check_error() method
-            # This error will be accepted/ignored, but others has to fail the test.
-            if result == 1 and s7_err.args[0] == b' TCP : Other Socket error (1)':
-                logger.error("Job is Pending - ignore upper \"TCP : Other Socket error (1)\" log")
-                pass
-            else:
-                raise s7_err
+        check_error(result, context="client")
         return result
 
     def set_as_callback(self):
