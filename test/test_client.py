@@ -497,11 +497,13 @@ class TestClient(unittest.TestCase):
         except Snap7Exception as s7_err:
             if s7_err.args[0] == b'CLI : Job Timeout':
                 self.fail(f"Request was timeouted after {timeout} seconds - FAIL")
+            else:
+                self.fail(f"Snap7Exception was thrown: {s7_err} - FAIL")
         except BaseException as pyt_err:
             self.fail(f"Exception was thrown: {pyt_err}")
         self.assertEqual(bytearray(p_data), data)
 
-    def test_wait_as_completion_timeouted(self, timeout=0):
+    def test_wait_as_completion_timeouted(self, timeout=0, tries=10):
         # Cli_WaitAsCompletion
         # prepare Server
         area = snap7.types.areas.DB
@@ -510,15 +512,18 @@ class TestClient(unittest.TestCase):
         start = 1
         data = bytearray(size)
         self.client.write_area(area, dbnumber, start, data)
-        # start as_request and wait for zero seconds to trigger timeout
-        self.client.as_db_read(dbnumber, start, size)
-        try:
-            self.client.wait_as_completion(ctypes.c_ulong(0))
-        except Snap7Exception as s7_err:
-            if not s7_err.args[0] == b'CLI : Job Timeout':
-                self.fail(f"While waiting another error appeared: {s7_err}")
-        except BaseException as pyt_err:
-            self.fail(f"Exception was thrown: {pyt_err}")
+        # start as_request and wait for zero seconds to try trigger timeout
+        for i in range(tries):
+            self.client.as_db_read(dbnumber, start, size)
+            try:
+                self.client.wait_as_completion(ctypes.c_ulong(0))
+            except Snap7Exception as s7_err:
+                if not s7_err.args[0] == b'CLI : Job Timeout':
+                    self.fail(f"While waiting another error appeared: {s7_err}")
+                return
+            except BaseException as pyt_err:
+                self.fail(f"Exception was thrown: {pyt_err}")
+        self.skipTest(f"After {tries} tries, no timout could be envoked. Skip test.")
 
     def test_check_as_completion(self, timeout=5):
         # Cli_CheckAsCompletion
