@@ -503,7 +503,7 @@ class TestClient(unittest.TestCase):
             self.fail(f"Exception was thrown: {pyt_err}")
         self.assertEqual(bytearray(p_data), data)
 
-    def test_wait_as_completion_timeouted(self, timeout=0, tries=100):
+    def test_wait_as_completion_timeouted(self, timeout=0, tries=500):
         # Cli_WaitAsCompletion
         # prepare Server
         area = snap7.types.areas.DB
