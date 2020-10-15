@@ -65,6 +65,7 @@ def check_error(code, context="client"):
         logger.error(error)
         raise Snap7Exception(error)
 
+
 def error_text(error, context="client"):
     """Returns a textual explanation of a given error number
 
