@@ -85,19 +85,19 @@ async def test_as_read_area(testserver, testclient):
     amount = 1
     start = 1
     # Test read_area with a DB
-    area = snap7.snap7types.areas.DB
+    area = snap7.types.areas.DB
     dbnumber = 1
     res = await testclient.as_read_area(area, dbnumber, start, amount)
     if res is None:
         raise TimeoutError
     # Test read_area with a TM
-    area = snap7.snap7types.areas.TM
+    area = snap7.types.areas.TM
     dbnumber = 0
     res = await testclient.as_read_area(area, dbnumber, start, amount)
     if res is None:
         raise TimeoutError
     # Test read_area with a CT
-    area = snap7.snap7types.areas.CT
+    area = snap7.types.areas.CT
     dbnumber = 0
     res = await testclient.as_read_area(area, dbnumber, start, amount)
     if res is None:
@@ -106,7 +106,7 @@ async def test_as_read_area(testserver, testclient):
 
 async def test_as_write_area(testserver, testclient):
     # Test write area with a DB
-    area = snap7.snap7types.areas.DB
+    area = snap7.types.areas.DB
     dbnumber = 1
     size = 1
     start = 1
@@ -115,7 +115,7 @@ async def test_as_write_area(testserver, testclient):
     if res is None:
         raise TimeoutError
     # Test write area with a TM
-    area = snap7.snap7types.areas.TM
+    area = snap7.types.areas.TM
     dbnumber = 0
     size = 2
     timer = bytearray(size)
@@ -123,7 +123,7 @@ async def test_as_write_area(testserver, testclient):
     if res is None:
         raise TimeoutError
     # Test write area with a CT
-    area = snap7.snap7types.areas.CT
+    area = snap7.types.areas.CT
     dbnumber = 0
     size = 2
     timer = bytearray(size)

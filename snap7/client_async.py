@@ -8,7 +8,7 @@ from ctypes import c_int, byref
 from snap7.common import check_error
 import snap7
 from .client import Client
-from .snap7types import buffer_type, buffer_size
+from .types import buffer_type, buffer_size
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class ClientAsync(Client):
         :returns: user buffer.
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
-        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
         result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
         if await self.as_check_and_wait(timeout) is False:
@@ -99,8 +99,8 @@ class ClientAsync(Client):
         """
         This is the asynchronous counterpart of client.ab_read() with asyncio features.
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self._library.Cli_AsABRead(self._pointer, start, size,
@@ -193,13 +193,13 @@ class ClientAsync(Client):
         :param data: a bytearray containing the payload
         """
 
-        if area == snap7.snap7types.S7AreaTM:
-            wordlen = snap7.snap7types.S7WLTimer
-        elif area == snap7.snap7types.S7AreaCT:
-            wordlen = snap7.snap7types.S7WLCounter
+        if area == snap7.types.S7AreaTM:
+            wordlen = snap7.types.S7WLTimer
+        elif area == snap7.types.S7AreaCT:
+            wordlen = snap7.types.S7WLCounter
         else:
-            wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+            wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         size = len(data)
         logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen} type: {type_}")

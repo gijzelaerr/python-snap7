@@ -32,7 +32,7 @@ plc.db_write(reading, 31, 120, 1)    # write back the bytearray and now the bool
 # then you can specify an area to read from:
 # https://github.com/gijzelaerr/python-snap7/blob/master/snap7/snap7types.py
 
-from snap7.snap7types import area
+from snap7.types import area
 
 # play with these functions.
 plc.read_area(area['MK'], dbnumber, start, size)

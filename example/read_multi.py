@@ -8,7 +8,7 @@ import ctypes
 
 import snap7
 from snap7.common import check_error
-from snap7.snap7types import S7DataItem, S7AreaDB, S7WLByte
+from snap7.types import S7DataItem, S7AreaDB, S7WLByte
 
 client = snap7.client.Client()
 client.connect('10.100.5.2', 0, 2)

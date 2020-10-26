@@ -45,7 +45,7 @@ def get_db_row(db, start, size):
         start (int): The index of where to start in db data
         size (int): The size of the db data to read
     """
-    type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+    type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
     data = client.db_read(db, start, type_, size)
     # print_row(data[:60])
     return data
@@ -157,7 +157,7 @@ def set_part_db(start, size, _bytearray):
 
 
 def write_data_db(dbnumber, all_data, size):
-    area = snap7.snap7types.S7AreaDB
+    area = snap7.types.S7AreaDB
     dbnumber = 1
     client.write_area(area, dbnumber, 0, size, all_data)
 

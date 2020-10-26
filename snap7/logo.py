@@ -8,11 +8,11 @@ from ctypes import c_int, byref, c_uint16, c_int32
 from ctypes import c_void_p
 
 import snap7
-from snap7 import snap7types
+from snap7 import types
 from snap7.common import check_error, load_library, ipv4
 from snap7.exceptions import Snap7Exception
-from snap7.snap7types import S7Object
-from snap7.snap7types import param_types
+from snap7.types import S7Object
+from snap7.types import param_types
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class Logo:
         # special handling for Siemens Logo
         # 1st set connection params
         # 2nd connect without any parameters
-        self.set_param(snap7.snap7types.RemotePort, tcpport)
+        self.set_param(snap7.types.RemotePort, tcpport)
         self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
         result = self.library.Cli_Connect(self.pointer)
         check_error(result, context="client")
@@ -88,7 +88,7 @@ class Logo:
         :param vm_address: of Logo memory (e.g. V30.1, VW32, V24)
         :returns: integer
         """
-        area = snap7types.S7AreaDB
+        area = types.S7AreaDB
         db_number = 1
         size = 1
         start = 0
@@ -102,27 +102,27 @@ class Logo:
             address_byte = int(address[0])
             address_bit = int(address[1])
             start = (address_byte * 8) + address_bit
-            wordlen = snap7types.S7WLBit
+            wordlen = types.S7WLBit
         elif re.match("V[0-9]+", vm_address):
             # byte value
             logger.info(f"Byte address: {vm_address}")
             start = int(vm_address[1:])
-            wordlen = snap7types.S7WLByte
+            wordlen = types.S7WLByte
         elif re.match("VW[0-9]+", vm_address):
             # byte value
             logger.info(f"Word address: {vm_address}")
             start = int(vm_address[2:])
-            wordlen = snap7types.S7WLWord
+            wordlen = types.S7WLWord
         elif re.match("VD[0-9]+", vm_address):
             # byte value
             logger.info(f"DWord address: {vm_address}")
             start = int(vm_address[2:])
-            wordlen = snap7types.S7WLDWord
+            wordlen = types.S7WLDWord
         else:
             logger.info("Unknown address format")
             return 0
 
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
 
         logger.debug(f"start:{start}, wordlen:{wordlen}, data-length:{len(data)}")
@@ -131,13 +131,13 @@ class Logo:
                                            size, wordlen, byref(data))
         check_error(result, context="client")
         # transform result to int value
-        if wordlen == snap7types.S7WLBit:
+        if wordlen == types.S7WLBit:
             return data[0]
-        if wordlen == snap7types.S7WLByte:
+        if wordlen == types.S7WLByte:
             return struct.unpack_from(">B", data)[0]
-        if wordlen == snap7types.S7WLWord:
+        if wordlen == types.S7WLWord:
             return struct.unpack_from(">h", data)[0]
-        if wordlen == snap7types.S7WLDWord:
+        if wordlen == types.S7WLDWord:
             return struct.unpack_from(">l", data)[0]
 
     def write(self, vm_address, value):
@@ -148,7 +148,7 @@ class Logo:
         :param vm_address: write offset
         :param value: integer
         """
-        area = snap7types.S7AreaDB
+        area = types.S7AreaDB
         db_number = 1
         start = 0
         amount = 1
@@ -163,7 +163,7 @@ class Logo:
             address_byte = int(address[0])
             address_bit = int(address[1])
             start = (address_byte * 8) + address_bit
-            wordlen = snap7types.S7WLBit
+            wordlen = types.S7WLBit
             if value > 0:
                 data = bytearray([1])
             else:
@@ -172,28 +172,28 @@ class Logo:
             # byte value
             logger.info(f"Byte address: {vm_address}")
             start = int(vm_address[1:])
-            wordlen = snap7types.S7WLByte
+            wordlen = types.S7WLByte
             data = bytearray(struct.pack(">B", value))
         elif re.match("^VW[0-9]+$", vm_address):
             # byte value
             logger.info(f"Word address: {vm_address}")
             start = int(vm_address[2:])
-            wordlen = snap7types.S7WLWord
+            wordlen = types.S7WLWord
             data = bytearray(struct.pack(">h", value))
         elif re.match("^VD[0-9]+$", vm_address):
             # byte value
             logger.info(f"DWord address: {vm_address}")
             start = int(vm_address[2:])
-            wordlen = snap7types.S7WLDWord
+            wordlen = types.S7WLDWord
             data = bytearray(struct.pack(">l", value))
         else:
             logger.info(f"write, Unknown address format: {vm_address}")
             return 1
 
-        if wordlen == snap7types.S7WLBit:
-            type_ = snap7.snap7types.wordlen_to_ctypes[snap7types.S7WLByte]
+        if wordlen == types.S7WLBit:
+            type_ = snap7.types.wordlen_to_ctypes[types.S7WLByte]
         else:
-            type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+            type_ = snap7.types.wordlen_to_ctypes[wordlen]
 
         cdata = (type_ * amount).from_buffer_copy(data)
 
@@ -214,7 +214,7 @@ class Logo:
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = snap7.snap7types.wordlen_to_ctypes[snap7.snap7types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
         result = (self.library.Cli_DBRead(
             self.pointer, db_number, start, size,
@@ -230,8 +230,8 @@ class Logo:
         :param start: start address for Logo7 0..951 / Logo8 0..1469
         :param data: bytearray
         """
-        wordlen = snap7.snap7types.S7WLByte
-        type_ = snap7.snap7types.wordlen_to_ctypes[wordlen]
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
