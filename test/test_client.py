@@ -492,15 +492,7 @@ class TestClient(unittest.TestCase):
         self.client.write_area(area, dbnumber, start, data)
         # start as_request and test
         p_data = self.client.as_db_read(dbnumber, start, size)
-        try:
-            self.client.wait_as_completion(ctypes.c_ulong(timeout))
-        except Snap7Exception as s7_err:
-            if s7_err.args[0] == b'CLI : Job Timeout':
-                self.fail(f"Request was timeouted after {timeout} seconds - FAIL")
-            else:
-                self.fail(f"Snap7Exception was thrown: {s7_err} - FAIL")
-        except BaseException as pyt_err:
-            self.fail(f"Exception was thrown: {pyt_err}")
+        self.client.wait_as_completion(timeout)
         self.assertEqual(bytearray(p_data), data)
 
     def test_wait_as_completion_timeouted(self, timeout=0, tries=500):
@@ -516,14 +508,13 @@ class TestClient(unittest.TestCase):
         for i in range(tries):
             self.client.as_db_read(dbnumber, start, size)
             try:
-                self.client.wait_as_completion(ctypes.c_ulong(0))
+                self.client.wait_as_completion(timeout)
             except Snap7Exception as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
                 return
-            except BaseException as pyt_err:
-                self.fail(f"Exception was thrown: {pyt_err}")
-        self.skipTest(f"After {tries} tries, no timout could be envoked. Skip test.")
+        self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
+                  f"a problem is existing in the method. Fail test.")
 
     def test_check_as_completion(self, timeout=5):
         # Cli_CheckAsCompletion
@@ -534,27 +525,17 @@ class TestClient(unittest.TestCase):
         start = 0
         db = 1
         data = bytearray(40)
-        try:
-            self.client.db_write(db_number=db, start=start, data=data)
-        except Snap7Exception as s7_err:
-            self.fail(f"Snap7Exception raised while preparing as_check_completion test: {s7_err}")
-        except BaseException as python_err:
-            self.fail(f"Other exception raised  while preparing as_check_completion test: {python_err}")
+        self.client.db_write(db_number=db, start=start, data=data)
         # Execute test
         p_data = self.client.as_db_read(db, start, size)
         for i in range(10):
-            try:
-                self.client.check_as_completion(ctypes.byref(check_status))
-                if check_status.value == 0:
-                    data_result = bytearray(p_data)
-                    self.assertEqual(data_result, data)
-                    break
-                pending_checked = True
-                time.sleep(1)
-            except Snap7Exception as s7_err:
-                self.fail(f"Snap7Exception raised: {s7_err}")
-            except BaseException as python_err:
-                self.fail(f"Other exception raised: {python_err}")
+            self.client.check_as_completion(ctypes.byref(check_status))
+            if check_status.value == 0:
+                data_result = bytearray(p_data)
+                self.assertEqual(data_result, data)
+                break
+            pending_checked = True
+            time.sleep(1)
         else:
             self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
         if pending_checked is False:

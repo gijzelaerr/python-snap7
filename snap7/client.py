@@ -632,14 +632,14 @@ class Client:
         # Cli_SetAsCallback
         raise NotImplementedError
 
-    def wait_as_completion(self, timeout: c_ulong) -> int:
+    def wait_as_completion(self, timeout: int) -> int:
         """
         Snap7 Cli_WaitAsCompletion representative.
         :param timeout: ms to wait for async job
         :return: Result of request in int format
         """
         # Cli_WaitAsCompletion
-        result = self._library.Cli_WaitAsCompletion(self._pointer, timeout)
+        result = self._library.Cli_WaitAsCompletion(self._pointer, c_ulong(timeout))
         check_error(result, context="client")
         return result
 
