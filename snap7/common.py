@@ -60,7 +60,7 @@ def check_error(code, context="client"):
     check if the error code is set. If so, a Python log message is generated
     and an error is raised.
     """
-    if code:
+    if code and code != 1:
         error = error_text(code, context)
         logger.error(error)
         raise Snap7Exception(error)

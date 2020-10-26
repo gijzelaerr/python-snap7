@@ -3,7 +3,7 @@ Snap7 client used for connection to a siemens7 server.
 """
 import logging
 import re
-from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte
+from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte, c_ulong
 from ctypes import c_void_p
 from datetime import datetime
 
@@ -506,7 +506,7 @@ class Client:
         data = (type_ * size)()
         result = (self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data)))
         check_error(result, context="client")
-        return bytearray(data)
+        return data
 
     def as_db_write(self, db_number, start, data):
         """
@@ -616,6 +616,33 @@ class Client:
 
         return self._library.Cli_SetPlcDateTime(self._pointer, byref(buffer))
 
+    def check_as_completion(self, p_value) -> bool:
+        """
+        Method to check Status of an async request. Result contains if the check was successful,
+        not the data value itself
+        :param p_value: Pointer where result of this check shall be written.
+        :return: 0 - Job is done successfully
+        :return: 1 - Job is either pending or contains s7errors
+        """
+        result = self._library.Cli_CheckAsCompletion(self._pointer, p_value)
+        check_error(result, context="client")
+        return result
+
+    def set_as_callback(self):
+        # Cli_SetAsCallback
+        raise NotImplementedError
+
+    def wait_as_completion(self, timeout: int) -> int:
+        """
+        Snap7 Cli_WaitAsCompletion representative.
+        :param timeout: ms to wait for async job
+        :return: Result of request in int format
+        """
+        # Cli_WaitAsCompletion
+        result = self._library.Cli_WaitAsCompletion(self._pointer, c_ulong(timeout))
+        check_error(result, context="client")
+        return result
+
     def asebread(self):
         # Cli_AsEBRead
         raise NotImplementedError
@@ -666,10 +693,6 @@ class Client:
 
     def aswritearea(self):
         # Cli_AsWriteArea
-        raise NotImplementedError
-
-    def checkascompletion(self):
-        # Cli_CheckAsCompletion
         raise NotImplementedError
 
     def copyramtorom(self):
@@ -764,10 +787,6 @@ class Client:
         # Cli_ReadSZLList
         raise NotImplementedError
 
-    def setascallback(self):
-        # Cli_SetAsCallback
-        raise NotImplementedError
-
     def setparam(self):
         # Cli_SetParam
         raise NotImplementedError
@@ -786,10 +805,6 @@ class Client:
 
     def tmwrite(self):
         # Cli_TMWrite
-        raise NotImplementedError
-
-    def waitascompletion(self):
-        # Cli_WaitAsCompletion
         raise NotImplementedError
 
     def writemultivars(self):
