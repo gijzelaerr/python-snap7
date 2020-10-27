@@ -203,7 +203,6 @@ class TestClient(unittest.TestCase):
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
-
     def test_list_blocks(self):
         blockList = self.client.list_blocks()
 
