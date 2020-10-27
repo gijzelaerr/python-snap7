@@ -15,6 +15,7 @@ from snap7.exceptions import Snap7Exception
 from snap7.server import mainloop
 from snap7.types import S7AreaDB, S7WLByte, S7DataItem
 
+
 logging.basicConfig(level=logging.WARNING)
 
 ip = '127.0.0.1'
@@ -148,18 +149,30 @@ class TestClient(unittest.TestCase):
     def test_read_area(self):
         amount = 1
         start = 1
+
         # Test read_area with a DB
         area = snap7.types.areas.DB
         dbnumber = 1
-        self.client.read_area(area, dbnumber, start, amount)
+        data = bytearray(b'\x11')
+        self.client.write_area(area, dbnumber, start, data)
+        res = self.client.read_area(area, dbnumber, start, amount)
+        self.assertEqual(data, bytearray(res))
+
         # Test read_area with a TM
         area = snap7.types.areas.TM
         dbnumber = 0
-        self.client.read_area(area, dbnumber, start, amount)
+        data = bytearray(b'\x12\x34')
+        self.client.write_area(area, dbnumber, start, data)
+        res = self.client.read_area(area, dbnumber, start, amount)
+        self.assertEqual(data, bytearray(res))
+
         # Test read_area with a CT
         area = snap7.types.areas.CT
         dbnumber = 0
-        self.client.read_area(area, dbnumber, start, amount)
+        data = bytearray(b'\x13\x35')
+        self.client.write_area(area, dbnumber, start, data)
+        res = self.client.read_area(area, dbnumber, start, amount)
+        self.assertEqual(data, bytearray(res))
 
     def test_write_area(self):
         # Test write area with a DB
@@ -167,20 +180,29 @@ class TestClient(unittest.TestCase):
         dbnumber = 1
         size = 1
         start = 1
-        data = bytearray(size)
+        data = bytearray(b'\x11')
         self.client.write_area(area, dbnumber, start, data)
+        res = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(data, bytearray(res))
+
         # Test write area with a TM
         area = snap7.types.areas.TM
         dbnumber = 0
         size = 2
-        timer = bytearray(size)
-        self.client.write_area(area, dbnumber, start, timer)
+        timer = bytearray(b'\x12\x00')
+        res = self.client.write_area(area, dbnumber, start, timer)
+        res = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(timer, bytearray(res))
+
         # Test write area with a CT
         area = snap7.types.areas.CT
         dbnumber = 0
         size = 2
-        timer = bytearray(size)
-        self.client.write_area(area, dbnumber, start, timer)
+        timer = bytearray(b'\x13\x00')
+        res = self.client.write_area(area, dbnumber, start, timer)
+        res = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(timer, bytearray(res))
+
 
     def test_list_blocks(self):
         blockList = self.client.list_blocks()
@@ -541,6 +563,72 @@ class TestClient(unittest.TestCase):
         if pending_checked is False:
             logging.warning("Pending was never reached, because Server was to fast,"
                             " but request to server was successfull.")
+
+    def test_as_read_area(self):
+        amount = 1
+        start = 1
+
+        # Test read_area with a DB
+        area = snap7.types.areas.DB
+        dbnumber = 1
+        data = bytearray(b'\x11')
+        self.client.write_area(area, dbnumber, start, data)
+        res = self.client.as_read_area(area, dbnumber, start, amount)
+        self.client.wait_as_completion(10)
+        res2 = bytearray(res)
+        self.assertEqual(res2, data)
+
+        # Test read_area with a TM
+        area = snap7.types.areas.TM
+        dbnumber = 0
+        data = bytearray(b'\x12\x34')
+        self.client.write_area(area, dbnumber, start, data)
+        res = self.client.as_read_area(area, dbnumber, start, amount)
+        self.client.wait_as_completion(10)
+        res2 = bytearray(res)
+        self.assertEqual(res2, data)
+
+        # Test read_area with a CT
+        area = snap7.types.areas.CT
+        dbnumber = 0
+        data = bytearray(b'\x13\x35')
+        self.client.write_area(area, dbnumber, start, data)
+        res = self.client.as_read_area(area, dbnumber, start, amount)
+        self.client.wait_as_completion(10)
+        res2 = bytearray(res)
+        self.assertEqual(res2, data)
+
+    def test_as_write_area(self):
+        # Test write area with a DB
+        area = snap7.types.areas.DB
+        dbnumber = 1
+        size = 1
+        start = 1
+        data = bytearray(b'\x11')
+        self.client.as_write_area(area, dbnumber, start, data)
+        self.client.wait_as_completion(10)
+        res = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(data, bytearray(res))
+
+        # Test write area with a TM
+        area = snap7.types.areas.TM
+        dbnumber = 0
+        size = 2
+        timer = bytearray(b'\x12\x00')
+        self.client.as_write_area(area, dbnumber, start, timer)
+        self.client.wait_as_completion(10)
+        res = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(timer, bytearray(res))
+
+        # Test write area with a CT
+        area = snap7.types.areas.CT
+        dbnumber = 0
+        size = 2
+        timer = bytearray(b'\x13\x00')
+        self.client.as_write_area(area, dbnumber, start, timer)
+        self.client.wait_as_completion(10)
+        res = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(timer, bytearray(res))
 
     def test_asebread(self):
         # Cli_AsEBRead

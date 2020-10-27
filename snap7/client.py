@@ -657,7 +657,7 @@ class Client:
         logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
         result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
         check_error(result, context="client")
-        return bytearray(data)
+        return data
 
     @staticmethod
     def _as_read_area_prepare(area, size):
