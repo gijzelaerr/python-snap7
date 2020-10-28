@@ -16,7 +16,7 @@ jobs:
         run: python3 -m pip install --upgrade pip
       - name: Install python-snap7
         run: python3 -m pip install .[test]
-      - name: Run putest
+      - name: Run pytest
         run: pytest
 
 
