@@ -1,3 +1,5 @@
+import asyncio
+import ctypes
 import logging
 import time
 import pytest
@@ -31,9 +33,31 @@ def testserver():
 @pytest.fixture(scope='module')
 def testclient():
     client_async = snap7.client_async.ClientAsync()
-    client_async.set_as_check_mode(1)  # Todo: It should be possible to check all modes for all Tests in Future
     client_async.connect(ip, rack, slot, tcpport)
     yield client_async
     client_async.disconnect()
     client_async.destroy()
 
+async def test_wait_loop(testclient):
+    check_status = ctypes.c_int(-1)
+    pending_checked = False
+    # preparing Server values
+    size = 40
+    start = 0
+    db = 1
+    data = bytearray(40)
+    testclient.client_async.client.db_write(db_number=db, start=start, data=data)
+    
+    # Execute test
+    p_data = testclient.client_async.client.as_db_read(db, start, size)
+    wait_res = await asyncio.wait_for(testclient.client_async.wait_loop, 10)
+    if wait_res == 0:
+        data_result = bytearray(p_data)
+        if not data == data_result:
+            raise ValueError
+        if pending_checked is False:
+            logging.warning("Pending was never reached, because Server was to fast,"
+                            " but request to server was successfull.")
+        return
+    else:
+        raise TimeoutError
