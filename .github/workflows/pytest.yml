@@ -31,5 +31,8 @@ jobs:
           python3 -m pip install .[test]
       - name: Run pytest
         run: |
+          which pytest
+          echo $PATH
           pytest test/test_server.py test/test_client.py test/test_util.py
+          sudo echo $PATH
           sudo pytest test/test_partner.py
