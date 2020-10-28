@@ -18,7 +18,7 @@ jobs:
         run: python3 -m pip install .[test]
       - name: Run pytest
         run: |
-          pytest test/test_server.py test/test_client.py test/test_util.py test/test_client_async.py
+          pytest test/test_server.py test/test_client.py test/test_util.py
           sudo pytest test/test_partner.py
 
 
