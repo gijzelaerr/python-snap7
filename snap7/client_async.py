@@ -38,11 +38,10 @@ class ClientAsync(Client):
         super().__init__()
         self.as_check = None
 
-    async def wait_loop(self):
+    async def wait_loop(self, operation):
         """
         This loop checks if an answer received from an async request.
         :return:
         """
-        temp = c_int(0)
-        while Client.check_as_completion(self._pointer, byref(temp)):
+        while Client.check_as_completion(self._pointer, byref(operation)):
             await asyncio.sleep(0)
