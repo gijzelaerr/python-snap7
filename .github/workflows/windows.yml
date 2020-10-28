@@ -6,6 +6,7 @@ on:
     branches: [ master ]
 jobs:
   windows_wheel:
+    continue-on-error: true
     runs-on: windows-2019
     steps:
       - name: Checkout
@@ -23,5 +24,4 @@ jobs:
       - name: Install python libraries
         run: python.exe -m pip install .[test]
       - name: Run tests
-        run: pytest.exe  test/test_client.py test/test_util.py
-# test/test_partner.py todo: enable again at some point
+        run: pytest.exe  test/test_client.py test/test_util.py test/test_partner.py
