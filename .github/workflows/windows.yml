@@ -23,4 +23,4 @@ jobs:
       - name: Install python libraries
         run: python.exe -m pip install .[test]
       - name: Run tests
-        run: pytest.exe
+        run: pytest.exe  test/test_client.py test/test_util.py test/test_partner.py
