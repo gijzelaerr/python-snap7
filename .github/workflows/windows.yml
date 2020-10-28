@@ -1,0 +1,26 @@
+name: Windows Test
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+jobs:
+  windows_wheel:
+    continue-on-error: true
+    runs-on: windows-2019
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install choco packages
+        run: choco install unzip curl python
+      - name: Get snap7
+        run: |
+          curl.exe https://dev.monetdb.org/hg/MonetDB/archive/${{ env.branch }}.zip -O
+          7z x snap7.7z
+          Copy-Item snap7-full-1.4.2/release/Windows/Win64/snap7.dll snap7/.
+      - name: Upgrade pip and wheel for all pythons
+        run:  python.exe -m pip install --upgrade pip wheel
+      - name: Install python libraries
+        run: python.exe -m pip install .[test]
+      - name: Run tests
+        run: pytest.exe
