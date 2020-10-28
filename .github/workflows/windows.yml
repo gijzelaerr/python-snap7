@@ -12,11 +12,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Install choco packages
-        run: choco install unzip curl python
+        run: choco install 7zip wget python
       - name: Get snap7
         run: |
-          curl.exe https://dev.monetdb.org/hg/MonetDB/archive/${{ env.branch }}.zip -O
-          7z x snap7.7z
+           wget.exe --content-disposition -c https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
+          7z x snap7-full-1.4.2.7z
           Copy-Item snap7-full-1.4.2/release/Windows/Win64/snap7.dll snap7/.
       - name: Upgrade pip and wheel for all pythons
         run:  python.exe -m pip install --upgrade pip wheel

@@ -10,12 +10,12 @@ jobs:
     steps:
     - name: Install Debian packages
       run: |
-        apt-get update -qq
-        apt-get install -y python3-pip
+        sudo apt-get update -qq
+        sudo apt-get install -y python3-pip
     - name: Install dependencies
       run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install flake8
+        sudo python3 -m pip install --upgrade pip
+        sudo python3 -m pip install flake8
     - name: Lint with flake8
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
