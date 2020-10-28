@@ -7,9 +7,9 @@ on:
 jobs:
   osx_wheel:
     runs-on: macos-10.15
-    continue-on-error: true
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
       - name: Install snap7
         run: brew install snap7
       - name: Upgrade pip

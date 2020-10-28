@@ -8,15 +8,17 @@ jobs:
   build:
     runs-on: ubuntu-20.04
     steps:
-    - name: Install Debian packages
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y python3-pip
-    - name: Install dependencies
-      run: |
-        sudo python3 -m pip install --upgrade pip
-        sudo python3 -m pip install flake8
-    - name: Lint with flake8
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Debian packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-pip
+      - name: Install dependencies
+        run: |
+          sudo python3 -m pip install --upgrade pip
+          sudo python3 -m pip install flake8
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics

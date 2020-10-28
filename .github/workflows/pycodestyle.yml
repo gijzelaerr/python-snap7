@@ -8,13 +8,15 @@ jobs:
   build:
     runs-on: ubuntu-20.04
     steps:
-    - name: Install Debian packages
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y python3-pip
-    - name: Install dependencies
-      run: |
-        sudo python3 -m pip install --upgrade pip
-        sudo python3 -m pip install pycodestyle
-    - name: Run pycodestyle
-      run: pycodestyle snap7 test
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Debian packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-pip
+      - name: Install dependencies
+        run: |
+          sudo python3 -m pip install --upgrade pip
+          sudo python3 -m pip install pycodestyle
+      - name: Run pycodestyle
+        run: pycodestyle snap7 test
