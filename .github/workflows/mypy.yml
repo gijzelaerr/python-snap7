@@ -1,4 +1,4 @@
-name: mypy
+name: Mypy
 on:
   push:
     branches: [ master ]
