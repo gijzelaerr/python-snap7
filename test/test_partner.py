@@ -14,6 +14,9 @@ class TestPartner(unittest.TestCase):
         self.partner = snap7.partner.Partner()
         self.partner.start()
 
+    def tearDown(self) -> None:
+        self.partner.stop()
+
     def test_as_b_send(self):
         self.partner.as_b_send()
 
