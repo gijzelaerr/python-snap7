@@ -15,16 +15,9 @@ logger = logging.getLogger(__name__)
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
-
-    if asyncio.iscoroutinefunction(func):
-        async def f(*args, **kw):
-            code = await func(*args, **kw)
-            check_error(code, context="client")
-
-    else:
-        def f(*args, **kw):
-            code = func(*args, **kw)
-            check_error(code, context="client")
+    async def f(*args, **kw):
+        code = await func(*args, **kw)
+        check_error(code, context="client")
 
     return f
 
@@ -43,5 +36,5 @@ class ClientAsync(Client):
         This loop checks if an answer received from an async request.
         :return:
         """
-        while Client.check_as_completion(self._pointer, byref(operation)):
+        while self.check_as_completion(byref(operation)):
             await asyncio.sleep(0)

@@ -652,16 +652,9 @@ class Client:
         :param start: offset to start writing
         :param size: number of units to read
         """
+        if area not in snap7.types.areas.values():
+            raise NotImplementedError(f"{area} is not implemented in snap7.types")
 
-        wordlen, data = self._as_read_area_prepare(area, size)
-        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
-        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
-        check_error(result, context="client")
-        return data
-
-    @staticmethod
-    def _as_read_area_prepare(area, size):
-        assert area in snap7.types.areas.values()
         if area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
@@ -670,7 +663,12 @@ class Client:
             wordlen = snap7.types.S7WLByte
         type_ = snap7.types.wordlen_to_ctypes[wordlen]
         data = (type_ * size)()
-        return wordlen, data
+
+        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
+        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
+        check_error(result, context="client")
+        return data
+
 
     @error_wrap
     def as_write_area(self, area, dbnumber, start, data):

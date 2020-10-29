@@ -21,7 +21,7 @@ rack = 1
 slot = 1
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def testserver():
     process = Process(target=mainloop)
     process.start()
@@ -30,7 +30,7 @@ def testserver():
     kill(process.pid, 1)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def testclient():
     client_async = snap7.client_async.ClientAsync()
     client_async.connect(ip, rack, slot, tcpport)
@@ -47,19 +47,14 @@ async def test_wait_loop(testclient):
     start = 0
     db = 1
     data = bytearray(40)
-    testclient.client_async.client.db_write(db_number=db, start=start, data=data)
+    testclient.db_write(db_number=db, start=start, data=data)
     # Execute test
-    p_data = testclient.client_async.client.as_db_read(db, start, size)
-    wait_res = await asyncio.wait_for(testclient.client_async.wait_loop(check_status), 10)
-    if wait_res == 0:
-        data_result = bytearray(p_data)
-        if not data == data_result:
-            logging.warning("Test result is not as expected")
-            raise ValueError
-        if pending_checked is False:
-            logging.warning("Pending was never reached, because Server was to fast,"
-                            " but request to server was successfull.")
-        return
-    else:
-        logging.warning("Test timed out.")
-        raise TimeoutError
+    p_data = testclient.as_db_read(db, start, size)
+    await asyncio.wait_for(testclient.wait_loop(check_status), 10)
+    data_result = bytearray(p_data)
+    if not data == data_result:
+        logging.warning("Test result is not as expected")
+        raise ValueError
+    if pending_checked is False:
+        logging.warning("Pending was never reached, because Server was to fast,"
+                        " but request to server was successfull.")
