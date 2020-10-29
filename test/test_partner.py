@@ -1,8 +1,8 @@
 import logging
-import unittest as unittest
+import unittest
 
 from unittest import mock
-
+import pytest
 import snap7.partner
 from snap7.exceptions import Snap7Exception
 
@@ -17,7 +17,7 @@ class TestPartner(unittest.TestCase):
     def test_as_b_send(self):
         self.partner.as_b_send()
 
-    @unittest.skip("we don't recv something yet")
+    @pytest.skip("we don't recv something yet")
     def test_b_recv(self):
         self.partner.b_recv()
 
