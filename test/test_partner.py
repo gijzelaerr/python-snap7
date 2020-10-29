@@ -17,7 +17,7 @@ class TestPartner(unittest.TestCase):
     def test_as_b_send(self):
         self.partner.as_b_send()
 
-    @pytest.skip("we don't recv something yet")
+    @pytest.mark.skip("we don't recv something yet")
     def test_b_recv(self):
         self.partner.b_recv()
 
