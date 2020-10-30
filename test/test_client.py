@@ -631,6 +631,7 @@ class TestClient(unittest.TestCase):
 
     def test_asebread(self):
         # Cli_AsEBRead
+        self.fail("Test if fail causes testrun fail")
         with self.assertRaises(NotImplementedError):
             self.client.asebread()
 
