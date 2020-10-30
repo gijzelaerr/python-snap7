@@ -31,6 +31,5 @@ jobs:
           python3 -m pip install .[test]
       - name: Run pytest
         run: |
-          which pytest
           pytest test/test_server.py test/test_client.py test/test_util.py
           sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest test/test_partner.py
