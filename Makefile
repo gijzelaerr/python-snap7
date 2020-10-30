@@ -29,7 +29,7 @@ doc: venv/bin/sphinx-build
 pycodestyle: venv/bin/pytest
 	venv/bin/pycodestyle snap7 test
 
-mypy: venv/bin/pytest
+mypy: venv/
 	venv/bin/mypy snap7 test
 
 test: venv/bin/pytest
