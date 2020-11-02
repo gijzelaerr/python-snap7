@@ -1,8 +1,10 @@
 import time
-import snap7
-from snap7 import util
+
 from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
+
+import snap7
+from snap7 import util
 
 print("""
 

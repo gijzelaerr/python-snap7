@@ -643,6 +643,57 @@ class Client:
         check_error(result, context="client")
         return result
 
+    def as_read_area(self, area, dbnumber, start, size):
+        """This is the main function to read data from a PLC.
+        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+
+        :param area: chosen memory_area
+        :param dbnumber: The DB number, only used when area= S7AreaDB
+        :param start: offset to start writing
+        :param size: number of units to read
+        """
+        if area not in snap7.types.areas.values():
+            raise NotImplementedError(f"{area} is not implemented in snap7.types")
+
+        if area == snap7.types.S7AreaTM:
+            wordlen = snap7.types.S7WLTimer
+        elif area == snap7.types.S7AreaCT:
+            wordlen = snap7.types.S7WLCounter
+        else:
+            wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        data = (type_ * size)()
+
+        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
+        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, byref(data))
+        check_error(result, context="client")
+        return data
+
+    @error_wrap
+    def as_write_area(self, area, dbnumber, start, data):
+        """This is the main function to write data into a PLC. It's the
+        complementary function of Cli_ReadArea(), the parameters and their
+        meanings are the same. The only difference is that the data is
+        transferred from the buffer pointed by pUsrData into PLC.
+
+        :param area: chosen memory_area
+        :param dbnumber: The DB number, only used when area= S7AreaDB
+        :param start: offset to start writing
+        :param data: a bytearray containing the payload
+        """
+        if area == snap7.types.S7AreaTM:
+            wordlen = snap7.types.S7WLTimer
+        elif area == snap7.types.S7AreaCT:
+            wordlen = snap7.types.S7WLCounter
+        else:
+            wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        size = len(data)
+        logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
+                     f"wordlen {wordlen} type: {type_}")
+        cdata = (type_ * len(data)).from_buffer_copy(data)
+        return self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
+
     def asebread(self):
         # Cli_AsEBRead
         raise NotImplementedError
@@ -665,10 +716,6 @@ class Client:
 
     def asmbwrite(self):
         # Cli_AsMBWrite
-        raise NotImplementedError
-
-    def asreadarea(self):
-        # Cli_AsReadArea
         raise NotImplementedError
 
     def asreadszl(self):

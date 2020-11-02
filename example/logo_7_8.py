@@ -1,4 +1,5 @@
 import logging
+
 import snap7
 
 # for setup the Logo connection please follow this link

@@ -17,6 +17,9 @@ setup: venv/installed
 venv/bin/pytest: venv/
 	venv/bin/pip install -e ".[test]"
 
+venv/bin/pytest-asyncio: venv/
+	venv/bin/pip install -e ".[test]"
+
 venv/bin/sphinx-build:  venv/
 	venv/bin/pip install -e ".[doc]"
 
@@ -25,12 +28,12 @@ doc: venv/bin/sphinx-build
 
 pycodestyle: venv/bin/pytest
 	venv/bin/pycodestyle snap7 test
-    
+
 mypy: venv/bin/pytest
 	venv/bin/mypy snap7 test
 
 test: venv/bin/pytest
-	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py
+	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py test/test_client_async.py
 	sudo venv/bin/pytest test/test_partner.py  # run this as last to prevent pytest cache dir creates as root
 
 clean:

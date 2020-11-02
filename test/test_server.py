@@ -1,7 +1,6 @@
 import ctypes
 import logging
 import unittest
-
 from unittest import mock
 
 import snap7.error

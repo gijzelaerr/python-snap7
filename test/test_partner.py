@@ -1,6 +1,5 @@
 import logging
 import unittest as unittest
-
 from unittest import mock
 
 import snap7.partner
