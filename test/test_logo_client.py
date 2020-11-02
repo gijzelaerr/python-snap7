@@ -28,12 +28,9 @@ class TestLogoClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        try:
-            cls.process.kill()
-            cls.process.close()
-        except:
-            logging.error("Process couldn't")
-            cls.process.terminate()
+        cls.process.kill()
+        cls.process.join()
+        cls.process.close()
 
     def setUp(self):
         self.client = snap7.logo.Logo()
