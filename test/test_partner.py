@@ -66,7 +66,8 @@ class TestPartner(unittest.TestCase):
             (snap7.types.KeepAliveTime, 5000),
         )
         for param, value in expected:
-            self.assertEqual(self.partner.get_param(param), value)
+            test_val = self.partner.get_param(param)
+            self.assertEqual(test_val, value)
 
         self.assertRaises(Exception, self.partner.get_param, snap7.types.MaxClients)
 
