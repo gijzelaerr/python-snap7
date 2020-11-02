@@ -108,12 +108,14 @@ class TestPartner(unittest.TestCase):
     def test_set_send_callback(self):
         self.partner.set_send_callback()
 
+    @unittest.skip("FIXME: Opening an already opened partner may cause test troubles")
     def test_start(self):
         self.partner.start()
 
     def test_start_to(self):
         self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0)
 
+    @unittest.skip("FIXME: Stopping an already opened partner may cause test troubles")
     def test_stop(self):
         self.partner.stop()
 
