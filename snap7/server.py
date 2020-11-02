@@ -303,11 +303,15 @@ def mainloop(tcpport: int = 1102):
     server.register_area(snap7.types.srvAreaTM, 1, TMdata)
     server.register_area(snap7.types.srvAreaCT, 1, CTdata)
     server.start(tcpport=tcpport)
-    while True:
+    try:
         while True:
-            event = server.pick_event()
-            if event:
-                logger.info(server.event_text(event))
-            else:
-                break
-        time.sleep(1)
+            while True:
+                event = server.pick_event()
+                if event:
+                    logger.info(server.event_text(event))
+                else:
+                    break
+            time.sleep(1)
+    except BaseException:
+        server.stop()
+        server.destroy()
