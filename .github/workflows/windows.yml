@@ -12,12 +12,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Install choco packages
-        run: choco install 7zip wget
-      - name: Check python version before
-        run: py --version
-      - run: choco install -y python
-      - name: Check newest version
-        run: py --version
+        run: choco install 7zip wget python
       - name: Get snap7
         run: |
           wget.exe --content-disposition -c https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
@@ -25,8 +20,8 @@ jobs:
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll snap7\.
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll C:\Windows\System32\.
       - name: Upgrade pip and wheel for all pythons
-        run:  py -m pip install --upgrade pip wheel
+        run:  python.exe -m pip install --upgrade pip wheel
       - name: Install python libraries
-        run: py -m pip install .[test]
+        run: python.exe -m pip install .[test]
       - name: Run tests
-        run: py -m pytest test/test_client.py test/test_util.py
+        run: pytest.exe  test/test_client.py test/test_util.py test/test_partner.py
