@@ -37,7 +37,10 @@ class TestClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.kill()
+        try:
+            cls.process.kill()
+        except AttributeError:
+            cls.process.terminate()
         cls.process.join()
         cls.process.close()
 
