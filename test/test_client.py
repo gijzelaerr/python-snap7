@@ -37,9 +37,9 @@ class TestClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-            cls.process.kill()
-            cls.process.join()
-            cls.process.close()
+        cls.process.kill()
+        cls.process.join()
+        cls.process.close()
 
     def setUp(self):
         self.client = snap7.client.Client()
