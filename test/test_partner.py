@@ -68,8 +68,7 @@ class TestPartner(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.partner.get_param(param), value)
 
-        self.assertRaises(Exception, self.partner.get_param,
-                          snap7.types.MaxClients)
+        self.assertRaises(Exception, self.partner.get_param, snap7.types.MaxClients)
 
     def test_get_stats(self):
         self.partner.get_stats()
