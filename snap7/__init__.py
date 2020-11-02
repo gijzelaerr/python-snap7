@@ -11,6 +11,7 @@ import snap7.logo as logo
 import snap7.server as server
 import snap7.types as types
 import snap7.util as util
+import snap7.partner as partner
 
 try:
     __version__ = pkg_resources.require("snap7")[0].version
