@@ -39,10 +39,11 @@ class TestClient(unittest.TestCase):
     def tearDownClass(cls):
         try:
             cls.process.kill()
+            cls.process.join()
+            cls.process.close()
         except AttributeError:
             cls.process.terminate()
-        cls.process.join()
-        cls.process.close()
+            cls.process.join()
 
     def setUp(self):
         self.client = snap7.client.Client()
