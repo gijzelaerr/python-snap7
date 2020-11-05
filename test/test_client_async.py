@@ -9,7 +9,7 @@ from os import kill
 import snap7
 from snap7.server import mainloop
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 
 pytestmark = pytest.mark.asyncio
 

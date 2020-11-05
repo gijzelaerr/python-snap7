@@ -7,7 +7,7 @@ from os import kill
 import snap7
 from snap7.server import mainloop
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 
 ip = '127.0.0.1'
 tcpport = 1102

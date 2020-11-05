@@ -5,7 +5,7 @@ from unittest import mock
 import snap7.partner
 from snap7.exceptions import Snap7Exception
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 
 
 class TestPartner(unittest.TestCase):

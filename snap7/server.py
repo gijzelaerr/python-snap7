@@ -291,7 +291,7 @@ class Server:
         return self.library.Srv_ClearEvents(self.pointer)
 
 
-def mainloop(tcpport: int = 1102):
+def mainloop(tcpport: int = 1102, ev=None):
     server = snap7.server.Server()
     size = 100
     DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
@@ -303,15 +303,13 @@ def mainloop(tcpport: int = 1102):
     server.register_area(snap7.types.srvAreaTM, 1, TMdata)
     server.register_area(snap7.types.srvAreaCT, 1, CTdata)
     server.start(tcpport=tcpport)
-    try:
+    while not ev.is_set():
         while True:
-            while True:
-                event = server.pick_event()
-                if event:
-                    logger.info(server.event_text(event))
-                else:
-                    break
-            time.sleep(1)
-    except BaseException:
-        server.stop()
-        server.destroy()
+            event = server.pick_event()
+            if event:
+                logger.info(server.event_text(event))
+            else:
+                break
+        time.sleep(1)
+    server.stop()
+    server.destroy()
