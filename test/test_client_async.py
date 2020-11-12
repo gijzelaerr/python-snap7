@@ -43,15 +43,20 @@ async def test_wait_loop(testclient):
     check_status = ctypes.c_int(-1)
     pending_checked = False
     # preparing Server values
-    size = 40
-    start = 0
-    db = 1
-    data = bytearray(40)
-    testclient.db_write(db_number=db, start=start, data=data)
+    amount = 1
+    start = 1
+    # Test read_area with a DB
+    area = snap7.types.areas.DB
+    dbnumber = 1
+    data = bytearray(b'\x11')
+    testclient.write_area(area, dbnumber, start, data)
     # Execute test
-    p_data = testclient.as_db_read(db, start, size)
+    wordlen, usrdata = testclient._prepare_as_read_area(snap7.types.S7AreaDB, amount)
+    res = testclient.as_read_area(area, dbnumber, start, amount, wordlen, usrdata)
+    if res != 0:
+        pytest.fail(f"as_area_read was not succescull -- Errpr: {res}")
     await asyncio.wait_for(testclient.wait_loop(check_status), 10)
-    data_result = bytearray(p_data)
+    data_result = bytearray(usrdata)
     if not data == data_result:
         logging.warning("Test result is not as expected")
         raise ValueError
