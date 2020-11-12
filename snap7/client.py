@@ -701,7 +701,7 @@ class Client:
                      f"wordlen {wordlen} type: {type_}")
         cdata = (type_ * len(pusrdata)).from_buffer_copy(pusrdata)
         res = self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
-        check_error(res,context="client")
+        check_error(res, context="client")
         return res
 
     def asebread(self):
