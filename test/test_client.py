@@ -513,7 +513,8 @@ class TestClient(unittest.TestCase):
         self.client.write_area(area, dbnumber, start, data)
         # start as_request and test
         wordlen, usrdata = self.client._prepare_as_read_area(area, size)
-        res = self.client.as_read_area(area, dbnumber, start, size, wordlen, usrdata)
+        pusrdata = ctypes.byref(usrdata)
+        res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pusrdata)
         if res != 0:
             self.fail(f"Async read area failed before checking -- Error {res}")
         self.client.wait_as_completion(timeout)
