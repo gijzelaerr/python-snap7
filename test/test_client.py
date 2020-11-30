@@ -4,7 +4,7 @@ import logging
 import struct
 import time
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from multiprocessing import Process
 from os import kill
 from unittest import mock
@@ -494,7 +494,7 @@ class TestClient(unittest.TestCase):
             self.client._library.Cli_AsDownload = original
 
     def test_get_plc_time(self):
-        self.assertEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime())
+        self.assertAlmostEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime(), delta=timedelta(seconds=1))
 
     def test_set_plc_datetime(self):
         new_dt = datetime(2011, 1, 1, 1, 1, 1, 0)
