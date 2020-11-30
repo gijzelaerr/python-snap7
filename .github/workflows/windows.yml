@@ -15,7 +15,7 @@ jobs:
         run: choco install 7zip wget python
       - name: Get snap7
         run: |
-          wget.exe --content-disposition -c https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
+          wget.exe -O snap7-full-1.4.2.7z --content-disposition -c https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
           7z x snap7-full-1.4.2.7z
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll snap7\.
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll C:\Windows\System32\.
