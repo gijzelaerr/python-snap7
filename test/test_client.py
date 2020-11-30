@@ -515,8 +515,6 @@ class TestClient(unittest.TestCase):
         wordlen, usrdata = self.client._prepare_as_read_area(area, size)
         pusrdata = ctypes.byref(usrdata)
         res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pusrdata)
-        if res != 0:
-            self.fail(f"Async read area failed before checking -- Error {res}")
         self.client.wait_as_completion(timeout)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -534,16 +532,14 @@ class TestClient(unittest.TestCase):
         # start as_request and wait for zero seconds to try trigger timeout
         for i in range(tries):
             res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pdata)
-            if res != 0:
-                self.fail(f"Async read area failed before checking -- Error {res}")
             try:
                 res2 = self.client.wait_as_completion(timeout)
             except Snap7Exception as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
                 return
-            if res2 != 0:
-                self.fail(f"While waiting another error appeared:>>>>>>>> {res2}")
+            except:
+                self.fail(f"While waiting another error appeared: {res2}")
 
         self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
                   f"a problem is existing in the method. Fail test.")
@@ -564,8 +560,6 @@ class TestClient(unittest.TestCase):
         wordlen, cdata = self.client._prepare_as_read_area(area, size)
         pcdata = ctypes.byref(cdata)
         res = self.client.as_read_area(area, db, start, size, wordlen, pcdata)
-        if res != 0:
-            self.fail(f"as_read_area was not sucessfull --- error {res}")
         for i in range(10):
             self.client.check_as_completion(ctypes.byref(check_status))
             if check_status.value == 0:
@@ -625,8 +619,6 @@ class TestClient(unittest.TestCase):
         data = bytearray(b'\x11')
         wordlen, cdata = self.client._prepare_as_write_area(area, data)
         res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
-        if res != 0:
-            self.fail(f"Client failed: --  as_write_area command returned {res}")
         self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(data, bytearray(res))
@@ -638,8 +630,6 @@ class TestClient(unittest.TestCase):
         timer = bytearray(b'\x12\x00')
         wordlen, cdata = self.client._prepare_as_write_area(area, timer)
         res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
-        if res != 0:
-            self.fail(f"Client failed: --  as_write_area command returned {res}")
         self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
@@ -651,8 +641,6 @@ class TestClient(unittest.TestCase):
         timer = bytearray(b'\x13\x00')
         wordlen, cdata = self.client._prepare_as_write_area(area, timer)
         res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
-        if res != 0:
-            self.fail(f"Client failed: --  as_write_area command returned {res}")
         self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
