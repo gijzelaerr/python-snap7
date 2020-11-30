@@ -591,8 +591,6 @@ class TestClient(unittest.TestCase):
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
         res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
-        if res != 0:
-            self.fail(f"Client failed: --  as_read_area command returned {res}")
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -604,8 +602,6 @@ class TestClient(unittest.TestCase):
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
         res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
-        if res != 0:
-            self.fail(f"Client failed: --  as_read_area command returned {res}")
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -617,8 +613,6 @@ class TestClient(unittest.TestCase):
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
         res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
-        if res != 0:
-            self.fail(f"Client failed: --  as_read_area command returned {res}")
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
