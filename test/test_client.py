@@ -502,7 +502,7 @@ class TestClient(unittest.TestCase):
         # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
         # self.assertEqual(new_dt, self.client.get_plc_datetime())
 
-    def test_wait_as_completion_pass(self, timeout=10):
+    def test_wait_as_completion_pass(self, timeout=1000):
         # Cli_WaitAsCompletion
         # prepare Server with values
         area = snap7.types.areas.DB
@@ -512,9 +512,11 @@ class TestClient(unittest.TestCase):
         data = bytearray(size)
         self.client.write_area(area, dbnumber, start, data)
         # start as_request and test
-        p_data = self.client.as_db_read(dbnumber, start, size)
+        wordlen, usrdata = self.client._prepare_as_read_area(area, size)
+        pusrdata = ctypes.byref(usrdata)
+        res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pusrdata)
         self.client.wait_as_completion(timeout)
-        self.assertEqual(bytearray(p_data), data)
+        self.assertEqual(bytearray(usrdata), data)
 
     def test_wait_as_completion_timeouted(self, timeout=0, tries=500):
         # Cli_WaitAsCompletion
@@ -524,16 +526,21 @@ class TestClient(unittest.TestCase):
         size = 1
         start = 1
         data = bytearray(size)
+        wordlen, data = self.client._prepare_as_read_area(area, size)
+        pdata = ctypes.byref(data)
         self.client.write_area(area, dbnumber, start, data)
         # start as_request and wait for zero seconds to try trigger timeout
         for i in range(tries):
-            self.client.as_db_read(dbnumber, start, size)
+            res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pdata)
             try:
-                self.client.wait_as_completion(timeout)
+                res2 = self.client.wait_as_completion(timeout)
             except Snap7Exception as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
                 return
+            except BaseException:
+                self.fail(f"While waiting another error appeared:>>>>>>>> {res2}")
+
         self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
                   f"a problem is existing in the method. Fail test.")
 
@@ -542,18 +549,21 @@ class TestClient(unittest.TestCase):
         check_status = ctypes.c_int(-1)
         pending_checked = False
         # preparing Server values
-        size = 40
-        start = 0
+        data = bytearray(b'\x01\xFF')
+        size = len(data)
+        area = snap7.types.areas.DB
         db = 1
-        data = bytearray(40)
-        self.client.db_write(db_number=db, start=start, data=data)
-        # Execute test
-        p_data = self.client.as_db_read(db, start, size)
+        start = 1
+        self.client.write_area(area, db, start, data)
+
+        # start as_request and test
+        wordlen, cdata = self.client._prepare_as_read_area(area, size)
+        pcdata = ctypes.byref(cdata)
+        res = self.client.as_read_area(area, db, start, size, wordlen, pcdata)
         for i in range(10):
             self.client.check_as_completion(ctypes.byref(check_status))
             if check_status.value == 0:
-                data_result = bytearray(p_data)
-                self.assertEqual(data_result, data)
+                self.assertEqual(data, bytearray(cdata))
                 break
             pending_checked = True
             time.sleep(1)
@@ -572,30 +582,33 @@ class TestClient(unittest.TestCase):
         dbnumber = 1
         data = bytearray(b'\x11')
         self.client.write_area(area, dbnumber, start, data)
-        res = self.client.as_read_area(area, dbnumber, start, amount)
-        self.client.wait_as_completion(10)
-        res2 = bytearray(res)
-        self.assertEqual(res2, data)
+        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
+        pusrdata = ctypes.byref(usrdata)
+        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        self.client.wait_as_completion(1000)
+        self.assertEqual(bytearray(usrdata), data)
 
         # Test read_area with a TM
         area = snap7.types.areas.TM
         dbnumber = 0
         data = bytearray(b'\x12\x34')
         self.client.write_area(area, dbnumber, start, data)
-        res = self.client.as_read_area(area, dbnumber, start, amount)
-        self.client.wait_as_completion(10)
-        res2 = bytearray(res)
-        self.assertEqual(res2, data)
+        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
+        pusrdata = ctypes.byref(usrdata)
+        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        self.client.wait_as_completion(1000)
+        self.assertEqual(bytearray(usrdata), data)
 
         # Test read_area with a CT
         area = snap7.types.areas.CT
         dbnumber = 0
         data = bytearray(b'\x13\x35')
         self.client.write_area(area, dbnumber, start, data)
-        res = self.client.as_read_area(area, dbnumber, start, amount)
-        self.client.wait_as_completion(10)
-        res2 = bytearray(res)
-        self.assertEqual(res2, data)
+        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
+        pusrdata = ctypes.byref(usrdata)
+        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        self.client.wait_as_completion(1000)
+        self.assertEqual(bytearray(usrdata), data)
 
     def test_as_write_area(self):
         # Test write area with a DB
@@ -604,8 +617,9 @@ class TestClient(unittest.TestCase):
         size = 1
         start = 1
         data = bytearray(b'\x11')
-        self.client.as_write_area(area, dbnumber, start, data)
-        self.client.wait_as_completion(10)
+        wordlen, cdata = self.client._prepare_as_write_area(area, data)
+        res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
+        self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(data, bytearray(res))
 
@@ -614,8 +628,9 @@ class TestClient(unittest.TestCase):
         dbnumber = 0
         size = 2
         timer = bytearray(b'\x12\x00')
-        self.client.as_write_area(area, dbnumber, start, timer)
-        self.client.wait_as_completion(10)
+        wordlen, cdata = self.client._prepare_as_write_area(area, timer)
+        res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
+        self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
@@ -624,8 +639,9 @@ class TestClient(unittest.TestCase):
         dbnumber = 0
         size = 2
         timer = bytearray(b'\x13\x00')
-        self.client.as_write_area(area, dbnumber, start, timer)
-        self.client.wait_as_completion(10)
+        wordlen, cdata = self.client._prepare_as_write_area(area, timer)
+        res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
+        self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
