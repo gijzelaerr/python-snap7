@@ -538,8 +538,8 @@ class TestClient(unittest.TestCase):
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
                 return
-            except:
-                self.fail(f"While waiting another error appeared: {res2}")
+            except BaseException:
+                self.fail(f"While waiting another error appeared:>>>>>>>> {res2}")
 
         self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
                   f"a problem is existing in the method. Fail test.")
