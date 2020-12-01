@@ -815,15 +815,15 @@ class TestClient(unittest.TestCase):
         expected_length_of_record = 34
         ssl_id = 0x001c
         response = self.client.readszl(ssl_id)
-        self.assertEqual(expected_number_of_records, response.Header.NDR)
-        self.assertEqual(expected_length_of_record, response.Header.LengthDR)
+        self.assertEqual(expected_number_of_records, response.header.number_dr)
+        self.assertEqual(expected_length_of_record, response.header.length_dr)
 
     def test_readszl_single_data_record(self):
         expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
         ssl_id = 0x011c
         index = 0x0005
         response = self.client.readszl(ssl_id, index)
-        result = bytes(response.Data[2:26])
+        result = response.data[2:26]
         self.assertEqual(expected, result)
 
     def test_readszl_order_number(self):
@@ -831,7 +831,7 @@ class TestClient(unittest.TestCase):
         ssl_id = 0x0111
         index = 0x0001
         response = self.client.readszl(ssl_id, index)
-        result = bytes(response.Data[2:22])
+        result = response.data[2:22]
         self.assertEqual(expected, result)
 
     def test_readszl_invalid_id(self):
