@@ -836,7 +836,7 @@ class Client:
         # Cli_ReadMultiVars
         raise NotImplementedError
 
-    def readszl(self, ssl_id: int, index: int=0x0000) -> S7SZL:
+    def readszl(self, ssl_id: int, index: int = 0x0000) -> S7SZL:
         # Cli_ReadSZL
         data = S7SZL()
         size = c_int(sizeof(data))

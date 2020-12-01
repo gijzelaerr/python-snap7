@@ -833,7 +833,7 @@ class TestClient(unittest.TestCase):
         response = self.client.readszl(ssl_id, index)
         result = bytes(response.Data[2:22])
         self.assertEqual(expected, result)
-    
+
     def test_readszl_invalid_id(self):
         ssl_id = 0xffff
         index = 0xffff
