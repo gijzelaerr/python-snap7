@@ -11,7 +11,7 @@ import snap7
 from snap7.common import check_error, load_library, ipv4
 from snap7.exceptions import Snap7Exception
 from snap7.types import S7Object, buffer_type, buffer_size, BlocksList
-from snap7.types import TS7BlockInfo, param_types, cpu_statuses
+from snap7.types import TS7BlockInfo, param_types, cpu_statuses, S7SZLHeader, S7SZL
 
 logger = logging.getLogger(__name__)
 
@@ -836,9 +836,13 @@ class Client:
         # Cli_ReadMultiVars
         raise NotImplementedError
 
-    def readszl(self):
+    def readszl(self, ssl_id: int, index: int=0x0000) -> S7SZL:
         # Cli_ReadSZL
-        raise NotImplementedError
+        data = S7SZL()
+        size = c_int(sizeof(data))
+        result = self._library.Cli_ReadSZL(self._pointer, ssl_id, index, byref(data), byref(size))
+        check_error(result, context="client")
+        return data
 
     def readszllist(self):
         # Cli_ReadSZLList

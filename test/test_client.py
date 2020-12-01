@@ -810,10 +810,35 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.readmultivars()
 
-    def test_readszl(self):
-        # Cli_ReadSZL
-        with self.assertRaises(NotImplementedError):
-            self.client.readszl()
+    def test_readszl_partial_list(self):
+        expected_number_of_records = 10
+        expected_length_of_record = 34
+        ssl_id = 0x001c
+        response = self.client.readszl(ssl_id)
+        self.assertEqual(expected_number_of_records, response.Header.NDR)
+        self.assertEqual(expected_length_of_record, response.Header.LengthDR)
+
+    def test_readszl_single_data_record(self):
+        expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
+        ssl_id = 0x011c
+        index = 0x0005
+        response = self.client.readszl(ssl_id, index)
+        result = bytes(response.Data[2:26])
+        self.assertEqual(expected, result)
+
+    def test_readszl_order_number(self):
+        expected = b'6ES7 315-2EH14-0AB0 '
+        ssl_id = 0x0111
+        index = 0x0001
+        response = self.client.readszl(ssl_id, index)
+        result = bytes(response.Data[2:22])
+        self.assertEqual(expected, result)
+    
+    def test_readszl_invalid_id(self):
+        ssl_id = 0xffff
+        index = 0xffff
+        self.assertRaises(Snap7Exception, self.client.readszl, ssl_id)
+        self.assertRaises(Snap7Exception, self.client.readszl, ssl_id, index)
 
     def test_readszllist(self):
         # Cli_ReadSZLList

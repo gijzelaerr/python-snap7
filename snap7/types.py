@@ -221,3 +221,17 @@ class S7CpuInfo(ctypes.Structure):
         ('Copyright', ctypes.c_char * 27),
         ('ModuleName', ctypes.c_char * 25)
     ]
+
+
+class S7SZLHeader(ctypes.Structure):
+    _fields_ = [
+        ('LengthDR', ctypes.c_uint16),
+        ('NDR', ctypes.c_uint16)
+    ]
+
+
+class S7SZL(ctypes.Structure):
+    _fields_ = [
+        ('Header', S7SZLHeader),
+        ('Data', ctypes.c_byte * (0x4000 - 4))
+    ]
