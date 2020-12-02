@@ -240,13 +240,3 @@ class S7SZL(ctypes.Structure):
         ('Header', S7SZLHeader),
         ('Data', ctypes.c_byte * (0x4000 - 4))
     ]
-
-
-class SystemStatusListHeader(typing.NamedTuple):
-    length_dr: int
-    number_dr: int
-
-
-class SystemStatusList(typing.NamedTuple):
-    header: SystemStatusListHeader
-    data: bytes
