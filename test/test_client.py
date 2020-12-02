@@ -823,7 +823,7 @@ class TestClient(unittest.TestCase):
         ssl_id = 0x011c
         index = 0x0005
         response = self.client.readszl(ssl_id, index)
-        result = response.Data[2:26]
+        result = bytes(response.Data)[2:26]
         self.assertEqual(expected, result)
 
     def test_readszl_order_number(self):
@@ -831,7 +831,7 @@ class TestClient(unittest.TestCase):
         ssl_id = 0x0111
         index = 0x0001
         response = self.client.readszl(ssl_id, index)
-        result = response.Data[2:22]
+        result = bytes(response.Data[2:22])
         self.assertEqual(expected, result)
 
     def test_readszl_invalid_id(self):
