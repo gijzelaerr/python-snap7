@@ -2,6 +2,7 @@
 Python equivalent for snap7 specific types.
 """
 import ctypes
+import typing
 
 from snap7.common import ADict
 
@@ -220,4 +221,22 @@ class S7CpuInfo(ctypes.Structure):
         ('ASName', ctypes.c_char * 25),
         ('Copyright', ctypes.c_char * 27),
         ('ModuleName', ctypes.c_char * 25)
+    ]
+
+
+class S7SZLHeader(ctypes.Structure):
+    """
+        LengthDR: Length of a data record of the partial list in bytes
+        NDR: Number of data records contained in the partial list
+    """
+    _fields_ = [
+        ('LengthDR', ctypes.c_uint16),
+        ('NDR', ctypes.c_uint16)
+    ]
+
+
+class S7SZL(ctypes.Structure):
+    _fields_ = [
+        ('Header', S7SZLHeader),
+        ('Data', ctypes.c_byte * (0x4000 - 4))
     ]
