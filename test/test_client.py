@@ -707,33 +707,40 @@ class TestClient(unittest.TestCase):
 
     def test_copyramtorom(self):
         # Cli_CopyRamToRom
-        with self.assertRaises(NotImplementedError):
-            self.client.copyramtorom()
+        self.assertEqual(0, self.client.copyramtorom(timeout=1))
 
     def test_ctread(self):
         # Cli_CTRead
-        with self.assertRaises(NotImplementedError):
-            self.client.ctread()
+        data = b'\x10\x01'
+        self.client.ctwrite(0, 1, data)
+        result = self.client.ctread(0, 1)
+        self.assertEqual(data, result)
 
     def test_ctwrite(self):
         # Cli_CTWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.ctwrite()
+        data = b'\x01\x11'
+        self.assertEqual(0, self.client.ctwrite(0, 1, data))
+        self.assertRaises(ValueError, self.client.ctwrite, 0, 2, bytes(1))
 
     def test_dbfill(self):
         # Cli_DBFill
-        with self.assertRaises(NotImplementedError):
-            self.client.dbfill()
+        filler = 31
+        expected = bytearray(filler.to_bytes(1, byteorder='big') * 100)
+        self.client.dbfill(1, filler)
+        self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
     def test_ebread(self):
         # Cli_EBRead
-        with self.assertRaises(NotImplementedError):
-            self.client.ebread()
+        self.client._library.Cli_EBRead = mock.Mock(return_value=0)
+        response = self.client.ebread(0, 1)
+        self.assertTrue(isinstance(response, bytearray))
+        self.assertEqual(1, len(response))
 
     def test_ebwrite(self):
         # Cli_EBWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.ebwrite()
+        self.client._library.Cli_EBWrite = mock.Mock(return_value=0)
+        response = self.client.ebwrite(0, 1, b'\x00')
+        self.assertEqual(0, response)
 
     def test_errortext(self):
         # Cli_ErrorText
@@ -747,23 +754,26 @@ class TestClient(unittest.TestCase):
 
     def test_getcpinfo(self):
         # Cli_GetCpInfo
-        with self.assertRaises(NotImplementedError):
-            self.client.getcpinfo()
+        result = self.client.getcpinfo()
+        self.assertEqual(2048, result.MaxPduLength)
+        self.assertEqual(0, result.MaxConnections)
+        self.assertEqual(1024, result.MaxMpiRate)
+        self.assertEqual(0, result.MaxBusRate)
 
     def test_getexectime(self):
         # Cli_GetExecTime
-        with self.assertRaises(NotImplementedError):
-            self.client.getexectime()
+        response = self.client.getexectime()
+        self.assertTrue(isinstance(response, int))
 
     def test_getlasterror(self):
         # Cli_GetLastError
-        with self.assertRaises(NotImplementedError):
-            self.client.getlasterror()
+        self.assertEqual(0, self.client.getlasterror())
 
     def test_getordercode(self):
         # Cli_GetOrderCode
-        with self.assertRaises(NotImplementedError):
-            self.client.getordercode()
+        expected = b'6ES7 315-2EH14-0AB0 '
+        result = self.client.getordercode()
+        self.assertEqual(expected, result.OrderCode)
 
     def test_getpdulength(self):
         # Cli_GetPduLength
@@ -782,8 +792,12 @@ class TestClient(unittest.TestCase):
 
     def test_getprotection(self):
         # Cli_GetProtection
-        with self.assertRaises(NotImplementedError):
-            self.client.getprotection()
+        result = self.client.getprotection()
+        self.assertEqual(1, result.sch_schal)
+        self.assertEqual(0, result.sch_par)
+        self.assertEqual(1, result.sch_rel)
+        self.assertEqual(2, result.bart_sch)
+        self.assertEqual(0, result.anl_sch)
 
     def test_isoexchangebuffer(self):
         # Cli_IsoExchangeBuffer
@@ -792,13 +806,16 @@ class TestClient(unittest.TestCase):
 
     def test_mbread(self):
         # Cli_MBRead
-        with self.assertRaises(NotImplementedError):
-            self.client.mbread()
+        self.client._library.Cli_MBRead = mock.Mock(return_value=0)
+        response = self.client.mbread(0, 10)
+        self.assertTrue(isinstance(response, bytearray))
+        self.assertEqual(10, len(response))
 
     def test_mbwrite(self):
         # Cli_MBWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.mbwrite()
+        self.client._library.Cli_MBWrite = mock.Mock(return_value=0)
+        response = self.client.mbwrite(0, 1, b'\x00')
+        self.assertEqual(0, response)
 
     def test_readarea(self):
         # Cli_ReadArea
@@ -842,8 +859,9 @@ class TestClient(unittest.TestCase):
 
     def test_readszllist(self):
         # Cli_ReadSZLList
-        with self.assertRaises(NotImplementedError):
-            self.client.readszllist()
+        expected = b'\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01'
+        result = self.client.readszllist()
+        self.assertEqual(expected, result[:16])
 
     def test_setparam(self):
         # Cli_SetParam
@@ -852,8 +870,7 @@ class TestClient(unittest.TestCase):
 
     def test_setplcsystemdatetime(self):
         # Cli_SetPlcSystemDateTime
-        with self.assertRaises(NotImplementedError):
-            self.client.setplcsystemdatetime()
+        self.assertEqual(0, self.client.setplcsystemdatetime())
 
     def test_setsessionpassword(self):
         # Cli_SetSessionPassword
@@ -862,13 +879,17 @@ class TestClient(unittest.TestCase):
 
     def test_tmread(self):
         # Cli_TMRead
-        with self.assertRaises(NotImplementedError):
-            self.client.tmread()
+        data = b'\x10\x01'
+        self.client.tmwrite(0, 1, data)
+        result = self.client.tmread(0, 1)
+        self.assertEqual(data, result)
 
     def test_tmwrite(self):
         # Cli_TMWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.tmwrite()
+        data = b'\x10\x01'
+        self.assertEqual(0, self.client.tmwrite(0, 1, data))
+        self.assertRaises(Snap7Exception, self.client.tmwrite, 0, 100, bytes(200))
+        self.assertRaises(ValueError, self.client.tmwrite, 0, 2, bytes(2))
 
     def test_writemultivars(self):
         # Cli_WriteMultiVars
