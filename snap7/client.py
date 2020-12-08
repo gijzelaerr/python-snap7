@@ -459,7 +459,7 @@ class Client:
         """
         return self._library.Cli_AsCompress(self._pointer, time)
 
-    def copy_ram_to_rom(self):
+    def as_copy_ram_to_rom(self):
         """
 
         """
@@ -753,13 +753,13 @@ class Client:
         # Cli_AsWriteArea
         raise NotImplementedError
 
-    def copyramtorom(self, timeout=1) -> int:
+    def copy_ram_to_rom(self, timeout=1) -> int:
         # Cli_CopyRamToRom
         result = self._library.Cli_CopyRamToRom(self._pointer, timeout)
         check_error(result)
         return result
 
-    def ctread(self, start: int, amount: int) -> bytearray:
+    def ct_read(self, start: int, amount: int) -> bytearray:
         # Cli_CTRead
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
         data = (type_ * amount)()
@@ -767,7 +767,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    def ctwrite(self, start: int, amount: int, data: bytearray) -> int:
+    def ct_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_CTWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
         cdata = (type_ * amount).from_buffer_copy(data)
@@ -775,13 +775,13 @@ class Client:
         check_error(result)
         return result
 
-    def dbfill(self, db_number: int, filler: int) -> int:
+    def db_fill(self, db_number: int, filler: int) -> int:
         # Cli_DBFill
         result = self._library.Cli_DBFill(self._pointer, db_number, filler)
         check_error(result)
         return result
 
-    def ebread(self, start: int, size: int) -> bytearray:
+    def eb_read(self, start: int, size: int) -> bytearray:
         # Cli_EBRead
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
@@ -789,7 +789,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    def ebwrite(self, start: int, size: int, data: bytearray) -> int:
+    def eb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_EBWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         cdata = (type_ * size).from_buffer_copy(data)
@@ -805,28 +805,28 @@ class Client:
         # Cli_GetAgBlockInfo
         raise NotImplementedError
 
-    def getcpinfo(self) -> S7CpInfo:
+    def get_cp_info(self) -> S7CpInfo:
         # Cli_GetCpInfo
         cp_info = S7CpInfo()
         result = self._library.Cli_GetCpInfo(self._pointer, byref(cp_info))
         check_error(result)
         return cp_info
 
-    def getexectime(self) -> int:
+    def get_exec_time(self) -> int:
         # Cli_GetExecTime
         time = c_int32()
         result = self._library.Cli_GetExecTime(self._pointer, byref(time))
         check_error(result)
         return time.value
 
-    def getlasterror(self) -> int:
+    def get_last_error(self) -> int:
         # Cli_GetLastError
         last_error = c_int32()
         result = self._library.Cli_GetLastError(self._pointer, byref(last_error))
         check_error(result)
         return last_error.value
 
-    def getordercode(self) -> S7OrderCode:
+    def get_order_code(self) -> S7OrderCode:
         # Cli_GetOrderCode
         order_code = S7OrderCode()
         result = self._library.Cli_GetOrderCode(self._pointer, byref(order_code))
@@ -845,7 +845,7 @@ class Client:
         # Cli_GetPlcStatus
         raise NotImplementedError
 
-    def getprotection(self) -> S7Protection:
+    def get_protection(self) -> S7Protection:
         # Cli_GetProtection
         s7_protection = S7Protection()
         result = self._library.Cli_GetProtection(self._pointer, byref(s7_protection))
@@ -856,7 +856,7 @@ class Client:
         # Cli_IsoExchangeBuffer
         raise NotImplementedError
 
-    def mbread(self, start: int, size: int) -> bytearray:
+    def mb_read(self, start: int, size: int) -> bytearray:
         # Cli_MBRead
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         data = (type_ * size)()
@@ -864,7 +864,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    def mbwrite(self, start: int, size: int, data: bytearray) -> int:
+    def mb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_MBWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         cdata = (type_ * size).from_buffer_copy(data)
@@ -880,7 +880,7 @@ class Client:
         # Cli_ReadMultiVars
         raise NotImplementedError
 
-    def readszl(self, ssl_id: int, index: int = 0x0000) -> S7SZL:
+    def read_szl(self, ssl_id: int, index: int = 0x0000) -> S7SZL:
         # Cli_ReadSZL
         s7_szl = S7SZL()
         size = c_int(sizeof(s7_szl))
@@ -888,7 +888,7 @@ class Client:
         check_error(result, context="client")
         return s7_szl
 
-    def readszllist(self) -> bytearray:
+    def read_szl_list(self) -> bytearray:
         # Cli_ReadSZLList
         szl_list = S7SZLList()
         items_count = c_int(sizeof(szl_list))
@@ -901,7 +901,7 @@ class Client:
         # Cli_SetParam
         raise NotImplementedError
 
-    def setplcsystemdatetime(self) -> int:
+    def set_plc_system_datetime(self) -> int:
         # Cli_SetPlcSystemDateTime
         result = self._library.Cli_SetPlcSystemDateTime(self._pointer)
         check_error(result)
@@ -911,7 +911,7 @@ class Client:
         # Cli_SetSessionPassword
         raise NotImplementedError
 
-    def tmread(self, start: int, amount: int) -> bytearray:
+    def tm_read(self, start: int, amount: int) -> bytearray:
         # Cli_TMRead
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
         data = (type_ * amount)()
@@ -919,7 +919,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    def tmwrite(self, start: int, amount: int, data: bytearray) -> int:
+    def tm_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_TMWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
         cdata = (type_ * amount).from_buffer_copy(data)

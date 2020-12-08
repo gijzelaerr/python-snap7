@@ -705,41 +705,41 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.aswritearea()
 
-    def test_copyramtorom(self):
+    def test_copy_ram_to_rom(self):
         # Cli_CopyRamToRom
-        self.assertEqual(0, self.client.copyramtorom(timeout=1))
+        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=1))
 
-    def test_ctread(self):
+    def test_ct_read(self):
         # Cli_CTRead
         data = b'\x10\x01'
-        self.client.ctwrite(0, 1, data)
-        result = self.client.ctread(0, 1)
+        self.client.ct_write(0, 1, data)
+        result = self.client.ct_read(0, 1)
         self.assertEqual(data, result)
 
     def test_ctwrite(self):
         # Cli_CTWrite
         data = b'\x01\x11'
-        self.assertEqual(0, self.client.ctwrite(0, 1, data))
-        self.assertRaises(ValueError, self.client.ctwrite, 0, 2, bytes(1))
+        self.assertEqual(0, self.client.ct_write(0, 1, data))
+        self.assertRaises(ValueError, self.client.ct_write, 0, 2, bytes(1))
 
-    def test_dbfill(self):
+    def test_db_fill(self):
         # Cli_DBFill
         filler = 31
         expected = bytearray(filler.to_bytes(1, byteorder='big') * 100)
-        self.client.dbfill(1, filler)
+        self.client.db_fill(1, filler)
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
-    def test_ebread(self):
+    def test_eb_read(self):
         # Cli_EBRead
         self.client._library.Cli_EBRead = mock.Mock(return_value=0)
-        response = self.client.ebread(0, 1)
+        response = self.client.eb_read(0, 1)
         self.assertTrue(isinstance(response, bytearray))
         self.assertEqual(1, len(response))
 
-    def test_ebwrite(self):
+    def test_eb_write(self):
         # Cli_EBWrite
         self.client._library.Cli_EBWrite = mock.Mock(return_value=0)
-        response = self.client.ebwrite(0, 1, b'\x00')
+        response = self.client.eb_write(0, 1, b'\x00')
         self.assertEqual(0, response)
 
     def test_errortext(self):
@@ -752,27 +752,27 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.getagblockinfo()
 
-    def test_getcpinfo(self):
+    def test_get_cp_info(self):
         # Cli_GetCpInfo
-        result = self.client.getcpinfo()
+        result = self.client.get_cp_info()
         self.assertEqual(2048, result.MaxPduLength)
         self.assertEqual(0, result.MaxConnections)
         self.assertEqual(1024, result.MaxMpiRate)
         self.assertEqual(0, result.MaxBusRate)
 
-    def test_getexectime(self):
+    def test_get_exec_time(self):
         # Cli_GetExecTime
-        response = self.client.getexectime()
+        response = self.client.get_exec_time()
         self.assertTrue(isinstance(response, int))
 
-    def test_getlasterror(self):
+    def test_get_last_error(self):
         # Cli_GetLastError
-        self.assertEqual(0, self.client.getlasterror())
+        self.assertEqual(0, self.client.get_last_error())
 
-    def test_getordercode(self):
+    def test_get_order_code(self):
         # Cli_GetOrderCode
         expected = b'6ES7 315-2EH14-0AB0 '
-        result = self.client.getordercode()
+        result = self.client.get_order_code()
         self.assertEqual(expected, result.OrderCode)
 
     def test_getpdulength(self):
@@ -790,9 +790,9 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.getplcstatus()
 
-    def test_getprotection(self):
+    def test_get_protection(self):
         # Cli_GetProtection
-        result = self.client.getprotection()
+        result = self.client.get_protection()
         self.assertEqual(1, result.sch_schal)
         self.assertEqual(0, result.sch_par)
         self.assertEqual(1, result.sch_rel)
@@ -804,17 +804,17 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.isoexchangebuffer()
 
-    def test_mbread(self):
+    def test_mb_read(self):
         # Cli_MBRead
         self.client._library.Cli_MBRead = mock.Mock(return_value=0)
-        response = self.client.mbread(0, 10)
+        response = self.client.mb_read(0, 10)
         self.assertTrue(isinstance(response, bytearray))
         self.assertEqual(10, len(response))
 
-    def test_mbwrite(self):
+    def test_mb_write(self):
         # Cli_MBWrite
         self.client._library.Cli_MBWrite = mock.Mock(return_value=0)
-        response = self.client.mbwrite(0, 1, b'\x00')
+        response = self.client.mb_write(0, 1, b'\x00')
         self.assertEqual(0, response)
 
     def test_readarea(self):
@@ -831,7 +831,7 @@ class TestClient(unittest.TestCase):
         expected_number_of_records = 10
         expected_length_of_record = 34
         ssl_id = 0x001c
-        response = self.client.readszl(ssl_id)
+        response = self.client.read_szl(ssl_id)
         self.assertEqual(expected_number_of_records, response.Header.NDR)
         self.assertEqual(expected_length_of_record, response.Header.LengthDR)
 
@@ -839,7 +839,7 @@ class TestClient(unittest.TestCase):
         expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
         ssl_id = 0x011c
         index = 0x0005
-        response = self.client.readszl(ssl_id, index)
+        response = self.client.read_szl(ssl_id, index)
         result = bytes(response.Data)[2:26]
         self.assertEqual(expected, result)
 
@@ -847,20 +847,20 @@ class TestClient(unittest.TestCase):
         expected = b'6ES7 315-2EH14-0AB0 '
         ssl_id = 0x0111
         index = 0x0001
-        response = self.client.readszl(ssl_id, index)
+        response = self.client.read_szl(ssl_id, index)
         result = bytes(response.Data[2:22])
         self.assertEqual(expected, result)
 
-    def test_readszl_invalid_id(self):
+    def test_read_szl_invalid_id(self):
         ssl_id = 0xffff
         index = 0xffff
-        self.assertRaises(Snap7Exception, self.client.readszl, ssl_id)
-        self.assertRaises(Snap7Exception, self.client.readszl, ssl_id, index)
+        self.assertRaises(Snap7Exception, self.client.read_szl, ssl_id)
+        self.assertRaises(Snap7Exception, self.client.read_szl, ssl_id, index)
 
-    def test_readszllist(self):
+    def test_read_szl_list(self):
         # Cli_ReadSZLList
         expected = b'\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01'
-        result = self.client.readszllist()
+        result = self.client.read_szl_list()
         self.assertEqual(expected, result[:16])
 
     def test_setparam(self):
@@ -868,28 +868,28 @@ class TestClient(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.client.setparam()
 
-    def test_setplcsystemdatetime(self):
+    def test_set_plc_system_datetime(self):
         # Cli_SetPlcSystemDateTime
-        self.assertEqual(0, self.client.setplcsystemdatetime())
+        self.assertEqual(0, self.client.set_plc_system_datetime())
 
     def test_setsessionpassword(self):
         # Cli_SetSessionPassword
         with self.assertRaises(NotImplementedError):
             self.client.setsessionpassword()
 
-    def test_tmread(self):
+    def test_tm_read(self):
         # Cli_TMRead
         data = b'\x10\x01'
-        self.client.tmwrite(0, 1, data)
-        result = self.client.tmread(0, 1)
+        self.client.tm_write(0, 1, data)
+        result = self.client.tm_read(0, 1)
         self.assertEqual(data, result)
 
-    def test_tmwrite(self):
+    def test_tmw_rite(self):
         # Cli_TMWrite
         data = b'\x10\x01'
-        self.assertEqual(0, self.client.tmwrite(0, 1, data))
-        self.assertRaises(Snap7Exception, self.client.tmwrite, 0, 100, bytes(200))
-        self.assertRaises(ValueError, self.client.tmwrite, 0, 2, bytes(2))
+        self.assertEqual(0, self.client.tm_write(0, 1, data))
+        self.assertRaises(Snap7Exception, self.client.tm_write, 0, 100, bytes(200))
+        self.assertRaises(ValueError, self.client.tm_write, 0, 2, bytes(2))
 
     def test_writemultivars(self):
         # Cli_WriteMultiVars
