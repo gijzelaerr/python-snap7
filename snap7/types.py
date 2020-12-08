@@ -2,7 +2,6 @@
 Python equivalent for snap7 specific types.
 """
 import ctypes
-import typing
 
 from snap7.common import ADict
 
@@ -236,7 +235,44 @@ class S7SZLHeader(ctypes.Structure):
 
 
 class S7SZL(ctypes.Structure):
+    """See §33.1 of System Software for S7-300/400 System and Standard Functions"""
     _fields_ = [
         ('Header', S7SZLHeader),
         ('Data', ctypes.c_byte * (0x4000 - 4))
+    ]
+
+
+class S7SZLList(ctypes.Structure):
+    _fields_ = [
+        ('Header', S7SZLHeader),
+        ('List', word * (0x4000 - 2))
+    ]
+
+
+class S7OrderCode(ctypes.Structure):
+    _fields_ = [
+        ('OrderCode', ctypes.c_char * 21),
+        ('V1', ctypes.c_byte),
+        ('V2', ctypes.c_byte),
+        ('V3', ctypes.c_byte)
+    ]
+
+
+class S7CpInfo(ctypes.Structure):
+    _fields_ = [
+        ('MaxPduLength', ctypes.c_uint16),
+        ('MaxConnections', ctypes.c_uint16),
+        ('MaxMpiRate', ctypes.c_uint16),
+        ('MaxBusRate', ctypes.c_uint16)
+    ]
+
+
+class S7Protection(ctypes.Structure):
+    """See §33.19 of System Software for S7-300/400 System and Standard Functions"""
+    _fields_ = [
+        ('sch_schal', word),
+        ('sch_par', word),
+        ('sch_rel', word),
+        ('bart_sch', word),
+        ('anl_sch', word),
     ]
