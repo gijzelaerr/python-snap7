@@ -140,7 +140,7 @@ class SrvEvent(ctypes.Structure):
         ('EvtParam4', word),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"<event time: {self.EvtTime} sender: {self.EvtSender} code: {self.EvtCode} " \
                f"retcode: {self.EvtRetCode} param1: {self.EvtParam1} param2:{self.EvtParam2} " \
                f"param3: {self.EvtParam3} param4: {self.EvtParam4}>"
@@ -157,7 +157,7 @@ class BlocksList(ctypes.Structure):
         ('SDBCount', ctypes.c_int32),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"<block list count OB: {self.OBCount} FB: {self.FBCount} FC: {self.FCCount} SFB: {self.SFBCount} " \
                f"SFC: {hex(self.SFCCount)} DB: {self.DBCount} SDB: {self.SDBCount}>"
 
@@ -181,7 +181,7 @@ class TS7BlockInfo(ctypes.Structure):
         ('Header', ctypes.c_char * 9),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"""\
     Block type: {self.BlkType}
     Block number: {self.BlkNumber}

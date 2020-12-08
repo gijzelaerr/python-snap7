@@ -87,11 +87,12 @@ import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
-def get_bool(_bytearray, byte_index, bool_index):
+def get_bool(_bytearray, byte_index, bool_index) -> bool:
     """
     Get the boolean value from location in bytearray
     """
@@ -218,7 +219,7 @@ def set_string(_bytearray, byte_index, value, max_size):
         _bytearray[byte_index + 2 + r] = ord(' ')
 
 
-def get_string(_bytearray, byte_index, max_size):
+def get_string(_bytearray, byte_index, max_size) -> str:
     """
     parse string from bytearray
     """
@@ -266,7 +267,7 @@ def set_dint(_bytearray, byte_index, dint):
         _bytearray[byte_index + i] = b
 
 
-def get_s5time(_bytearray, byte_index):
+def get_s5time(_bytearray, byte_index) -> str:
     micro_to_milli = 1000
     data_bytearray = _bytearray[byte_index:byte_index + 2]
     s5time_data_int_like = list(data_bytearray.hex())
@@ -295,7 +296,7 @@ def get_s5time(_bytearray, byte_index):
     return "".join(str(s5time))
 
 
-def get_dt(_bytearray, byte_index):
+def get_dt(_bytearray, byte_index) -> str:
     # 1990 - 1999, 2000 - 2089
     micro_to_milli = 1000
     data_bytearray = _bytearray[byte_index:byte_index + 8]
@@ -324,7 +325,7 @@ def get_dt(_bytearray, byte_index):
     return date_and_time
 
 
-def set_usint(bytearray_, byte_index, _int):
+def set_usint(bytearray_, byte_index, _int) -> bytearray:
     """set unsigned small int
 
     Args:
@@ -357,7 +358,7 @@ def get_usint(bytearray_, byte_index):
     return value
 
 
-def set_sint(bytearray_, byte_index, _int):
+def set_sint(bytearray_, byte_index, _int) -> bytearray:
     """set small int
 
     Args:
@@ -390,7 +391,7 @@ def get_sint(bytearray_, byte_index):
     return value
 
 
-def parse_specification(db_specification):
+def parse_specification(db_specification) -> OrderedDict:
     """
     Create a db specification derived from a
     dataview of a db in which the byte layout
@@ -508,7 +509,7 @@ class DB_Row:
         self._bytearray = _bytearray
         self._specification = parse_specification(_specification)
 
-    def get_bytearray(self):
+    def get_bytearray(self) -> Optional[bytearray]:
         """
         return bytearray from self or DB parent
         """
@@ -545,12 +546,12 @@ class DB_Row:
             string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
-    def unchanged(self, _bytearray):
+    def unchanged(self, _bytearray) -> bool:
         if self.get_bytearray() == _bytearray:
             return True
         return False
 
-    def get_offset(self, byte_index):
+    def get_offset(self, byte_index) -> int:
         """
         Calculate correct beginning position for a row
         the db_offset = row_size * index

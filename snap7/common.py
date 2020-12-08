@@ -1,6 +1,6 @@
 import logging
 import platform
-from ctypes import c_char
+from ctypes import c_char, CDLL
 from ctypes.util import find_library
 
 from snap7.exceptions import Snap7Exception
@@ -66,7 +66,7 @@ def check_error(code, context="client"):
         raise Snap7Exception(error)
 
 
-def error_text(error, context="client"):
+def error_text(error, context="client") -> bytes:
     """Returns a textual explanation of a given error number
 
     :param error: an error integer

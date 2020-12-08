@@ -53,7 +53,7 @@ class Logo:
         logger.info("destroying snap7 client")
         return self.library.Cli_Destroy(byref(self.pointer))
 
-    def disconnect(self):
+    def disconnect(self) -> int:
         """
         disconnect a client.
         """
@@ -62,7 +62,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def connect(self, ip_address, tsap_snap7, tsap_logo, tcpport=102):
+    def connect(self, ip_address, tsap_snap7, tsap_logo, tcpport=102) -> int:
         """
         Connect to a Siemens LOGO server.
         Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
@@ -140,7 +140,7 @@ class Logo:
         if wordlen == types.S7WLDWord:
             return struct.unpack_from(">l", data)[0]
 
-    def write(self, vm_address, value):
+    def write(self, vm_address, value) -> int:
         """
         Writes to VM addresses of Siemens Logo.
         Example: write("VW10", 200) or write("V10.3", 1)
@@ -203,7 +203,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def db_read(self, db_number, start, size):
+    def db_read(self, db_number, start, size) -> bytearray:
         """
         This is a lean function of Cli_ReadArea() to read PLC DB.
 
@@ -222,7 +222,7 @@ class Logo:
         check_error(result, context="client")
         return bytearray(data)
 
-    def db_write(self, db_number, start, data):
+    def db_write(self, db_number, start, data) -> int:
         """
         Writes to a DB object.
 
@@ -267,7 +267,7 @@ class Logo:
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
-    def get_connected(self):
+    def get_connected(self) -> bool:
         """
         Returns the connection status
 
@@ -290,7 +290,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def get_param(self, number):
+    def get_param(self, number) -> int:
         """Reads an internal Logo object parameter.
 
         :param number: Parameter type number
