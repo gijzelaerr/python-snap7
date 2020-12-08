@@ -10,6 +10,7 @@ is requesting the connection.
 from ctypes import c_int32, c_uint32, byref, c_uint16, c_int
 import logging
 import re
+from typing import Tuple
 
 import snap7.types
 from snap7.common import load_library, check_error, ipv4
