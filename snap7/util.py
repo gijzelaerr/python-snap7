@@ -576,44 +576,44 @@ class DB_Row:
             max_size = int(max_size)
             return get_string(_bytearray, byte_index, max_size)
 
-        if _type == 'REAL':
+        elif _type == 'REAL':
             return get_real(_bytearray, byte_index)
 
-        if _type == 'DWORD':
+        elif _type == 'DWORD':
             return get_dword(_bytearray, byte_index)
 
-        if _type == 'DINT':
+        elif _type == 'DINT':
             return get_dint(_bytearray, byte_index)
 
-        if _type == 'INT':
+        elif _type == 'INT':
             return get_int(_bytearray, byte_index)
 
-        if _type == 'WORD':
+        elif _type == 'WORD':
             return get_word(_bytearray, byte_index)
 
-        if _type == 'S5TIME':
+        elif _type == 'S5TIME':
             data_s5time = get_s5time(_bytearray, byte_index)
             return data_s5time
 
-        if _type == 'DATE_AND_TIME':
+        elif _type == 'DATE_AND_TIME':
             data_dt = get_dt(_bytearray, byte_index)
             return data_dt
 
-        if _type == 'USINT':
+        elif _type == 'USINT':
             return get_usint(_bytearray, byte_index)
 
-        if _type == 'SINT':
+        elif _type == 'SINT':
             return get_sint(_bytearray, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
-        if _type == 'TIME':
+        elif _type == 'TIME':
             return 'read TIME not implemented'
 
-        if _type == 'DATE':
+        elif _type == 'DATE':
             return 'read DATE not implemented'
 
-        if _type == 'TIME_OF_DAY':
+        elif _type == 'TIME_OF_DAY':
             return 'read TIME_OF_DAY not implemented'
 
         raise ValueError
@@ -633,25 +633,25 @@ class DB_Row:
             max_size = int(max_size)
             return set_string(_bytearray, byte_index, value, max_size)
 
-        if _type == 'REAL':
+        elif _type == 'REAL':
             return set_real(_bytearray, byte_index, value)
 
-        if _type == 'DWORD':
+        elif _type == 'DWORD':
             return set_dword(_bytearray, byte_index, value)
 
-        if _type == 'DINT':
+        elif _type == 'DINT':
             return set_dint(_bytearray, byte_index, value)
 
-        if _type == 'INT':
+        elif _type == 'INT':
             return set_int(_bytearray, byte_index, value)
 
-        if _type == 'WORD':
+        elif _type == 'WORD':
             return set_word(_bytearray, byte_index, value)
 
-        if _type == 'USINT':
+        elif _type == 'USINT':
             return set_usint(_bytearray, byte_index, value)
 
-        if _type == 'SINT':
+        elif _type == 'SINT':
             return set_sint(_bytearray, byte_index, value)
 
         raise ValueError
