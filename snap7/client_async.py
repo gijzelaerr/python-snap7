@@ -3,12 +3,10 @@ Snap7 async client used for connection to a siemens7 server.
 """
 import asyncio
 import logging
-from ctypes import c_int, byref
+from ctypes import byref
 
 from snap7.common import check_error
-import snap7
 from .client import Client
-from .types import buffer_type, buffer_size
 
 logger = logging.getLogger(__name__)
 

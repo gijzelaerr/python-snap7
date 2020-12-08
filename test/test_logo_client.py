@@ -2,7 +2,6 @@ import logging
 import time
 import unittest
 from multiprocessing import Process
-from os import kill
 
 import snap7
 from snap7.server import mainloop
@@ -28,7 +27,7 @@ class TestLogoClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        kill(cls.process, 1)
+        cls.process.terminate()
 
     def setUp(self):
         self.client = snap7.logo.Logo()

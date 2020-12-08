@@ -5,6 +5,7 @@ import ctypes
 import logging
 import re
 import time
+from typing import Tuple, Any, Optional
 
 import snap7
 import snap7.types
@@ -45,7 +46,7 @@ class Server:
     def __del__(self):
         self.destroy()
 
-    def event_text(self, event):
+    def event_text(self, event) -> str:
         """Returns a textual explanation of a given event object
 
         :param event: an PSrvEvent struct object
@@ -80,7 +81,7 @@ class Server:
                                              ctypes.byref(userdata), size)
 
     @error_wrap
-    def set_events_callback(self, call_back):
+    def set_events_callback(self, call_back) -> int:
         """Sets the user callback that the Server object has to call when an
         event is created.
         """
@@ -89,7 +90,7 @@ class Server:
                                          ctypes.POINTER(snap7.types.SrvEvent),
                                          ctypes.c_int)
 
-        def wrapper(usrptr, pevent, size):
+        def wrapper(usrptr, pevent, size) -> int:
             """
             Wraps python function into a ctypes function
 
@@ -119,7 +120,7 @@ class Server:
                                             ctypes.POINTER(snap7.types.SrvEvent),
                                             ctypes.c_int)
 
-        def wrapper(usrptr, pevent, size):
+        def wrapper(usrptr, pevent, size) -> int:
             """
             Wraps python function into a ctypes function
 
@@ -173,7 +174,7 @@ class Server:
         if self.library:
             self.library.Srv_Destroy(ctypes.byref(self.pointer))
 
-    def get_status(self):
+    def get_status(self) -> Tuple[Any, Any, int]:
         """Reads the server status, the Virtual CPU status and the number of
         the clients connected.
 
@@ -250,7 +251,7 @@ class Server:
         logger.debug(f"setting cpu status to {status}")
         return self.library.Srv_SetCpuStatus(self.pointer, status)
 
-    def pick_event(self):
+    def pick_event(self) -> Optional[snap7.types.SrvEvent]:
         """Extracts an event (if available) from the Events queue.
         """
         logger.debug("checking event queue")
@@ -263,8 +264,9 @@ class Server:
             logger.debug(f"one event ready: {event}")
             return event
         logger.debug("no events ready")
+        return None
 
-    def get_param(self, number):
+    def get_param(self, number) -> int:
         """Reads an internal Server object parameter.
         """
         logger.debug(f"retreiving param number {number}")
@@ -274,7 +276,7 @@ class Server:
         check_error(code)
         return value.value
 
-    def get_mask(self, kind):
+    def get_mask(self, kind) -> ctypes.c_uint32:
         """Reads the specified filter mask.
         """
         logger.debug(f"retrieving mask kind {kind}")
@@ -284,7 +286,7 @@ class Server:
         return mask
 
     @error_wrap
-    def clear_events(self):
+    def clear_events(self) -> int:
         """Empties the Event queue.
         """
         logger.debug("clearing event queue")

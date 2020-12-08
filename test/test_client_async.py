@@ -27,7 +27,7 @@ def testserver():
     process.start()
     time.sleep(2)  # wait for server to start
     yield process
-    kill(process.pid, 1)
+    process.terminate()
 
 
 @pytest.fixture

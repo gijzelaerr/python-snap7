@@ -6,7 +6,6 @@ import time
 import unittest
 from datetime import datetime, timedelta
 from multiprocessing import Process
-from os import kill
 from unittest import mock
 
 import snap7
