@@ -4,9 +4,9 @@ Snap7 client used for connection to a siemens7 server.
 import logging
 import re
 from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte, c_ulong, Array
-from ctypes import c_void_p
+from ctypes import c_void_p, create_string_buffer
 from datetime import datetime
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, List, ByteString
 
 import snap7
 from snap7.common import check_error, load_library, ipv4
@@ -792,13 +792,15 @@ class Client:
         check_error(result)
         return result
 
-    def errortext(self):
+    def error_text(self, error: int) -> str:
         # Cli_ErrorText
-        raise NotImplementedError
-
-    def getagblockinfo(self):
-        # Cli_GetAgBlockInfo
-        raise NotImplementedError
+        text_length = c_int(256)
+        error_code = c_int32(error)
+        text = create_string_buffer(buffer_size)
+        response = self._library.Cli_ErrorText(error_code, byref(text), text_length)
+        check_error(response)
+        result = bytearray(text)[:text_length.value].decode().strip('\x00')
+        return result
 
     def get_cp_info(self) -> S7CpInfo:
         # Cli_GetCpInfo
@@ -828,17 +830,13 @@ class Client:
         check_error(result)
         return order_code
 
-    def getpdulength(self):
-        # Cli_GetPduLength
-        raise NotImplementedError
-
-    def getpgblockinfo(self):
-        # Cli_GetPgBlockInfo
-        raise NotImplementedError
-
-    def getplcstatus(self):
-        # Cli_GetPlcStatus
-        raise NotImplementedError
+    def get_pg_block_info(self, block: bytearray) -> TS7BlockInfo:
+        block_info = TS7BlockInfo()
+        size = c_int(len(block))
+        buffer = (c_byte * len(block)).from_buffer_copy(block)
+        result = self._library.Cli_GetPgBlockInfo(self._pointer, byref(buffer), byref(block_info), size)
+        check_error(result)
+        return block_info
 
     def get_protection(self) -> S7Protection:
         # Cli_GetProtection
@@ -847,9 +845,14 @@ class Client:
         check_error(result)
         return s7_protection
 
-    def isoexchangebuffer(self):
+    def iso_exchange_buffer(self, data: bytearray) -> bytearray:
         # Cli_IsoExchangeBuffer
-        raise NotImplementedError
+        size = c_int(len(data))
+        cdata = (c_byte * len(data)).from_buffer_copy(data)
+        response = self._library.Cli_IsoExchangeBuffer(self._pointer, byref(cdata), byref(size))
+        check_error(response)
+        result = bytearray(cdata)[:size.value]
+        return result
 
     def mb_read(self, start: int, size: int) -> bytearray:
         # Cli_MBRead
@@ -866,14 +869,6 @@ class Client:
         result = self._library.Cli_MBWrite(self._pointer, start, size, byref(cdata))
         check_error(result)
         return result
-
-    def readarea(self):
-        # Cli_ReadArea
-        raise NotImplementedError
-
-    def readmultivars(self):
-        # Cli_ReadMultiVars
-        raise NotImplementedError
 
     def read_szl(self, ssl_id: int, index: int = 0x0000) -> S7SZL:
         # Cli_ReadSZL
@@ -892,19 +887,11 @@ class Client:
         result = bytearray(szl_list.List)[:items_count.value]
         return result
 
-    def setparam(self):
-        # Cli_SetParam
-        raise NotImplementedError
-
     def set_plc_system_datetime(self) -> int:
         # Cli_SetPlcSystemDateTime
         result = self._library.Cli_SetPlcSystemDateTime(self._pointer)
         check_error(result)
         return result
-
-    def setsessionpassword(self):
-        # Cli_SetSessionPassword
-        raise NotImplementedError
 
     def tm_read(self, start: int, amount: int) -> bytearray:
         # Cli_TMRead
@@ -922,6 +909,13 @@ class Client:
         check_error(result)
         return result
 
-    def writemultivars(self):
+    def writemultivars(self, items: List[S7DataItem]) -> int:
         # Cli_WriteMultiVars
-        raise NotImplementedError
+        items_count = c_int32(len(items))
+        data = bytearray()
+        for item in items:
+            data += bytearray(item)
+        cdata = (S7DataItem * len(items)).from_buffer_copy(data)
+        result = self._library.Cli_WriteMultiVars(self._pointer, byref(cdata), items_count)
+        check_error(result, context="client")
+        return result

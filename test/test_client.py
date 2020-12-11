@@ -741,15 +741,14 @@ class TestClient(unittest.TestCase):
         response = self.client.eb_write(0, 1, b'\x00')
         self.assertEqual(0, response)
 
-    def test_errortext(self):
+    def test_error_text(self):
         # Cli_ErrorText
-        with self.assertRaises(NotImplementedError):
-            self.client.errortext()
-
-    def test_getagblockinfo(self):
-        # Cli_GetAgBlockInfo
-        with self.assertRaises(NotImplementedError):
-            self.client.getagblockinfo()
+        CPU_INVALID_PASSWORD = 0x01E00000
+        CPU_INVLID_VALUE = 0x00D00000
+        CANNOT_CHANGE_PARAM = 0x02600000
+        self.assertEqual('CPU : Invalid password', self.client.error_text(CPU_INVALID_PASSWORD))
+        self.assertEqual('CPU : Invalid value supplied', self.client.error_text(CPU_INVLID_VALUE))
+        self.assertEqual('CLI : Cannot change this param now', self.client.error_text(CANNOT_CHANGE_PARAM))
 
     def test_get_cp_info(self):
         # Cli_GetCpInfo
@@ -774,21 +773,6 @@ class TestClient(unittest.TestCase):
         result = self.client.get_order_code()
         self.assertEqual(expected, result.OrderCode)
 
-    def test_getpdulength(self):
-        # Cli_GetPduLength
-        with self.assertRaises(NotImplementedError):
-            self.client.getpdulength()
-
-    def test_getpgblockinfo(self):
-        # Cli_GetPgBlockInfo
-        with self.assertRaises(NotImplementedError):
-            self.client.getpgblockinfo()
-
-    def test_getplcstatus(self):
-        # Cli_GetPlcStatus
-        with self.assertRaises(NotImplementedError):
-            self.client.getplcstatus()
-
     def test_get_protection(self):
         # Cli_GetProtection
         result = self.client.get_protection()
@@ -798,10 +782,28 @@ class TestClient(unittest.TestCase):
         self.assertEqual(2, result.bart_sch)
         self.assertEqual(0, result.anl_sch)
 
-    def test_isoexchangebuffer(self):
+    def test_get_pg_block_info(self):
+        valid_db_block = b'pp\x01\x01\x05\n\x00c\x00\x00\x00t\x00\x00\x00\x00\x01\x8d\xbe)2\xa1\x01' \
+                         b'\x85V\x1f2\xa1\x00*\x00\x00\x00\x00\x00\x02\x01\x0f\x05c\x00#\x00\x00\x00' \
+                         b'\x11\x04\x10\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01' \
+                         b'\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x00' \
+                         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
+                         b'\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        block_info = self.client.get_pg_block_info(valid_db_block)
+        self.assertEqual(10, block_info.BlkType)
+        self.assertEqual(99, block_info.BlkNumber)
+        self.assertEqual(2752512, block_info.SBBLength)
+        self.assertEqual(b'2019/06/27', block_info.CodeDate)
+        self.assertEqual(b'2019/06/27', block_info.IntfDate)
+
+    def test_iso_exchange_buffer(self):
         # Cli_IsoExchangeBuffer
-        with self.assertRaises(NotImplementedError):
-            self.client.isoexchangebuffer()
+        self.client.db_write(1, 0, b'\x11')
+        # PDU read DB1 1.0 BYTE
+        data = b'\x32\x01\x00\x00\x01\x00\x00\x0e\x00\x00\x04\x01\x12\x0a\x10\x02\x00\x01\x00\x01\x84\x00\x00\x00'
+        # PDU response
+        expected = bytearray(b'2\x03\x00\x00\x01\x00\x00\x02\x00\x05\x00\x00\x04\x01\xff\x04\x00\x08\x11')
+        self.assertEqual(expected, self.client.iso_exchange_buffer(data))
 
     def test_mb_read(self):
         # Cli_MBRead
@@ -815,16 +817,6 @@ class TestClient(unittest.TestCase):
         self.client._library.Cli_MBWrite = mock.Mock(return_value=0)
         response = self.client.mb_write(0, 1, b'\x00')
         self.assertEqual(0, response)
-
-    def test_readarea(self):
-        # Cli_ReadArea
-        with self.assertRaises(NotImplementedError):
-            self.client.readarea()
-
-    def test_readmultivars(self):
-        # Cli_ReadMultiVars
-        with self.assertRaises(NotImplementedError):
-            self.client.readmultivars()
 
     def test_readszl_partial_list(self):
         expected_number_of_records = 10
@@ -862,19 +854,9 @@ class TestClient(unittest.TestCase):
         result = self.client.read_szl_list()
         self.assertEqual(expected, result[:16])
 
-    def test_setparam(self):
-        # Cli_SetParam
-        with self.assertRaises(NotImplementedError):
-            self.client.setparam()
-
     def test_set_plc_system_datetime(self):
         # Cli_SetPlcSystemDateTime
         self.assertEqual(0, self.client.set_plc_system_datetime())
-
-    def test_setsessionpassword(self):
-        # Cli_SetSessionPassword
-        with self.assertRaises(NotImplementedError):
-            self.client.setsessionpassword()
 
     def test_tm_read(self):
         # Cli_TMRead
@@ -892,8 +874,28 @@ class TestClient(unittest.TestCase):
 
     def test_writemultivars(self):
         # Cli_WriteMultiVars
-        with self.assertRaises(NotImplementedError):
-            self.client.writemultivars()
+        items_count = 3
+        items = []
+        areas = [snap7.types.areas.DB, snap7.types.areas.CT, snap7.types.areas.TM]
+        expected_list = []
+        for i in range(0, items_count):
+            item = S7DataItem()
+            item.Area = ctypes.c_int32(areas[i])
+            item.WordLen = ctypes.c_int32(S7WLByte)
+            item.DBNumber = ctypes.c_int32(1)
+            item.Start = ctypes.c_int32(0)
+            item.Amount = ctypes.c_int32(4)
+            data = (i + 1).to_bytes(1, byteorder='big') * 4
+            array_class = ctypes.c_uint8 * len(data)
+            cdata = array_class.from_buffer_copy(data)
+            item.pData = ctypes.cast(cdata, ctypes.POINTER(array_class)).contents
+            items.append(item)
+            expected_list.append(data)
+        result = self.client.writemultivars(items)
+        self.assertEqual(0, result)
+        self.assertEqual(expected_list[0], self.client.db_read(db_number=1, start=0, size=4))
+        self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
+        self.assertEqual(expected_list[2], self.client.tm_read(0, 2))
 
 
 class TestClientBeforeConnect(unittest.TestCase):
