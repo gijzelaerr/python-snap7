@@ -909,7 +909,7 @@ class Client:
         check_error(result)
         return result
 
-    def writemultivars(self, items: List[S7DataItem]) -> int:
+    def write_multi_vars(self, items: List[S7DataItem]) -> int:
         # Cli_WriteMultiVars
         items_count = c_int32(len(items))
         data = bytearray()

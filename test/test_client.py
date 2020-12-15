@@ -872,7 +872,7 @@ class TestClient(unittest.TestCase):
         self.assertRaises(Snap7Exception, self.client.tm_write, 0, 100, bytes(200))
         self.assertRaises(ValueError, self.client.tm_write, 0, 2, bytes(2))
 
-    def test_writemultivars(self):
+    def test_write_multi_vars(self):
         # Cli_WriteMultiVars
         items_count = 3
         items = []
@@ -891,7 +891,7 @@ class TestClient(unittest.TestCase):
             item.pData = ctypes.cast(cdata, ctypes.POINTER(array_class)).contents
             items.append(item)
             expected_list.append(data)
-        result = self.client.writemultivars(items)
+        result = self.client.write_multi_vars(items)
         self.assertEqual(0, result)
         self.assertEqual(expected_list[0], self.client.db_read(db_number=1, start=0, size=4))
         self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
