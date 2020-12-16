@@ -248,33 +248,9 @@ class TestClient(unittest.TestCase):
         self.client.ab_write(start=start, data=data)
         self.client.ab_read(start=start, size=size)
 
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_ab_write(self):
-        start = 1
-        size = 10
-        data = bytearray(size)
-        self.client.ab_write(start=start, data=data)
-
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_as_ab_read(self):
-        start = 1
-        size = 1
-        self.client.as_ab_read(start=start, size=size)
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ab_write(self):
-        start = 1
-        size = 10
-        data = bytearray(size)
-        self.client.as_ab_write(start=start, data=data)
-
     def test_compress(self):
         time = 1000
-        self.client.compress(time)
-
-    def test_as_compress(self):
-        time = 1000
-        self.client.as_compress(time)
+        self.assertEqual(0, self.client.compress(time))
 
     def test_set_param(self):
         values = (
@@ -313,47 +289,6 @@ class TestClient(unittest.TestCase):
         # invalid param for client
         for param in non_client:
             self.assertRaises(Exception, self.client.get_param, non_client)
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_copy_ram_to_rom(self):
-        self.client.copy_ram_to_rom()
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ct_read(self):
-        self.client.as_ct_read()
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ct_write(self):
-        self.client.as_ct_write()
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_db_fill(self):
-        self.client.as_db_fill()
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_db_get(self):
-        self.client.as_db_get(db_number=db_number)
-
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_as_db_read(self):
-        size = 40
-        start = 0
-        db = 1
-        data = bytearray(40)
-        self.client.db_write(db_number=db, start=start, data=data)
-        result = self.client.as_db_read(db_number=db, start=start, size=size)
-        self.assertEqual(data, result)
-
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
-    def test_as_db_write(self):
-        size = 40
-        data = bytearray(size)
-        self.client.as_db_write(db_number=1, start=0, data=data)
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_download(self):
-        data = bytearray(128)
-        self.client.as_download(block_num=-1, data=data)
 
     def test_plc_stop(self):
         self.client.plc_stop()
@@ -444,53 +379,6 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._library.Cli_ABWrite = original
 
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_ab_write_with_byte_literal_does_not_throw(self):
-        mock_write = mock.MagicMock()
-        mock_write.return_value = None
-        original = self.client._library.Cli_AsABWrite
-        self.client._library.Cli_AsABWrite = mock_write
-
-        start = 1
-        data = b'\xDE\xAD\xBE\xEF'
-
-        try:
-            self.client.as_ab_write(start=start, data=data)
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._library.Cli_AsABWrite = original
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_db_write_with_byte_literal_does_not_throw(self):
-        mock_write = mock.MagicMock()
-        mock_write.return_value = None
-        original = self.client._library.Cli_AsDBWrite
-        self.client._library.Cli_AsDBWrite = mock_write
-        data = b'\xDE\xAD\xBE\xEF'
-
-        try:
-            self.client.db_write(db_number=1, start=0, data=data)
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._library.Cli_AsDBWrite = original
-
-    @unittest.skip("TODO: not yet fully implemented")
-    def test_as_download_with_byte_literal_does_not_throw(self):
-        mock_download = mock.MagicMock()
-        mock_download.return_value = None
-        original = self.client._library.Cli_AsDownload
-        self.client._library.Cli_AsDownload = mock_download
-        data = b'\xDE\xAD\xBE\xEF'
-
-        try:
-            self.client.as_download(block_num=db_number, data=data)
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._library.Cli_AsDownload = original
-
     def test_get_plc_time(self):
         self.assertAlmostEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime(), delta=timedelta(seconds=1))
 
@@ -500,6 +388,7 @@ class TestClient(unittest.TestCase):
         # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
         # self.assertEqual(new_dt, self.client.get_plc_datetime())
 
+    @unittest.skip('')
     def test_wait_as_completion_pass(self, timeout=1000):
         # Cli_WaitAsCompletion
         # prepare Server with values
@@ -516,6 +405,7 @@ class TestClient(unittest.TestCase):
         self.client.wait_as_completion(timeout)
         self.assertEqual(bytearray(usrdata), data)
 
+    @unittest.skip('')
     def test_wait_as_completion_timeouted(self, timeout=0, tries=500):
         # Cli_WaitAsCompletion
         # prepare Server
@@ -542,6 +432,7 @@ class TestClient(unittest.TestCase):
         self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
                   f"a problem is existing in the method. Fail test.")
 
+    @unittest.skip('')
     def test_check_as_completion(self, timeout=5):
         # Cli_CheckAsCompletion
         check_status = ctypes.c_int(-1)
@@ -570,138 +461,6 @@ class TestClient(unittest.TestCase):
         if pending_checked is False:
             logging.warning("Pending was never reached, because Server was to fast,"
                             " but request to server was successfull.")
-
-    def test_as_read_area(self):
-        amount = 1
-        start = 1
-
-        # Test read_area with a DB
-        area = snap7.types.areas.DB
-        dbnumber = 1
-        data = bytearray(b'\x11')
-        self.client.write_area(area, dbnumber, start, data)
-        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
-        pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
-        self.client.wait_as_completion(1000)
-        self.assertEqual(bytearray(usrdata), data)
-
-        # Test read_area with a TM
-        area = snap7.types.areas.TM
-        dbnumber = 0
-        data = bytearray(b'\x12\x34')
-        self.client.write_area(area, dbnumber, start, data)
-        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
-        pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
-        self.client.wait_as_completion(1000)
-        self.assertEqual(bytearray(usrdata), data)
-
-        # Test read_area with a CT
-        area = snap7.types.areas.CT
-        dbnumber = 0
-        data = bytearray(b'\x13\x35')
-        self.client.write_area(area, dbnumber, start, data)
-        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
-        pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
-        self.client.wait_as_completion(1000)
-        self.assertEqual(bytearray(usrdata), data)
-
-    def test_as_write_area(self):
-        # Test write area with a DB
-        area = snap7.types.areas.DB
-        dbnumber = 1
-        size = 1
-        start = 1
-        data = bytearray(b'\x11')
-        wordlen, cdata = self.client._prepare_as_write_area(area, data)
-        res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
-        self.client.wait_as_completion(1000)
-        res = self.client.read_area(area, dbnumber, start, 1)
-        self.assertEqual(data, bytearray(res))
-
-        # Test write area with a TM
-        area = snap7.types.areas.TM
-        dbnumber = 0
-        size = 2
-        timer = bytearray(b'\x12\x00')
-        wordlen, cdata = self.client._prepare_as_write_area(area, timer)
-        res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
-        self.client.wait_as_completion(1000)
-        res = self.client.read_area(area, dbnumber, start, 1)
-        self.assertEqual(timer, bytearray(res))
-
-        # Test write area with a CT
-        area = snap7.types.areas.CT
-        dbnumber = 0
-        size = 2
-        timer = bytearray(b'\x13\x00')
-        wordlen, cdata = self.client._prepare_as_write_area(area, timer)
-        res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
-        self.client.wait_as_completion(1000)
-        res = self.client.read_area(area, dbnumber, start, 1)
-        self.assertEqual(timer, bytearray(res))
-
-    def test_asebread(self):
-        # Cli_AsEBRead
-        with self.assertRaises(NotImplementedError):
-            self.client.asebread()
-
-    def test_asebwrite(self):
-        # Cli_AsEBWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.asebwrite()
-
-    def test_asfullupload(self):
-        # Cli_AsFullUpload
-        with self.assertRaises(NotImplementedError):
-            self.client.asfullupload()
-
-    def test_aslistblocksoftype(self):
-        # Cli_AsListBlocksOfType
-        with self.assertRaises(NotImplementedError):
-            self.client.aslistblocksoftype()
-
-    def test_asmbread(self):
-        # Cli_AsMBRead
-        with self.assertRaises(NotImplementedError):
-            self.client.asmbread()
-
-    def test_asmbwrite(self):
-        # Cli_AsMBWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.asmbwrite()
-
-    def test_asreadszl(self):
-        # Cli_AsReadSZL
-        with self.assertRaises(NotImplementedError):
-            self.client.asreadszl()
-
-    def test_asreadszllist(self):
-        # Cli_AsReadSZLList
-        with self.assertRaises(NotImplementedError):
-            self.client.asreadszllist()
-
-    def test_astmread(self):
-        # Cli_AsTMRead
-        with self.assertRaises(NotImplementedError):
-            self.client.astmread()
-
-    def test_astmwrite(self):
-        # Cli_AsTMWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.astmwrite()
-
-    def test_asupload(self):
-        # Cli_AsUpload
-        with self.assertRaises(NotImplementedError):
-            self.client.asupload()
-
-    def test_aswritearea(self):
-        # Cli_AsWriteArea
-        with self.assertRaises(NotImplementedError):
-            self.client.aswritearea()
 
     def test_copy_ram_to_rom(self):
         # Cli_CopyRamToRom
