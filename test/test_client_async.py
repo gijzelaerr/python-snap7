@@ -34,6 +34,7 @@ def testserver():
     if process.is_alive():
         raise RuntimeError
 
+
 @pytest.fixture
 def testclient():
     client_async = snap7.client_async.ClientAsync()

@@ -656,7 +656,7 @@ class DB_Row:
             return set_sint(_bytearray, byte_index, value)
 
         raise ValueError
-    # small change
+
     def write(self, client):
         """
         Write current data to db in plc
