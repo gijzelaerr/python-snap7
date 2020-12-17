@@ -7,10 +7,10 @@ it, the peer to peer model sees two components with same rights, each of them
 can send data asynchronously. The only difference between them is the one who
 is requesting the connection.
 """
-from ctypes import c_int32, c_uint32, byref, c_uint16, c_int
+from ctypes import c_int32, c_uint32, byref, c_uint16, c_int, c_void_p
 import logging
 import re
-from typing import Tuple
+from typing import Tuple, Optional
 
 import snap7.types
 from snap7.common import load_library, check_error, ipv4
@@ -33,8 +33,9 @@ class Partner:
     """
     A snap7 partner.
     """
+    _pointer: Optional[c_void_p]
 
-    def __init__(self, active=False):
+    def __init__(self, active: bool = False):
         self._library = load_library()
         self._pointer = None
         self.create(active)
@@ -89,7 +90,7 @@ class Partner:
 
         return return_values[result], op_result
 
-    def create(self, active=False):
+    def create(self, active: bool = False):
         """
         Creates a Partner and returns its handle, which is the reference that
         you have to use every time you refer to that Partner.
@@ -108,6 +109,7 @@ class Partner:
         """
         if self._library:
             return self._library.Par_Destroy(byref(self._pointer))
+        return None
 
     def get_last_error(self) -> c_int32:
         """
@@ -167,7 +169,7 @@ class Partner:
         return send_time, recv_time
 
     @error_wrap
-    def set_param(self, number, value) -> int:
+    def set_param(self, number: int, value) -> int:
         """Sets an internal Partner object parameter.
         """
         logger.debug(f"setting param number {number} to {value}")
@@ -197,7 +199,7 @@ class Partner:
         return self._library.Par_Start(self._pointer)
 
     @error_wrap
-    def start_to(self, local_ip, remote_ip, local_tsap, remote_tsap) -> int:
+    def start_to(self, local_ip: str, remote_ip: str, local_tsap: int, remote_tsap: int) -> int:
         """
         Starts the Partner and binds it to the specified IP address and the
         IsoTCP port.
@@ -221,7 +223,7 @@ class Partner:
         return self._library.Par_Stop(self._pointer)
 
     @error_wrap
-    def wait_as_b_send_completion(self, timeout=0) -> int:
+    def wait_as_b_send_completion(self, timeout: int = 0) -> int:
         """
         Waits until the current asynchronous send job is done or the timeout
         expires.

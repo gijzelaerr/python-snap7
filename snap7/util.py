@@ -87,12 +87,14 @@ import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
-from typing import Optional
+from typing import Optional, Union, Match, AnyStr, cast
+
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
 
-def get_bool(_bytearray, byte_index, bool_index) -> bool:
+def get_bool(_bytearray: bytearray, byte_index: int, bool_index: int) -> bool:
     """
     Get the boolean value from location in bytearray
     """
@@ -102,7 +104,7 @@ def get_bool(_bytearray, byte_index, bool_index) -> bool:
     return current_value == index_value
 
 
-def set_bool(_bytearray, byte_index, bool_index, value):
+def set_bool(_bytearray: bytearray, byte_index: int, bool_index: int, value: bool):
     """
     Set boolean value on location in bytearray
     """
@@ -122,7 +124,7 @@ def set_bool(_bytearray, byte_index, bool_index, value):
         _bytearray[byte_index] -= index_value
 
 
-def set_word(bytearray_, byte_index, _int):
+def set_word(bytearray_: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to word
     """
@@ -132,7 +134,7 @@ def set_word(bytearray_, byte_index, _int):
     return bytearray_
 
 
-def get_word(bytearray_, byte_index):
+def get_word(bytearray_: bytearray, byte_index: int):
     """
     Get word value from bytearray.
     WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
@@ -145,7 +147,7 @@ def get_word(bytearray_, byte_index):
     return value
 
 
-def set_int(bytearray_, byte_index, _int):
+def set_int(bytearray_: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to int
     """
@@ -156,7 +158,7 @@ def set_int(bytearray_, byte_index, _int):
     return bytearray_
 
 
-def get_int(bytearray_, byte_index):
+def get_int(bytearray_: bytearray, byte_index: int):
     """
     Get int value from bytearray.
 
@@ -170,7 +172,7 @@ def get_int(bytearray_, byte_index):
     return value
 
 
-def set_real(_bytearray, byte_index, real):
+def set_real(_bytearray: bytearray, byte_index: int, real):
     """
     Set Real value
 
@@ -184,7 +186,7 @@ def set_real(_bytearray, byte_index, real):
         _bytearray[byte_index + i] = b
 
 
-def get_real(_bytearray, byte_index):
+def get_real(_bytearray: bytearray, byte_index: int):
     """
     Get real value. create float from 4 bytes
     """
@@ -193,7 +195,7 @@ def get_real(_bytearray, byte_index):
     return real
 
 
-def set_string(_bytearray, byte_index, value, max_size):
+def set_string(_bytearray: bytearray, byte_index: int, value: str, max_size: int):
     """
     Set string value
 
@@ -219,7 +221,7 @@ def set_string(_bytearray, byte_index, value, max_size):
         _bytearray[byte_index + 2 + r] = ord(' ')
 
 
-def get_string(_bytearray, byte_index, max_size) -> str:
+def get_string(_bytearray: bytearray, byte_index: int, max_size: int) -> str:
     """
     parse string from bytearray
     """
@@ -234,20 +236,20 @@ def get_string(_bytearray, byte_index, max_size) -> str:
     return "".join(data)
 
 
-def get_dword(_bytearray, byte_index):
+def get_dword(_bytearray: bytearray, byte_index: int):
     data = _bytearray[byte_index:byte_index + 4]
     dword = struct.unpack('>I', struct.pack('4B', *data))[0]
     return dword
 
 
-def set_dword(_bytearray, byte_index, dword):
+def set_dword(_bytearray: bytearray, byte_index: int, dword: int):
     dword = int(dword)
     _bytes = struct.unpack('4B', struct.pack('>I', dword))
     for i, b in enumerate(_bytes):
         _bytearray[byte_index + i] = b
 
 
-def get_dint(_bytearray, byte_index):
+def get_dint(_bytearray: bytearray, byte_index: int):
     """
     Get dint value from bytearray.
     DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647
@@ -257,7 +259,7 @@ def get_dint(_bytearray, byte_index):
     return dint
 
 
-def set_dint(_bytearray, byte_index, dint):
+def set_dint(_bytearray: bytearray, byte_index: int, dint: int):
     """
     Set value in bytearray to dint
     """
@@ -267,7 +269,7 @@ def set_dint(_bytearray, byte_index, dint):
         _bytearray[byte_index + i] = b
 
 
-def get_s5time(_bytearray, byte_index) -> str:
+def get_s5time(_bytearray: bytearray, byte_index: int) -> str:
     micro_to_milli = 1000
     data_bytearray = _bytearray[byte_index:byte_index + 2]
     s5time_data_int_like = list(data_bytearray.hex())
@@ -296,7 +298,7 @@ def get_s5time(_bytearray, byte_index) -> str:
     return "".join(str(s5time))
 
 
-def get_dt(_bytearray, byte_index) -> str:
+def get_dt(_bytearray: bytearray, byte_index: int) -> str:
     # 1990 - 1999, 2000 - 2089
     micro_to_milli = 1000
     data_bytearray = _bytearray[byte_index:byte_index + 8]
@@ -325,7 +327,7 @@ def get_dt(_bytearray, byte_index) -> str:
     return date_and_time
 
 
-def set_usint(bytearray_, byte_index, _int) -> bytearray:
+def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """set unsigned small int
 
     Args:
@@ -342,7 +344,7 @@ def set_usint(bytearray_, byte_index, _int) -> bytearray:
     return bytearray_
 
 
-def get_usint(bytearray_, byte_index):
+def get_usint(bytearray_: bytearray, byte_index: int) -> int:
     """get the unsigned small int from the bytearray
 
     Args:
@@ -358,7 +360,7 @@ def get_usint(bytearray_, byte_index):
     return value
 
 
-def set_sint(bytearray_, byte_index, _int) -> bytearray:
+def set_sint(bytearray_: bytearray, byte_index: int, _int) -> bytearray:
     """set small int
 
     Args:
@@ -375,7 +377,7 @@ def set_sint(bytearray_, byte_index, _int) -> bytearray:
     return bytearray_
 
 
-def get_sint(bytearray_, byte_index):
+def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     """get the small int
 
     Args:
@@ -391,7 +393,7 @@ def get_sint(bytearray_, byte_index):
     return value
 
 
-def parse_specification(db_specification) -> OrderedDict:
+def parse_specification(db_specification: str) -> OrderedDict:
     """
     Create a db specification derived from a
     dataview of a db in which the byte layout
@@ -486,7 +488,7 @@ class DB:
     def __len__(self):
         return len(self.index)
 
-    def set_data(self, _bytearray):
+    def set_data(self, _bytearray: bytearray):
         assert (isinstance(_bytearray, bytearray))
         self._bytearray = _bytearray
 
@@ -495,8 +497,8 @@ class DB_Row:
     """
     Provide ROW API for DB bytearray
     """
-    _bytearray = None  # data of reference to parent DB
-    _specification = None  # row specification
+    _bytearray: bytearray  # data of reference to parent DB
+    _specification: Optional[OrderedDict] = None  # row specification
 
     def __init__(self, _bytearray, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
 
@@ -509,7 +511,7 @@ class DB_Row:
         self._bytearray = _bytearray
         self._specification = parse_specification(_specification)
 
-    def get_bytearray(self) -> Optional[bytearray]:
+    def get_bytearray(self) -> bytearray:
         """
         return bytearray from self or DB parent
         """
@@ -546,12 +548,12 @@ class DB_Row:
             string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
-    def unchanged(self, _bytearray) -> bool:
+    def unchanged(self, _bytearray: bytearray) -> bool:
         if self.get_bytearray() == _bytearray:
             return True
         return False
 
-    def get_offset(self, byte_index) -> int:
+    def get_offset(self, byte_index: Union[str, int]) -> int:
         """
         Calculate correct beginning position for a row
         the db_offset = row_size * index
@@ -575,6 +577,13 @@ class DB_Row:
         if _type.startswith('STRING'):
             max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
+            """
+            normally mypy conform style
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            """
             return get_string(_bytearray, byte_index, max_size)
 
         elif _type == 'REAL':
@@ -623,7 +632,15 @@ class DB_Row:
         _bytearray = self.get_bytearray()
 
         if _type == 'BOOL':
-            byte_index, bool_index = byte_index.split('.')
+            """
+            mypy conform style:
+            
+            if isinstance(byte_index, str):
+                byte_index, bool_index = byte_index.split('.')
+                return set_bool(_bytearray, self.get_offset(byte_index),
+                                int(bool_index), value)
+            """
+            byte_index, bool_index = byte_index.split(".")
             return set_bool(_bytearray, self.get_offset(byte_index),
                             int(bool_index), value)
 
@@ -632,6 +649,14 @@ class DB_Row:
         if _type.startswith('STRING'):
             max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
+            """
+            mypy conform style:
+            max_size = re.search(r'\d+', _type)
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            """
             return set_string(_bytearray, byte_index, value, max_size)
 
         elif _type == 'REAL':

@@ -62,7 +62,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def connect(self, ip_address, tsap_snap7, tsap_logo, tcpport=102) -> int:
+    def connect(self, ip_address: str, tsap_snap7: int, tsap_logo: int, tcpport: int = 102) -> int:
         """
         Connect to a Siemens LOGO server.
         Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
@@ -81,7 +81,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def read(self, vm_address):
+    def read(self, vm_address: str):
         """
         Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
 
@@ -140,7 +140,7 @@ class Logo:
         if wordlen == types.S7WLDWord:
             return struct.unpack_from(">l", data)[0]
 
-    def write(self, vm_address, value) -> int:
+    def write(self, vm_address: str, value: int) -> int:
         """
         Writes to VM addresses of Siemens Logo.
         Example: write("VW10", 200) or write("V10.3", 1)
@@ -203,7 +203,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def db_read(self, db_number, start, size) -> bytearray:
+    def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """
         This is a lean function of Cli_ReadArea() to read PLC DB.
 
@@ -222,7 +222,7 @@ class Logo:
         check_error(result, context="client")
         return bytearray(data)
 
-    def db_write(self, db_number, start, data) -> int:
+    def db_write(self, db_number: int, start: int, data: bytearray) -> int:
         """
         Writes to a DB object.
 
@@ -239,7 +239,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def set_connection_params(self, ip_address, tsap_snap7, tsap_logo):
+    def set_connection_params(self, ip_address: str, tsap_snap7: int, tsap_logo: int):
         """
         Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
         This function must be called just before Cli_Connect().
@@ -255,7 +255,7 @@ class Logo:
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
-    def set_connection_type(self, connection_type):
+    def set_connection_type(self, connection_type: int):
         """
         Sets the connection resource type, i.e the way in which the Clients
         connects to a PLC.
@@ -278,7 +278,7 @@ class Logo:
         check_error(result, context="client")
         return bool(connected)
 
-    def set_param(self, number, value):
+    def set_param(self, number: int, value):
         """Sets an internal Server object parameter.
 
         :param number: Parameter type number

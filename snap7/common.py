@@ -1,6 +1,6 @@
 import logging
 import platform
-from ctypes import c_char, CDLL
+from ctypes import c_char
 from ctypes.util import find_library
 
 from snap7.exceptions import Snap7Exception
@@ -48,14 +48,14 @@ class Snap7Library:
         self.cdll = cdll.LoadLibrary(self.lib_location)
 
 
-def load_library(lib_location=None):
+def load_library(lib_location: str = None):
     """
     :returns: a ctypes cdll object with the snap7 shared library loaded.
     """
     return Snap7Library(lib_location).cdll
 
 
-def check_error(code, context="client"):
+def check_error(code: int, context: str = "client"):
     """
     check if the error code is set. If so, a Python log message is generated
     and an error is raised.
@@ -66,7 +66,7 @@ def check_error(code, context="client"):
         raise Snap7Exception(error)
 
 
-def error_text(error, context="client") -> bytes:
+def error_text(error, context: str = "client") -> bytes:
     """Returns a textual explanation of a given error number
 
     :param error: an error integer
