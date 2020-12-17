@@ -12,7 +12,7 @@ import logging
 import re
 from typing import Tuple
 
-from snap7.types import param_types, S7Object
+import snap7.types
 from snap7.common import load_library, check_error, ipv4
 from snap7.exceptions import Snap7Exception
 
@@ -97,8 +97,8 @@ class Partner:
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self._library.Par_Create.restype = S7Object
-        self._pointer = S7Object(self._library.Par_Create(int(active)))
+        self._library.Par_Create.restype = snap7.types.S7Object
+        self._pointer = snap7.types.S7Object(self._library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -123,7 +123,7 @@ class Partner:
         Reads an internal Partner object parameter.
         """
         logger.debug(f"retreiving param number {number}")
-        type_ = param_types[number]
+        type_ = snap7.types.param_types[number]
         value = type_()
         code = self._library.Par_GetParam(self._pointer, c_int(number),
                                           byref(value))
