@@ -4,7 +4,8 @@ import logging
 import time
 import pytest
 from multiprocessing import Process
-from os import kill
+from os import kill, name
+import signal
 
 import snap7
 from snap7.server import mainloop
@@ -27,8 +28,11 @@ def testserver():
     process.start()
     time.sleep(2)  # wait for server to start
     yield process
-    process.terminate()
-
+    send_signal = signal.SIGINT if name == "posix" else signal.CTRL_C_EVENT
+    kill(process.pid, send_signal)
+    process.join(5)
+    if process.is_alive():
+        raise RuntimeError
 
 @pytest.fixture
 def testclient():

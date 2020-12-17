@@ -14,7 +14,6 @@ class TestPartner(unittest.TestCase):
         self.partner.start()
 
     def tearDown(self):
-        self.partner.stop()
         self.partner.destroy()
 
     def test_as_b_send(self):

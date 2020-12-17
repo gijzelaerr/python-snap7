@@ -2,6 +2,8 @@ import logging
 import time
 import unittest
 from multiprocessing import Process
+import signal
+from os import kill, name
 
 import snap7
 from snap7.server import mainloop
@@ -27,7 +29,11 @@ class TestLogoClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.terminate()
+        send_signal = signal.SIGINT if name == "posix" else signal.CTRL_C_EVENT
+        kill(cls.process.pid, send_signal)
+        cls.process.join(5)
+        if cls.process.is_alive():
+            raise RuntimeError
 
     def setUp(self):
         self.client = snap7.logo.Logo()

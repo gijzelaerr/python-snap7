@@ -7,6 +7,8 @@ import unittest
 from datetime import datetime, timedelta
 from multiprocessing import Process
 from unittest import mock
+from os import name, kill
+import signal
 
 import snap7
 from snap7 import util
@@ -36,7 +38,11 @@ class TestClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.terminate()
+        send_signal = signal.SIGINT if name == "posix" else signal.CTRL_C_EVENT
+        kill(cls.process.pid, send_signal)
+        cls.process.join(5)
+        if cls.process.is_alive():
+            raise RuntimeError
 
     def setUp(self):
         self.client = snap7.client.Client()

@@ -17,7 +17,6 @@ class TestServer(unittest.TestCase):
         self.server.start(tcpport=1102)
 
     def tearDown(self):
-        self.server.stop()
         self.server.destroy()
 
     def test_register_area(self):
