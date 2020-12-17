@@ -26,7 +26,7 @@ pytest.valid_db_block = b'pp\x01\x01\x05\n\x00c\x00\x00\x00t\x00\x00\x00\x00\x01
                         b'\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def server():
     process = Process(target=mainloop)
     process.start()
