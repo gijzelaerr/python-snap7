@@ -33,6 +33,9 @@ def server():
     time.sleep(2)  # wait for server to start
     yield process
     process.terminate()
+    process.join(3)
+    if process.is_alive():
+        process.kill()
 
 
 @pytest.fixture
@@ -42,6 +45,7 @@ def client():
     yield client_async
     client_async.disconnect()
     client_async.destroy()
+    client_async.executor.shutdown()
 
 
 @pytest.fixture
