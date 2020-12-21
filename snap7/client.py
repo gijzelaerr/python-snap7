@@ -421,7 +421,6 @@ class Client:
         return self._library.Cli_ABWrite(
             self._pointer, start, size, byref(cdata))
 
-<<<<<<< HEAD
     def as_ab_read(self, start: int, size: int) -> bytearray:
         """
         This is the asynchronous counterpart of client.ab_read().
@@ -535,9 +534,6 @@ class Client:
 
     @error_wrap
     def compress(self, time: int) -> int:
-=======
-    def compress(self, time) -> int:
->>>>>>> Add async_client
         """
         Performs the Memory compress action.
 

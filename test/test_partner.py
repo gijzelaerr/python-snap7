@@ -1,9 +1,10 @@
 import logging
-import unittest as unittest
-from unittest import mock
 
 import snap7.partner
 from snap7.exceptions import Snap7Exception
+
+import unittest
+from unittest import mock
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -54,10 +55,6 @@ class TestPartner(unittest.TestCase):
             (snap7.types.RecvTimeout, 3000),
             (snap7.types.SrcRef, 256),
             (snap7.types.DstRef, 0),
-<<<<<<< HEAD
-=======
-            # (snap7.types.SrcTSap, 0),
->>>>>>> remove session scope
             (snap7.types.PDURequest, 480),
             (snap7.types.WorkInterval, 100),
             (snap7.types.BSendTimeout, 3000),
