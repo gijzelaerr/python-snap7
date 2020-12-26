@@ -7,18 +7,45 @@ on:
 jobs:
   osx_wheel:
     runs-on: macos-10.15
+    strategy:
+      matrix:
+        python-version: [ 3.6.12, 3.7.9, 3.8.6, 3.9.0 ]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Install snap7
-        run: brew install snap7
-      - name: Upgrade pip
-        run: python3 -m pip install --upgrade pip
-      - name: Install python-snap7
-        run: python3 -m pip install .[test]
+
+      - name: brew packages
+        run: brew install pyenv snap7
+
+      - name: Install Python version
+        run:  pyenv install -s ${{ matrix.python-version }}
+
+      - name: Install Python dependencies
+        run: ~/.pyenv/versions/${{ matrix.python-version }}/bin/pip install --upgrade pip wheel delocate pytest
+
+      - name: Compile and install python-snap7
+        run: CFLAGS="-I/usr/local/include -L/usr/local/lib" ~/.pyenv/versions/${{ matrix.python-version }}/bin/pip install -e ".[test]"
+
       - name: Run pytest
-        run: |
-          pytest test/test_server.py test/test_client.py test/test_util.py
-          sudo pytest test/test_partner.py
+        run: ~/.pyenv/versions/${{ matrix.python-version }}/bin/pytest test/test_server.py test/test_client.py test/test_util.py
 
+      - name: Run tests that require sudo
+        run: sudo ~/.pyenv/versions/${{ matrix.python-version }}/bin/pytest test/test_partner.py
 
+      - name: make binary wheel
+        run: ~/.pyenv/versions/${{ matrix.python-version }}/bin/python setup.py bdist_wheel
+
+      - name: Delocate binary wheel
+        run: ~/.pyenv/versions/${{ matrix.python-version }}/bin/delocate-wheel -v dist/*.whl
+
+      - name: Publish OS X binary wheels
+        uses: actions/upload-artifact@v2
+        with:
+          path: dist/*.whl
+
+      - name: Publish package
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.PYTHON_SNAP7_PYPI }}

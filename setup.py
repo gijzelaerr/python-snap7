@@ -1,6 +1,7 @@
 import os
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
+from sys import platform
 
 __version__ = "0.11"
 
@@ -12,8 +13,19 @@ extras_require = {
 }
 
 
+# this is an empty module just here to trick the binary wheel helper tools
+# to include the snap7 shared library
+dummy = Extension('snap7.__dummy__', libraries=['snap7'], sources=['dummy.c'])
+
+
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
+
+if platform == 'win32':
+    package_data = {"monetdbe": ["*.dll"]}
+else:
+    package_data = {}
 
 
 setup(
@@ -24,6 +36,7 @@ setup(
     author_email='gijs@pythonic.nl',
     url='https://github.com/gijzelaerr/python-snap7',
     packages=find_packages(),
+    ext_modules=[dummy],
     license='MIT licence',
     long_description=read('README.rst'),
     scripts=['snap7/bin/snap7-server.py'],
@@ -43,4 +56,5 @@ setup(
     extras_require=extras_require,
     tests_require=tests_require,
     test_suite="tests",
+    package_data=package_data,
 )

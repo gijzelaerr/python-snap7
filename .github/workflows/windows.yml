@@ -11,17 +11,82 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+
       - name: Install choco packages
-        run: choco install 7zip wget python
+        run: choco install 7zip wget
+
+      - name: Install Python 3.9
+        run: choco install --version 3.9.0 --no-progress -y --allowmultiple python3
+
+      - name: Install Python 3.8
+        run: choco install --version 3.8.6 --no-progress -y --allowmultiple python3
+
+      - name: Install Python 3.7
+        run: choco install --version 3.7.9 --no-progress -y --allowmultiple python3
+
+      - name: Install Python 3.6
+        run: choco install --version 3.6.8 --no-progress -y --allowmultiple python3
+
       - name: Get snap7
         run: |
           wget.exe --content-disposition -c https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
           7z x snap7-full-1.4.2.7z
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll snap7\.
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll C:\Windows\System32\.
+          Copy-Item snap7-full-1.4.2\examples\plain-c\snap7.h C:\Windows\System32\.
+
       - name: Upgrade pip and wheel for all pythons
         run:  python.exe -m pip install --upgrade pip wheel
+
       - name: Install python libraries
         run: python.exe -m pip install .[test]
+
       - name: Run tests
         run: pytest.exe  test/test_client.py test/test_util.py test/test_partner.py
+
+
+      - name: Upgrade pip and wheel for all pythons
+        run: |
+          C:\hostedtoolcache\windows\Python\3.9.0\x64\python.exe -m pip install --upgrade pip wheel
+          C:\hostedtoolcache\windows\Python\3.8.6\x64\python.exe -m pip install --upgrade pip wheel
+          C:\hostedtoolcache\windows\Python\3.7.9\x64\python.exe -m pip install --upgrade pip wheel
+          C:\hostedtoolcache\windows\Python\3.6.8\x64\python.exe -m pip install --upgrade pip wheel
+      - name: Build binary python extension
+        run: |
+          C:\hostedtoolcache\windows\Python\3.9.0\x64\python.exe setup.py build_ext --include-dirs=C:\Windows\System32
+          C:\hostedtoolcache\windows\Python\3.8.6\x64\python.exe setup.py build_ext --include-dirs=C:\Windows\System32
+          C:\hostedtoolcache\windows\Python\3.7.9\x64\python.exe setup.py build_ext --include-dirs=C:\Windows\System32
+          C:\hostedtoolcache\windows\Python\3.6.8\x64\python.exe setup.py build_ext --include-dirs=C:\Windows\System32
+      -
+        name: Install python libraries
+        run: |
+          C:\hostedtoolcache\windows\Python\3.9.0\x64\python.exe -m pip install -e .[test]
+          C:\hostedtoolcache\windows\Python\3.8.6\x64\python.exe -m pip install -e .[test]
+          C:\hostedtoolcache\windows\Python\3.7.9\x64\python.exe -m pip install -e .[test]
+          C:\hostedtoolcache\windows\Python\3.6.8\x64\python.exe -m pip install -e .[test]
+
+      - name: Run tests
+        run: |
+          C:\hostedtoolcache\windows\Python\3.9.0\x64\Scripts\pytest.exe
+          C:\hostedtoolcache\windows\Python\3.8.6\x64\Scripts\pytest.exe
+          C:\hostedtoolcache\windows\Python\3.7.9\x64\Scripts\pytest.exe
+          C:\hostedtoolcache\windows\Python\3.6.8\x64\Scripts\pytest.exe
+      -
+        name: Make wheel
+        run: |
+          C:\hostedtoolcache\windows\Python\3.9.0\x64\python.exe setup.py bdist_wheel
+          C:\hostedtoolcache\windows\Python\3.8.6\x64\python.exe setup.py bdist_wheel
+          C:\hostedtoolcache\windows\Python\3.7.9\x64\python.exe setup.py bdist_wheel
+          C:\hostedtoolcache\windows\Python\3.6.8\x64\python.exe setup.py bdist_wheel
+      -
+        uses: actions/upload-artifact@v2
+        name: Publish Windows binary wheels
+        with:
+          path: dist/*.whl
+
+      - name: Publish package
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          user: __token__
+          password: ${{ secrets.MONETDBE_PYPI }}
