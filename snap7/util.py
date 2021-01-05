@@ -632,7 +632,6 @@ class DB_Row:
         if _type == 'BOOL':
             """
             mypy conform style:
-            
             if isinstance(byte_index, str):
                 byte_index, bool_index = byte_index.split('.')
                 return set_bool(_bytearray, self.get_offset(byte_index),
