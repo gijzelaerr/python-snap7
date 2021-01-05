@@ -87,9 +87,7 @@ import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
-from typing import Optional, Union, Match, AnyStr, cast
-
-from snap7.exceptions import Snap7Exception
+from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -649,14 +647,6 @@ class DB_Row:
         if _type.startswith('STRING'):
             max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
-            """
-            mypy conform style:
-            max_size = re.search(r'\d+', _type)
-            if max_size is None:
-                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
-            max_size_grouped = max_size.group(0)
-            max_size_int = int(max_size_grouped)
-            """
             return set_string(_bytearray, byte_index, value, max_size)
 
         elif _type == 'REAL':
