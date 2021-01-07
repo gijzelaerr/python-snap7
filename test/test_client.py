@@ -208,8 +208,7 @@ class TestClient(unittest.TestCase):
     def test_list_blocks_of_type(self):
         self.client.list_blocks_of_type('DB', 10)
 
-        self.assertRaises(Exception, self.client.list_blocks_of_type,
-                          'NOblocktype', 10)
+        self.assertRaises(Snap7Exception, self.client.list_blocks_of_type, 'NOblocktype', 10)
 
     def test_get_block_info(self):
         """test Cli_GetAgBlockInfo"""
