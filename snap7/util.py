@@ -92,22 +92,22 @@ from typing import Optional, Union
 logger = logging.getLogger(__name__)
 
 
-def get_bool(_bytearray: bytearray, byte_index: int, bool_index: int) -> bool:
+def get_bool(bytearray_: bytearray, byte_index: int, bool_index: int) -> bool:
     """
     Get the boolean value from location in bytearray
     """
     index_value = 1 << bool_index
-    byte_value = _bytearray[byte_index]
+    byte_value = bytearray_[byte_index]
     current_value = byte_value & index_value
     return current_value == index_value
 
 
-def set_bool(_bytearray: bytearray, byte_index: int, bool_index: int, value: bool):
+def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: bool):
     """
     Set boolean value on location in bytearray
     """
     assert value in [0, 1, True, False]
-    current_value = get_bool(_bytearray, byte_index, bool_index)
+    current_value = get_bool(bytearray_, byte_index, bool_index)
     index_value = 1 << bool_index
 
     # check if bool already has correct value
@@ -116,28 +116,28 @@ def set_bool(_bytearray: bytearray, byte_index: int, bool_index: int, value: boo
 
     if value:
         # make sure index_v is IN current byte
-        _bytearray[byte_index] += index_value
+        bytearray_[byte_index] += index_value
     else:
         # make sure index_v is NOT in current byte
-        _bytearray[byte_index] -= index_value
+        bytearray_[byte_index] -= index_value
 
 
-def set_word(_bytearray: bytearray, byte_index: int, _int: int):
+def set_word(bytearray_: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to word
     """
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>H', _int))
-    _bytearray[byte_index:byte_index + 2] = _bytes
-    return _bytearray
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
 
 
-def get_word(_bytearray: bytearray, byte_index: int):
+def get_word(bytearray_: bytearray, byte_index: int):
     """
     Get word value from bytearray.
     WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
     """
-    data = _bytearray[byte_index:byte_index + 2]
+    data = bytearray_[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
     data[0] = data[0] & 0xff
     packed = struct.pack('2B', *data)
@@ -145,24 +145,24 @@ def get_word(_bytearray: bytearray, byte_index: int):
     return value
 
 
-def set_int(_bytearray: bytearray, byte_index: int, _int: int):
+def set_int(bytearray_: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to int
     """
     # make sure were dealing with an int
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>h', _int))
-    _bytearray[byte_index:byte_index + 2] = _bytes
-    return _bytearray
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
 
 
-def get_int(_bytearray: bytearray, byte_index: int):
+def get_int(bytearray_: bytearray, byte_index: int):
     """
     Get int value from bytearray.
 
     int are represented in two bytes
     """
-    data = _bytearray[byte_index:byte_index + 2]
+    data = bytearray_[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
     data[0] = data[0] & 0xff
     packed = struct.pack('2B', *data)
@@ -170,7 +170,7 @@ def get_int(_bytearray: bytearray, byte_index: int):
     return value
 
 
-def set_real(_bytearray: bytearray, byte_index: int, real):
+def set_real(bytearray_: bytearray, byte_index: int, real):
     """
     Set Real value
 
@@ -181,19 +181,19 @@ def set_real(_bytearray: bytearray, byte_index: int, real):
     real = struct.pack('>f', real)
     _bytes = struct.unpack('4B', real)
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index + i] = b
+        bytearray_[byte_index + i] = b
 
 
-def get_real(_bytearray: bytearray, byte_index: int):
+def get_real(bytearray_: bytearray, byte_index: int):
     """
     Get real value. create float from 4 bytes
     """
-    x = _bytearray[byte_index:byte_index + 4]
+    x = bytearray_[byte_index:byte_index + 4]
     real = struct.unpack('>f', struct.pack('4B', *x))[0]
     return real
 
 
-def set_string(_bytearray: bytearray, byte_index: int, value: str, max_size: int):
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int):
     """
     Set string value
 
@@ -207,69 +207,69 @@ def set_string(_bytearray: bytearray, byte_index: int, value: str, max_size: int
     if size > max_size:
         raise ValueError(f'size {size} > max_size {max_size} {value}')
     # set len count on first position
-    _bytearray[byte_index + 1] = len(value)
+    bytearray_[byte_index + 1] = len(value)
 
     i = 0
     # fill array which chr integers
     for i, c in enumerate(value):
-        _bytearray[byte_index + 2 + i] = ord(c)
+        bytearray_[byte_index + 2 + i] = ord(c)
 
     # fill the rest with empty space
-    for r in range(i + 1, _bytearray[byte_index]):
-        _bytearray[byte_index + 2 + r] = ord(' ')
+    for r in range(i + 1, bytearray_[byte_index]):
+        bytearray_[byte_index + 2 + r] = ord(' ')
 
 
-def get_string(_bytearray: bytearray, byte_index: int, max_size: int) -> str:
+def get_string(bytearray_: bytearray, byte_index: int, max_size: int) -> str:
     """
     parse string from bytearray
     """
-    size = _bytearray[byte_index + 1]
+    size = bytearray_[byte_index + 1]
 
     if max_size < size:
         logger.error("the string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         size = max_size
 
-    data = map(chr, _bytearray[byte_index + 2:byte_index + 2 + size])
+    data = map(chr, bytearray_[byte_index + 2:byte_index + 2 + size])
     return "".join(data)
 
 
-def get_dword(_bytearray: bytearray, byte_index: int):
-    data = _bytearray[byte_index:byte_index + 4]
+def get_dword(bytearray_: bytearray, byte_index: int):
+    data = bytearray_[byte_index:byte_index + 4]
     dword = struct.unpack('>I', struct.pack('4B', *data))[0]
     return dword
 
 
-def set_dword(_bytearray: bytearray, byte_index: int, dword: int):
+def set_dword(bytearray_: bytearray, byte_index: int, dword: int):
     dword = int(dword)
     _bytes = struct.unpack('4B', struct.pack('>I', dword))
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index + i] = b
+        bytearray_[byte_index + i] = b
 
 
-def get_dint(_bytearray: bytearray, byte_index: int):
+def get_dint(bytearray_: bytearray, byte_index: int):
     """
     Get dint value from bytearray.
     DINT (Double integer) 32bit 4 bytes Decimal number signed	L#-2147483648 to L#2147483647
     """
-    data = _bytearray[byte_index:byte_index + 4]
+    data = bytearray_[byte_index:byte_index + 4]
     dint = struct.unpack('>i', struct.pack('4B', *data))[0]
     return dint
 
 
-def set_dint(_bytearray: bytearray, byte_index: int, dint: int):
+def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
     """
     Set value in bytearray to dint
     """
     dint = int(dint)
     _bytes = struct.unpack('4B', struct.pack('>i', dint))
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index + i] = b
+        bytearray_[byte_index + i] = b
 
 
-def get_s5time(_bytearray: bytearray, byte_index: int) -> str:
+def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
     micro_to_milli = 1000
-    data_bytearray = _bytearray[byte_index:byte_index + 2]
+    data_bytearray = bytearray_[byte_index:byte_index + 2]
     s5time_data_int_like = list(data_bytearray.hex())
     if s5time_data_int_like[0] == '0':
         # 10ms
@@ -296,10 +296,10 @@ def get_s5time(_bytearray: bytearray, byte_index: int) -> str:
     return "".join(str(s5time))
 
 
-def get_dt(_bytearray: bytearray, byte_index: int) -> str:
+def get_dt(bytearray_: bytearray, byte_index: int) -> str:
     # 1990 - 1999, 2000 - 2089
     micro_to_milli = 1000
-    data_bytearray = _bytearray[byte_index:byte_index + 8]
+    data_bytearray = bytearray_[byte_index:byte_index + 8]
     dt_lst = list(data_bytearray.hex())
     date_time_list = []
     for i in range(0, len(dt_lst), 2):
@@ -325,11 +325,11 @@ def get_dt(_bytearray: bytearray, byte_index: int) -> str:
     return date_and_time
 
 
-def set_usint(_bytearray: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """set unsigned small int
 
     Args:
-        _bytearray (bytearray): bytearray
+         bytearray_ (bytearray): bytearray
         byte_index (int): index of the bytearray
         _int (int): positive value to set (0 - 255)
 
@@ -338,31 +338,31 @@ def set_usint(_bytearray: bytearray, byte_index: int, _int: int) -> bytearray:
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>B', _int))
-    _bytearray[byte_index] = _bytes[0]
-    return _bytearray
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
 
 
-def get_usint(_bytearray: bytearray, byte_index: int) -> int:
+def get_usint(bytearray_: bytearray, byte_index: int) -> int:
     """get the unsigned small int from the bytearray
 
     Args:
-        _bytearray (bytearray)
+         bytearray_ (bytearray)
         byte_index (int): index of the bytearray
 
     Returns:
         int: unsigned small int (0 - 255)
     """
-    data = _bytearray[byte_index] & 0xff
+    data = bytearray_[byte_index] & 0xff
     packed = struct.pack('B', data)
     value = struct.unpack('>B', packed)[0]
     return value
 
 
-def set_sint(_bytearray: bytearray, byte_index: int, _int) -> bytearray:
+def set_sint(bytearray_: bytearray, byte_index: int, _int) -> bytearray:
     """set small int
 
     Args:
-        _bytearray (bytearray)
+         bytearray_ (bytearray)
         byte_index (int): index of the bytearray
         _int (int): small int (-128 - 127)
 
@@ -371,21 +371,21 @@ def set_sint(_bytearray: bytearray, byte_index: int, _int) -> bytearray:
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>b', _int))
-    _bytearray[byte_index] = _bytes[0]
-    return _bytearray
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
 
 
-def get_sint(_bytearray: bytearray, byte_index: int) -> int:
+def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     """get the small int
 
     Args:
-        _bytearray (bytearray)
+         bytearray_ (bytearray)
         byte_index (int): index of the bytearray
 
     Returns:
         int: small int (-127 - 128)
     """
-    data = _bytearray[byte_index]
+    data = bytearray_[byte_index]
     packed = struct.pack('B', data)
     value = struct.unpack('>b', packed)[0]
     return value
@@ -420,7 +420,7 @@ class DB:
     db1[0]['testbool1'] = test
     db1.write()   # puts data in plc
     """
-    _bytearray = None  # data from plc
+    bytearray_ = None  # data from plc
     specification = None  # layout of db rows
     row_size = None  # bytes size of a db row
     layout_offset = None  # at which byte in row specification should
@@ -432,7 +432,7 @@ class DB:
     # now you can be sure you will never overwrite
     # critical parts of db
 
-    def __init__(self, db_number, _bytearray,
+    def __init__(self, db_number, bytearray_,
                  specification, row_size, size, id_field=None,
                  db_offset=0, layout_offset=0, row_offset=0):
 
@@ -445,7 +445,7 @@ class DB:
         self.layout_offset = layout_offset
         self.row_offset = row_offset
 
-        self._bytearray = _bytearray
+        self._bytearray = bytearray_
         self.specification = specification
         # loop over bytearray. make rowObjects
         # store index of id_field to row objects
@@ -486,27 +486,27 @@ class DB:
     def __len__(self):
         return len(self.index)
 
-    def set_data(self, _bytearray: bytearray):
-        assert (isinstance(_bytearray, bytearray))
-        self._bytearray = _bytearray
+    def set_data(self, bytearray_: bytearray):
+        assert (isinstance(bytearray_, bytearray))
+        self._bytearray = bytearray_
 
 
 class DB_Row:
     """
     Provide ROW API for DB bytearray
     """
-    _bytearray: bytearray  # data of reference to parent DB
+    bytearray_: bytearray  # data of reference to parent DB
     _specification: Optional[OrderedDict] = None  # row specification
 
-    def __init__(self, _bytearray, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(self, bytearray_, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
         self.row_size = row_size
         self.row_offset = row_offset  # start of writable part of row
 
-        assert (isinstance(_bytearray, (bytearray, DB)))
-        self._bytearray = _bytearray
+        assert (isinstance(bytearray_, (bytearray, DB)))
+        self._bytearray = bytearray_
         self._specification = parse_specification(_specification)
 
     def get_bytearray(self) -> bytearray:
@@ -546,8 +546,8 @@ class DB_Row:
             string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
-    def unchanged(self, _bytearray: bytearray) -> bool:
-        if self.get_bytearray() == _bytearray:
+    def unchanged(self, bytearray_: bytearray) -> bool:
+        if self.get_bytearray() == bytearray_:
             return True
         return False
 
@@ -561,11 +561,11 @@ class DB_Row:
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
     def get_value(self, byte_index, _type):
-        _bytearray = self.get_bytearray()
+        bytearray_ = self.get_bytearray()
 
         if _type == 'BOOL':
             byte_index, bool_index = byte_index.split('.')
-            return get_bool(_bytearray, self.get_offset(byte_index),
+            return get_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index))
 
         # remove 4 from byte index since
@@ -582,36 +582,36 @@ class DB_Row:
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             """
-            return get_string(_bytearray, byte_index, max_size)
+            return get_string(bytearray_, byte_index, max_size)
 
         elif _type == 'REAL':
-            return get_real(_bytearray, byte_index)
+            return get_real(bytearray_, byte_index)
 
         elif _type == 'DWORD':
-            return get_dword(_bytearray, byte_index)
+            return get_dword(bytearray_, byte_index)
 
         elif _type == 'DINT':
-            return get_dint(_bytearray, byte_index)
+            return get_dint(bytearray_, byte_index)
 
         elif _type == 'INT':
-            return get_int(_bytearray, byte_index)
+            return get_int(bytearray_, byte_index)
 
         elif _type == 'WORD':
-            return get_word(_bytearray, byte_index)
+            return get_word(bytearray_, byte_index)
 
         elif _type == 'S5TIME':
-            data_s5time = get_s5time(_bytearray, byte_index)
+            data_s5time = get_s5time(bytearray_, byte_index)
             return data_s5time
 
         elif _type == 'DATE_AND_TIME':
-            data_dt = get_dt(_bytearray, byte_index)
+            data_dt = get_dt(bytearray_, byte_index)
             return data_dt
 
         elif _type == 'USINT':
-            return get_usint(_bytearray, byte_index)
+            return get_usint(bytearray_, byte_index)
 
         elif _type == 'SINT':
-            return get_sint(_bytearray, byte_index)
+            return get_sint(bytearray_, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
@@ -627,18 +627,18 @@ class DB_Row:
         raise ValueError
 
     def set_value(self, byte_index, _type, value):
-        _bytearray = self.get_bytearray()
+        bytearray_ = self.get_bytearray()
 
         if _type == 'BOOL':
             """
             mypy conform style:
             if isinstance(byte_index, str):
                 byte_index, bool_index = byte_index.split('.')
-                return set_bool(_bytearray, self.get_offset(byte_index),
+                return set_bool(bytearray_, self.get_offset(byte_index),
                                 int(bool_index), value)
             """
             byte_index, bool_index = byte_index.split(".")
-            return set_bool(_bytearray, self.get_offset(byte_index),
+            return set_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
@@ -646,28 +646,28 @@ class DB_Row:
         if _type.startswith('STRING'):
             max_size = re.search(r'\d+', _type).group(0)
             max_size = int(max_size)
-            return set_string(_bytearray, byte_index, value, max_size)
+            return set_string(bytearray_, byte_index, value, max_size)
 
         elif _type == 'REAL':
-            return set_real(_bytearray, byte_index, value)
+            return set_real(bytearray_, byte_index, value)
 
         elif _type == 'DWORD':
-            return set_dword(_bytearray, byte_index, value)
+            return set_dword(bytearray_, byte_index, value)
 
         elif _type == 'DINT':
-            return set_dint(_bytearray, byte_index, value)
+            return set_dint(bytearray_, byte_index, value)
 
         elif _type == 'INT':
-            return set_int(_bytearray, byte_index, value)
+            return set_int(bytearray_, byte_index, value)
 
         elif _type == 'WORD':
-            return set_word(_bytearray, byte_index, value)
+            return set_word(bytearray_, byte_index, value)
 
         elif _type == 'USINT':
-            return set_usint(_bytearray, byte_index, value)
+            return set_usint(bytearray_, byte_index, value)
 
         elif _type == 'SINT':
-            return set_sint(_bytearray, byte_index, value)
+            return set_sint(bytearray_, byte_index, value)
 
         raise ValueError
 
@@ -697,9 +697,9 @@ class DB_Row:
         assert (isinstance(self._bytearray, DB))
         assert (self.row_size >= 0)
         db_nr = self._bytearray.db_number
-        _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
+        bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray
-        for i, b in enumerate(_bytearray):
+        for i, b in enumerate(bytearray_):
             data[i + self.db_offset] = b
