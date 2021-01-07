@@ -638,7 +638,6 @@ class Client:
         check_error(result, context="client")
         return result
 
-<<<<<<< HEAD
     def _prepare_as_read_area(self, area: str, size: int) -> Tuple[int, Array]:
         if area not in snap7.types.areas.values():
             raise NotImplementedError(f"{area} is not implemented in snap7.types")
@@ -749,9 +748,6 @@ class Client:
         raise NotImplementedError
 
     def copy_ram_to_rom(self, timeout: int = 1) -> int:
-=======
-    def copy_ram_to_rom(self, timeout=1) -> int:
->>>>>>> Add async_client
         # Cli_CopyRamToRom
         result = self._library.Cli_CopyRamToRom(self._pointer, timeout)
         check_error(result)
