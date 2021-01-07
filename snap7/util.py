@@ -122,22 +122,22 @@ def set_bool(_bytearray: bytearray, byte_index: int, bool_index: int, value: boo
         _bytearray[byte_index] -= index_value
 
 
-def set_word(bytearray_: bytearray, byte_index: int, _int: int):
+def set_word(_bytearray: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to word
     """
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>H', _int))
-    bytearray_[byte_index:byte_index + 2] = _bytes
-    return bytearray_
+    _bytearray[byte_index:byte_index + 2] = _bytes
+    return _bytearray
 
 
-def get_word(bytearray_: bytearray, byte_index: int):
+def get_word(_bytearray: bytearray, byte_index: int):
     """
     Get word value from bytearray.
     WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
     """
-    data = bytearray_[byte_index:byte_index + 2]
+    data = _bytearray[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
     data[0] = data[0] & 0xff
     packed = struct.pack('2B', *data)
@@ -145,24 +145,24 @@ def get_word(bytearray_: bytearray, byte_index: int):
     return value
 
 
-def set_int(bytearray_: bytearray, byte_index: int, _int: int):
+def set_int(_bytearray: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to int
     """
     # make sure were dealing with an int
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>h', _int))
-    bytearray_[byte_index:byte_index + 2] = _bytes
-    return bytearray_
+    _bytearray[byte_index:byte_index + 2] = _bytes
+    return _bytearray
 
 
-def get_int(bytearray_: bytearray, byte_index: int):
+def get_int(_bytearray: bytearray, byte_index: int):
     """
     Get int value from bytearray.
 
     int are represented in two bytes
     """
-    data = bytearray_[byte_index:byte_index + 2]
+    data = _bytearray[byte_index:byte_index + 2]
     data[1] = data[1] & 0xff
     data[0] = data[0] & 0xff
     packed = struct.pack('2B', *data)
@@ -325,11 +325,11 @@ def get_dt(_bytearray: bytearray, byte_index: int) -> str:
     return date_and_time
 
 
-def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_usint(_bytearray: bytearray, byte_index: int, _int: int) -> bytearray:
     """set unsigned small int
 
     Args:
-        bytearray_ (bytearray): bytearray
+        _bytearray (bytearray): bytearray
         byte_index (int): index of the bytearray
         _int (int): positive value to set (0 - 255)
 
@@ -338,31 +338,31 @@ def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>B', _int))
-    bytearray_[byte_index] = _bytes[0]
-    return bytearray_
+    _bytearray[byte_index] = _bytes[0]
+    return _bytearray
 
 
-def get_usint(bytearray_: bytearray, byte_index: int) -> int:
+def get_usint(_bytearray: bytearray, byte_index: int) -> int:
     """get the unsigned small int from the bytearray
 
     Args:
-        bytearray_ (bytearray)
+        _bytearray (bytearray)
         byte_index (int): index of the bytearray
 
     Returns:
         int: unsigned small int (0 - 255)
     """
-    data = bytearray_[byte_index] & 0xff
+    data = _bytearray[byte_index] & 0xff
     packed = struct.pack('B', data)
     value = struct.unpack('>B', packed)[0]
     return value
 
 
-def set_sint(bytearray_: bytearray, byte_index: int, _int) -> bytearray:
+def set_sint(_bytearray: bytearray, byte_index: int, _int) -> bytearray:
     """set small int
 
     Args:
-        bytearray_ (bytearray)
+        _bytearray (bytearray)
         byte_index (int): index of the bytearray
         _int (int): small int (-128 - 127)
 
@@ -371,21 +371,21 @@ def set_sint(bytearray_: bytearray, byte_index: int, _int) -> bytearray:
     """
     _int = int(_int)
     _bytes = struct.unpack('B', struct.pack('>b', _int))
-    bytearray_[byte_index] = _bytes[0]
-    return bytearray_
+    _bytearray[byte_index] = _bytes[0]
+    return _bytearray
 
 
-def get_sint(bytearray_: bytearray, byte_index: int) -> int:
+def get_sint(_bytearray: bytearray, byte_index: int) -> int:
     """get the small int
 
     Args:
-        bytearray_ (bytearray)
+        _bytearray (bytearray)
         byte_index (int): index of the bytearray
 
     Returns:
         int: small int (-127 - 128)
     """
-    data = bytearray_[byte_index]
+    data = _bytearray[byte_index]
     packed = struct.pack('B', data)
     value = struct.unpack('>b', packed)[0]
     return value
