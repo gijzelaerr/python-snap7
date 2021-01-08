@@ -11,8 +11,9 @@ from unittest import mock
 import snap7
 from snap7 import util
 from snap7.exceptions import Snap7Exception
+from snap7.common import check_error
 from snap7.server import mainloop
-from snap7.types import S7AreaDB, S7WLByte, S7DataItem
+from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -37,6 +38,9 @@ class TestClient(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.process.terminate()
+        cls.process.join(1)
+        if cls.process.is_alive():
+            cls.process.kill()
 
     def setUp(self):
         self.client = snap7.client.Client()
@@ -139,6 +143,14 @@ class TestClient(unittest.TestCase):
         implemented in server emulator
         """
         self.assertRaises(Snap7Exception, self.client.upload, db_number)
+
+    def test_as_upload(self):
+        _buffer = buffer_type()
+        size = ctypes.c_int(ctypes.sizeof(_buffer))
+        self.client.as_upload(1, _buffer, size)
+        response = self.client.wait_as_completion(500)
+        result = bytearray(_buffer)[:size.value]
+        self.assertRaises(Snap7Exception, check_error, response)
 
     @unittest.skip("TODO: invalid block size")
     def test_download(self):
@@ -248,12 +260,13 @@ class TestClient(unittest.TestCase):
         self.client.ab_write(start=start, data=data)
         self.client.ab_read(start=start, size=size)
 
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
+    # @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
     def test_ab_write(self):
         start = 1
         size = 10
         data = bytearray(size)
-        self.client.ab_write(start=start, data=data)
+        result = self.client.ab_write(start=start, data=data)
+        self.assertEqual(0, result)
 
     @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
     def test_as_ab_read(self):
@@ -274,7 +287,10 @@ class TestClient(unittest.TestCase):
 
     def test_as_compress(self):
         time = 1000
-        self.client.as_compress(time)
+        response = self.client.as_compress(time)
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(0, response)
+        self.assertEqual(0, result)
 
     def test_set_param(self):
         values = (
@@ -314,41 +330,66 @@ class TestClient(unittest.TestCase):
         for param in non_client:
             self.assertRaises(Exception, self.client.get_param, non_client)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_copy_ram_to_rom(self):
-        self.client.copy_ram_to_rom()
+        self.client.copy_ram_to_rom(timeout=1)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ct_read(self):
-        self.client.as_ct_read()
+        # Cli_AsCTRead
+        expected = b'\x10\x01'
+        self.client.ct_write(0, 1, expected)
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
+        buffer = (type_ * 1)()
+        self.client.as_ct_read(0, 1, buffer)
+        self.client.wait_as_completion(500)
+        self.assertEqual(expected, bytearray(buffer))
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ct_write(self):
-        self.client.as_ct_write()
+        # Cli_CTWrite
+        data = b'\x01\x11'
+        response = self.client.as_ct_write(0, 1, data)
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(0, response)
+        self.assertEqual(0, result)
+        self.assertEqual(data, self.client.ct_read(0, 1))
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_fill(self):
-        self.client.as_db_fill()
+        filler = 31
+        expected = bytearray(filler.to_bytes(1, byteorder='big') * 100)
+        response = self.client.db_fill(1, filler)
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_get(self):
-        self.client.as_db_get(db_number=db_number)
+        _buffer = buffer_type()
+        size = ctypes.c_int(buffer_size)
+        self.client.as_db_get(db_number, _buffer, size)
+        self.client.wait_as_completion(500)
+        result = bytearray(_buffer)[:size.value]
+        self.assertEqual(100, len(result))
 
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
     def test_as_db_read(self):
         size = 40
         start = 0
         db = 1
-        data = bytearray(40)
-        self.client.db_write(db_number=db, start=start, data=data)
-        result = self.client.as_db_read(db_number=db, start=start, size=size)
-        self.assertEqual(data, result)
+        expected = bytearray(40)
+        self.client.db_write(db_number=db, start=start, data=expected)
 
-    @unittest.skip("TODO: crash client: FATAL: exception not rethrown")
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        data = (type_ * size)()
+        self.client.as_db_read(db, start, size, data)
+        self.client.wait_as_completion(500)
+        self.assertEqual(data, expected)
+
     def test_as_db_write(self):
         size = 40
         data = bytearray(size)
-        self.client.as_db_write(db_number=1, start=0, data=data)
+        wordlen = snap7.types.S7WLByte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        size = len(data)
+        result = (type_ * size).from_buffer_copy(data)
+        self.client.as_db_write(db_number=1, start=0, size=size, data=result)
+        self.client.wait_as_completion(500)
+        self.assertEqual(data, result)
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_download(self):
@@ -532,6 +573,7 @@ class TestClient(unittest.TestCase):
             res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pdata)
             try:
                 res2 = self.client.wait_as_completion(timeout)
+                check_error(res2)
             except Snap7Exception as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
@@ -643,65 +685,93 @@ class TestClient(unittest.TestCase):
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
-    def test_asebread(self):
+    def test_as_eb_read(self):
         # Cli_AsEBRead
-        with self.assertRaises(NotImplementedError):
-            self.client.asebread()
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        buffer = (type_ * 1)()
+        response = self.client.as_eb_read(0, 1, buffer)
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(0, response)
+        self.assertRaises(Snap7Exception, check_error, result)
 
-    def test_asebwrite(self):
+    def test_as_eb_write(self):
         # Cli_AsEBWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.asebwrite()
+        response = self.client.as_eb_write(0, 1, b'\x00')
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(0, response)
+        self.assertRaises(Snap7Exception, check_error, result)
 
-    def test_asfullupload(self):
+    def test_as_full_upload(self):
         # Cli_AsFullUpload
-        with self.assertRaises(NotImplementedError):
-            self.client.asfullupload()
+        response = self.client.as_full_upload('DB', 1)
+        result = self.client.wait_as_completion(500)
+        self.assertRaises(Snap7Exception, check_error, result)
 
-    def test_aslistblocksoftype(self):
-        # Cli_AsListBlocksOfType
-        with self.assertRaises(NotImplementedError):
-            self.client.aslistblocksoftype()
+    def test_as_list_blocks_of_type(self):
+        size = 10
+        data = (ctypes.c_uint16 * 10)()
+        count = ctypes.c_int()
+        self.client.as_list_blocks_of_type('DB', data, count)
+        self.client.wait_as_completion(500)
+        result = bytearray(data)
+        self.assertEqual(0, count.value)
 
-    def test_asmbread(self):
+    def test_as_mb_read(self):
         # Cli_AsMBRead
-        with self.assertRaises(NotImplementedError):
-            self.client.asmbread()
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        data = (type_ * 1)()
+        self.client.as_mb_read(0, 1, data)
+        response = self.client.wait_as_completion(500)
+        result = bytearray(data)
+        self.assertRaises(Snap7Exception, check_error, response)
 
-    def test_asmbwrite(self):
+    def test_as_mb_write(self):
         # Cli_AsMBWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.asmbwrite()
+        response = self.client.as_mb_write(0, 1, b'\x00')
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(0, response)
+        self.assertRaises(Snap7Exception, check_error, result)
 
-    def test_asreadszl(self):
+    def test_as_read_szl(self):
         # Cli_AsReadSZL
-        with self.assertRaises(NotImplementedError):
-            self.client.asreadszl()
+        expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
+        ssl_id = 0x011c
+        index = 0x0005
+        s7_szl = S7SZL()
+        size = ctypes.c_int(ctypes.sizeof(s7_szl))
+        self.client.as_read_szl(ssl_id, index, s7_szl, size)
+        self.client.wait_as_completion(100)
+        result = bytes(s7_szl.Data)[2:26]
+        self.assertEqual(expected, result)
 
-    def test_asreadszllist(self):
+    def test_as_read_szl_list(self):
         # Cli_AsReadSZLList
-        with self.assertRaises(NotImplementedError):
-            self.client.asreadszllist()
+        expected = b'\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01'
+        szl_list = S7SZLList()
+        items_count = ctypes.c_int(ctypes.sizeof(szl_list))
+        self.client.as_read_szl_list(szl_list, items_count)
+        self.client.wait_as_completion(500)
+        result = bytearray(szl_list.List)[:16]
+        self.assertEqual(expected, result)
 
-    def test_astmread(self):
-        # Cli_AsTMRead
-        with self.assertRaises(NotImplementedError):
-            self.client.astmread()
+    def test_as_tm_read(self):
+        # Cli_AsMBRead
+        expected = b'\x10\x01'
+        self.client.tm_write(0, 1, expected)
+        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
+        buffer = (type_ * 1)()
+        self.client.as_tm_read(0, 1, buffer)
+        self.client.wait_as_completion(500)
+        self.assertEqual(expected, bytearray(buffer))
 
-    def test_astmwrite(self):
-        # Cli_AsTMWrite
-        with self.assertRaises(NotImplementedError):
-            self.client.astmwrite()
-
-    def test_asupload(self):
-        # Cli_AsUpload
-        with self.assertRaises(NotImplementedError):
-            self.client.asupload()
-
-    def test_aswritearea(self):
-        # Cli_AsWriteArea
-        with self.assertRaises(NotImplementedError):
-            self.client.aswritearea()
+    def test_as_tm_write(self):
+        # Cli_AsMBWrite
+        data = b'\x10\x01'
+        response = self.client.as_tm_write(0, 1, data)
+        result = self.client.wait_as_completion(500)
+        self.assertEqual(0, response)
+        self.assertEqual(0, result)
+        self.assertEqual(data, self.client.tm_read(0, 1))
 
     def test_copy_ram_to_rom(self):
         # Cli_CopyRamToRom
@@ -714,7 +784,7 @@ class TestClient(unittest.TestCase):
         result = self.client.ct_read(0, 1)
         self.assertEqual(data, result)
 
-    def test_ctwrite(self):
+    def test_ct_write(self):
         # Cli_CTWrite
         data = b'\x01\x11'
         self.assertEqual(0, self.client.ct_write(0, 1, data))
@@ -817,31 +887,29 @@ class TestClient(unittest.TestCase):
         response = self.client.mb_write(0, 1, b'\x00')
         self.assertEqual(0, response)
 
-    def test_readszl_partial_list(self):
+    def test_read_szl(self):
+        # read_szl_partial_list
         expected_number_of_records = 10
         expected_length_of_record = 34
         ssl_id = 0x001c
         response = self.client.read_szl(ssl_id)
         self.assertEqual(expected_number_of_records, response.Header.NDR)
         self.assertEqual(expected_length_of_record, response.Header.LengthDR)
-
-    def test_readszl_single_data_record(self):
+        # read_szl_single_data_record
         expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
         ssl_id = 0x011c
         index = 0x0005
         response = self.client.read_szl(ssl_id, index)
         result = bytes(response.Data)[2:26]
         self.assertEqual(expected, result)
-
-    def test_readszl_order_number(self):
+        # read_szl_order_number
         expected = b'6ES7 315-2EH14-0AB0 '
         ssl_id = 0x0111
         index = 0x0001
         response = self.client.read_szl(ssl_id, index)
         result = bytes(response.Data[2:22])
         self.assertEqual(expected, result)
-
-    def test_read_szl_invalid_id(self):
+        # read_szl_invalid_id
         ssl_id = 0xffff
         index = 0xffff
         self.assertRaises(Snap7Exception, self.client.read_szl, ssl_id)
@@ -864,10 +932,11 @@ class TestClient(unittest.TestCase):
         result = self.client.tm_read(0, 1)
         self.assertEqual(data, result)
 
-    def test_tmw_rite(self):
+    def test_tm_write(self):
         # Cli_TMWrite
         data = b'\x10\x01'
         self.assertEqual(0, self.client.tm_write(0, 1, data))
+        self.assertEqual(data, self.client.tm_read(0, 1))
         self.assertRaises(Snap7Exception, self.client.tm_write, 0, 100, bytes(200))
         self.assertRaises(ValueError, self.client.tm_write, 0, 2, bytes(2))
 
