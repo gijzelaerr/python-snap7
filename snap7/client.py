@@ -421,18 +421,15 @@ class Client:
         return self._library.Cli_ABWrite(
             self._pointer, start, size, byref(cdata))
 
-    def as_ab_read(self, start: int, size: int) -> bytearray:
+    def as_ab_read(self, start: int, size: int, data) -> int:
         """
         This is the asynchronous counterpart of client.ab_read().
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
-        data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self._library.Cli_AsABRead(self._pointer, start, size,
                                             byref(data))
         check_error(result, context="client")
-        return bytearray(data)
+        return result
 
     def as_ab_write(self, start: int, data: bytearray) -> int:
         """
@@ -443,49 +440,62 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
-        return self._library.Cli_AsABWrite(
+        result = self._library.Cli_AsABWrite(
             self._pointer, start, size, byref(cdata))
+        check_error(result, context="client")
+        return result
 
     def as_compress(self, time: int) -> int:
         """
         This is the asynchronous counterpart of client.compress().
         """
-        return self._library.Cli_AsCompress(self._pointer, time)
+        result = self._library.Cli_AsCompress(self._pointer, time)
+        check_error(result, context="client")
+        return result
 
     def as_copy_ram_to_rom(self, timeout: int = 1) -> int:
-        return self._library.Cli_AsCopyRamToRom(self._pointer)
+        result = self._library.Cli_AsCopyRamToRom(self._pointer)
+        check_error(result, context="client")
+        return result
 
     def as_ct_read(self, start: int, amount: int, data) -> int:
         # Cli_CTRead
-        return self._library.Cli_AsCTRead(self._pointer, start, amount, byref(data))
+        result = self._library.Cli_AsCTRead(self._pointer, start, amount, byref(data))
+        check_error(result, context="client")
+        return result
 
     def as_ct_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_CTWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_AsCTWrite(self._pointer, start, amount, byref(cdata))
+        check_error(result, context="client")
         return result
 
     def as_db_fill(self, db_number: int, filler) -> int:
-        return self._library.Cli_AsDBFill(self._pointer, db_number, filler)
+        result = self._library.Cli_AsDBFill(self._pointer, db_number, filler)
+        check_error(result, context="client")
+        return result
 
     def as_db_get(self, db_number: int, _buffer, size) -> bytearray:
         """
         This is the asynchronous counterpart of Cli_DBGet.
         """
-        return self._library.Cli_AsDBGet(self._pointer, db_number,
-                                         byref(_buffer),
-                                         byref(size))
+        result = self._library.Cli_AsDBGet(self._pointer, db_number, byref(_buffer), byref(size))
+        check_error(result, context="client")
+        return result
 
     def as_db_read(self, db_number: int, start: int, size: int, data) -> Array:
-        return self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data))
+        result = self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data))
+        check_error(result, context="client")
+        return result
 
     def as_db_write(self, db_number: int, start: int, size: int, data) -> int:
-        return self._library.Cli_AsDBWrite(
-            self._pointer, db_number, start, size,
-            byref(data))
+        result = self._library.Cli_AsDBWrite(self._pointer, db_number, start, size, byref(data))
+        check_error(result, context="client")
+        return result
 
-    def as_download(self, data: bytearray, block_num: int = -1) -> int:
+    def as_download(self, data: bytearray, block_num: int) -> int:
         """
         Downloads a DB data into the AG asynchronously.
         A whole block (including header and footer) must be available into the
@@ -497,8 +507,7 @@ class Client:
         size = len(data)
         type_ = c_byte * len(data)
         cdata = type_.from_buffer_copy(data)
-        result = self._library.Cli_AsDownload(self._pointer, block_num,
-                                              byref(cdata), size)
+        result = self._library.Cli_AsDownload(self._pointer, block_num, byref(cdata), size)
         check_error(result)
         return result
 
@@ -540,7 +549,6 @@ class Client:
         negotiated_ = c_uint16()
         code = self._library.Cli_GetPduLength(self._pointer, byref(requested_), byref(negotiated_))
         check_error(code)
-
         return negotiated_.value
 
     def get_plc_datetime(self) -> datetime:
@@ -605,6 +613,7 @@ class Client:
         """
         # Cli_WaitAsCompletion
         result = self._library.Cli_WaitAsCompletion(self._pointer, c_ulong(timeout))
+        check_error(result, context="client")
         return result
 
     def _prepare_as_read_area(self, area: str, size: int) -> Tuple[int, Array]:
@@ -670,13 +679,16 @@ class Client:
 
     def as_eb_read(self, start: int, size: int, data) -> int:
         # Cli_AsEBRead
-        return self._library.Cli_AsEBRead(self._pointer, start, size, byref(data))
+        result = self._library.Cli_AsEBRead(self._pointer, start, size, byref(data))
+        check_error(result, context="client")
+        return result
 
     def as_eb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_AsEBWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_AsEBWrite(self._pointer, start, size, byref(cdata))
+        check_error(result, context="client")
         return result
 
     def as_full_upload(self, _type: str, block_num: int) -> int:
@@ -684,39 +696,43 @@ class Client:
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
         block_type = snap7.types.block_types[_type]
-        result = self._library.Cli_AsFullUpload(self._pointer, block_type,
-                                                block_num, byref(_buffer),
-                                                byref(size))
+        result = self._library.Cli_AsFullUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
+        check_error(result, context="client")
         return result
 
     def as_list_blocks_of_type(self, blocktype, data, count) -> int:
         blocktype = snap7.types.block_types.get(blocktype)
         if not blocktype:
             raise Snap7Exception("The blocktype parameter was invalid")
-
-        return self._library.Cli_AsListBlocksOfType(
-            self._pointer, blocktype,
-            byref(data),
-            byref(count))
+        result = self._library.Cli_AsListBlocksOfType(self._pointer, blocktype, byref(data), byref(count))
+        check_error(result, context="client")
+        return result
 
     def as_mb_read(self, start: int, size: int, data) -> int:
         # Cli_AsMBRead
-        return self._library.Cli_AsMBRead(self._pointer, start, size, byref(data))
+        result = self._library.Cli_AsMBRead(self._pointer, start, size, byref(data))
+        check_error(result, context="client")
+        return result
 
     def as_mb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_AsMBWrite
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_AsMBWrite(self._pointer, start, size, byref(cdata))
+        check_error(result, context="client")
         return result
 
     def as_read_szl(self, ssl_id: int, index: int, s7_szl: S7SZL, size) -> int:
         # Cli_AsReadSZL
-        return self._library.Cli_AsReadSZL(self._pointer, ssl_id, index, byref(s7_szl), byref(size))
+        result = self._library.Cli_AsReadSZL(self._pointer, ssl_id, index, byref(s7_szl), byref(size))
+        check_error(result, context="client")
+        return result
 
     def as_read_szl_list(self, szl_list, items_count) -> int:
         # Cli_AsReadSZLList
-        return self._library.Cli_AsReadSZLList(self._pointer, byref(szl_list), byref(items_count))
+        result = self._library.Cli_AsReadSZLList(self._pointer, byref(szl_list), byref(items_count))
+        check_error(result, context="client")
+        return result
 
     def as_tm_read(self, start: int, amount: int, data) -> bytearray:
         # Cli_ASTMRead
@@ -734,12 +750,14 @@ class Client:
 
     def as_upload(self, block_num: int, _buffer, size) -> int:
         block_type = snap7.types.block_types['DB']
-        return self._library.Cli_Upload(self._pointer, block_type, block_num,
-                                        byref(_buffer), byref(size))
+        result = self._library.Cli_AsUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
+        check_error(result, context="client")
+        return result
 
     def copy_ram_to_rom(self, timeout: int = 1) -> int:
         # Cli_CopyRamToRom
         result = self._library.Cli_CopyRamToRom(self._pointer, timeout)
+        check_error(result, context="client")
         return result
 
     def ct_read(self, start: int, amount: int) -> bytearray:
