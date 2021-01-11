@@ -50,6 +50,18 @@ class TestClient(unittest.TestCase):
         self.client.disconnect()
         self.client.destroy()
 
+    def _as_check_loop(self, check_times=20) -> int:
+        check_status = ctypes.c_int(-1)
+        # preparing Server values
+        for i in range(check_times):
+            self.client.check_as_completion(ctypes.byref(check_status))
+            if check_status.value == 0:
+                break
+            time.sleep(0.5)
+        else:
+            raise Snap7Exception(f"Async Request not finished after {check_times} times - Fail")
+        return check_status.value
+
     def test_db_read(self):
         size = 40
         start = 0
@@ -267,7 +279,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_ab_read(self):
         expected = b'\x10\x01'
-        self.client.ab_write(0, expected)
+        self.client.ab_write(0, bytearray(expected))
 
         wordlen = snap7.types.S7WLByte
         type_ = snap7.types.wordlen_to_ctypes[wordlen]
@@ -279,19 +291,19 @@ class TestClient(unittest.TestCase):
 
     def test_as_ab_write(self):
         data = b'\x01\x11'
-        response = self.client.as_ab_write(0, data)
+        response = self.client.as_ab_write(0, bytearray(data))
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
         self.assertEqual(0, result)
         self.assertEqual(data, self.client.ab_read(0, 2))
 
     def test_compress(self):
-        time = 1000
-        self.client.compress(time)
+        time_ = 1000
+        self.client.compress(time_)
 
     def test_as_compress(self):
-        time = 1000
-        response = self.client.as_compress(time)
+        time_ = 1000
+        response = self.client.as_compress(time_)
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
         self.assertEqual(0, result)
@@ -340,7 +352,7 @@ class TestClient(unittest.TestCase):
     def test_as_ct_read(self):
         # Cli_AsCTRead
         expected = b'\x10\x01'
-        self.client.ct_write(0, 1, expected)
+        self.client.ct_write(0, 1, bytearray(expected))
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
         buffer = (type_ * 1)()
         self.client.as_ct_read(0, 1, buffer)
@@ -350,7 +362,7 @@ class TestClient(unittest.TestCase):
     def test_as_ct_write(self):
         # Cli_CTWrite
         data = b'\x01\x11'
-        response = self.client.as_ct_write(0, 1, data)
+        response = self.client.as_ct_write(0, 1, bytearray(data))
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
         self.assertEqual(0, result)
@@ -434,7 +446,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.db_write(db_number=1, start=0, data=data)
+            self.client.db_write(db_number=1, start=0, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -448,7 +460,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.download(block_num=db_number, data=data)
+            self.client.download(block_num=db_number, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -467,7 +479,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.write_area(area, dbnumber, start, data)
+            self.client.write_area(area, dbnumber, start, bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -483,7 +495,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.ab_write(start=start, data=data)
+            self.client.ab_write(start=start, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -500,7 +512,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.as_ab_write(start=start, data=data)
+            self.client.as_ab_write(start=start, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -515,7 +527,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.db_write(db_number=1, start=0, data=data)
+            self.client.db_write(db_number=1, start=0, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -530,7 +542,7 @@ class TestClient(unittest.TestCase):
         data = b'\xDE\xAD\xBE\xEF'
 
         try:
-            self.client.as_download(block_num=db_number, data=data)
+            self.client.as_download(block_num=db_number, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
         finally:
@@ -571,10 +583,11 @@ class TestClient(unittest.TestCase):
         data = bytearray(size)
         wordlen, data = self.client._prepare_as_read_area(area, size)
         pdata = ctypes.byref(data)
-        self.client.write_area(area, dbnumber, start, data)
+        self.client.write_area(area, dbnumber, start, bytearray(data))
         # start as_request and wait for zero seconds to try trigger timeout
         for i in range(tries):
             res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pdata)
+            res2 = None
             try:
                 res2 = self.client.wait_as_completion(timeout)
                 check_error(res2)
@@ -699,7 +712,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_eb_write(self):
         # Cli_AsEBWrite
-        response = self.client.as_eb_write(0, 1, b'\x00')
+        response = self.client.as_eb_write(0, 1, bytearray(b'\x00'))
         self.assertEqual(0, response)
         self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
 
@@ -724,7 +737,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_mb_write(self):
         # Cli_AsMBWrite
-        response = self.client.as_mb_write(0, 1, b'\x00')
+        response = self.client.as_mb_write(0, 1, bytearray(b'\x00'))
         self.assertEqual(0, response)
         self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
 
@@ -753,7 +766,7 @@ class TestClient(unittest.TestCase):
     def test_as_tm_read(self):
         # Cli_AsMBRead
         expected = b'\x10\x01'
-        self.client.tm_write(0, 1, expected)
+        self.client.tm_write(0, 1, bytearray(expected))
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
         buffer = (type_ * 1)()
         self.client.as_tm_read(0, 1, buffer)
@@ -763,7 +776,7 @@ class TestClient(unittest.TestCase):
     def test_as_tm_write(self):
         # Cli_AsMBWrite
         data = b'\x10\x01'
-        response = self.client.as_tm_write(0, 1, data)
+        response = self.client.as_tm_write(0, 1, bytearray(data))
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
         self.assertEqual(0, result)
@@ -776,14 +789,14 @@ class TestClient(unittest.TestCase):
     def test_ct_read(self):
         # Cli_CTRead
         data = b'\x10\x01'
-        self.client.ct_write(0, 1, data)
+        self.client.ct_write(0, 1, bytearray(data))
         result = self.client.ct_read(0, 1)
         self.assertEqual(data, result)
 
     def test_ct_write(self):
         # Cli_CTWrite
         data = b'\x01\x11'
-        self.assertEqual(0, self.client.ct_write(0, 1, data))
+        self.assertEqual(0, self.client.ct_write(0, 1, bytearray(data)))
         self.assertRaises(ValueError, self.client.ct_write, 0, 2, bytes(1))
 
     def test_db_fill(self):
@@ -803,7 +816,7 @@ class TestClient(unittest.TestCase):
     def test_eb_write(self):
         # Cli_EBWrite
         self.client._library.Cli_EBWrite = mock.Mock(return_value=0)
-        response = self.client.eb_write(0, 1, b'\x00')
+        response = self.client.eb_write(0, 1, bytearray(b'\x00'))
         self.assertEqual(0, response)
 
     def test_error_text(self):
@@ -854,7 +867,7 @@ class TestClient(unittest.TestCase):
                          b'\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x00' \
                          b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
                          b'\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-        block_info = self.client.get_pg_block_info(valid_db_block)
+        block_info = self.client.get_pg_block_info(bytearray(valid_db_block))
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
@@ -863,12 +876,12 @@ class TestClient(unittest.TestCase):
 
     def test_iso_exchange_buffer(self):
         # Cli_IsoExchangeBuffer
-        self.client.db_write(1, 0, b'\x11')
+        self.client.db_write(1, 0, bytearray(b'\x11'))
         # PDU read DB1 1.0 BYTE
         data = b'\x32\x01\x00\x00\x01\x00\x00\x0e\x00\x00\x04\x01\x12\x0a\x10\x02\x00\x01\x00\x01\x84\x00\x00\x00'
         # PDU response
         expected = bytearray(b'2\x03\x00\x00\x01\x00\x00\x02\x00\x05\x00\x00\x04\x01\xff\x04\x00\x08\x11')
-        self.assertEqual(expected, self.client.iso_exchange_buffer(data))
+        self.assertEqual(expected, self.client.iso_exchange_buffer(bytearray(data)))
 
     def test_mb_read(self):
         # Cli_MBRead
@@ -880,7 +893,7 @@ class TestClient(unittest.TestCase):
     def test_mb_write(self):
         # Cli_MBWrite
         self.client._library.Cli_MBWrite = mock.Mock(return_value=0)
-        response = self.client.mb_write(0, 1, b'\x00')
+        response = self.client.mb_write(0, 1, bytearray(b'\x00'))
         self.assertEqual(0, response)
 
     def test_read_szl(self):
@@ -924,14 +937,14 @@ class TestClient(unittest.TestCase):
     def test_tm_read(self):
         # Cli_TMRead
         data = b'\x10\x01'
-        self.client.tm_write(0, 1, data)
+        self.client.tm_write(0, 1, bytearray(data))
         result = self.client.tm_read(0, 1)
         self.assertEqual(data, result)
 
     def test_tm_write(self):
         # Cli_TMWrite
         data = b'\x10\x01'
-        self.assertEqual(0, self.client.tm_write(0, 1, data))
+        self.assertEqual(0, self.client.tm_write(0, 1, bytearray(data)))
         self.assertEqual(data, self.client.tm_read(0, 1))
         self.assertRaises(Snap7Exception, self.client.tm_write, 0, 100, bytes(200))
         self.assertRaises(ValueError, self.client.tm_write, 0, 2, bytes(2))

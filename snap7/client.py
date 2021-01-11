@@ -6,7 +6,7 @@ import re
 from ctypes import c_int, c_char_p, byref, sizeof, c_uint16, c_int32, c_byte, c_ulong, Array
 from ctypes import c_void_p, create_string_buffer
 from datetime import datetime
-from typing import Union, Tuple, Optional, List, ByteString, Any
+from typing import Union, Tuple, Optional, List
 
 import snap7
 from snap7.common import check_error, load_library, ipv4
@@ -114,13 +114,14 @@ class Client:
         return self._library.Cli_Disconnect(self._pointer)
 
     @error_wrap
-    def connect(self, address: str, rack: int, slot: int, tcpport=102) -> int:
+    def connect(self, address: str, rack: int, slot: int, tcpport: int = 102) -> int:
         """
         Connect to a S7 server.
 
         :param address: IP address of server
         :param rack: rack on server
         :param slot: slot on server.
+        :param tcpport: port of server, 102 is standard
         """
         logger.info(f"connecting to {address}:{tcpport} rack {rack} slot {slot}")
 
@@ -151,6 +152,7 @@ class Client:
 
         :param start: write offset
         :param data: bytearray
+        :param db_number: target DB number
         """
         wordlen = snap7.types.S7WLByte
         type_ = snap7.types.wordlen_to_ctypes[wordlen]
@@ -305,7 +307,7 @@ class Client:
         logger.debug(f"blocks: {blocksList}")
         return blocksList
 
-    def list_blocks_of_type(self, blocktype, size) -> Union[int, Array]:
+    def list_blocks_of_type(self, blocktype: str, size: int) -> Union[int, Array]:
         """This function returns the AG list of a specified block type."""
 
         blocktype = snap7.types.block_types.get(blocktype)
@@ -526,17 +528,15 @@ class Client:
         """
         logger.debug(f"setting param number {number} to {value}")
         type_ = param_types[number]
-        return self._library.Cli_SetParam(self._pointer, number,
-                                          byref(type_(value)))
+        return self._library.Cli_SetParam(self._pointer, number, byref(type_(value)))
 
-    def get_param(self, number) -> int:
+    def get_param(self, number: int) -> int:
         """Reads an internal Client object parameter.
         """
         logger.debug(f"retreiving param number {number}")
         type_ = param_types[number]
         value = type_()
-        code = self._library.Cli_GetParam(self._pointer, c_int(number),
-                                          byref(value))
+        code = self._library.Cli_GetParam(self._pointer, c_int(number), byref(value))
         check_error(code)
         return value.value
 
@@ -601,9 +601,9 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def set_as_callback(self):
+    def set_as_callback(self, pfn_clicompletion, p_usr):
         # Cli_SetAsCallback
-        raise NotImplementedError
+        return self._library.Cli_SetAsCallback(self, pfn_clicompletion, p_usr)
 
     def wait_as_completion(self, timeout: int) -> int:
         """
@@ -667,7 +667,6 @@ class Client:
         :param area: chosen memory_area
         :param dbnumber: The DB number, only used when area= S7AreaDB
         :param start: offset to start writing
-        :param data: a bytearray containing the payload
         """
         type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
         logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
