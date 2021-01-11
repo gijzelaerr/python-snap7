@@ -978,6 +978,7 @@ class TestClient(unittest.TestCase):
     def test_set_as_callback(self):
         raise NotImplementedError
 
+
 class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.

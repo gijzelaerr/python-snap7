@@ -307,7 +307,7 @@ class Client:
         logger.debug(f"blocks: {blocksList}")
         return blocksList
 
-    def list_blocks_of_type(self, blocktype: str, size: int) -> Union[int, Array]:
+    def list_blocks_of_type(self, blocktype, size: int) -> Union[int, Array]:
         """This function returns the AG list of a specified block type."""
 
         blocktype = snap7.types.block_types.get(blocktype)
