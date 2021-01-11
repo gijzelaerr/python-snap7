@@ -974,6 +974,9 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
         self.assertEqual(expected_list[2], self.client.tm_read(0, 2))
 
+    @unittest.skip("TODO: not yet fully implemented")
+    def test_set_as_callback(self):
+        raise NotImplementedError
 
 class TestClientBeforeConnect(unittest.TestCase):
     """
