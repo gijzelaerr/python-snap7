@@ -33,7 +33,7 @@ mypy: venv/bin/pytest
 	venv/bin/mypy snap7 test
 
 test: venv/bin/pytest
-	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py test/test_client_async.py
+	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py
 	sudo venv/bin/pytest test/test_partner.py  # run this as last to prevent pytest cache dir creates as root
 
 clean:
