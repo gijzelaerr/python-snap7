@@ -603,7 +603,9 @@ class Client:
 
     def set_as_callback(self, pfn_clicompletion, p_usr):
         # Cli_SetAsCallback
-        return self._library.Cli_SetAsCallback(self, pfn_clicompletion, p_usr)
+        result = self._library.Cli_SetAsCallback(self, pfn_clicompletion, p_usr)
+        check_error(result, context='client')
+        return result
 
     def wait_as_completion(self, timeout: int) -> int:
         """
