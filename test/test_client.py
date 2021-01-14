@@ -987,7 +987,7 @@ class TestClient(unittest.TestCase):
         self.client.set_as_callback(cfunc_type(callback), cObj)
         self.client.as_ct_write(0, 1, bytearray(expected))
 
-        time.sleep(1)
+        self._as_check_loop()
         self.assertEqual(expected, self.client.ct_read(0, 1))
         self.assertEqual(1, self.callback_counter)
 
