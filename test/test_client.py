@@ -13,7 +13,7 @@ from snap7 import util
 from snap7.exceptions import Snap7Exception
 from snap7.common import check_error
 from snap7.server import mainloop
-from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size
+from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -974,9 +974,22 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
         self.assertEqual(expected_list[2], self.client.tm_read(0, 2))
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_set_as_callback(self):
-        raise NotImplementedError
+        expected = b"\x11\x11"
+        self.callback_counter = 0
+        cObj = ctypes.cast(ctypes.pointer(ctypes.py_object(self)), ctypes.c_void_p)
+
+        def callback(FUsrPtr, JobOp, response):
+            self = ctypes.cast(FUsrPtr, ctypes.POINTER(ctypes.py_object)).contents.value
+            self.callback_counter += 1
+
+        cfunc_type = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(S7Object), ctypes.c_int, ctypes.c_int)
+        self.client.set_as_callback(cfunc_type(callback), cObj)
+        self.client.as_ct_write(0, 1, bytearray(expected))
+
+        time.sleep(1)
+        self.assertEqual(expected, self.client.ct_read(0, 1))
+        self.assertEqual(1, self.callback_counter)
 
 
 class TestClientBeforeConnect(unittest.TestCase):

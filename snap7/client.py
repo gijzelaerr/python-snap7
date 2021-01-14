@@ -603,7 +603,7 @@ class Client:
 
     def set_as_callback(self, pfn_clicompletion, p_usr):
         # Cli_SetAsCallback
-        result = self._library.Cli_SetAsCallback(self, pfn_clicompletion, p_usr)
+        result = self._library.Cli_SetAsCallback(self._pointer, pfn_clicompletion, p_usr)
         check_error(result, context='client')
         return result
 
