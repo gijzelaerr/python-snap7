@@ -32,6 +32,6 @@ Special thanks to
 * Davide Nardella for creating snap7
 * Thomas Hergenhahn for his libnodave.
 * Thomas W for his S7comm wireshark plugin
-* `Fabian Beitler <https://github.com/swamper123>`_ and `Denis Petrov <https://github.com/nikteliy>`_ for their contributions to the 1.0 release
+* `Fabian Beitler <https://github.com/swamper123>`_ and `Nikteliy <https://github.com/nikteliy>`_ for their contributions to the 1.0 release
 
 

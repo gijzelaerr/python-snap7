@@ -15,7 +15,7 @@ CHANGES
  *  Not all functions are implemented yet  (#25)
 
 special thanks to [Fabian Beitler](https://github.com/swamper123) and
-[Denis Petrov](https://github.com/nikteliy>) for their contributions to the 1.0 release!
+[Nikteliy](https://github.com/nikteliy>) for their contributions to the 1.0 release!
 
 
 
