@@ -107,7 +107,7 @@ def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: boo
     Set boolean value on location in bytearray
     """
     if isinstance(value, bool) is False:
-        raise ValueError(f"Value {value} is not from type bool.")
+        raise TypeError(f"Value value:{value} is not from type bool.")
 
     current_value = get_bool(bytearray_, byte_index, bool_index)
     index_value = 1 << bool_index
@@ -203,7 +203,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     :params max_size: max possible string size
     """
     if isinstance(value, str) is False:
-
+        raise TypeError(f"Value value:{value} is not from Type string")
 
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
@@ -491,7 +491,7 @@ class DB:
 
     def set_data(self, bytearray_: bytearray):
         if isinstance(bytearray_, bytearray) is False:
-            raise ValueError(f"Value bytearray_: {bytearray_} is not from type bytearray")
+            raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
         self._bytearray = bytearray_
 
 
@@ -510,7 +510,7 @@ class DB_Row:
         self.row_offset = row_offset  # start of writable part of row
 
         if isinstance(bytearray_, (bytearray, DB)) is False:
-            raise ValueError(f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)")
+            raise TypeError(f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)")
         self._bytearray = bytearray_
         self._specification = parse_specification(_specification)
 
@@ -683,7 +683,7 @@ class DB_Row:
         Write current data to db in plc
         """
         if isinstance(self._bytearray, DB) is False:
-            raise ValueError(f"Value {self._bytearray} is not from type DB.")
+            raise TypeError(f"Value self._bytearray: {self._bytearray} is not from type DB.")
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
 
@@ -704,7 +704,7 @@ class DB_Row:
         read current data of db row from plc
         """
         if isinstance(self._bytearray, DB) is False:
-            raise ValueError(f"Value {self._bytearray} is not from type DB.")
+            raise TypeError(f"Value self._bytearray:{self._bytearray} is not from type DB.")
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
