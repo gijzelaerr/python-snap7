@@ -10,6 +10,7 @@ from typing import Tuple, Optional, Callable, Any
 import snap7
 import snap7.types
 from snap7.common import check_error, load_library, ipv4
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -243,8 +244,8 @@ class Server:
     def set_cpu_status(self, status: int):
         """Sets the Virtual CPU status.
         """
-        if status not in snap7.types.cpu_statuses.keys():
-            raise ValueError(f"unknown cpu state: {status}")
+        if status not in snap7.types.cpu_statuses:
+            raise Snap7Exception(f"The cpu state ({status}) is invalid")
         logger.debug(f"setting cpu status to {status}")
         return self.library.Srv_SetCpuStatus(self.pointer, status)
 
