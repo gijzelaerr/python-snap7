@@ -219,7 +219,8 @@ class Server:
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
             self.set_param(snap7.types.LocalPort, tcpport)
-        assert re.match(ipv4, ip), f'{ip} is invalid ipv4'
+        if re.match(ipv4, ip) is False:
+            raise ValueError(f"{ip} is invalid ipv4")
         logger.info(f"starting server to {ip}:102")
         return self.library.Srv_StartTo(self.pointer, ip)
 
@@ -242,7 +243,8 @@ class Server:
     def set_cpu_status(self, status: int):
         """Sets the Virtual CPU status.
         """
-        assert status in snap7.types.cpu_statuses, f'unknown cpu state {status}'
+        if status not in snap7.types.cpu_statuses:
+            raise KeyError(f"unknown cpu state {status}")
         logger.debug(f"setting cpu status to {status}")
         return self.library.Srv_SetCpuStatus(self.pointer, status)
 

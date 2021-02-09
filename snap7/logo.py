@@ -248,7 +248,8 @@ class Logo:
         :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
         :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
         """
-        assert re.match(ipv4, ip_address), f'{ip_address} is invalid ipv4'
+        if re.match(ipv4, ip_address) is False:
+            raise ValueError(f"{ip_address} is invalid ipv4")
         result = self.library.Cli_SetConnectionParams(self.pointer, ip_address.encode(),
                                                       c_uint16(tsap_snap7),
                                                       c_uint16(tsap_logo))
