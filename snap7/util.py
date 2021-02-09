@@ -106,8 +106,8 @@ def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: boo
     """
     Set boolean value on location in bytearray
     """
-    if isinstance(value, bool) is False:
-        raise TypeError(f"Value value:{value} is not from type bool.")
+    if value not in {0, 1, True, False}:
+        raise TypeError(f"Value value:{value} is not a boolean expression.")
 
     current_value = get_bool(bytearray_, byte_index, bool_index)
     index_value = 1 << bool_index
@@ -541,7 +541,7 @@ class DB_Row:
         return self.get_value(index, _type)
 
     def __setitem__(self, key, value):
-        if  key not in self._specification:
+        if key not in self._specification:
             raise KeyError(f"Value {key} was not found in specifications.")
         index, _type = self._specification[key]
         self.set_value(index, _type, value)

@@ -67,7 +67,7 @@ class TestServer(unittest.TestCase):
         self.server.set_cpu_status(0)
         self.server.set_cpu_status(4)
         self.server.set_cpu_status(8)
-        self.assertRaises(AssertionError, self.server.set_cpu_status, -1)
+        self.assertRaises(KeyError, self.server.set_cpu_status, -1)
 
     def test_set_mask(self):
         self.server.set_mask(kind=snap7.types.mkEvent, mask=10)
@@ -115,7 +115,7 @@ class TestServer(unittest.TestCase):
 
     def test_start_to(self):
         self.server.start_to('0.0.0.0')
-        self.assertRaises(AssertionError, self.server.start_to, 'bogus')
+        self.assertRaises(ValueError, self.server.start_to, 'bogus')
 
     def test_get_param(self):
         # check the defaults
