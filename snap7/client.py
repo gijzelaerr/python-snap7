@@ -245,7 +245,7 @@ class Client:
         :param size: number of units to read
         """
         if area not in snap7.types.areas.values():
-            raise TypeError(f"{area} is not implemented in snap7.types")
+            raise Snap7Exception(f"{area} is not implemented in snap7.types")
         elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
@@ -623,7 +623,7 @@ class Client:
 
     def _prepare_as_read_area(self, area: str, size: int) -> Tuple[int, Array]:
         if area not in snap7.types.areas.values():
-            raise TypeError(f"{area} is not implemented in snap7.types")
+            raise Snap7Exception(f"{area} is not implemented in snap7.types")
         elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
@@ -652,7 +652,7 @@ class Client:
 
     def _prepare_as_write_area(self, area: str, data: bytearray) -> Tuple[int, Array]:
         if area not in snap7.types.areas.values():
-            raise TypeError(f"{area} is not implemented in snap7.types")
+            raise Snap7Exception(f"{area} is not implemented in snap7.types")
         elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
