@@ -68,7 +68,7 @@ class TestServer(unittest.TestCase):
         self.server.set_cpu_status(0)
         self.server.set_cpu_status(4)
         self.server.set_cpu_status(8)
-        self.assertRaises(Snap7Exception, self.server.set_cpu_status, -1)
+        self.assertRaises(ValueError, self.server.set_cpu_status, -1)
 
     def test_set_mask(self):
         self.server.set_mask(kind=snap7.types.mkEvent, mask=10)
