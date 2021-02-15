@@ -245,7 +245,7 @@ class Client:
         :param size: number of units to read
         """
         if area not in snap7.types.areas.values():
-            raise Snap7Exception(f"{area} is not implemented in snap7.types")
+            raise ValueError(f"{area} is not implemented in snap7.types")
         elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:

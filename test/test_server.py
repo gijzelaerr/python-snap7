@@ -6,7 +6,6 @@ from unittest import mock
 import snap7.error
 import snap7.server
 import snap7.types
-from snap7.exceptions import Snap7Exception
 
 logging.basicConfig(level=logging.WARNING)
 

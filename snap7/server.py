@@ -10,7 +10,6 @@ from typing import Tuple, Optional, Callable, Any
 import snap7
 import snap7.types
 from snap7.common import check_error, load_library, ipv4
-from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
