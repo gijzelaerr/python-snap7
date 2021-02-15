@@ -73,7 +73,8 @@ def error_text(error, context: str = "client") -> bytes:
     :param context: server, client or partner
     :returns: the error string
     """
-    assert context in ("client", "server", "partner")
+    if context not in ("client", "server", "partner"):
+        raise TypeError(f"Unkown context {context} used, should be either client, server or partner")
     logger.debug(f"error text for {hex(error)}")
     len_ = 1024
     text_type = c_char * len_
