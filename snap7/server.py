@@ -245,7 +245,7 @@ class Server:
         """Sets the Virtual CPU status.
         """
         if status not in snap7.types.cpu_statuses:
-            raise Snap7Exception(f"The cpu state ({status}) is invalid")
+            raise ValueError(f"The cpu state ({status}) is invalid")
         logger.debug(f"setting cpu status to {status}")
         return self.library.Srv_SetCpuStatus(self.pointer, status)
 
