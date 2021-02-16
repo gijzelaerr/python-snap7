@@ -244,8 +244,9 @@ class Client:
         :param start: offset to start writing
         :param size: number of units to read
         """
-        assert area in snap7.types.areas.values()
-        if area == snap7.types.S7AreaTM:
+        if area not in snap7.types.areas.values():
+            raise ValueError(f"{area} is not implemented in snap7.types")
+        elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
             wordlen = snap7.types.S7WLCounter
@@ -349,7 +350,8 @@ class Client:
     @error_wrap
     def set_session_password(self, password: str) -> int:
         """Send the password to the PLC to meet its security level."""
-        assert len(password) <= 8, 'maximum password length is 8'
+        if len(password) > 8:
+            raise ValueError("Maximum password length is 8")
         return self._library.Cli_SetSessionPassword(self._pointer,
                                                     c_char_p(password.encode()))
 
@@ -367,7 +369,8 @@ class Client:
         :param local_tsap: Local TSAP (PC TSAP)
         :param remote_tsap: Remote TSAP (PLC TSAP)
         """
-        assert re.match(ipv4, address), f'{address} is invalid ipv4'
+        if not re.match(ipv4, address):
+            raise ValueError(f"{address} is invalid ipv4")
         result = self._library.Cli_SetConnectionParams(self._pointer, address,
                                                        c_uint16(local_tsap),
                                                        c_uint16(remote_tsap))
@@ -620,8 +623,8 @@ class Client:
 
     def _prepare_as_read_area(self, area: str, size: int) -> Tuple[int, Array]:
         if area not in snap7.types.areas.values():
-            raise NotImplementedError(f"{area} is not implemented in snap7.types")
-        if area == snap7.types.S7AreaTM:
+            raise ValueError(f"{area} is not implemented in snap7.types")
+        elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
             wordlen = snap7.types.S7WLCounter
@@ -649,8 +652,8 @@ class Client:
 
     def _prepare_as_write_area(self, area: str, data: bytearray) -> Tuple[int, Array]:
         if area not in snap7.types.areas.values():
-            raise NotImplementedError(f"{area} is not implemented in snap7.types")
-        if area == snap7.types.S7AreaTM:
+            raise ValueError(f"{area} is not implemented in snap7.types")
+        elif area == snap7.types.S7AreaTM:
             wordlen = snap7.types.S7WLTimer
         elif area == snap7.types.S7AreaCT:
             wordlen = snap7.types.S7WLCounter

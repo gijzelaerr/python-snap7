@@ -106,7 +106,9 @@ def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: boo
     """
     Set boolean value on location in bytearray
     """
-    assert value in [0, 1, True, False]
+    if value not in {0, 1, True, False}:
+        raise TypeError(f"Value value:{value} is not a boolean expression.")
+
     current_value = get_bool(bytearray_, byte_index, bool_index)
     index_value = 1 << bool_index
 
@@ -200,7 +202,8 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     :params value: string data
     :params max_size: max possible string size
     """
-    assert isinstance(value, str)
+    if not isinstance(value, str):
+        raise TypeError(f"Value value:{value} is not from Type string")
 
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
@@ -400,7 +403,7 @@ def parse_specification(db_specification: str) -> OrderedDict:
     parsed_db_specification = OrderedDict()
 
     for line in db_specification.split('\n'):
-        if line and not (line.isspace() or line[0] == '#'):
+        if line and not line.lstrip().startswith('#'):
             index, var_name, _type = line.split('#')[0].split()
             parsed_db_specification[var_name] = (index, _type)
 
@@ -487,7 +490,8 @@ class DB:
         return len(self.index)
 
     def set_data(self, bytearray_: bytearray):
-        assert (isinstance(bytearray_, bytearray))
+        if not isinstance(bytearray_, bytearray):
+            raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
         self._bytearray = bytearray_
 
 
@@ -505,7 +509,8 @@ class DB_Row:
         self.row_size = row_size
         self.row_offset = row_offset  # start of writable part of row
 
-        assert (isinstance(bytearray_, (bytearray, DB)))
+        if not isinstance(bytearray_, (bytearray, DB)):
+            raise TypeError(f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)")
         self._bytearray = bytearray_
         self._specification = parse_specification(_specification)
 
@@ -530,12 +535,10 @@ class DB_Row:
         """
         Get a specific db field
         """
-        assert key in self._specification
         index, _type = self._specification[key]
         return self.get_value(index, _type)
 
     def __setitem__(self, key, value):
-        assert key in self._specification
         index, _type = self._specification[key]
         self.set_value(index, _type, value)
 
@@ -675,8 +678,10 @@ class DB_Row:
         """
         Write current data to db in plc
         """
-        assert (isinstance(self._bytearray, DB))
-        assert (self.row_size >= 0)
+        if not isinstance(self._bytearray, DB):
+            raise TypeError(f"Value self._bytearray: {self._bytearray} is not from type DB.")
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
 
         db_nr = self._bytearray.db_number
         offset = self.db_offset
@@ -694,8 +699,10 @@ class DB_Row:
         """
         read current data of db row from plc
         """
-        assert (isinstance(self._bytearray, DB))
-        assert (self.row_size >= 0)
+        if not isinstance(self._bytearray, DB):
+            raise TypeError(f"Value self._bytearray:{self._bytearray} is not from type DB.")
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
         bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
 

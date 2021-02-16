@@ -209,8 +209,11 @@ class Partner:
         :param local_tsap: Local TSAP
         :param remote_tsap: PLC TSAP
         """
-        assert re.match(ipv4, local_ip), f'{local_ip} is invalid ipv4'
-        assert re.match(ipv4, remote_ip), f'{remote_ip} is invalid ipv4'
+
+        if not re.match(ipv4, local_ip):
+            raise ValueError(f"{local_ip} is invalid ipv4")
+        if not re.match(ipv4, remote_ip):
+            raise ValueError(f"{remote_ip} is invalid ipv4")
         logger.info(f"starting partnering from {local_ip} to {remote_ip}")
         return self._library.Par_StartTo(self._pointer, local_ip, remote_ip,
                                          c_uint16(local_tsap),
