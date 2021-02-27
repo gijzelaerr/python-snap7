@@ -33,11 +33,11 @@ class Client:
     A snap7 client
     """
 
-    def __init__(self):
+    def __init__(self, lib_location: Optional[str]=None):
         self._read_callback = None
         self._callback = None
         self._pointer = None
-        self._library = load_library()
+        self._library = load_library(lib_location)
         self.create()
 
     def __del__(self):

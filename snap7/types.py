@@ -4,6 +4,7 @@ Python equivalent for snap7 specific types.
 import ctypes
 
 from snap7.common import ADict
+from enum import Enum
 
 S7Object = ctypes.c_void_p
 buffer_size = 65536
@@ -52,12 +53,14 @@ mkEvent = 0
 mkLog = 1
 
 # Area ID
-S7AreaPE = 0x81
-S7AreaPA = 0x82
-S7AreaMK = 0x83
-S7AreaDB = 0x84
-S7AreaCT = 0x1C
-S7AreaTM = 0x1D
+class Areas(Enum):
+    S7AreaPE = 0x81
+    S7AreaPA = 0x82
+    S7AreaMK = 0x83
+    S7AreaDB = 0x84
+    S7AreaCT = 0x1C
+    S7AreaTM = 0x1D
+
 
 areas = ADict({
     'PE': 0x81,

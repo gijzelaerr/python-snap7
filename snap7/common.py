@@ -2,6 +2,7 @@ import logging
 import platform
 from ctypes import c_char
 from ctypes.util import find_library
+from typing import Optional
 
 from snap7.exceptions import Snap7Exception
 
@@ -38,7 +39,7 @@ class Snap7Library:
             cls._instance.cdll = None
         return cls._instance
 
-    def __init__(self, lib_location=None):
+    def __init__(self, lib_location: Optional[str]=None):
         if self.cdll:
             return
         self.lib_location = lib_location or self.lib_location or find_library('snap7')
@@ -48,7 +49,7 @@ class Snap7Library:
         self.cdll = cdll.LoadLibrary(self.lib_location)
 
 
-def load_library(lib_location: str = None):
+def load_library(lib_location: Optional[str] = None):
     """
     :returns: a ctypes cdll object with the snap7 shared library loaded.
     """

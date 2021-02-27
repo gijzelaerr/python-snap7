@@ -87,8 +87,9 @@ import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
-from typing import Optional, Union
-from snap7.types import S7AreaDB
+from typing import Dict, Iterable, Literal, Optional, Union
+from snap7.types import Areas
+from snap7.client import Client
 
 logger = logging.getLogger(__name__)
 
@@ -424,21 +425,21 @@ class DB:
     db1[0]['testbool1'] = test
     db1.write()   # puts data in plc
     """
-    bytearray_ = None  # data from plc
-    specification = None  # layout of db rows
-    row_size = None  # bytes size of a db row
-    layout_offset = None  # at which byte in row specification should
+    bytearray_:bytearray = None  # data from plc
+    specification:str = None  # layout of db rows
+    row_size:int = None  # bytes size of a db row
+    layout_offset:int = None  # at which byte in row specification should
     # we start reading the data
-    db_offset = None  # at which byte in db should we start reading?
+    db_offset:int = None  # at which byte in db should we start reading?
 
     # first fields could be be status data.
     # and only the last part could be control data
     # now you can be sure you will never overwrite
     # critical parts of db
 
-    def __init__(self, db_number, bytearray_,
-                 specification, row_size, size, id_field=None,
-                 db_offset=0, layout_offset=0, row_offset=0, area=S7AreaDB):
+    def __init__(self, db_number:int, bytearray_:bytearray,
+                 specification:str, row_size:int, size:int, id_field:Optional[str]=None,
+                 db_offset:Optional[int]=0, layout_offset:Optional[int]=0, row_offset: Optional[int]=0, area:Optional[Areas]=Areas.S7AreaDB):
 
         self.db_number = db_number
         self.size = size
@@ -482,7 +483,7 @@ class DB:
                 logger.error(msg)
             self.index[key] = row
 
-    def __getitem__(self, key, default=None):
+    def __getitem__(self, key:str, default: Optional[None]=None)->Union[None, int, float, str, bool, datetime]:
         return self.index.get(key, default)
 
     def __iter__(self):
@@ -505,7 +506,16 @@ class DB_Row:
     bytearray_: bytearray  # data of reference to parent DB
     _specification: Optional[OrderedDict] = None  # row specification
 
-    def __init__(self, bytearray_, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0, area=S7AreaDB):
+    def __init__(
+        self, 
+        bytearray_:bytearray, 
+        _specification:str, 
+        row_size: Optional[int]=0, 
+        db_offset: Optional[int]=0, 
+        layout_offset: Optional[int]=0, 
+        row_offset: Optional[str]=0, 
+        area: Optional[Areas]=Areas.S7AreaDB
+    ):
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
@@ -526,7 +536,7 @@ class DB_Row:
             return self._bytearray._bytearray
         return self._bytearray
 
-    def export(self):
+    def export(self) -> Dict[str, Union[bool, str, int, float, datetime]]:
         """
         export dictionary with values
         """
@@ -567,7 +577,7 @@ class DB_Row:
         # the variable address with decimal point(like 0.0 or 4.0)
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
-    def get_value(self, byte_index, _type):
+    def get_value(self, byte_index: int, _type: str) -> Union[ValueError, int, float, str, datetime]:
         bytearray_ = self.get_bytearray()
 
         if _type == 'BOOL':
@@ -633,7 +643,7 @@ class DB_Row:
 
         raise ValueError
 
-    def set_value(self, byte_index, _type, value):
+    def set_value(self, byte_index: int, _type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         bytearray_ = self.get_bytearray()
 
         if _type == 'BOOL':
@@ -684,7 +694,7 @@ class DB_Row:
 
         raise ValueError
 
-    def write(self, client):
+    def write(self, client: Client) -> None:
         """
         Write current data to db in plc
         """
@@ -703,11 +713,12 @@ class DB_Row:
             data = data[self.row_offset:]
             db_offset += self.row_offset
 
-        if self.area == S7AreaDB:
+        if self.area == Areas.S7AreaDB:
             client.db_write(db_nr, db_offset, data)
         else:
             client.write_area(self.area, 0, db_offset, data) # TODO test
-    def read(self, client):
+
+    def read(self, client: Client) -> None:
         """
         read current data of db row from plc
         """
@@ -716,7 +727,7 @@ class DB_Row:
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        if self.area == S7AreaDB:
+        if self.area == Areas.S7AreaDB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
