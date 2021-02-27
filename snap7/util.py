@@ -519,7 +519,7 @@ class DB_Row:
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
-        self.row_size = row_size # lenght of the read
+        self.row_size = row_size  # lenght of the read
         self.row_offset = row_offset  # start of writable part of row
         self.area = area
 
@@ -716,7 +716,7 @@ class DB_Row:
         if self.area == Areas.S7AreaDB:
             client.db_write(db_nr, db_offset, data)
         else:
-            client.write_area(self.area, 0, db_offset, data) # TODO test
+            client.write_area(self.area, 0, db_offset, data)  # TODO test
 
     def read(self, client: Client) -> None:
         """

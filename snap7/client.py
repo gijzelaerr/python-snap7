@@ -33,7 +33,7 @@ class Client:
     A snap7 client
     """
 
-    def __init__(self, lib_location: Optional[str]=None):
+    def __init__(self, lib_location: Optional[str] = None):
         self._read_callback = None
         self._callback = None
         self._pointer = None

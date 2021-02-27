@@ -39,7 +39,7 @@ class Snap7Library:
             cls._instance.cdll = None
         return cls._instance
 
-    def __init__(self, lib_location: Optional[str]=None):
+    def __init__(self, lib_location: Optional[str] = None):
         if self.cdll:
             return
         self.lib_location = lib_location or self.lib_location or find_library('snap7')
