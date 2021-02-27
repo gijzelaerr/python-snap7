@@ -511,9 +511,9 @@ class DB_Row:
         bytearray_: bytearray, 
         _specification: str, 
         row_size: Optional[int]=0, 
-        db_offset: Optional[int]=0, 
-        layout_offset: Optional[int]=0, 
-        row_offset: Optional[str]=0, 
+        db_offset: int=0, 
+        layout_offset: int=0, 
+        row_offset: Optional[int]=0, 
         area: Optional[Areas]=Areas.S7AreaDB
     ):
 
@@ -536,7 +536,7 @@ class DB_Row:
             return self._bytearray._bytearray
         return self._bytearray
 
-    def export(self) -> Dict[str, Union[bool, str, int, float, datetime]]:
+    def export(self) -> Dict:
         """
         export dictionary with values
         """
@@ -577,7 +577,7 @@ class DB_Row:
         # the variable address with decimal point(like 0.0 or 4.0)
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
-    def get_value(self, byte_index: Union[int, str], _type: str) -> Union[ValueError, int, float, str, datetime]:
+    def get_value(self, byte_index: Union[str, int], _type: str) -> Union[ValueError, int, float, str, datetime]:
         bytearray_ = self.get_bytearray()
 
         if _type == 'BOOL':
@@ -643,7 +643,7 @@ class DB_Row:
 
         raise ValueError
 
-    def set_value(self, byte_index: Union[int, str], _type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], _type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         bytearray_ = self.get_bytearray()
 
         if _type == 'BOOL':
