@@ -438,8 +438,8 @@ class DB:
     # critical parts of db
 
     def __init__(self, db_number: int, bytearray_: bytearray,
-                 specification: str, row_size: int, size: int, id_field: Optional[str]=None,
-                 db_offset: Optional[int]=0, layout_offset: Optional[int]=0, row_offset: Optional[int]=0, area: Optional[Areas]=Areas.S7AreaDB):
+                 specification: str, row_size: int, size: int, id_field: Optional[str] = None,
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.S7AreaDB):
 
         self.db_number = db_number
         self.size = size
@@ -483,7 +483,7 @@ class DB:
                 logger.error(msg)
             self.index[key] = row
 
-    def __getitem__(self, key:str, default: Optional[None]=None)->Union[None, int, float, str, bool, datetime]:
+    def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, int, float, str, bool, datetime]:
         return self.index.get(key, default)
 
     def __iter__(self):
@@ -507,14 +507,14 @@ class DB_Row:
     _specification: Optional[OrderedDict] = None  # row specification
 
     def __init__(
-        self, 
-        bytearray_: bytearray, 
-        _specification: str, 
-        row_size: Optional[int]=0, 
-        db_offset: int=0, 
-        layout_offset: int=0, 
-        row_offset: Optional[int]=0, 
-        area: Optional[Areas]=Areas.S7AreaDB
+        self,
+        bytearray_: bytearray,
+        _specification: str,
+        row_size: Optional[int] = 0,
+        db_offset: int = 0,
+        layout_offset: int = 0,
+        row_offset: Optional[int] = 0,
+        area: Optional[Areas] = Areas.S7AreaDB
     ):
 
         self.db_offset = db_offset  # start point of row data in db
@@ -731,7 +731,7 @@ class DB_Row:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
-            #_bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
+            # _bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
             # TODO the read area should be (area, 0, 0, lenght) where lenght if the size of the father DB
 
         data = self.get_bytearray()

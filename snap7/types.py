@@ -52,6 +52,7 @@ param_types = ADict({
 mkEvent = 0
 mkLog = 1
 
+
 # Area ID
 class Areas(Enum):
     S7AreaPE = 0x81
@@ -60,6 +61,7 @@ class Areas(Enum):
     S7AreaDB = 0x84
     S7AreaCT = 0x1C
     S7AreaTM = 0x1D
+    
 S7AreaPE = 0x81
 S7AreaPA = 0x82
 S7AreaMK = 0x83
