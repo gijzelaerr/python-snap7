@@ -1,0 +1,24 @@
+name: Doc
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Debian packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-pip make
+      - name: Install dependencies
+        run: |
+          sudo python3 -m pip install --upgrade pip
+          sudo python3 -m pip install .[doc]
+      - name: Run doc
+        run: |
+          cd doc
+          make html

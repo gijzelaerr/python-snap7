@@ -1,6 +1,5 @@
 import logging
 import unittest as unittest
-
 from unittest import mock
 
 import snap7.partner
@@ -13,6 +12,10 @@ class TestPartner(unittest.TestCase):
     def setUp(self):
         self.partner = snap7.partner.Partner()
         self.partner.start()
+
+    def tearDown(self):
+        self.partner.stop()
+        self.partner.destroy()
 
     def test_as_b_send(self):
         self.partner.as_b_send()
@@ -51,7 +54,6 @@ class TestPartner(unittest.TestCase):
             (snap7.types.RecvTimeout, 3000),
             (snap7.types.SrcRef, 256),
             (snap7.types.DstRef, 0),
-            (snap7.types.SrcTSap, 0),
             (snap7.types.PDURequest, 480),
             (snap7.types.WorkInterval, 100),
             (snap7.types.BSendTimeout, 3000),

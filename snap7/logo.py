@@ -53,7 +53,7 @@ class Logo:
         logger.info("destroying snap7 client")
         return self.library.Cli_Destroy(byref(self.pointer))
 
-    def disconnect(self):
+    def disconnect(self) -> int:
         """
         disconnect a client.
         """
@@ -62,7 +62,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def connect(self, ip_address, tsap_snap7, tsap_logo, tcpport=102):
+    def connect(self, ip_address: str, tsap_snap7: int, tsap_logo: int, tcpport: int = 102) -> int:
         """
         Connect to a Siemens LOGO server.
         Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
@@ -81,7 +81,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def read(self, vm_address):
+    def read(self, vm_address: str):
         """
         Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
 
@@ -140,7 +140,7 @@ class Logo:
         if wordlen == types.S7WLDWord:
             return struct.unpack_from(">l", data)[0]
 
-    def write(self, vm_address, value):
+    def write(self, vm_address: str, value: int) -> int:
         """
         Writes to VM addresses of Siemens Logo.
         Example: write("VW10", 200) or write("V10.3", 1)
@@ -203,7 +203,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def db_read(self, db_number, start, size):
+    def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """
         This is a lean function of Cli_ReadArea() to read PLC DB.
 
@@ -222,7 +222,7 @@ class Logo:
         check_error(result, context="client")
         return bytearray(data)
 
-    def db_write(self, db_number, start, data):
+    def db_write(self, db_number: int, start: int, data: bytearray) -> int:
         """
         Writes to a DB object.
 
@@ -239,7 +239,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def set_connection_params(self, ip_address, tsap_snap7, tsap_logo):
+    def set_connection_params(self, ip_address: str, tsap_snap7: int, tsap_logo: int):
         """
         Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
         This function must be called just before Cli_Connect().
@@ -248,14 +248,15 @@ class Logo:
         :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
         :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
         """
-        assert re.match(ipv4, ip_address), f'{ip_address} is invalid ipv4'
+        if not re.match(ipv4, ip_address):
+            raise ValueError(f"{ip_address} is invalid ipv4")
         result = self.library.Cli_SetConnectionParams(self.pointer, ip_address.encode(),
                                                       c_uint16(tsap_snap7),
                                                       c_uint16(tsap_logo))
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
-    def set_connection_type(self, connection_type):
+    def set_connection_type(self, connection_type: int):
         """
         Sets the connection resource type, i.e the way in which the Clients
         connects to a PLC.
@@ -267,7 +268,7 @@ class Logo:
         if result != 0:
             raise Snap7Exception("The parameter was invalid")
 
-    def get_connected(self):
+    def get_connected(self) -> bool:
         """
         Returns the connection status
 
@@ -278,7 +279,7 @@ class Logo:
         check_error(result, context="client")
         return bool(connected)
 
-    def set_param(self, number, value):
+    def set_param(self, number: int, value):
         """Sets an internal Server object parameter.
 
         :param number: Parameter type number
@@ -290,7 +291,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def get_param(self, number):
+    def get_param(self, number) -> int:
         """Reads an internal Logo object parameter.
 
         :param number: Parameter type number

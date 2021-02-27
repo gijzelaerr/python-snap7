@@ -1,0 +1,24 @@
+name: OS X Test
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+jobs:
+  osx_wheel:
+    runs-on: macos-10.15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install snap7
+        run: brew install snap7
+      - name: Upgrade pip
+        run: python3 -m pip install --upgrade pip
+      - name: Install python-snap7
+        run: python3 -m pip install .[test]
+      - name: Run pytest
+        run: |
+          pytest test/test_server.py test/test_client.py test/test_util.py
+          sudo pytest test/test_partner.py
+
+

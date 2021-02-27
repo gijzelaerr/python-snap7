@@ -140,7 +140,7 @@ class SrvEvent(ctypes.Structure):
         ('EvtParam4', word),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"<event time: {self.EvtTime} sender: {self.EvtSender} code: {self.EvtCode} " \
                f"retcode: {self.EvtRetCode} param1: {self.EvtParam1} param2:{self.EvtParam2} " \
                f"param3: {self.EvtParam3} param4: {self.EvtParam4}>"
@@ -157,7 +157,7 @@ class BlocksList(ctypes.Structure):
         ('SDBCount', ctypes.c_int32),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"<block list count OB: {self.OBCount} FB: {self.FBCount} FC: {self.FCCount} SFB: {self.SFBCount} " \
                f"SFC: {hex(self.SFCCount)} DB: {self.DBCount} SDB: {self.SDBCount}>"
 
@@ -181,7 +181,7 @@ class TS7BlockInfo(ctypes.Structure):
         ('Header', ctypes.c_char * 9),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"""\
     Block type: {self.BlkType}
     Block number: {self.BlkNumber}
@@ -220,4 +220,59 @@ class S7CpuInfo(ctypes.Structure):
         ('ASName', ctypes.c_char * 25),
         ('Copyright', ctypes.c_char * 27),
         ('ModuleName', ctypes.c_char * 25)
+    ]
+
+
+class S7SZLHeader(ctypes.Structure):
+    """
+        LengthDR: Length of a data record of the partial list in bytes
+        NDR: Number of data records contained in the partial list
+    """
+    _fields_ = [
+        ('LengthDR', ctypes.c_uint16),
+        ('NDR', ctypes.c_uint16)
+    ]
+
+
+class S7SZL(ctypes.Structure):
+    """See §33.1 of System Software for S7-300/400 System and Standard Functions"""
+    _fields_ = [
+        ('Header', S7SZLHeader),
+        ('Data', ctypes.c_byte * (0x4000 - 4))
+    ]
+
+
+class S7SZLList(ctypes.Structure):
+    _fields_ = [
+        ('Header', S7SZLHeader),
+        ('List', word * (0x4000 - 2))
+    ]
+
+
+class S7OrderCode(ctypes.Structure):
+    _fields_ = [
+        ('OrderCode', ctypes.c_char * 21),
+        ('V1', ctypes.c_byte),
+        ('V2', ctypes.c_byte),
+        ('V3', ctypes.c_byte)
+    ]
+
+
+class S7CpInfo(ctypes.Structure):
+    _fields_ = [
+        ('MaxPduLength', ctypes.c_uint16),
+        ('MaxConnections', ctypes.c_uint16),
+        ('MaxMpiRate', ctypes.c_uint16),
+        ('MaxBusRate', ctypes.c_uint16)
+    ]
+
+
+class S7Protection(ctypes.Structure):
+    """See §33.19 of System Software for S7-300/400 System and Standard Functions"""
+    _fields_ = [
+        ('sch_schal', word),
+        ('sch_par', word),
+        ('sch_rel', word),
+        ('bart_sch', word),
+        ('anl_sch', word),
     ]
