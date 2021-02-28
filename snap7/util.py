@@ -82,6 +82,7 @@ example::
 
 
 """
+from snap7.common import ADict
 import struct
 import logging
 import re
@@ -439,7 +440,7 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[areas] = areas.DB):
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[ADict] = areas.DB):
 
         self.db_number = db_number
         self.size = size
@@ -514,7 +515,7 @@ class DB_Row:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: Optional[int] = 0,
-        area: Optional[areas] = areas.DB
+        area: Optional[ADict] = areas.DB
     ):
 
         self.db_offset = db_offset  # start point of row data in db
@@ -643,10 +644,10 @@ class DB_Row:
 
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         bytearray_ = self.get_bytearray()
 
-        if type_ == 'BOOL':
+        if type == 'BOOL':
             """
             mypy conform style:
             if isinstance(byte_index, str):
@@ -660,36 +661,36 @@ class DB_Row:
 
         byte_index = self.get_offset(byte_index)
 
-        if type_.startswith('STRING'):
-            max_size = re.search(r'\d+', type_).group(0)
+        if type.startswith('STRING'):
+            max_size = re.search(r'\d+', type).group(0)
             max_size = int(max_size)
             return set_string(bytearray_, byte_index, value, max_size)
 
-        elif type_ == 'REAL':
+        elif type == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
-        elif type_ == 'DWORD':
+        elif type == 'DWORD':
             return set_dword(bytearray_, byte_index, value)
 
-        elif type_ == 'DINT':
+        elif type == 'DINT':
             return set_dint(bytearray_, byte_index, value)
 
-        elif type_ == 'INT':
+        elif type == 'INT':
             return set_int(bytearray_, byte_index, value)
 
-        elif type_ == 'WORD':
+        elif type == 'WORD':
             return set_word(bytearray_, byte_index, value)
 
-        elif type_ == 'USINT':
+        elif type == 'USINT':
             return set_usint(bytearray_, byte_index, value)
 
-        elif type_ == 'SINT':
+        elif type == 'SINT':
             return set_sint(bytearray_, byte_index, value)
 
-        if type_ == 'USINT':
+        if type == 'USINT':
             return set_usint(bytearray_, byte_index, value)
 
-        if type_ == 'SINT':
+        if type == 'SINT':
             return set_sint(bytearray_, byte_index, value)
 
         raise ValueError
@@ -731,7 +732,6 @@ class DB_Row:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
-            # _bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray
