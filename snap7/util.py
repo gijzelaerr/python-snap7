@@ -88,7 +88,7 @@ import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
 from typing import Dict, Optional, Union
-from snap7.types import Areas
+from snap7.types import areas
 from snap7.client import Client
 
 logger = logging.getLogger(__name__)
@@ -439,7 +439,7 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.S7AreaDB):
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[areas] = areas.DB):
 
         self.db_number = db_number
         self.size = size
@@ -514,7 +514,7 @@ class DB_Row:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: Optional[int] = 0,
-        area: Optional[Areas] = Areas.S7AreaDB
+        area: Optional[areas] = areas.DB
     ):
 
         self.db_offset = db_offset  # start point of row data in db
@@ -713,7 +713,7 @@ class DB_Row:
             data = data[self.row_offset:]
             db_offset += self.row_offset
 
-        if self.area == Areas.S7AreaDB:
+        if self.area == areas.DB:
             client.db_write(db_nr, db_offset, data)
         else:
             client.write_area(self.area, 0, db_offset, data)  # TODO test
@@ -727,7 +727,7 @@ class DB_Row:
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        if self.area == Areas.S7AreaDB:
+        if self.area == areas.DB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
