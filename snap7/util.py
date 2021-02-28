@@ -577,10 +577,10 @@ class DB_Row:
         # the variable address with decimal point(like 0.0 or 4.0)
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
-    def get_value(self, byte_index: Union[str, int], _type: str) -> Union[ValueError, int, float, str, datetime]:
+    def get_value(self, byte_index: Union[str, int], type_: str) -> Union[ValueError, int, float, str, datetime]:
         bytearray_ = self.get_bytearray()
 
-        if _type == 'BOOL':
+        if type_ == 'BOOL':
             byte_index, bool_index = byte_index.split('.')
             return get_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index))
@@ -589,8 +589,8 @@ class DB_Row:
         # first 4 bytes are used by db
         byte_index = self.get_offset(byte_index)
 
-        if _type.startswith('STRING'):
-            max_size = re.search(r'\d+', _type).group(0)
+        if type_.startswith('STRING'):
+            max_size = re.search(r'\d+', type_).group(0)
             max_size = int(max_size)
             """
             normally mypy conform style
@@ -601,52 +601,52 @@ class DB_Row:
             """
             return get_string(bytearray_, byte_index, max_size)
 
-        elif _type == 'REAL':
+        elif type_ == 'REAL':
             return get_real(bytearray_, byte_index)
 
-        elif _type == 'DWORD':
+        elif type_ == 'DWORD':
             return get_dword(bytearray_, byte_index)
 
-        elif _type == 'DINT':
+        elif type_ == 'DINT':
             return get_dint(bytearray_, byte_index)
 
-        elif _type == 'INT':
+        elif type_ == 'INT':
             return get_int(bytearray_, byte_index)
 
-        elif _type == 'WORD':
+        elif type_ == 'WORD':
             return get_word(bytearray_, byte_index)
 
-        elif _type == 'S5TIME':
+        elif type_ == 'S5TIME':
             data_s5time = get_s5time(bytearray_, byte_index)
             return data_s5time
 
-        elif _type == 'DATE_AND_TIME':
+        elif type_ == 'DATE_AND_TIME':
             data_dt = get_dt(bytearray_, byte_index)
             return data_dt
 
-        elif _type == 'USINT':
+        elif type_ == 'USINT':
             return get_usint(bytearray_, byte_index)
 
-        elif _type == 'SINT':
+        elif type_ == 'SINT':
             return get_sint(bytearray_, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
-        elif _type == 'TIME':
+        elif type_ == 'TIME':
             return 'read TIME not implemented'
 
-        elif _type == 'DATE':
+        elif type_ == 'DATE':
             return 'read DATE not implemented'
 
-        elif _type == 'TIME_OF_DAY':
+        elif type_ == 'TIME_OF_DAY':
             return 'read TIME_OF_DAY not implemented'
 
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], _type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         bytearray_ = self.get_bytearray()
 
-        if _type == 'BOOL':
+        if type_ == 'BOOL':
             """
             mypy conform style:
             if isinstance(byte_index, str):
@@ -660,36 +660,36 @@ class DB_Row:
 
         byte_index = self.get_offset(byte_index)
 
-        if _type.startswith('STRING'):
-            max_size = re.search(r'\d+', _type).group(0)
+        if type_.startswith('STRING'):
+            max_size = re.search(r'\d+', type_).group(0)
             max_size = int(max_size)
             return set_string(bytearray_, byte_index, value, max_size)
 
-        elif _type == 'REAL':
+        elif type_ == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
-        elif _type == 'DWORD':
+        elif type_ == 'DWORD':
             return set_dword(bytearray_, byte_index, value)
 
-        elif _type == 'DINT':
+        elif type_ == 'DINT':
             return set_dint(bytearray_, byte_index, value)
 
-        elif _type == 'INT':
+        elif type_ == 'INT':
             return set_int(bytearray_, byte_index, value)
 
-        elif _type == 'WORD':
+        elif type_ == 'WORD':
             return set_word(bytearray_, byte_index, value)
 
-        elif _type == 'USINT':
+        elif type_ == 'USINT':
             return set_usint(bytearray_, byte_index, value)
 
-        elif _type == 'SINT':
+        elif type_ == 'SINT':
             return set_sint(bytearray_, byte_index, value)
 
-        if _type == 'USINT':
+        if type_ == 'USINT':
             return set_usint(bytearray_, byte_index, value)
 
-        if _type == 'SINT':
+        if type_ == 'SINT':
             return set_sint(bytearray_, byte_index, value)
 
         raise ValueError
