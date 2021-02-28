@@ -716,7 +716,7 @@ class DB_Row:
         if self.area == areas.DB:
             client.db_write(db_nr, db_offset, data)
         else:
-            client.write_area(self.area, 0, db_offset, data)  # TODO test
+            client.write_area(self.area, 0, db_offset, data)
 
     def read(self, client: Client) -> None:
         """
@@ -731,8 +731,7 @@ class DB_Row:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
-            # _bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size) # TODO tests
-            # TODO the read area should be (area, 0, 0, lenght) where lenght if the size of the father DB
+            # _bytearray = client.read_area(self.area, db_nr, self.db_offset, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray
