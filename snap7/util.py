@@ -536,7 +536,7 @@ class DB_Row:
             return self._bytearray._bytearray
         return self._bytearray
 
-    def export(self) -> Dict:
+    def export(self) -> Dict[str, Union[str, int, float, bool, datetime]]:
         """
         export dictionary with values
         """
