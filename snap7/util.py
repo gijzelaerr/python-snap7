@@ -644,7 +644,7 @@ class DB_Row:
     def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         bytearray_ = self.get_bytearray()
 
-        if type == 'BOOL':
+        if type == 'BOOL' and isinstance(value, bool):
             """
             mypy conform style:
             if isinstance(byte_index, str):
@@ -658,7 +658,7 @@ class DB_Row:
 
         byte_index = self.get_offset(byte_index)
 
-        if type.startswith('STRING'):
+        if type.startswith('STRING') and isinstance(value, str):
             max_size = re.search(r'\d+', type)
             if max_size is None:
                 raise Snap7Exception("Max size could not be determinate. re.search() returned None")
@@ -669,28 +669,28 @@ class DB_Row:
         elif type == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
-        elif type == 'DWORD':
+        elif type == 'DWORD' and isinstance(value, int):
             return set_dword(bytearray_, byte_index, value)
 
-        elif type == 'DINT':
+        elif type == 'DINT' and isinstance(value, int):
             return set_dint(bytearray_, byte_index, value)
 
-        elif type == 'INT':
+        elif type == 'INT' and isinstance(value, int):
             return set_int(bytearray_, byte_index, value)
 
-        elif type == 'WORD':
+        elif type == 'WORD' and isinstance(value, int):
             return set_word(bytearray_, byte_index, value)
 
-        elif type == 'USINT':
+        elif type == 'USINT' and isinstance(value, int):
             return set_usint(bytearray_, byte_index, value)
 
-        elif type == 'SINT':
+        elif type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
-        if type == 'USINT':
+        if type == 'USINT' and isinstance(value, int):
             return set_usint(bytearray_, byte_index, value)
 
-        if type == 'SINT':
+        if type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
         raise ValueError
