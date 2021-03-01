@@ -165,11 +165,11 @@ class TestS7util(unittest.TestCase):
     def test_set_bool(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
-        row['testbool8'] = 1
-        row['testbool1'] = 0
+        row['testbool8'] = True
+        row['testbool1'] = False
 
-        self.assertEqual(row['testbool8'], 1)
-        self.assertEqual(row['testbool1'], 0)
+        self.assertEqual(row['testbool8'], True)
+        self.assertEqual(row['testbool1'], False)
 
     def test_db_creation(self):
         test_array = bytearray(_bytearray * 10)
