@@ -2,7 +2,7 @@ import logging
 import platform
 from ctypes import c_char
 from ctypes.util import find_library
-from typing import Optional
+from typing import Optional, Union
 
 from snap7.exceptions import Snap7Exception
 
@@ -31,6 +31,7 @@ class Snap7Library:
     sure the library is loaded only once.
     """
     _instance = None
+    lib_location: Optional[str]
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:

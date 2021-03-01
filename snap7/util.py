@@ -89,8 +89,9 @@ import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
 from typing import Dict, Optional, Union
-from snap7.types import areas
+from snap7.types import Areas
 from snap7.client import Client
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +441,7 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[ADict] = areas.DB):
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.DB):
 
         self.db_number = db_number
         self.size = size
@@ -456,7 +457,7 @@ class DB:
         self.specification = specification
         # loop over bytearray. make rowObjects
         # store index of id_field to row objects
-        self.index = OrderedDict()
+        self.index: OrderedDict = OrderedDict()
         self.make_rows()
 
     def make_rows(self):
@@ -505,7 +506,7 @@ class DB_Row:
     Provide ROW API for DB bytearray
     """
     bytearray_: bytearray  # data of reference to parent DB
-    _specification: Optional[OrderedDict] = None  # row specification
+    _specification: OrderedDict = OrderedDict()  # row specification
 
     def __init__(
         self,
@@ -515,7 +516,7 @@ class DB_Row:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: Optional[int] = 0,
-        area: Optional[ADict] = areas.DB
+        area: Optional[Areas] = Areas.DB
     ):
 
         self.db_offset = db_offset  # start point of row data in db
@@ -582,7 +583,7 @@ class DB_Row:
         bytearray_ = self.get_bytearray()
 
         if type_ == 'BOOL':
-            byte_index, bool_index = byte_index.split('.')
+            byte_index, bool_index = str(byte_index).split('.')
             return get_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index))
 
@@ -591,16 +592,12 @@ class DB_Row:
         byte_index = self.get_offset(byte_index)
 
         if type_.startswith('STRING'):
-            max_size = re.search(r'\d+', type_).group(0)
-            max_size = int(max_size)
-            """
-            normally mypy conform style
+            max_size = re.search(r'\d+', type_)
             if max_size is None:
                 raise Snap7Exception("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
-            """
-            return get_string(bytearray_, byte_index, max_size)
+            return get_string(bytearray_, byte_index, max_size_int)
 
         elif type_ == 'REAL':
             return get_real(bytearray_, byte_index)
@@ -655,17 +652,20 @@ class DB_Row:
                 return set_bool(bytearray_, self.get_offset(byte_index),
                                 int(bool_index), value)
             """
-            byte_index, bool_index = byte_index.split(".")
+            byte_index, bool_index = str(byte_index).split(".")
             return set_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
 
         if type.startswith('STRING'):
-            max_size = re.search(r'\d+', type).group(0)
-            max_size = int(max_size)
-            return set_string(bytearray_, byte_index, value, max_size)
-
+            max_size = re.search(r'\d+', type)
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            return set_string(bytearray_, byte_index, value, max_size_int)
+            
         elif type == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
@@ -714,7 +714,7 @@ class DB_Row:
             data = data[self.row_offset:]
             db_offset += self.row_offset
 
-        if self.area == areas.DB:
+        if self.area == Areas.DB:
             client.db_write(db_nr, db_offset, data)
         else:
             client.write_area(self.area, 0, db_offset, data)
@@ -728,7 +728,7 @@ class DB_Row:
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        if self.area == areas.DB:
+        if self.area == Areas.DB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, 0, self.row_size)

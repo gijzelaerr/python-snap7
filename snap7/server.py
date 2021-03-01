@@ -293,10 +293,10 @@ class Server:
 def mainloop(tcpport: int = 1102):
     server = snap7.server.Server()
     size = 100
-    DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
-    PAdata = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
-    TMdata = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
-    CTdata = (snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte] * size)()
+    DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
+    PAdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
+    TMdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
+    CTdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
     server.register_area(snap7.types.srvAreaDB, 1, DBdata)
     server.register_area(snap7.types.srvAreaPA, 1, PAdata)
     server.register_area(snap7.types.srvAreaTM, 1, TMdata)

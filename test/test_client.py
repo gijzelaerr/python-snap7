@@ -15,7 +15,7 @@ from snap7 import util
 from snap7.exceptions import Snap7Exception
 from snap7.common import check_error
 from snap7.server import mainloop
-from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object
+from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object, Areas, WordLen
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -104,21 +104,21 @@ class TestClient(unittest.TestCase):
         data_items = (S7DataItem * 3)()
 
         data_items[0].Area = ctypes.c_int32(S7AreaDB)
-        data_items[0].WordLen = ctypes.c_int32(S7WLByte)
+        data_items[0].WordLen = ctypes.c_int32(WordLen.Byte.value)
         data_items[0].Result = ctypes.c_int32(0)
         data_items[0].DBNumber = ctypes.c_int32(db)
         data_items[0].Start = ctypes.c_int32(0)
         data_items[0].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
 
         data_items[1].Area = ctypes.c_int32(S7AreaDB)
-        data_items[1].WordLen = ctypes.c_int32(S7WLByte)
+        data_items[1].WordLen = ctypes.c_int32(WordLen.Byte.value)
         data_items[1].Result = ctypes.c_int32(0)
         data_items[1].DBNumber = ctypes.c_int32(db)
         data_items[1].Start = ctypes.c_int32(4)
         data_items[1].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
 
         data_items[2].Area = ctypes.c_int32(S7AreaDB)
-        data_items[2].WordLen = ctypes.c_int32(S7WLByte)
+        data_items[2].WordLen = ctypes.c_int32(WordLen.Byte.value)
         data_items[2].Result = ctypes.c_int32(0)
         data_items[2].DBNumber = ctypes.c_int32(db)
         data_items[2].Start = ctypes.c_int32(8)
@@ -174,7 +174,7 @@ class TestClient(unittest.TestCase):
         start = 1
 
         # Test read_area with a DB
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         data = bytearray(b'\x11')
         self.client.write_area(area, dbnumber, start, data)
@@ -182,7 +182,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test read_area with a TM
-        area = snap7.types.areas.TM
+        area = Areas.TM
         dbnumber = 0
         data = bytearray(b'\x12\x34')
         self.client.write_area(area, dbnumber, start, data)
@@ -190,7 +190,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test read_area with a CT
-        area = snap7.types.areas.CT
+        area = Areas.CT
         dbnumber = 0
         data = bytearray(b'\x13\x35')
         self.client.write_area(area, dbnumber, start, data)
@@ -199,7 +199,7 @@ class TestClient(unittest.TestCase):
 
     def test_write_area(self):
         # Test write area with a DB
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         size = 1
         start = 1
@@ -209,7 +209,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test write area with a TM
-        area = snap7.types.areas.TM
+        area = Areas.TM
         dbnumber = 0
         size = 2
         timer = bytearray(b'\x12\x00')
@@ -218,7 +218,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(timer, bytearray(res))
 
         # Test write area with a CT
-        area = snap7.types.areas.CT
+        area = Areas.CT
         dbnumber = 0
         size = 2
         timer = bytearray(b'\x13\x00')
@@ -283,8 +283,8 @@ class TestClient(unittest.TestCase):
         expected = b'\x10\x01'
         self.client.ab_write(0, bytearray(expected))
 
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         buffer = (type_ * 2)()
         self.client.as_ab_read(0, 2, buffer)
         result = self.client.wait_as_completion(500)
@@ -355,7 +355,7 @@ class TestClient(unittest.TestCase):
         # Cli_AsCTRead
         expected = b'\x10\x01'
         self.client.ct_write(0, 1, bytearray(expected))
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
         buffer = (type_ * 1)()
         self.client.as_ct_read(0, 1, buffer)
         self.client.wait_as_completion(500)
@@ -392,7 +392,8 @@ class TestClient(unittest.TestCase):
         expected = bytearray(40)
         self.client.db_write(db_number=db, start=start, data=expected)
 
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
         self.client.as_db_read(db, start, size, data)
         self.client.wait_as_completion(500)
@@ -401,8 +402,8 @@ class TestClient(unittest.TestCase):
     def test_as_db_write(self):
         size = 40
         data = bytearray(size)
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         size = len(data)
         result = (type_ * size).from_buffer_copy(data)
         self.client.as_db_write(db_number=1, start=0, size=size, data=result)
@@ -474,7 +475,7 @@ class TestClient(unittest.TestCase):
         original = self.client._library.Cli_WriteArea
         self.client._library.Cli_WriteArea = mock_writearea
 
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         size = 4
         start = 1
@@ -562,7 +563,7 @@ class TestClient(unittest.TestCase):
     def test_wait_as_completion_pass(self, timeout=1000):
         # Cli_WaitAsCompletion
         # prepare Server with values
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         size = 1
         start = 1
@@ -578,7 +579,7 @@ class TestClient(unittest.TestCase):
     def test_wait_as_completion_timeouted(self, timeout=0, tries=500):
         # Cli_WaitAsCompletion
         # prepare Server
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         size = 1
         start = 1
@@ -610,7 +611,7 @@ class TestClient(unittest.TestCase):
         # preparing Server values
         data = bytearray(b'\x01\xFF')
         size = len(data)
-        area = snap7.types.areas.DB
+        area = Areas.DB
         db = 1
         start = 1
         self.client.write_area(area, db, start, data)
@@ -637,7 +638,7 @@ class TestClient(unittest.TestCase):
         start = 1
 
         # Test read_area with a DB
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         data = bytearray(b'\x11')
         self.client.write_area(area, dbnumber, start, data)
@@ -648,7 +649,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(bytearray(usrdata), data)
 
         # Test read_area with a TM
-        area = snap7.types.areas.TM
+        area = Areas.TM
         dbnumber = 0
         data = bytearray(b'\x12\x34')
         self.client.write_area(area, dbnumber, start, data)
@@ -659,7 +660,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(bytearray(usrdata), data)
 
         # Test read_area with a CT
-        area = snap7.types.areas.CT
+        area = Areas.CT
         dbnumber = 0
         data = bytearray(b'\x13\x35')
         self.client.write_area(area, dbnumber, start, data)
@@ -671,7 +672,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_write_area(self):
         # Test write area with a DB
-        area = snap7.types.areas.DB
+        area = Areas.DB
         dbnumber = 1
         size = 1
         start = 1
@@ -683,7 +684,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test write area with a TM
-        area = snap7.types.areas.TM
+        area = Areas.TM
         dbnumber = 0
         size = 2
         timer = bytearray(b'\x12\x00')
@@ -694,7 +695,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(timer, bytearray(res))
 
         # Test write area with a CT
-        area = snap7.types.areas.CT
+        area = Areas.CT
         dbnumber = 0
         size = 2
         timer = bytearray(b'\x13\x00')
@@ -706,7 +707,8 @@ class TestClient(unittest.TestCase):
 
     def test_as_eb_read(self):
         # Cli_AsEBRead
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         buffer = (type_ * 1)()
         response = self.client.as_eb_read(0, 1, buffer)
         self.assertEqual(0, response)
@@ -731,7 +733,8 @@ class TestClient(unittest.TestCase):
 
     def test_as_mb_read(self):
         # Cli_AsMBRead
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         data = (type_ * 1)()
         self.client.as_mb_read(0, 1, data)
         result = bytearray(data)
@@ -768,8 +771,9 @@ class TestClient(unittest.TestCase):
     def test_as_tm_read(self):
         # Cli_AsMBRead
         expected = b'\x10\x01'
+        wordlen = WordLen.Timer
         self.client.tm_write(0, 1, bytearray(expected))
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         buffer = (type_ * 1)()
         self.client.as_tm_read(0, 1, buffer)
         self.client.wait_as_completion(500)
@@ -873,8 +877,8 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(b'2019/06/27', block_info.CodeDate)
-        self.assertEqual(b'2019/06/27', block_info.IntfDate)
+        self.assertEqual(b'2019/06/26', block_info.CodeDate)
+        self.assertEqual(b'2019/06/26', block_info.IntfDate)
 
     def test_iso_exchange_buffer(self):
         # Cli_IsoExchangeBuffer
@@ -955,12 +959,13 @@ class TestClient(unittest.TestCase):
         # Cli_WriteMultiVars
         items_count = 3
         items = []
-        areas = [snap7.types.areas.DB, snap7.types.areas.CT, snap7.types.areas.TM]
+        areas = [Areas.DB, Areas.CT, Areas.TM]
         expected_list = []
         for i in range(0, items_count):
             item = S7DataItem()
-            item.Area = ctypes.c_int32(areas[i])
-            item.WordLen = ctypes.c_int32(S7WLByte)
+            item.Area = ctypes.c_int32(areas[i].value)
+            wordlen = WordLen.Byte
+            item.WordLen = ctypes.c_int32(wordlen.value)
             item.DBNumber = ctypes.c_int32(1)
             item.Start = ctypes.c_int32(0)
             item.Amount = ctypes.c_int32(4)

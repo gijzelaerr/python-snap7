@@ -54,6 +54,16 @@ mkLog = 1
 
 
 # Area ID
+class Areas(Enum):
+    PE = 0x81
+    PA = 0x82
+    MK = 0x83
+    DB = 0x84
+    CT = 0x1C
+    TM = 0x1D
+
+
+# Leave it for now
 S7AreaPE = 0x81
 S7AreaPA = 0x82
 S7AreaMK = 0x83
@@ -72,6 +82,17 @@ areas = ADict({
 })
 
 # Word Length
+class WordLen(Enum):
+    Bit = 0x01
+    Byte = 0x02
+    Word = 0x04
+    DWord = 0x06
+    Real = 0x08
+    Counter = 0x1C
+    Timer = 0x1D
+
+
+# Leave it for now
 S7WLBit = 0x01
 S7WLByte = 0x02
 S7WLWord = 0x04
