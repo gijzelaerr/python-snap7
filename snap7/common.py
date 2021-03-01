@@ -22,7 +22,7 @@ class ADict(dict):
     Accessing dict keys like an attribute.
     """
     __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
+    __setattr__ = dict.__setitem__ # type: ignore
 
 
 class Snap7Library:
@@ -41,7 +41,7 @@ class Snap7Library:
         return cls._instance
 
     def __init__(self, lib_location: Optional[str] = None):
-        if self.cdll:
+        if self.cdll: # type: ignore
             return
         self.lib_location = lib_location or self.lib_location or find_library('snap7')
         if not self.lib_location:
