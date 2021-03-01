@@ -877,8 +877,8 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(b'2019/06/26', block_info.CodeDate)
-        self.assertEqual(b'2019/06/26', block_info.IntfDate)
+        self.assertEqual(b'2019/06/27', block_info.CodeDate)
+        self.assertEqual(b'2019/06/27', block_info.IntfDate)
 
     def test_iso_exchange_buffer(self):
         # Cli_IsoExchangeBuffer
