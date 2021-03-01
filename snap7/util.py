@@ -665,7 +665,7 @@ class DB_Row:
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return set_string(bytearray_, byte_index, value, max_size_int)
-            
+
         elif type == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
