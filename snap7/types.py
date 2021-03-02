@@ -237,6 +237,16 @@ class S7DataItem(ctypes.Structure):
         ('pData', ctypes.POINTER(ctypes.c_uint8))
     ]
 
+    def __str__(self) -> str:
+        return f"""\
+    Area: {self.Area}
+    WordLen: {self.WordLen}
+    Result: {self.Result}
+    DBNumber: {self.DBNumber}
+    Start: {self.Start}
+    Amount: {self.Amount}
+    pData: {self.pData}"""
+
 
 class S7CpuInfo(ctypes.Structure):
     _fields_ = [
@@ -246,6 +256,14 @@ class S7CpuInfo(ctypes.Structure):
         ('Copyright', ctypes.c_char * 27),
         ('ModuleName', ctypes.c_char * 25)
     ]
+
+    def __str__(self):
+        return f"""\
+        ModuleTypeName: {self.ModuleTypeName}
+        SerialNumber: {self.SerialNumber}
+        ASName: {self.ASName}
+        Copyright: {self.Copyright}
+        ModuleName: {self.ModuleName}"""
 
 
 class S7SZLHeader(ctypes.Structure):
@@ -258,6 +276,9 @@ class S7SZLHeader(ctypes.Structure):
         ('NDR', ctypes.c_uint16)
     ]
 
+    def __str__(self) -> str:
+        return f"LengthDR: {self.LengthDR}, NDR: {self.NDR}"
+
 
 class S7SZL(ctypes.Structure):
     """See §33.1 of System Software for S7-300/400 System and Standard Functions"""
@@ -265,6 +286,9 @@ class S7SZL(ctypes.Structure):
         ('Header', S7SZLHeader),
         ('Data', ctypes.c_byte * (0x4000 - 4))
     ]
+
+    def __str__(self) -> str:
+        return f"Header: {self.S7SZHeader}, Data: {self.Data}"
 
 
 class S7SZLList(ctypes.Structure):
@@ -290,6 +314,13 @@ class S7CpInfo(ctypes.Structure):
         ('MaxMpiRate', ctypes.c_uint16),
         ('MaxBusRate', ctypes.c_uint16)
     ]
+
+    def __str__(self) -> str:
+        return f"""\
+        MaxPduLength: {self.MaxPduLength}
+        MaxConnections: {self.MaxConnections}
+        MaxMpiRate: {self.MaxMpiRate}
+        MaxBusRate: {self.MaxBusRate}"""
 
 
 class S7Protection(ctypes.Structure):

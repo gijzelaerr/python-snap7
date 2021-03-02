@@ -92,8 +92,15 @@ from typing import Dict, Optional, Union
 from snap7.types import Areas
 from snap7.client import Client
 from snap7.exceptions import Snap7Exception
+import time
 
 logger = logging.getLogger(__name__)
+
+
+def utc2local(utc) -> datetime:
+    epoch = time.mktime(utc.timetuple())
+    offset = datetime.fromtimestamp(epoch) - datetime.utcfromtimestamp(epoch)
+    return utc + offset
 
 
 def get_bool(bytearray_: bytearray, byte_index: int, bool_index: int) -> bool:

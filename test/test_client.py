@@ -5,7 +5,7 @@ import struct
 import time
 import unittest
 import platform
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from multiprocessing import Process
 from unittest import mock
 
@@ -877,8 +877,8 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(b'2019/06/27', block_info.CodeDate)
-        self.assertEqual(b'2019/06/27', block_info.IntfDate)
+        self.assertEqual(bytes((util.utc2local(date(2019, 6, 27)).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
+        self.assertEqual(bytes((util.utc2local(date(2019, 6, 27)).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
 
     def test_iso_exchange_buffer(self):
         # Cli_IsoExchangeBuffer
