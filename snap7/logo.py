@@ -127,8 +127,8 @@ class Logo:
 
         logger.debug(f"start:{start}, wordlen:{wordlen.name}={wordlen.value}, data-length:{len(data)}")
 
-        result = self.library.Cli_ReadArea(self.pointer, area, db_number, start,
-                                           size, wordlen, byref(data))
+        result = self.library.Cli_ReadArea(self.pointer, area.value, db_number, start,
+                                           size, wordlen.value, byref(data))
         check_error(result, context="client")
         # transform result to int value
         if wordlen == WordLen.Bit:
@@ -199,7 +199,7 @@ class Logo:
 
         logger.debug(f"write, vm_address:{vm_address} value:{value}")
 
-        result = self.library.Cli_WriteArea(self.pointer, area, db_number, start, amount, wordlen.value, byref(cdata))
+        result = self.library.Cli_WriteArea(self.pointer, area.value, db_number, start, amount, wordlen.value, byref(cdata))
         check_error(result, context="client")
         return result
 

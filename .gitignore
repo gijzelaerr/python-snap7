@@ -53,3 +53,9 @@ doc/_build/
 venv/
 
 .DS_Store
+
+# VSCode
+.vscode/
+
+# DLL
+snap7.dll

@@ -1,4 +1,5 @@
 import logging
+import os
 import platform
 from ctypes import c_char
 from ctypes.util import find_library
@@ -9,7 +10,7 @@ from snap7.exceptions import Snap7Exception
 if platform.system() == 'Windows':
     from ctypes import windll as cdll  # type: ignore
 else:
-    from ctypes import cdll
+    from ctypes import cdll  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class Snap7Library:
     def __init__(self, lib_location: Optional[str] = None):
         if self.cdll:  # type: ignore
             return
-        self.lib_location = lib_location or self.lib_location or find_library('snap7')
+        self.lib_location = lib_location or self.lib_location or find_library('snap7') or find_locally('snap7')
         if not self.lib_location:
             msg = "can't find snap7 library. If installed, try running ldconfig"
             raise Snap7Exception(msg)
@@ -89,3 +90,9 @@ def error_text(error, context: str = "client") -> bytes:
     elif context == "partner":
         library.Par_ErrorText(error, text, len_)
     return text.value
+
+
+def find_locally(fname):
+    if os.path.isfile("./" + fname + ".dll"):
+        return os.path.join("./", fname + ".dll")
+    return None
