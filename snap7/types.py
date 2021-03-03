@@ -238,14 +238,8 @@ class S7DataItem(ctypes.Structure):
     ]
 
     def __str__(self) -> str:
-        return f"""\
-    Area: {self.Area}
-    WordLen: {self.WordLen}
-    Result: {self.Result}
-    DBNumber: {self.DBNumber}
-    Start: {self.Start}
-    Amount: {self.Amount}
-    pData: {self.pData}"""
+        return f"<S7DataItem Area: {self.Area} WordLen: {self.WordLen} Result: {self.Result} "\
+               f"DBNumber: {self.DBNumber} Start: {self.Start} Amount: {self.Amount} pData: {self.pData}>"
 
 
 class S7CpuInfo(ctypes.Structure):
@@ -258,12 +252,8 @@ class S7CpuInfo(ctypes.Structure):
     ]
 
     def __str__(self):
-        return f"""\
-        ModuleTypeName: {self.ModuleTypeName}
-        SerialNumber: {self.SerialNumber}
-        ASName: {self.ASName}
-        Copyright: {self.Copyright}
-        ModuleName: {self.ModuleName}"""
+        return f"<S7CpuInfo ModuleTypeName: {self.ModuleTypeName} SerialNumber: {self.SerialNumber} "\
+               f"ASName: {self.ASName} Copyright: {self.Copyright} ModuleName: {self.ModuleName}>"
 
 
 class S7SZLHeader(ctypes.Structure):
@@ -277,7 +267,7 @@ class S7SZLHeader(ctypes.Structure):
     ]
 
     def __str__(self) -> str:
-        return f"LengthDR: {self.LengthDR}, NDR: {self.NDR}"
+        return f"<S7SZLHeader LengthDR: {self.LengthDR}, NDR: {self.NDR}>"
 
 
 class S7SZL(ctypes.Structure):
@@ -288,7 +278,7 @@ class S7SZL(ctypes.Structure):
     ]
 
     def __str__(self) -> str:
-        return f"Header: {self.S7SZHeader}, Data: {self.Data}"
+        return f"<S7SZL Header: {self.S7SZHeader}, Data: {self.Data}>"
 
 
 class S7SZLList(ctypes.Structure):
@@ -316,11 +306,8 @@ class S7CpInfo(ctypes.Structure):
     ]
 
     def __str__(self) -> str:
-        return f"""\
-        MaxPduLength: {self.MaxPduLength}
-        MaxConnections: {self.MaxConnections}
-        MaxMpiRate: {self.MaxMpiRate}
-        MaxBusRate: {self.MaxBusRate}"""
+        return f"<S7CpInfo MaxPduLength: {self.MaxPduLength} MaxConnections: {self.MaxConnections} "\
+               f"MaxMpiRate: {self.MaxMpiRate} MaxBusRate: {self.MaxBusRate}>"
 
 
 class S7Protection(ctypes.Structure):

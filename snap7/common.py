@@ -10,7 +10,7 @@ from snap7.exceptions import Snap7Exception
 if platform.system() == 'Windows':
     from ctypes import windll as cdll  # type: ignore
 else:
-    from ctypes import cdll  # type: ignore
+    from ctypes import cdll
 
 logger = logging.getLogger(__name__)
 
