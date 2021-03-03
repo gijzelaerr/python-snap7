@@ -4,6 +4,7 @@ import platform
 from ctypes import c_char
 from ctypes.util import find_library
 from typing import Optional, Union
+import pathlib
 
 from snap7.exceptions import Snap7Exception
 
@@ -93,6 +94,7 @@ def error_text(error, context: str = "client") -> bytes:
 
 
 def find_locally(fname):
-    if os.path.isfile("./" + fname + ".dll"):
-        return os.path.join("./", fname + ".dll")
+    file = pathlib.Path(__file__).resolve().parent / f"{fname}.dll"
+    if file.exists():
+        return str(file)
     return None
