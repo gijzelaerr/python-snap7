@@ -94,7 +94,7 @@ def error_text(error, context: str = "client") -> bytes:
 
 
 def find_locally(fname):
-    file = pathlib.Path(__file__).resolve().parent / f"{fname}.dll"
+    file = pathlib.Path.cwd() / f"{fname}.dll"
     if file.exists():
         return str(file)
     return None
