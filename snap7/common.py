@@ -1,7 +1,10 @@
 import logging
+import os
 import platform
 from ctypes import c_char
 from ctypes.util import find_library
+from typing import Optional, Union
+import pathlib
 
 from snap7.exceptions import Snap7Exception
 
@@ -21,7 +24,7 @@ class ADict(dict):
     Accessing dict keys like an attribute.
     """
     __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__
+    __setattr__ = dict.__setitem__  # type: ignore
 
 
 class Snap7Library:
@@ -30,6 +33,7 @@ class Snap7Library:
     sure the library is loaded only once.
     """
     _instance = None
+    lib_location: Optional[str]
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -38,17 +42,17 @@ class Snap7Library:
             cls._instance.cdll = None
         return cls._instance
 
-    def __init__(self, lib_location=None):
-        if self.cdll:
+    def __init__(self, lib_location: Optional[str] = None):
+        if self.cdll:  # type: ignore
             return
-        self.lib_location = lib_location or self.lib_location or find_library('snap7')
+        self.lib_location = lib_location or self.lib_location or find_library('snap7') or find_locally('snap7')
         if not self.lib_location:
             msg = "can't find snap7 library. If installed, try running ldconfig"
             raise Snap7Exception(msg)
         self.cdll = cdll.LoadLibrary(self.lib_location)
 
 
-def load_library(lib_location: str = None):
+def load_library(lib_location: Optional[str] = None):
     """
     :returns: a ctypes cdll object with the snap7 shared library loaded.
     """
@@ -87,3 +91,10 @@ def error_text(error, context: str = "client") -> bytes:
     elif context == "partner":
         library.Par_ErrorText(error, text, len_)
     return text.value
+
+
+def find_locally(fname):
+    file = pathlib.Path.cwd() / f"{fname}.dll"
+    if file.exists():
+        return str(file)
+    return None

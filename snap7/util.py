@@ -78,18 +78,29 @@ example::
 
     db1['test'].write()
 
-    db1['test'].read()
+    db1['test'].read(client)
 
 
 """
+from snap7.common import ADict
 import struct
 import logging
 import re
 from datetime import timedelta, datetime
 from collections import OrderedDict
-from typing import Optional, Union
+from typing import Dict, Optional, Union
+from snap7.types import Areas
+from snap7.client import Client
+from snap7.exceptions import Snap7Exception
+import time
 
 logger = logging.getLogger(__name__)
+
+
+def utc2local(utc) -> datetime:
+    epoch = time.mktime(utc.timetuple())
+    offset = datetime.fromtimestamp(epoch) - datetime.utcfromtimestamp(epoch)
+    return utc + offset
 
 
 def get_bool(bytearray_: bytearray, byte_index: int, bool_index: int) -> bool:
@@ -423,26 +434,27 @@ class DB:
     db1[0]['testbool1'] = test
     db1.write()   # puts data in plc
     """
-    bytearray_ = None  # data from plc
-    specification = None  # layout of db rows
-    row_size = None  # bytes size of a db row
-    layout_offset = None  # at which byte in row specification should
+    bytearray_: Optional[bytearray] = None  # data from plc
+    specification: Optional[str] = None  # layout of db rows
+    row_size: Optional[int] = None  # bytes size of a db row
+    layout_offset: Optional[int] = None  # at which byte in row specification should
     # we start reading the data
-    db_offset = None  # at which byte in db should we start reading?
+    db_offset: Optional[int] = None  # at which byte in db should we start reading?
 
     # first fields could be be status data.
     # and only the last part could be control data
     # now you can be sure you will never overwrite
     # critical parts of db
 
-    def __init__(self, db_number, bytearray_,
-                 specification, row_size, size, id_field=None,
-                 db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(self, db_number: int, bytearray_: bytearray,
+                 specification: str, row_size: int, size: int, id_field: Optional[str] = None,
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.DB):
 
         self.db_number = db_number
         self.size = size
         self.row_size = row_size
         self.id_field = id_field
+        self.area = area
 
         self.db_offset = db_offset
         self.layout_offset = layout_offset
@@ -452,7 +464,7 @@ class DB:
         self.specification = specification
         # loop over bytearray. make rowObjects
         # store index of id_field to row objects
-        self.index = OrderedDict()
+        self.index: OrderedDict = OrderedDict()
         self.make_rows()
 
     def make_rows(self):
@@ -470,7 +482,8 @@ class DB:
                          row_size=row_size,
                          db_offset=db_offset,
                          layout_offset=layout_offset,
-                         row_offset=self.row_offset)
+                         row_offset=self.row_offset,
+                         area=self.area)
 
             # store row object
             key = row[id_field] if id_field else i
@@ -479,7 +492,7 @@ class DB:
                 logger.error(msg)
             self.index[key] = row
 
-    def __getitem__(self, key, default=None):
+    def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, int, float, str, bool, datetime]:
         return self.index.get(key, default)
 
     def __iter__(self):
@@ -500,14 +513,24 @@ class DB_Row:
     Provide ROW API for DB bytearray
     """
     bytearray_: bytearray  # data of reference to parent DB
-    _specification: Optional[OrderedDict] = None  # row specification
+    _specification: OrderedDict = OrderedDict()  # row specification
 
-    def __init__(self, bytearray_, _specification, row_size=0, db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(
+        self,
+        bytearray_: bytearray,
+        _specification: str,
+        row_size: Optional[int] = 0,
+        db_offset: int = 0,
+        layout_offset: int = 0,
+        row_offset: Optional[int] = 0,
+        area: Optional[Areas] = Areas.DB
+    ):
 
         self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
-        self.row_size = row_size
+        self.row_size = row_size  # lenght of the read
         self.row_offset = row_offset  # start of writable part of row
+        self.area = area
 
         if not isinstance(bytearray_, (bytearray, DB)):
             raise TypeError(f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)")
@@ -522,7 +545,7 @@ class DB_Row:
             return self._bytearray._bytearray
         return self._bytearray
 
-    def export(self):
+    def export(self) -> Dict[str, Union[str, int, float, bool, datetime]]:
         """
         export dictionary with values
         """
@@ -563,11 +586,11 @@ class DB_Row:
         # the variable address with decimal point(like 0.0 or 4.0)
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
-    def get_value(self, byte_index, _type):
+    def get_value(self, byte_index: Union[str, int], type_: str) -> Union[ValueError, int, float, str, datetime]:
         bytearray_ = self.get_bytearray()
 
-        if _type == 'BOOL':
-            byte_index, bool_index = byte_index.split('.')
+        if type_ == 'BOOL':
+            byte_index, bool_index = str(byte_index).split('.')
             return get_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index))
 
@@ -575,64 +598,60 @@ class DB_Row:
         # first 4 bytes are used by db
         byte_index = self.get_offset(byte_index)
 
-        if _type.startswith('STRING'):
-            max_size = re.search(r'\d+', _type).group(0)
-            max_size = int(max_size)
-            """
-            normally mypy conform style
+        if type_.startswith('STRING'):
+            max_size = re.search(r'\d+', type_)
             if max_size is None:
                 raise Snap7Exception("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
-            """
-            return get_string(bytearray_, byte_index, max_size)
+            return get_string(bytearray_, byte_index, max_size_int)
 
-        elif _type == 'REAL':
+        elif type_ == 'REAL':
             return get_real(bytearray_, byte_index)
 
-        elif _type == 'DWORD':
+        elif type_ == 'DWORD':
             return get_dword(bytearray_, byte_index)
 
-        elif _type == 'DINT':
+        elif type_ == 'DINT':
             return get_dint(bytearray_, byte_index)
 
-        elif _type == 'INT':
+        elif type_ == 'INT':
             return get_int(bytearray_, byte_index)
 
-        elif _type == 'WORD':
+        elif type_ == 'WORD':
             return get_word(bytearray_, byte_index)
 
-        elif _type == 'S5TIME':
+        elif type_ == 'S5TIME':
             data_s5time = get_s5time(bytearray_, byte_index)
             return data_s5time
 
-        elif _type == 'DATE_AND_TIME':
+        elif type_ == 'DATE_AND_TIME':
             data_dt = get_dt(bytearray_, byte_index)
             return data_dt
 
-        elif _type == 'USINT':
+        elif type_ == 'USINT':
             return get_usint(bytearray_, byte_index)
 
-        elif _type == 'SINT':
+        elif type_ == 'SINT':
             return get_sint(bytearray_, byte_index)
 
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
-        elif _type == 'TIME':
+        elif type_ == 'TIME':
             return 'read TIME not implemented'
 
-        elif _type == 'DATE':
+        elif type_ == 'DATE':
             return 'read DATE not implemented'
 
-        elif _type == 'TIME_OF_DAY':
+        elif type_ == 'TIME_OF_DAY':
             return 'read TIME_OF_DAY not implemented'
 
         raise ValueError
 
-    def set_value(self, byte_index, _type, value):
+    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         bytearray_ = self.get_bytearray()
 
-        if _type == 'BOOL':
+        if type == 'BOOL' and isinstance(value, bool):
             """
             mypy conform style:
             if isinstance(byte_index, str):
@@ -640,41 +659,50 @@ class DB_Row:
                 return set_bool(bytearray_, self.get_offset(byte_index),
                                 int(bool_index), value)
             """
-            byte_index, bool_index = byte_index.split(".")
+            byte_index, bool_index = str(byte_index).split(".")
             return set_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
 
-        if _type.startswith('STRING'):
-            max_size = re.search(r'\d+', _type).group(0)
-            max_size = int(max_size)
-            return set_string(bytearray_, byte_index, value, max_size)
+        if type.startswith('STRING') and isinstance(value, str):
+            max_size = re.search(r'\d+', type)
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            return set_string(bytearray_, byte_index, value, max_size_int)
 
-        elif _type == 'REAL':
+        elif type == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
-        elif _type == 'DWORD':
+        elif type == 'DWORD' and isinstance(value, int):
             return set_dword(bytearray_, byte_index, value)
 
-        elif _type == 'DINT':
+        elif type == 'DINT' and isinstance(value, int):
             return set_dint(bytearray_, byte_index, value)
 
-        elif _type == 'INT':
+        elif type == 'INT' and isinstance(value, int):
             return set_int(bytearray_, byte_index, value)
 
-        elif _type == 'WORD':
+        elif type == 'WORD' and isinstance(value, int):
             return set_word(bytearray_, byte_index, value)
 
-        elif _type == 'USINT':
+        elif type == 'USINT' and isinstance(value, int):
             return set_usint(bytearray_, byte_index, value)
 
-        elif _type == 'SINT':
+        elif type == 'SINT' and isinstance(value, int):
+            return set_sint(bytearray_, byte_index, value)
+
+        if type == 'USINT' and isinstance(value, int):
+            return set_usint(bytearray_, byte_index, value)
+
+        if type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
         raise ValueError
 
-    def write(self, client):
+    def write(self, client: Client) -> None:
         """
         Write current data to db in plc
         """
@@ -693,9 +721,12 @@ class DB_Row:
             data = data[self.row_offset:]
             db_offset += self.row_offset
 
-        client.db_write(db_nr, db_offset, data)
+        if self.area == Areas.DB:
+            client.db_write(db_nr, db_offset, data)
+        else:
+            client.write_area(self.area, 0, db_offset, data)
 
-    def read(self, client):
+    def read(self, client: Client) -> None:
         """
         read current data of db row from plc
         """
@@ -704,7 +735,10 @@ class DB_Row:
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
+        if self.area == Areas.DB:
+            bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
+        else:
+            bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray

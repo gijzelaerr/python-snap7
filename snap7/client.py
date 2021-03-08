@@ -11,7 +11,7 @@ from typing import Union, Tuple, Optional, List
 import snap7
 from snap7.common import check_error, load_library, ipv4
 from snap7.exceptions import Snap7Exception
-from snap7.types import S7Object, buffer_type, buffer_size, BlocksList, S7CpuInfo, S7DataItem, S7SZL, S7OrderCode, \
+from snap7.types import Areas, WordLen, S7Object, buffer_type, buffer_size, BlocksList, S7CpuInfo, S7DataItem, S7SZL, S7OrderCode, \
     S7Protection, S7SZLList, S7CpInfo
 from snap7.types import TS7BlockInfo, param_types, cpu_statuses
 
@@ -33,11 +33,11 @@ class Client:
     A snap7 client
     """
 
-    def __init__(self):
+    def __init__(self, lib_location: Optional[str] = None):
         self._read_callback = None
         self._callback = None
         self._pointer = None
-        self._library = load_library()
+        self._library = load_library(lib_location)
         self.create()
 
     def __del__(self):
@@ -137,7 +137,7 @@ class Client:
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = (self._library.Cli_DBRead(
             self._pointer, db_number, start, size,
@@ -154,8 +154,8 @@ class Client:
         :param data: bytearray
         :param db_number: target DB number
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
@@ -236,7 +236,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def read_area(self, area: str, dbnumber: int, start: int, size: int) -> bytearray:
+    def read_area(self, area: Areas, dbnumber: int, start: int, size: int) -> bytearray:
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
@@ -244,24 +244,24 @@ class Client:
         :param start: offset to start writing
         :param size: number of units to read
         """
-        if area not in snap7.types.areas.values():
+        if area not in Areas:
             raise ValueError(f"{area} is not implemented in snap7.types")
-        elif area == snap7.types.S7AreaTM:
-            wordlen = snap7.types.S7WLTimer
-        elif area == snap7.types.S7AreaCT:
-            wordlen = snap7.types.S7WLCounter
+        elif area == Areas.TM:
+            wordlen = WordLen.Timer
+        elif area == Areas.CT:
+            wordlen = WordLen.Counter
         else:
-            wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
-        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
+            wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        logger.debug(f"reading area: {area.name} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen.name}={wordlen.value}")
         data = (type_ * size)()
-        result = self._library.Cli_ReadArea(self._pointer, area, dbnumber, start,
-                                            size, wordlen, byref(data))
+        result = self._library.Cli_ReadArea(self._pointer, area.value, dbnumber, start,
+                                            size, wordlen.value, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
     @error_wrap
-    def write_area(self, area: str, dbnumber: int, start: int, data: bytearray) -> int:
+    def write_area(self, area: Areas, dbnumber: int, start: int, data: bytearray) -> int:
         """This is the main function to write data into a PLC. It's the
         complementary function of Cli_ReadArea(), the parameters and their
         meanings are the same. The only difference is that the data is
@@ -271,19 +271,19 @@ class Client:
         :param start: offset to start writing
         :param data: a bytearray containing the payload
         """
-        if area == snap7.types.S7AreaTM:
-            wordlen = snap7.types.S7WLTimer
-        elif area == snap7.types.S7AreaCT:
-            wordlen = snap7.types.S7WLCounter
+        if area == Areas.TM:
+            wordlen = WordLen.Timer
+        elif area == Areas.CT:
+            wordlen = WordLen.Counter
         else:
-            wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+            wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         size = len(data)
-        logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
-                     f"wordlen {wordlen} type: {type_}")
+        logger.debug(f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
+                     f"wordlen {wordlen.name}={wordlen.value} type: {type_}")
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self._library.Cli_WriteArea(self._pointer, area, dbnumber, start,
-                                           size, wordlen, byref(cdata))
+        return self._library.Cli_WriteArea(self._pointer, area.value, dbnumber, start,
+                                           size, wordlen.value, byref(cdata))
 
     def read_multi_vars(self, items) -> Tuple[int, S7DataItem]:
         """This function read multiple variables from the PLC.
@@ -404,8 +404,8 @@ class Client:
         """
         This is a lean function of Cli_ReadArea() to read PLC process outputs.
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self._library.Cli_ABRead(self._pointer, start, size,
@@ -418,8 +418,8 @@ class Client:
         This is a lean function of Cli_WriteArea() to write PLC process
         outputs
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
@@ -440,8 +440,8 @@ class Client:
         """
         This is the asynchronous counterpart of Cli_ABWrite.
         """
-        wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+        wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
@@ -471,7 +471,7 @@ class Client:
 
     def as_ct_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_CTWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_AsCTWrite(self._pointer, start, amount, byref(cdata))
         check_error(result, context="client")
@@ -621,20 +621,20 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def _prepare_as_read_area(self, area: str, size: int) -> Tuple[int, Array]:
-        if area not in snap7.types.areas.values():
+    def _prepare_as_read_area(self, area: Areas, size: int) -> Tuple[WordLen, Array]:
+        if area not in Areas:
             raise ValueError(f"{area} is not implemented in snap7.types")
-        elif area == snap7.types.S7AreaTM:
-            wordlen = snap7.types.S7WLTimer
-        elif area == snap7.types.S7AreaCT:
-            wordlen = snap7.types.S7WLCounter
+        elif area == Areas.TM:
+            wordlen = WordLen.Timer
+        elif area == Areas.CT:
+            wordlen = WordLen.Counter
         else:
-            wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen]
+            wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         usrdata = (type_ * size)()
         return wordlen, usrdata
 
-    def as_read_area(self, area: str, dbnumber: int, start: int, size: int, wordlen: int, pusrdata) -> int:
+    def as_read_area(self, area: Areas, dbnumber: int, start: int, size: int, wordlen: WordLen, pusrdata) -> int:
         """This is the main function to read data from a PLC.
         With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
@@ -645,25 +645,25 @@ class Client:
         :param pusrdata:
         :param wordlen:
         """
-        logger.debug(f"reading area: {area} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen}")
-        result = self._library.Cli_AsReadArea(self._pointer, area, dbnumber, start, size, wordlen, pusrdata)
+        logger.debug(f"reading area: {area.name} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen.name}={wordlen.value}")
+        result = self._library.Cli_AsReadArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, pusrdata)
         check_error(result, context="client")
         return result
 
-    def _prepare_as_write_area(self, area: str, data: bytearray) -> Tuple[int, Array]:
-        if area not in snap7.types.areas.values():
+    def _prepare_as_write_area(self, area: Areas, data: bytearray) -> Tuple[WordLen, Array]:
+        if area not in Areas:
             raise ValueError(f"{area} is not implemented in snap7.types")
-        elif area == snap7.types.S7AreaTM:
-            wordlen = snap7.types.S7WLTimer
-        elif area == snap7.types.S7AreaCT:
-            wordlen = snap7.types.S7WLCounter
+        elif area == Areas.TM:
+            wordlen = WordLen.Timer
+        elif area == Areas.CT:
+            wordlen = WordLen.Counter
         else:
-            wordlen = snap7.types.S7WLByte
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+            wordlen = WordLen.Byte
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return wordlen, cdata
 
-    def as_write_area(self, area: str, dbnumber: int, start: int, size: int, wordlen: int, pusrdata) -> int:
+    def as_write_area(self, area: Areas, dbnumber: int, start: int, size: int, wordlen: WordLen, pusrdata) -> int:
         """This is the main function to write data into a PLC. It's the
         complementary function of Cli_ReadArea(), the parameters and their
         meanings are the same. The only difference is that the data is
@@ -673,11 +673,11 @@ class Client:
         :param dbnumber: The DB number, only used when area= S7AreaDB
         :param start: offset to start writing
         """
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
-        logger.debug(f"writing area: {area} dbnumber: {dbnumber} start: {start}: size {size}: "
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        logger.debug(f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen} type: {type_}")
         cdata = (type_ * len(pusrdata)).from_buffer_copy(pusrdata)
-        res = self._library.Cli_AsWriteArea(self._pointer, area, dbnumber, start, size, wordlen, byref(cdata))
+        res = self._library.Cli_AsWriteArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
         check_error(res, context="client")
         return res
 
@@ -689,7 +689,7 @@ class Client:
 
     def as_eb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_AsEBWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_AsEBWrite(self._pointer, start, size, byref(cdata))
         check_error(result, context="client")
@@ -720,7 +720,7 @@ class Client:
 
     def as_mb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_AsMBWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_AsMBWrite(self._pointer, start, size, byref(cdata))
         check_error(result, context="client")
@@ -746,7 +746,7 @@ class Client:
 
     def as_tm_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_TMWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Timer.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_AsTMWrite(self._pointer, start, amount, byref(cdata))
         check_error(result)
@@ -766,7 +766,7 @@ class Client:
 
     def ct_read(self, start: int, amount: int) -> bytearray:
         # Cli_CTRead
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
         data = (type_ * amount)()
         result = self._library.Cli_CTRead(self._pointer, start, amount, byref(data))
         check_error(result, context="client")
@@ -774,7 +774,7 @@ class Client:
 
     def ct_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_CTWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLCounter]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_CTWrite(self._pointer, start, amount, byref(cdata))
         check_error(result)
@@ -788,7 +788,7 @@ class Client:
 
     def eb_read(self, start: int, size: int) -> bytearray:
         # Cli_EBRead
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = self._library.Cli_EBRead(self._pointer, start, size, byref(data))
         check_error(result, context="client")
@@ -796,7 +796,7 @@ class Client:
 
     def eb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_EBWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_EBWrite(self._pointer, start, size, byref(cdata))
         check_error(result)
@@ -866,7 +866,7 @@ class Client:
 
     def mb_read(self, start: int, size: int) -> bytearray:
         # Cli_MBRead
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = self._library.Cli_MBRead(self._pointer, start, size, byref(data))
         check_error(result, context="client")
@@ -874,7 +874,7 @@ class Client:
 
     def mb_write(self, start: int, size: int, data: bytearray) -> int:
         # Cli_MBWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLByte]
+        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_MBWrite(self._pointer, start, size, byref(cdata))
         check_error(result)
@@ -905,7 +905,8 @@ class Client:
 
     def tm_read(self, start: int, amount: int) -> bytearray:
         # Cli_TMRead
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
+        wordlen = WordLen.Timer
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         data = (type_ * amount)()
         result = self._library.Cli_TMRead(self._pointer, start, amount, byref(data))
         check_error(result, context="client")
@@ -913,7 +914,8 @@ class Client:
 
     def tm_write(self, start: int, amount: int, data: bytearray) -> int:
         # Cli_TMWrite
-        type_ = snap7.types.wordlen_to_ctypes[snap7.types.S7WLTimer]
+        wordlen = WordLen.Timer
+        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_TMWrite(self._pointer, start, amount, byref(cdata))
         check_error(result)

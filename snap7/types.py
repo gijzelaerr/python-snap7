@@ -4,6 +4,7 @@ Python equivalent for snap7 specific types.
 import ctypes
 
 from snap7.common import ADict
+from enum import Enum
 
 S7Object = ctypes.c_void_p
 buffer_size = 65536
@@ -51,13 +52,25 @@ param_types = ADict({
 mkEvent = 0
 mkLog = 1
 
+
 # Area ID
+class Areas(Enum):
+    PE = 0x81
+    PA = 0x82
+    MK = 0x83
+    DB = 0x84
+    CT = 0x1C
+    TM = 0x1D
+
+
+# Leave it for now
 S7AreaPE = 0x81
 S7AreaPA = 0x82
 S7AreaMK = 0x83
 S7AreaDB = 0x84
 S7AreaCT = 0x1C
 S7AreaTM = 0x1D
+
 
 areas = ADict({
     'PE': 0x81,
@@ -68,7 +81,19 @@ areas = ADict({
     'TM': 0x1D,
 })
 
+
 # Word Length
+class WordLen(Enum):
+    Bit = 0x01
+    Byte = 0x02
+    Word = 0x04
+    DWord = 0x06
+    Real = 0x08
+    Counter = 0x1C
+    Timer = 0x1D
+
+
+# Leave it for now
 S7WLBit = 0x01
 S7WLByte = 0x02
 S7WLWord = 0x04
@@ -212,6 +237,10 @@ class S7DataItem(ctypes.Structure):
         ('pData', ctypes.POINTER(ctypes.c_uint8))
     ]
 
+    def __str__(self) -> str:
+        return f"<S7DataItem Area: {self.Area} WordLen: {self.WordLen} Result: {self.Result} "\
+               f"DBNumber: {self.DBNumber} Start: {self.Start} Amount: {self.Amount} pData: {self.pData}>"
+
 
 class S7CpuInfo(ctypes.Structure):
     _fields_ = [
@@ -221,6 +250,10 @@ class S7CpuInfo(ctypes.Structure):
         ('Copyright', ctypes.c_char * 27),
         ('ModuleName', ctypes.c_char * 25)
     ]
+
+    def __str__(self):
+        return f"<S7CpuInfo ModuleTypeName: {self.ModuleTypeName} SerialNumber: {self.SerialNumber} "\
+               f"ASName: {self.ASName} Copyright: {self.Copyright} ModuleName: {self.ModuleName}>"
 
 
 class S7SZLHeader(ctypes.Structure):
@@ -233,6 +266,9 @@ class S7SZLHeader(ctypes.Structure):
         ('NDR', ctypes.c_uint16)
     ]
 
+    def __str__(self) -> str:
+        return f"<S7SZLHeader LengthDR: {self.LengthDR}, NDR: {self.NDR}>"
+
 
 class S7SZL(ctypes.Structure):
     """See §33.1 of System Software for S7-300/400 System and Standard Functions"""
@@ -240,6 +276,9 @@ class S7SZL(ctypes.Structure):
         ('Header', S7SZLHeader),
         ('Data', ctypes.c_byte * (0x4000 - 4))
     ]
+
+    def __str__(self) -> str:
+        return f"<S7SZL Header: {self.S7SZHeader}, Data: {self.Data}>"
 
 
 class S7SZLList(ctypes.Structure):
@@ -265,6 +304,10 @@ class S7CpInfo(ctypes.Structure):
         ('MaxMpiRate', ctypes.c_uint16),
         ('MaxBusRate', ctypes.c_uint16)
     ]
+
+    def __str__(self) -> str:
+        return f"<S7CpInfo MaxPduLength: {self.MaxPduLength} MaxConnections: {self.MaxConnections} "\
+               f"MaxMpiRate: {self.MaxMpiRate} MaxBusRate: {self.MaxBusRate}>"
 
 
 class S7Protection(ctypes.Structure):
