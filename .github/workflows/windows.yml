@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install choco packages
-        run:
+        run: |
            choco install 7zip wget
            choco install --version ${{ matrix.python-version }} python
 
