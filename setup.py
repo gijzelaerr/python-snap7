@@ -1,5 +1,5 @@
 import os
-
+from sys import platform
 from setuptools import setup, find_packages
 
 __version__ = "1.0"
@@ -10,6 +10,11 @@ extras_require = {
     'test': tests_require,
     'doc': ['sphinx', 'sphinx_rtd_theme'],
 }
+
+if platform == 'win32':
+    package_data = {"snap7": ["*.dll"]}
+else:
+    package_data = {}
 
 
 def read(fname):
@@ -38,9 +43,12 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     python_requires='>=3.6',
     extras_require=extras_require,
     tests_require=tests_require,
     test_suite="tests",
+    package_data=package_data,
+    has_ext_modules=lambda: True
 )
