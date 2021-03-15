@@ -981,7 +981,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
         self.assertEqual(expected_list[2], self.client.tm_read(0, 2))
 
-    @unittest.skipIf(platform.system() == 'Windows', 'Access Violation error')
+    @unittest.skipIf(platform.system() in ['Windows', 'Darwin'], 'Access Violation error')
     def test_set_as_callback(self):
         expected = b"\x11\x11"
         self.callback_counter = 0

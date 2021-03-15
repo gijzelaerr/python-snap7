@@ -1,0 +1,42 @@
+name: test pipy packages
+on: [workflow_dispatch]
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pytest
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pytest
+
+      - name: install python-snap7
+        run: python3 -m pip install -i https://test.pypi.org/simple/ python-snap7
+
+      - name: Run pytest
+        run: |
+          which pytest
+          pytest test/test_server.py test/test_util.py test/test_client.py
+
+      - name: Run tests required sudo
+        if: ${{ runner.os == 'Linux'}}
+        run: sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest test/test_partner.py
+
+      - name: Run test_partner.py on windows
+        if: ${{ runner.os == 'Windows' }}
+        run: pytest test/test_partner.py
+
+      - name: Run tests required sudo
+        if: ${{ runner.os == 'macOS'}}
+        run: sudo pytest test/test_partner.py
