@@ -4,10 +4,6 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-# on:
-#   push:
-#     tags:
-#       - '*'
 env:
   snap7-archive-url: https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
 jobs:
@@ -215,11 +211,11 @@ jobs:
           name: wheels
           path: wheelhouse
 
-      - name: Publish distribution 📦 to Test PyPI
+      - name: Publish distribution to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
+          password: ${{ secrets.PYTHON_SNAP7_TEST_PYPI }}
           repository_url: https://test.pypi.org/legacy/
           packages_dir: wheelhouse
           verbose: true
@@ -241,5 +237,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          password: ${{ secrets.PYTHON_SNAP7_PYPI }}
           packages_dir: wheelhouse

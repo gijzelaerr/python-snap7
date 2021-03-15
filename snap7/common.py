@@ -46,11 +46,11 @@ class Snap7Library:
     def __init__(self, lib_location: Optional[str] = None):
         if self.cdll:  # type: ignore
             return
-        self.lib_location = lib_location \
-                            or self.lib_location \
-                            or find_in_package() \
-                            or find_library('snap7') \
-                            or find_locally('snap7')
+        self.lib_location = (lib_location
+                             or self.lib_location
+                             or find_in_package()
+                             or find_library('snap7')
+                             or find_locally('snap7'))
         if not self.lib_location:
             msg = "can't find snap7 library. If installed, try running ldconfig"
             raise Snap7Exception(msg)
