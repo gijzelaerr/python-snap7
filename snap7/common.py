@@ -116,3 +116,4 @@ def find_in_package() -> Optional[str]:
     full_path = basedir.joinpath('lib', lib)
     if os.path.exists(full_path) and os.path.isfile(full_path):
         return str(full_path)
+    return None
