@@ -23,7 +23,7 @@ slot = 1
 
 
 class TestServer(unittest.TestCase):
-    
+
     process = None
 
     @classmethod
@@ -79,30 +79,27 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_usint(data, 0), 0)
         self.assertEqual(get_usint(data, 1), 255)
 
-
     def test_read_int(self):
         data = self.client.db_read(0, 7, 10)
         self.assertEqual(get_int(data, 0), -32768)
         self.assertEqual(get_int(data, 2), -1234)
-        self.assertEqual(get_int(data, 4),  0)
-        self.assertEqual(get_int(data, 6),  1234)
-        self.assertEqual(get_int(data, 8),  32767)
-
+        self.assertEqual(get_int(data, 4), 0)
+        self.assertEqual(get_int(data, 6), 1234)
+        self.assertEqual(get_int(data, 8), 32767)
 
     def test_read_double_int(self):
         data = self.client.db_read(0, 17, 4 * 5)
         self.assertEqual(get_dint(data, 0), -2147483648)
         self.assertEqual(get_dint(data, 4), -32768)
-        self.assertEqual(get_dint(data, 8),  0)
-        self.assertEqual(get_dint(data, 12),  32767)
-        self.assertEqual(get_dint(data, 16),  2147483647)
-
+        self.assertEqual(get_dint(data, 8), 0)
+        self.assertEqual(get_dint(data, 12), 32767)
+        self.assertEqual(get_dint(data, 16), 2147483647)
 
     @unittest.skip("TODO: exponential residual decimal places")
     def test_read_real(self):
         data = self.client.db_read(0, 37, 4 * 9)
         self.assertAlmostEqual(get_real(data, 0), -3.402823e38)
-        self.assertAlmostEqual(get_real(data, 4), -3,402823e12)
+        self.assertAlmostEqual(get_real(data, 4), -3.402823e12)
         self.assertAlmostEqual(get_real(data, 8), -175494351e-38)
         self.assertAlmostEqual(get_real(data, 12), -1.175494351e-12)
         self.assertAlmostEqual(get_real(data, 16), 0.0)
@@ -110,12 +107,10 @@ class TestServer(unittest.TestCase):
         self.assertAlmostEqual(get_real(data, 24), 1.175494351e-12)
         self.assertAlmostEqual(get_real(data, 28), 3.402823466e12)
         self.assertAlmostEqual(get_real(data, 32), 3.402823466e38)
-        
 
     def test_read_string(self):
-        data = self.client.db_read(0, 73-2, 37 + 2) # -2 because get_string method
+        data = self.client.db_read(0, 73 - 2, 37 + 2)  # -2 because get_string method
         self.assertEqual(get_string(data, 0, 37), "the brown fox jumps over the lazy dog")
-
 
     def test_read_word(self):
         data = self.client.db_read(0, 110, 4 * 4)
@@ -124,13 +119,13 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_word(data, 8), 0xABCD)
         self.assertEqual(get_word(data, 12), 0xFFFF)
 
-
     def test_read_double_word(self):
         data = self.client.db_read(0, 126, 8 * 4)
         self.assertEqual(get_dword(data, 0), 0x00000000)
         self.assertEqual(get_dword(data, 8), 0x12345678)
         self.assertEqual(get_dword(data, 16), 0x1234ABCD)
         self.assertEqual(get_dword(data, 24), 0xFFFFFFFF)
+
 
 if __name__ == '__main__':
     import logging

@@ -293,7 +293,7 @@ class Server:
 
 def mainloop(tcpport: int = 1102):
     server = snap7.server.Server()
-    size = 1000
+    size = 100
     DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
     PAdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
     TMdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
@@ -303,24 +303,10 @@ def mainloop(tcpport: int = 1102):
     server.register_area(snap7.types.srvAreaTM, 1, TMdata)
     server.register_area(snap7.types.srvAreaCT, 1, CTdata)
 
-    db_data = [
-        128*0 + 64*0 + 32*0 + 16*0 + 8*0 + 4*0 + 2*0 + 1,   # BOOLEAN 1 BYTE
-        0, 100,                                             # INTEGER 2 BYTES
-        0, 0, 0, 127
-    ]
-    # DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(db_data))
-    # DBdata = DBdata(*db_data)
-    # server.register_area(snap7.types.srvAreaDB, 0, DBdata)
-
-    '''
-    ba = bytearray([128*1 + 1*1, 128])
-    array = c_int8 * len(ba)
-    array = array.from_buffer(ba)
-    '''
-    ba = bytearray(size)
+    ba = bytearray(1000)
     # 1. Bool 1 byte
-    ba[0] = 128*0 + 64*1 + 32*0 + 16*0 + 8*0 + 4*0 + 2*0 + 1   # BOOLEAN 1 BYTE
-    
+    ba[0] = 128 * 0 + 64 * 1 + 32 * 0 + 16 * 0 + 8 * 0 + 4 * 0 + 2 * 0 + 1 * 1  # BOOLEAN 1 BYTE
+
     # 2. Small int 1 byte
     ba[1:2] = struct.pack(">b", -128)
     ba[2:3] = struct.pack(">b", 0)
@@ -358,25 +344,24 @@ def mainloop(tcpport: int = 1102):
 
     # 7. String 1 byte per char
     string = "the brown fox jumps over the lazy dog"  # len = 37
-    for letter, i in zip(string, range(73, 73+len(string)+1)):
+    for letter, i in zip(string, range(73, 73 + len(string) + 1)):
         ba[i] = ord(letter)
 
     # 8. WORD 4 bytes
-    ba[110:110+4] = b"\x00\x00"
-    ba[114:114+4] = b"\x12\x34"
-    ba[118:118+4] = b"\xAB\xCD"
-    ba[122:122+4] = b"\xFF\xFF"
+    ba[110:110 + 4] = b"\x00\x00"
+    ba[114:114 + 4] = b"\x12\x34"
+    ba[118:118 + 4] = b"\xAB\xCD"
+    ba[122:122 + 4] = b"\xFF\xFF"
 
     # 9 DWORD 8 bytes
-    ba[126:126+8] = b"\x00\x00\x00\x00"
-    ba[134:134+8] = b"\x12\x34\x56\x78"
-    ba[142:142+8] = b"\x12\x34\xAB\xCD"
-    ba[150:150+8] = b"\xFF\xFF\xFF\xFF"
+    ba[126:126 + 8] = b"\x00\x00\x00\x00"
+    ba[134:134 + 8] = b"\x12\x34\x56\x78"
+    ba[142:142 + 8] = b"\x12\x34\xAB\xCD"
+    ba[150:150 + 8] = b"\xFF\xFF\xFF\xFF"
 
     DBdata = snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(ba)
     DBdata = DBdata.from_buffer(ba)
     server.register_area(snap7.types.srvAreaDB, 0, DBdata)
-
 
     server.start(tcpport=tcpport)
     while True:
