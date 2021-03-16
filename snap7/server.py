@@ -307,15 +307,20 @@ def mainloop(tcpport: int = 1102):
         0, 100,                                             # INTEGER 2 BYTES
         0, 0, 0, 127
     ]
-    DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(db_data))
-    DBdata = DBdata(*db_data)
-    server.register_area(snap7.types.srvAreaDB, 0, DBdata)
+    # DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(db_data))
+    # DBdata = DBdata(*db_data)
+    # server.register_area(snap7.types.srvAreaDB, 0, DBdata)
 
     '''
     ba = bytearray([128*1 + 1*1, 128])
     array = c_int8 * len(ba)
     array = array.from_buffer(ba)
     '''
+    ba = bytearray([
+        128*0 + 64*0 + 32*0 + 16*0 + 8*0 + 4*0 + 2*0 + 1,   # BOOLEAN 1 BYTE
+        
+    ])
+
 
     server.start(tcpport=tcpport)
     while True:
