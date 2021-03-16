@@ -356,7 +356,22 @@ def mainloop(tcpport: int = 1102):
     ba[65:69] = struct.pack(">f", 3.402823466e12)
     ba[69:73] = struct.pack(">f", 3.402823466e38)
 
-    ba[73:73+4] = b"asd"
+    # 7. String 1 byte per char
+    string = "the brown fox jumps over the lazy dog"  # len = 37
+    for letter, i in zip(string, range(73, 73+len(string)+1)):
+        ba[i] = ord(letter)
+
+    # 8. WORD 4 bytes
+    ba[110:110+4] = b"\x00\x00"
+    ba[114:114+4] = b"\x12\x34"
+    ba[118:118+4] = b"\xAB\xCD"
+    ba[122:122+4] = b"\xFF\xFF"
+
+    # 9 DWORD 8 bytes
+    ba[126:126+8] = b"\x00\x00\x00\x00"
+    ba[134:134+8] = b"\x12\x34\x56\x78"
+    ba[142:142+8] = b"\x12\x34\xAB\xCD"
+    ba[150:150+8] = b"\xFF\xFF\xFF\xFF"
 
     DBdata = snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(ba)
     DBdata = DBdata.from_buffer(ba)

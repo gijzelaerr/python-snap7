@@ -9,7 +9,7 @@ from unittest import mock
 import snap7.error
 import snap7.server
 import snap7.util
-from snap7.util import get_bool, get_dint, get_int, get_real, get_sint, get_string, get_usint
+from snap7.util import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
 from snap7.client import Client
 import snap7.types
 
@@ -113,8 +113,24 @@ class TestServer(unittest.TestCase):
         
 
     def test_read_string(self):
-        data = self.client.db_read(0, 73, 10)
-        self.assertEqual(get_string(data, 2, 3), "asd")
+        data = self.client.db_read(0, 73-2, 37 + 2) # -2 because get_string method
+        self.assertEqual(get_string(data, 0, 37), "the brown fox jumps over the lazy dog")
+
+
+    def test_read_word(self):
+        data = self.client.db_read(0, 110, 4 * 4)
+        self.assertEqual(get_word(data, 0), 0x0000)
+        self.assertEqual(get_word(data, 4), 0x1234)
+        self.assertEqual(get_word(data, 8), 0xABCD)
+        self.assertEqual(get_word(data, 12), 0xFFFF)
+
+
+    def test_read_double_word(self):
+        data = self.client.db_read(0, 126, 8 * 4)
+        self.assertEqual(get_dword(data, 0), 0x00000000)
+        self.assertEqual(get_dword(data, 8), 0x12345678)
+        self.assertEqual(get_dword(data, 16), 0x1234ABCD)
+        self.assertEqual(get_dword(data, 24), 0xFFFFFFFF)
 
 if __name__ == '__main__':
     import logging
