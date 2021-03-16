@@ -301,6 +301,16 @@ def mainloop(tcpport: int = 1102):
     server.register_area(snap7.types.srvAreaPA, 1, PAdata)
     server.register_area(snap7.types.srvAreaTM, 1, TMdata)
     server.register_area(snap7.types.srvAreaCT, 1, CTdata)
+
+    DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * 2)
+    db_data = [
+        128*0 + 64*0 + 32*0 + 16*0 + 8*0 + 4*0 + 2*0 + 1,
+        100,
+    ]
+    DBdata = DBdata(*db_data)
+    server.register_area(snap7.types.srvAreaDB, 0, DBdata)
+
+
     server.start(tcpport=tcpport)
     while True:
         while True:
