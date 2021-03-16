@@ -1,6 +1,7 @@
 import ctypes
 import logging
 from multiprocessing.context import Process
+from os import get_inheritable
 import time
 import unittest
 from unittest import mock
@@ -8,6 +9,8 @@ from unittest import mock
 import snap7.error
 import snap7.server
 import snap7.util
+from snap7.util import get_bool, get_dint, get_int, get_real, get_sint, get_string, get_usint
+from snap7.client import Client
 import snap7.types
 
 logging.basicConfig(level=logging.WARNING)
@@ -37,22 +40,81 @@ class TestServer(unittest.TestCase):
             cls.process.kill()
 
     def setUp(self):
-        self.client: snap7.client.Client = snap7.client.Client()
+        self.client: Client = snap7.client.Client()
         self.client.connect(ip, rack, slot, tcpport)
 
     def tearDown(self):
         self.client.disconnect()
         self.client.destroy()
 
+    @unittest.skip("TODO: only first test used")
     def test_read_prefill_db(self):
         data = self.client.db_read(0, 0, 7)
         boolean = snap7.util.get_bool(data, 0, 0)
         print(data)
         self.assertEqual(boolean, True)
         integer = snap7.util.get_int(data, 1)
-        self.assertEqual(integer, 100)
+        self.assertEqual(integer, 128)
         real = snap7.util.get_real(data, 3)
-        self.assertEqual(real, 127)
+        self.assertEqual(real, -128)
+
+    def test_read_booleans(self):
+        data = self.client.db_read(0, 0, 1)
+        self.assertEqual(True, get_bool(data, 0, 0))
+        self.assertEqual(True, get_bool(data, 0, 6))
+
+    def test_read_small_int(self):
+        data = self.client.db_read(0, 1, 4)
+        value_1 = get_sint(data, 0)
+        value_2 = get_sint(data, 1)
+        value_3 = get_sint(data, 2)
+        value_4 = get_sint(data, 3)
+        self.assertEqual(value_1, -128)
+        self.assertEqual(value_2, 0)
+        self.assertEqual(value_3, 100)
+        self.assertEqual(value_4, 127)
+
+    def test_read_unsigned_small_int(self):
+        data = self.client.db_read(0, 5, 2)
+        self.assertEqual(get_usint(data, 0), 0)
+        self.assertEqual(get_usint(data, 1), 255)
+
+
+    def test_read_int(self):
+        data = self.client.db_read(0, 7, 10)
+        self.assertEqual(get_int(data, 0), -32768)
+        self.assertEqual(get_int(data, 2), -1234)
+        self.assertEqual(get_int(data, 4),  0)
+        self.assertEqual(get_int(data, 6),  1234)
+        self.assertEqual(get_int(data, 8),  32767)
+
+
+    def test_read_double_int(self):
+        data = self.client.db_read(0, 17, 4 * 5)
+        self.assertEqual(get_dint(data, 0), -2147483648)
+        self.assertEqual(get_dint(data, 4), -32768)
+        self.assertEqual(get_dint(data, 8),  0)
+        self.assertEqual(get_dint(data, 12),  32767)
+        self.assertEqual(get_dint(data, 16),  2147483647)
+
+
+    @unittest.skip("TODO: exponential residual decimal places")
+    def test_read_real(self):
+        data = self.client.db_read(0, 37, 4 * 9)
+        self.assertAlmostEqual(get_real(data, 0), -3.402823e38)
+        self.assertAlmostEqual(get_real(data, 4), -3,402823e12)
+        self.assertAlmostEqual(get_real(data, 8), -175494351e-38)
+        self.assertAlmostEqual(get_real(data, 12), -1.175494351e-12)
+        self.assertAlmostEqual(get_real(data, 16), 0.0)
+        self.assertAlmostEqual(get_real(data, 20), 1.175494351e-38)
+        self.assertAlmostEqual(get_real(data, 24), 1.175494351e-12)
+        self.assertAlmostEqual(get_real(data, 28), 3.402823466e12)
+        self.assertAlmostEqual(get_real(data, 32), 3.402823466e38)
+        
+
+    def test_read_string(self):
+        data = self.client.db_read(0, 73, 10)
+        self.assertEqual(get_string(data, 2, 3), "asd")
 
 if __name__ == '__main__':
     import logging

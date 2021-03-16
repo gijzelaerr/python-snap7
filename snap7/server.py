@@ -3,6 +3,7 @@ Snap7 server used for mimicking a siemens 7 server.
 """
 import logging
 import re
+import struct
 import time
 import ctypes
 from typing import Tuple, Optional, Callable, Any
@@ -292,7 +293,7 @@ class Server:
 
 def mainloop(tcpport: int = 1102):
     server = snap7.server.Server()
-    size = 100
+    size = 1000
     DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
     PAdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
     TMdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
@@ -316,10 +317,50 @@ def mainloop(tcpport: int = 1102):
     array = c_int8 * len(ba)
     array = array.from_buffer(ba)
     '''
-    ba = bytearray([
-        128*0 + 64*0 + 32*0 + 16*0 + 8*0 + 4*0 + 2*0 + 1,   # BOOLEAN 1 BYTE
-        
-    ])
+    ba = bytearray(size)
+    # 1. Bool 1 byte
+    ba[0] = 128*0 + 64*1 + 32*0 + 16*0 + 8*0 + 4*0 + 2*0 + 1   # BOOLEAN 1 BYTE
+    
+    # 2. Small int 1 byte
+    ba[1:2] = struct.pack(">b", -128)
+    ba[2:3] = struct.pack(">b", 0)
+    ba[3:4] = struct.pack(">b", 100)
+    ba[4:5] = struct.pack(">b", 127)
+
+    # 3. Unsigned small int 1 byte
+    ba[5:6] = struct.pack("B", 0)
+    ba[6:7] = struct.pack("B", 255)
+
+    # 4. Int 2 bytes
+    ba[7:9] = struct.pack(">h", -32768)
+    ba[9:11] = struct.pack(">h", -1234)
+    ba[11:13] = struct.pack(">h", 0)
+    ba[13:15] = struct.pack(">h", 1234)
+    ba[15:17] = struct.pack(">h", 32767)
+
+    # 5. DInt 4 bytes
+    ba[17:21] = struct.pack(">i", -2147483648)
+    ba[21:25] = struct.pack(">i", -32768)
+    ba[25:29] = struct.pack(">i", 0)
+    ba[29:33] = struct.pack(">i", 32767)
+    ba[33:37] = struct.pack(">i", 2147483647)
+
+    # 6. Real 4 bytes
+    ba[37:41] = struct.pack(">f", -3.402823e38)
+    ba[41:45] = struct.pack(">f", -3.402823e12)
+    ba[45:49] = struct.pack(">f", -175494351e-38)
+    ba[49:53] = struct.pack(">f", -1.175494351e-12)
+    ba[53:57] = struct.pack(">f", 0.0)
+    ba[57:61] = struct.pack(">f", 1.175494351e-38)
+    ba[61:65] = struct.pack(">f", 1.175494351e-12)
+    ba[65:69] = struct.pack(">f", 3.402823466e12)
+    ba[69:73] = struct.pack(">f", 3.402823466e38)
+
+    ba[73:73+4] = b"asd"
+
+    DBdata = snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(ba)
+    DBdata = DBdata.from_buffer(ba)
+    server.register_area(snap7.types.srvAreaDB, 0, DBdata)
 
 
     server.start(tcpport=tcpport)
