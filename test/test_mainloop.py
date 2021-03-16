@@ -45,10 +45,14 @@ class TestServer(unittest.TestCase):
         self.client.destroy()
 
     def test_read_prefill_db(self):
-        data = self.client.db_read(0, 0, 1)
+        data = self.client.db_read(0, 0, 7)
         boolean = snap7.util.get_bool(data, 0, 0)
         print(data)
         self.assertEqual(boolean, True)
+        integer = snap7.util.get_int(data, 1)
+        self.assertEqual(integer, 100)
+        real = snap7.util.get_real(data, 3)
+        self.assertEqual(real, 127)
 
 if __name__ == '__main__':
     import logging
