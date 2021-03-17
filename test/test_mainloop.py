@@ -95,18 +95,17 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_dint(data, 12), 32767)
         self.assertEqual(get_dint(data, 16), 2147483647)
 
-    @unittest.skip("TODO: exponential residual decimal places")
     def test_read_real(self):
         data = self.client.db_read(0, 37, 4 * 9)
-        self.assertAlmostEqual(get_real(data, 0), -3.402823e38)
-        self.assertAlmostEqual(get_real(data, 4), -3.402823e12)
-        self.assertAlmostEqual(get_real(data, 8), -175494351e-38)
-        self.assertAlmostEqual(get_real(data, 12), -1.175494351e-12)
+        self.assertAlmostEqual(get_real(data, 0), -3.402823e38, delta=-3.402823e38 * -0.0000001)
+        self.assertAlmostEqual(get_real(data, 4), -3.402823e12, delta=-3.402823e12 * -0.0000001)
+        self.assertAlmostEqual(get_real(data, 8), -175494351e-38, delta=-175494351e-38 * -0.0000001)
+        self.assertAlmostEqual(get_real(data, 12), -1.175494351e-12, delta=-1.175494351e-12 * -0.0000001)
         self.assertAlmostEqual(get_real(data, 16), 0.0)
-        self.assertAlmostEqual(get_real(data, 20), 1.175494351e-38)
-        self.assertAlmostEqual(get_real(data, 24), 1.175494351e-12)
-        self.assertAlmostEqual(get_real(data, 28), 3.402823466e12)
-        self.assertAlmostEqual(get_real(data, 32), 3.402823466e38)
+        self.assertAlmostEqual(get_real(data, 20), 1.175494351e-38, delta=1.175494351e-38 * 0.0000001)
+        self.assertAlmostEqual(get_real(data, 24), 1.175494351e-12, delta=1.175494351e-12 * 0.0000001)
+        self.assertAlmostEqual(get_real(data, 28), 3.402823466e12, delta=3.402823466e12 * 0.0000001)
+        self.assertAlmostEqual(get_real(data, 32), 3.402823466e38, delta=3.402823466e38 * 0.0000001)
 
     def test_read_string(self):
         data = self.client.db_read(0, 73 - 2, 37 + 2)  # -2 because get_string method
