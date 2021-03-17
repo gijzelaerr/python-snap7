@@ -2,8 +2,6 @@ name: Create and publish a package
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
