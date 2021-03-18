@@ -28,7 +28,7 @@ class TestServer(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.process = Process(target=snap7.server.mainloop)
+        cls.process = Process(target=snap7.server.mainloop, args=[tcpport, True])
         cls.process.start()
         time.sleep(2)  # wait for server to start
 
@@ -60,11 +60,17 @@ class TestServer(unittest.TestCase):
 
     def test_read_booleans(self):
         data = self.client.db_read(0, 0, 1)
-        self.assertEqual(True, get_bool(data, 0, 0))
-        self.assertEqual(True, get_bool(data, 0, 6))
+        self.assertEqual(False, get_bool(data, 0, 0))
+        self.assertEqual(True, get_bool(data, 0, 1))
+        self.assertEqual(False, get_bool(data, 0, 2))
+        self.assertEqual(True, get_bool(data, 0, 3))
+        self.assertEqual(False, get_bool(data, 0, 4))
+        self.assertEqual(True, get_bool(data, 0, 5))
+        self.assertEqual(False, get_bool(data, 0, 6))
+        self.assertEqual(True, get_bool(data, 0, 7))
 
     def test_read_small_int(self):
-        data = self.client.db_read(0, 1, 4)
+        data = self.client.db_read(0, 10, 4)
         value_1 = get_sint(data, 0)
         value_2 = get_sint(data, 1)
         value_3 = get_sint(data, 2)
@@ -75,12 +81,12 @@ class TestServer(unittest.TestCase):
         self.assertEqual(value_4, 127)
 
     def test_read_unsigned_small_int(self):
-        data = self.client.db_read(0, 5, 2)
+        data = self.client.db_read(0, 20, 2)
         self.assertEqual(get_usint(data, 0), 0)
         self.assertEqual(get_usint(data, 1), 255)
 
     def test_read_int(self):
-        data = self.client.db_read(0, 7, 10)
+        data = self.client.db_read(0, 30, 10)
         self.assertEqual(get_int(data, 0), -32768)
         self.assertEqual(get_int(data, 2), -1234)
         self.assertEqual(get_int(data, 4), 0)
@@ -88,7 +94,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_int(data, 8), 32767)
 
     def test_read_double_int(self):
-        data = self.client.db_read(0, 17, 4 * 5)
+        data = self.client.db_read(0, 40, 4 * 5)
         self.assertEqual(get_dint(data, 0), -2147483648)
         self.assertEqual(get_dint(data, 4), -32768)
         self.assertEqual(get_dint(data, 8), 0)
@@ -96,7 +102,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_dint(data, 16), 2147483647)
 
     def test_read_real(self):
-        data = self.client.db_read(0, 37, 4 * 9)
+        data = self.client.db_read(0, 60, 4 * 9)
         self.assertAlmostEqual(get_real(data, 0), -3.402823e38, delta=-3.402823e38 * -0.0000001)
         self.assertAlmostEqual(get_real(data, 4), -3.402823e12, delta=-3.402823e12 * -0.0000001)
         self.assertAlmostEqual(get_real(data, 8), -175494351e-38, delta=-175494351e-38 * -0.0000001)
@@ -108,18 +114,18 @@ class TestServer(unittest.TestCase):
         self.assertAlmostEqual(get_real(data, 32), 3.402823466e38, delta=3.402823466e38 * 0.0000001)
 
     def test_read_string(self):
-        data = self.client.db_read(0, 73 - 2, 37 + 2)  # -2 because get_string method
-        self.assertEqual(get_string(data, 0, 37), "the brown fox jumps over the lazy dog")
+        data = self.client.db_read(0, 100, 254)
+        self.assertEqual(get_string(data, 0, 254), "the brown fox jumps over the lazy dog")
 
     def test_read_word(self):
-        data = self.client.db_read(0, 110, 4 * 4)
+        data = self.client.db_read(0, 400, 4 * 4)
         self.assertEqual(get_word(data, 0), 0x0000)
         self.assertEqual(get_word(data, 4), 0x1234)
         self.assertEqual(get_word(data, 8), 0xABCD)
         self.assertEqual(get_word(data, 12), 0xFFFF)
 
     def test_read_double_word(self):
-        data = self.client.db_read(0, 126, 8 * 4)
+        data = self.client.db_read(0, 500, 8 * 4)
         self.assertEqual(get_dword(data, 0), 0x00000000)
         self.assertEqual(get_dword(data, 8), 0x12345678)
         self.assertEqual(get_dword(data, 16), 0x1234ABCD)

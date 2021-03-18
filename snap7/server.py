@@ -291,7 +291,7 @@ class Server:
         return self.library.Srv_ClearEvents(self.pointer)
 
 
-def mainloop(tcpport: int = 1102):
+def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
     server = snap7.server.Server()
     size = 100
     DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
@@ -303,65 +303,11 @@ def mainloop(tcpport: int = 1102):
     server.register_area(snap7.types.srvAreaTM, 1, TMdata)
     server.register_area(snap7.types.srvAreaCT, 1, CTdata)
 
-    ba = bytearray(1000)
-    # 1. Bool 1 byte
-    ba[0] = 128 * 0 + 64 * 1 + 32 * 0 + 16 * 0 + 8 * 0 + 4 * 0 + 2 * 0 + 1 * 1  # BOOLEAN 1 BYTE
-
-    # 2. Small int 1 byte
-    ba[1:2] = struct.pack(">b", -128)
-    ba[2:3] = struct.pack(">b", 0)
-    ba[3:4] = struct.pack(">b", 100)
-    ba[4:5] = struct.pack(">b", 127)
-
-    # 3. Unsigned small int 1 byte
-    ba[5:6] = struct.pack("B", 0)
-    ba[6:7] = struct.pack("B", 255)
-
-    # 4. Int 2 bytes
-    ba[7:9] = struct.pack(">h", -32768)
-    ba[9:11] = struct.pack(">h", -1234)
-    ba[11:13] = struct.pack(">h", 0)
-    ba[13:15] = struct.pack(">h", 1234)
-    ba[15:17] = struct.pack(">h", 32767)
-
-    # 5. DInt 4 bytes
-    ba[17:21] = struct.pack(">i", -2147483648)
-    ba[21:25] = struct.pack(">i", -32768)
-    ba[25:29] = struct.pack(">i", 0)
-    ba[29:33] = struct.pack(">i", 32767)
-    ba[33:37] = struct.pack(">i", 2147483647)
-
-    # 6. Real 4 bytes
-    ba[37:41] = struct.pack(">f", -3.402823e38)
-    ba[41:45] = struct.pack(">f", -3.402823e12)
-    ba[45:49] = struct.pack(">f", -175494351e-38)
-    ba[49:53] = struct.pack(">f", -1.175494351e-12)
-    ba[53:57] = struct.pack(">f", 0.0)
-    ba[57:61] = struct.pack(">f", 1.175494351e-38)
-    ba[61:65] = struct.pack(">f", 1.175494351e-12)
-    ba[65:69] = struct.pack(">f", 3.402823466e12)
-    ba[69:73] = struct.pack(">f", 3.402823466e38)
-
-    # 7. String 1 byte per char
-    string = "the brown fox jumps over the lazy dog"  # len = 37
-    for letter, i in zip(string, range(73, 73 + len(string) + 1)):
-        ba[i] = ord(letter)
-
-    # 8. WORD 4 bytes
-    ba[110:110 + 4] = b"\x00\x00"
-    ba[114:114 + 4] = b"\x12\x34"
-    ba[118:118 + 4] = b"\xAB\xCD"
-    ba[122:122 + 4] = b"\xFF\xFF"
-
-    # 9 DWORD 8 bytes
-    ba[126:126 + 8] = b"\x00\x00\x00\x00"
-    ba[134:134 + 8] = b"\x12\x34\x56\x78"
-    ba[142:142 + 8] = b"\x12\x34\xAB\xCD"
-    ba[150:150 + 8] = b"\xFF\xFF\xFF\xFF"
-
-    DBdata = snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(ba)
-    DBdata = DBdata.from_buffer(ba)
-    server.register_area(snap7.types.srvAreaDB, 0, DBdata)
+    if init_standard_values:
+        ba = _init_standard_values()
+        DBdata = snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(ba)
+        DBdata = DBdata.from_buffer(ba)
+        server.register_area(snap7.types.srvAreaDB, 0, DBdata)
 
     server.start(tcpport=tcpport)
     while True:
@@ -372,3 +318,136 @@ def mainloop(tcpport: int = 1102):
             else:
                 break
         time.sleep(1)
+
+
+
+def _init_standard_values() -> bytearray:
+    ''' Standard values
+    * Boolean
+    BYTE    BIT     VALUE
+    0       0       True
+    0       1       False
+    0       2       True
+    0       3       False
+    0       4       True
+    0       5       False
+    0       6       True
+    0       7       False
+
+    * Small int
+    BYTE    VALUE
+    10      -128
+    11      0
+    12      100
+    13      127
+
+    * Unsigned small int
+    BYTE    VALUE
+    20      0
+    21      255
+
+    * Int
+    BYTE    VALUE
+    30      -32768
+    32      -1234
+    34      0
+    36      1234
+    38      32767
+
+    * Double int
+    BYTE    VALUE
+    40      -2147483648
+    44      -32768
+    48      0
+    52      32767
+    56      2147483647
+
+    * Real
+    BYTE    VALUE
+    60      -3.402823e38
+    64      -3.402823e12
+    68      -175494351e-38
+    72      -1.175494351e-12
+    76      0.0
+    80      1.175494351e-38
+    84      1.175494351e-12
+    88      3.402823466e12
+    92      3.402823466e38
+
+    * String
+    BYTE    VALUE
+    100     254|37|the brown fox jumps over the lazy dog
+    
+    * Word
+    BYTE    VALUE
+    400     \x00\x00
+    404     \x12\x34
+    408     \xAB\xCD
+    412     \xFF\xFF
+
+    * Double Word
+    BYTE    VALUE
+    500     \x00\x00\x00\x00
+    508     \x12\x34\x56\x78
+    516     \x12\x34\xAB\xCD
+    524     \xFF\xFF\xFF\xFF
+    '''
+    ba = bytearray(1000)
+    # 1. Bool 1 byte
+    ba[0] = 0b10101010
+
+    # 2. Small int 1 byte
+    ba[10:10 + 1] = struct.pack(">b", -128)
+    ba[11:11 + 1] = struct.pack(">b", 0)
+    ba[12:12 + 1] = struct.pack(">b", 100)
+    ba[13:13 + 1] = struct.pack(">b", 127)
+
+    # 3. Unsigned small int 1 byte
+    ba[20:20 + 1] = struct.pack("B", 0)
+    ba[21:21 + 1] = struct.pack("B", 255)
+
+    # 4. Int 2 bytes
+    ba[30:30 + 2] = struct.pack(">h", -32768)
+    ba[32:32 + 2] = struct.pack(">h", -1234)
+    ba[34:34 + 2] = struct.pack(">h", 0)
+    ba[36:36 + 2] = struct.pack(">h", 1234)
+    ba[38:38 + 2] = struct.pack(">h", 32767)
+
+    # 5. DInt 4 bytes
+    ba[40:40 + 4] = struct.pack(">i", -2147483648)
+    ba[44:44 + 4] = struct.pack(">i", -32768)
+    ba[48:48 + 4] = struct.pack(">i", 0)
+    ba[52:52 + 4] = struct.pack(">i", 32767)
+    ba[56:56 + 4] = struct.pack(">i", 2147483647)
+
+    # 6. Real 4 bytes
+    ba[60:60 + 4] = struct.pack(">f", -3.402823e38)
+    ba[64:64 + 4] = struct.pack(">f", -3.402823e12)
+    ba[68:68 + 4] = struct.pack(">f", -175494351e-38)
+    ba[72:72 + 4] = struct.pack(">f", -1.175494351e-12)
+    ba[76:76 + 4] = struct.pack(">f", 0.0)
+    ba[80:80 + 4] = struct.pack(">f", 1.175494351e-38)
+    ba[84:84 + 4] = struct.pack(">f", 1.175494351e-12)
+    ba[88:88 + 4] = struct.pack(">f", 3.402823466e12)
+    ba[92:92 + 4] = struct.pack(">f", 3.402823466e38)
+
+    # 7. String 1 byte per char
+    string = "the brown fox jumps over the lazy dog"  # len = 37
+    ba[100] = 254
+    ba[101] =  len(string)
+    for letter, i in zip(string, range(102, 102 + len(string) + 1)):
+        ba[i] = ord(letter)
+
+    # 8. WORD 4 bytes
+    ba[400:400 + 4] = b"\x00\x00"
+    ba[404:404 + 4] = b"\x12\x34"
+    ba[408:408 + 4] = b"\xAB\xCD"
+    ba[412:412 + 4] = b"\xFF\xFF"
+
+    # # 9 DWORD 8 bytes
+    ba[500:500 + 8] = b"\x00\x00\x00\x00"
+    ba[508:508 + 8] = b"\x12\x34\x56\x78"
+    ba[516:516 + 8] = b"\x12\x34\xAB\xCD"
+    ba[524:524 + 8] = b"\xFF\xFF\xFF\xFF"
+
+    return ba
