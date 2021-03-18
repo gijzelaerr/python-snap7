@@ -320,7 +320,6 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
         time.sleep(1)
 
 
-
 def _init_standard_values() -> bytearray:
     ''' Standard values
     * Boolean
@@ -377,7 +376,7 @@ def _init_standard_values() -> bytearray:
     * String
     BYTE    VALUE
     100     254|37|the brown fox jumps over the lazy dog
-    
+
     * Word
     BYTE    VALUE
     400     \x00\x00
@@ -392,6 +391,7 @@ def _init_standard_values() -> bytearray:
     516     \x12\x34\xAB\xCD
     524     \xFF\xFF\xFF\xFF
     '''
+
     ba = bytearray(1000)
     # 1. Bool 1 byte
     ba[0] = 0b10101010
@@ -434,7 +434,7 @@ def _init_standard_values() -> bytearray:
     # 7. String 1 byte per char
     string = "the brown fox jumps over the lazy dog"  # len = 37
     ba[100] = 254
-    ba[101] =  len(string)
+    ba[101] = len(string)
     for letter, i in zip(string, range(102, 102 + len(string) + 1)):
         ba[i] = ord(letter)
 
