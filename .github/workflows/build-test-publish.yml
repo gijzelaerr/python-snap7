@@ -1,4 +1,4 @@
-name: build-and-publish
+name: build-test-publish
 on:
   push:
     branches: [master]
