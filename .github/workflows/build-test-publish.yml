@@ -83,12 +83,6 @@ jobs:
   linux-build:
     name: Build binary wheels for linux
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - arch: x86_64
-            makefile: x86_64_linux.mk
     steps:
       - name: Checkout
         uses: actions/checkout@v2
