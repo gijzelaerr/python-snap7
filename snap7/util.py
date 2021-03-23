@@ -135,6 +135,28 @@ def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: boo
         bytearray_[byte_index] -= index_value
 
 
+def set_byte(bytearray_: bytearray, byte_index: int, _int: int):
+    """
+    Set value in bytearray to byte
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('1B', struct.pack('>b', _int))
+    bytearray_[byte_index:byte_index + 1] = _bytes
+    return bytearray_
+
+
+def get_byte(bytearray_: bytearray, byte_index: int):
+    """
+    Get byte value from bytearray.
+    WORD 8bit 1bytes Decimal number unsigned B#(0) to B#(255) => 0 to 255
+    """
+    data = bytearray_[byte_index:byte_index + 1]
+    data[0] = data[0] & 0xff
+    packed = struct.pack('1B', *data)
+    value = struct.unpack('>b', packed)[0]
+    return value
+
+
 def set_word(bytearray_: bytearray, byte_index: int, _int: int):
     """
     Set value in bytearray to word
