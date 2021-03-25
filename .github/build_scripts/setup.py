@@ -1,6 +1,7 @@
 import os
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
+from sys import platform
 
 __version__ = "1.0"
 
@@ -11,10 +12,20 @@ extras_require = {
     'doc': ['sphinx', 'sphinx_rtd_theme'],
 }
 
-
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
+ext_modules = [
+    Extension(
+        "snap7.__dummy__",
+        ["dummy.c"],
+        libraries=['snap7'],
+        include_dirs=['/usr/lib', '/usr/local/lib', 'src'],
+    ),
+]
+
+if platform == 'win32':
+    ext_modules = []
 
 setup(
     name='python-snap7',
@@ -43,4 +54,5 @@ setup(
     extras_require=extras_require,
     tests_require=tests_require,
     test_suite="tests",
+    ext_modules=ext_modules,
 )

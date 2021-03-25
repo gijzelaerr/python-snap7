@@ -1,4 +1,4 @@
-name: build-test-publish
+name: build-and-test-wheels
 on:
   push:
     branches: [master]
@@ -8,14 +8,15 @@ env:
   snap7-archive-url: https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
 jobs:
   windows-build:
-    name: Build binary wheels for windows
+    name: Build wheel for windows
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
       - name: Install choco packages
-        run: choco install 7zip wget python
+        run: |
+          choco install 7zip python wget
 
       - name: Cache snap7-archive
         id: snap7-archive
@@ -32,56 +33,22 @@ jobs:
       - name: Extract archive
         run: 7z x snap7-full-1.4.2.7z
 
-      - name: update wheel
+      - name: Update wheel
         run: python3 -m pip install wheel --upgrade
 
-      - name: build wheel
+      - name: Build wheel
         run: python3 setup.py bdist_wheel --plat-name win_amd64
 
-      - name: move dll to ./lib
-        run: .github/build_scripts/repack_wheels_windows.ps1 Win64
+      - name: Repack wheel
+        run: .github/build_scripts/repack_wheel_windows.ps1 Win64 wheelhouse/${{ runner.os }}
 
       - uses: actions/upload-artifact@v2
         with:
           name: wheels
-          path: wheelhouse/*.whl
-
-  test-windows:
-    name: testing windows
-    needs: windows-build
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install pytest
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pytest
-      
-      - uses: actions/download-artifact@v2
-        with:
-          name: wheels
-          path: wheelhouse
-
-      - name: install python-snap7
-        run: python3 -m pip install (ls wheelhouse/*win_amd64.whl)
-
-      - name: Run pytest
-        run: |
-          which pytest
-          pytest test/test_server.py test/test_util.py test/test_client.py test/test_partner.py
+          path: wheelhouse/*/*.whl
 
   linux-build:
-    name: Build binary wheels for linux
+    name: Build wheel for linux
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -107,7 +74,7 @@ jobs:
       - name: Extract archive
         run: 7z x snap7-full-1.4.2.7z
 
-      - name: copy files
+      - name: Copy files
         run: |
           mkdir src
           cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
@@ -115,23 +82,30 @@ jobs:
       - name: Install cibuildwheel and wheel
         run: python3 -m pip install cibuildwheel==1.10.0 wheel --upgrade
 
-      - name: Build wheels linux
-        run: python3 -m cibuildwheel --output-dir wheelhouse
+      - name: Build pure python wheel
+        run: python3 setup.py bdist_wheel --plat-name=linux_x86_64
+
+      - name: Build platform wheel
+        run: |
+          cp .github/build_scripts/dummy.c .github/build_scripts/setup.py ./
+          python3 -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: cp3*-manylinux_x86_64
-          CIBW_SKIP: cp35-* pp*
+          CIBW_BUILD: cp36-manylinux_x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux1
           CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f x86_64_linux.mk install
 
-      - name: move shared library to ./lib
-        run: bash .github/build_scripts/repack_wheels_linux.sh
+      - name: Repack wheel
+        run: |
+          bash .github/build_scripts/extract_lib.sh wheelhouse dist
+          bash .github/build_scripts/repack_wheel.sh dist dist wheelhouse/${{ runner.os }}
 
       - uses: actions/upload-artifact@v2
         with:
           name: wheels
-          path: wheelhouse/*.whl
+          path: wheelhouse/*/*.whl
 
   osx-build:
-    name: Build binary wheels for osx
+    name: Build wheel for osx
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -152,7 +126,7 @@ jobs:
       - name: Extract archive
         run: 7z x snap7-full-1.4.2.7z
 
-      - name: copy files
+      - name: Copy files
         run: |
           mkdir src
           cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
@@ -164,48 +138,36 @@ jobs:
       - name: Install cibuildwheel
         run: python3 -m pip install cibuildwheel==1.10.0 wheel --upgrade
 
-      - name: Build wheels
-        run: python3 -m cibuildwheel --output-dir wheelhouse
+      - name: Build pure python wheel
+        run: python3 setup.py bdist_wheel --plat-name=macosx_10_9_x86_64
+
+      - name: Build platform wheel
+        run: |
+          cp .github/build_scripts/dummy.c .github/build_scripts/setup.py ./
+          python3 -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: cp3*-macosx*
-          CIBW_SKIP: cp35-* pp*
+          CIBW_BUILD: cp36-macosx_x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux1
           CIBW_BUILD_VERBOSITY: 1
 
-      - name: move shared library to ./lib
-        run: bash .github/build_scripts/repack_wheels_macos.sh
+      - name: Repack wheel
+        run: |
+          bash .github/build_scripts/extract_lib.sh wheelhouse dist
+          bash .github/build_scripts/repack_wheel.sh dist dist wheelhouse/${{ runner.os }}
 
       - uses: actions/upload-artifact@v2
         with:
           name: wheels
-          path: wheelhouse/*.whl
+          path: wheelhouse/*/*.whl
 
-  create-matrix:
-    name: Create matrix for testing wheels
-    needs: [linux-build, osx-build]
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      
-      - uses: actions/download-artifact@v2
-        with:
-          name: wheels
-          path: wheelhouse
-      
-      - name: test run script
-        run: bash .github/build_scripts/create_matrix.sh
-      
-      - id: set-matrix
-        run: echo "::set-output name=matrix::$(bash .github/build_scripts/create_matrix.sh)"
-
-  test-linux-and-macos:
+  test-wheels:
     name: testing wheels
-    needs: create-matrix
+    needs: [windows-build, linux-build, osx-build]
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix: ${{fromJSON(needs.create-matrix.outputs.matrix)}}
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8, 3.9]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -214,7 +176,6 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.arch }}
 
       - name: Install pytest
         run: |
@@ -227,12 +188,12 @@ jobs:
           path: wheelhouse
 
       - name: install python-snap7
-        run: python3 -m pip install wheelhouse/${{ matrix.package }}
+        run: python3 -m pip install $(ls wheelhouse/${{ runner.os }}/*.whl)
 
       - name: Run pytest
         run: |
           which pytest
-          pytest test/test_server.py test/test_util.py test/test_client.py
+          pytest test/test_server.py test/test_util.py test/test_client.py test/test_mainloop.py
 
       - name: Run tests required sudo
         if: ${{ runner.os == 'Linux'}}
@@ -241,44 +202,7 @@ jobs:
       - name: Run tests required sudo
         if: ${{ runner.os == 'macOS'}}
         run: sudo pytest test/test_partner.py
-
-  publish-to-TestPyPI:
-    name: publish wheels to TestPyPI
-    needs: [test-linux-and-macos, test-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions/download-artifact@v2
-        with:
-          name: wheels
-          path: wheelhouse
-
-      - name: Publish distribution to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYTHON_SNAP7_TEST_PYPI }}
-          repository_url: https://test.pypi.org/legacy/
-          packages_dir: wheelhouse
-          verbose: true
-
-  publish-to-PyPI:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-    name: publish wheels to PyPI
-    needs: [test-linux-and-macos, test-windows]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions/download-artifact@v2
-        with:
-          name: wheels
-          path: wheelhouse
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          user: __token__
-          password: ${{ secrets.PYTHON_SNAP7_PYPI }}
-          packages_dir: wheelhouse
+      
+      - name: Run tests required sudo
+        if: ${{ runner.os == 'Windows'}}
+        run: pytest test/test_partner.py
