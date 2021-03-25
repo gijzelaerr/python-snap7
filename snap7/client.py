@@ -459,7 +459,7 @@ class Client:
         return result
 
     def as_copy_ram_to_rom(self, timeout: int = 1) -> int:
-        result = self._library.Cli_AsCopyRamToRom(self._pointer)
+        result = self._library.Cli_AsCopyRamToRom(self._pointer, timeout)
         check_error(result, context="client")
         return result
 
