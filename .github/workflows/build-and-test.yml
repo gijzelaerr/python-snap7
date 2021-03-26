@@ -87,7 +87,7 @@ jobs:
 
       - name: Build platform wheel
         run: |
-          cp .github/build_scripts/dummy.c .github/build_scripts/setup.py ./
+          cp .github/build_scripts/dummy.c ./
           python3 -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp36-manylinux_x86_64
@@ -144,7 +144,7 @@ jobs:
 
       - name: Build platform wheel
         run: |
-          cp .github/build_scripts/dummy.c .github/build_scripts/setup.py ./
+          cp .github/build_scripts/dummy.c ./
           python3 -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: cp36-macosx_x86_64
