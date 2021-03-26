@@ -1,6 +1,6 @@
 import os
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_packages, Extension
 
 __version__ = "1.0"
 
@@ -10,6 +10,17 @@ extras_require = {
     'test': tests_require,
     'doc': ['sphinx', 'sphinx_rtd_theme'],
 }
+
+ext_modules = []
+if os.environ.get('BUILD_WHEEL_WITH_EXTENSION'):
+    ext_modules = [
+        Extension(
+            "snap7.__dummy__",
+            ["dummy.c"],
+            libraries=['snap7'],
+            include_dirs=['/usr/lib', '/usr/local/lib', 'src'],
+        ),
+    ]
 
 
 def read(fname):
@@ -43,4 +54,5 @@ setup(
     extras_require=extras_require,
     tests_require=tests_require,
     test_suite="tests",
+    ext_modules=ext_modules,
 )
