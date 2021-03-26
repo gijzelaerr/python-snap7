@@ -11,6 +11,17 @@ extras_require = {
     'doc': ['sphinx', 'sphinx_rtd_theme'],
 }
 
+ext_modules = []
+if os.environ.get('BUILD_WHEEL_WITH_EXTENSION'):
+    ext_modules = [
+        Extension(
+            "snap7.__dummy__",
+            ["dummy.c"],
+            libraries=['snap7'],
+            include_dirs=['/usr/lib', '/usr/local/lib', 'src'],
+        ),
+    ]
+
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
@@ -43,4 +54,5 @@ setup(
     extras_require=extras_require,
     tests_require=tests_require,
     test_suite="tests",
+    ext_modules=ext_modules,
 )
