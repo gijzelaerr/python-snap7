@@ -1,10 +1,11 @@
-import logging
 import os
+import sys
+import logging
+import pathlib
 import platform
 from ctypes import c_char
 from ctypes.util import find_library
 from typing import Optional, Union
-import pathlib
 
 from snap7.exceptions import Snap7Exception
 
@@ -45,7 +46,11 @@ class Snap7Library:
     def __init__(self, lib_location: Optional[str] = None):
         if self.cdll:  # type: ignore
             return
-        self.lib_location = lib_location or self.lib_location or find_library('snap7') or find_locally('snap7')
+        self.lib_location = (lib_location
+                             or self.lib_location
+                             or find_in_package()
+                             or find_library('snap7')
+                             or find_locally('snap7'))
         if not self.lib_location:
             msg = "can't find snap7 library. If installed, try running ldconfig"
             raise Snap7Exception(msg)
@@ -97,4 +102,18 @@ def find_locally(fname):
     file = pathlib.Path.cwd() / f"{fname}.dll"
     if file.exists():
         return str(file)
+    return None
+
+
+def find_in_package() -> Optional[str]:
+    basedir = pathlib.Path(__file__).parent.absolute()
+    if sys.platform == "darwin":
+        lib = 'libsnap7.dylib'
+    elif sys.platform == "win32":
+        lib = 'snap7.dll'
+    else:
+        lib = 'libsnap7.so'
+    full_path = basedir.joinpath('lib', lib)
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        return str(full_path)
     return None

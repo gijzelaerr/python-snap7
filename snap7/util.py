@@ -414,7 +414,7 @@ def parse_specification(db_specification: str) -> OrderedDict:
     parsed_db_specification = OrderedDict()
 
     for line in db_specification.split('\n'):
-        if line and not (line.isspace() or line[0] == '#'):
+        if line and not line.lstrip().startswith('#'):
             index, var_name, _type = line.split('#')[0].split()
             parsed_db_specification[var_name] = (index, _type)
 

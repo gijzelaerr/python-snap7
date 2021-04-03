@@ -27,6 +27,31 @@ test_spec = """
 44      testsint0       SINT
 """
 
+test_spec_indented = """
+
+    4	    ID	         INT
+    6	    NAME	 STRING[4]
+
+ 12.0	testbool1    BOOL
+       12.1	testbool2    BOOL
+ 12.2	testbool3    BOOL
+#    12.3	testbool4    BOOL
+ #  12.4	testbool5    BOOL
+      #    12.5	testbool6    BOOL
+    #   12.6	testbool7    BOOL
+            12.7	testbool8    BOOL
+        13      testReal     REAL
+  17      testDword    DWORD
+    21      testint2     INT
+            23      testDint     DINT
+27      testWord     WORD
+    29      tests5time   S5TIME
+31      testdateandtime DATE_AND_TIME
+        43      testusint0      USINT
+44      testsint0       SINT
+"""
+
+
 _bytearray = bytearray([
     0, 0,  # test int
     4, 4, ord('t'), ord('e'), ord('s'), ord('t'),  # test string
@@ -251,6 +276,30 @@ class TestS7util(unittest.TestCase):
         self.assertIn('testDword', data)
         self.assertIn('testbool1', data)
         self.assertEqual(data['testbool5'], 0)
+
+    def test_indented_layout(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        x = row['ID']
+        y_single_space = row['testbool1']
+        y_multi_space = row['testbool2']
+        y_single_indent = row['testint2']
+        y_multi_indent = row['testbool8']
+
+        with self.assertRaises(KeyError):
+            fail_single_space = row['testbool4']
+        with self.assertRaises(KeyError):
+            fail_multiple_spaces = row['testbool5']
+        with self.assertRaises(KeyError):
+            fail_single_indent = row['testbool6']
+        with self.assertRaises(KeyError):
+            fail_multiple_indent = row['testbool7']
+
+        self.assertEqual(x, 0)
+        self.assertEqual(y_single_space, True)
+        self.assertEqual(y_multi_space, True)
+        self.assertEqual(y_single_indent, 0)
+        self.assertEqual(y_multi_indent, 0)
 
 
 def print_row(data):

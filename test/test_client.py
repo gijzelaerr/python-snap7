@@ -349,7 +349,9 @@ class TestClient(unittest.TestCase):
             self.assertRaises(Exception, self.client.get_param, non_client)
 
     def test_as_copy_ram_to_rom(self):
-        self.client.copy_ram_to_rom(timeout=1)
+        response = self.client.as_copy_ram_to_rom(timeout=1)
+        self.client.wait_as_completion(1100)
+        self.assertEqual(0, response)
 
     def test_as_ct_read(self):
         # Cli_AsCTRead
@@ -981,7 +983,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
         self.assertEqual(expected_list[2], self.client.tm_read(0, 2))
 
-    @unittest.skipIf(platform.system() == 'Windows', 'Access Violation error')
+    @unittest.skipIf(platform.system() in ['Windows', 'Darwin'], 'Access Violation error')
     def test_set_as_callback(self):
         expected = b"\x11\x11"
         self.callback_counter = 0
