@@ -76,6 +76,7 @@ _new_bytearray = bytearray(100)
 _new_bytearray[41:41 + 1] = struct.pack("B", 128)       # byte_index=41, value=128, bytes=1
 _new_bytearray[42:42 + 1] = struct.pack("B", 255)       # byte_index=41, value=255, bytes=1
 
+
 class TestS7util(unittest.TestCase):
 
     def test_get_byte(self):
