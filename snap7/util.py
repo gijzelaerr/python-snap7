@@ -140,7 +140,7 @@ def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     Set value in bytearray to byte
     """
     _int = int(_int)
-    _bytes = struct.unpack('1B', struct.pack('>b', _int))
+    _bytes = struct.pack('B', _int)
     bytearray_[byte_index:byte_index + 1] = _bytes
     return bytearray_
 
@@ -152,8 +152,8 @@ def get_byte(bytearray_: bytearray, byte_index: int) -> int:
     """
     data = bytearray_[byte_index:byte_index + 1]
     data[0] = data[0] & 0xff
-    packed = struct.pack('1B', *data)
-    value = struct.unpack('>b', packed)[0]
+    packed = struct.pack('B', *data)
+    value = struct.unpack('B', packed)[0]
     return value
 
 
