@@ -1,5 +1,6 @@
 import re
 import unittest
+import struct
 
 from snap7 import util, types
 
@@ -67,11 +68,29 @@ _bytearray = bytearray([
     32, 7, 18, 23, 50, 2, 133, 65,                 # these 8 values build the date and time 12 byte total
                                                    # data typ together, for details under this link
                                                    # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
-    254, 254, 254, 254, 254, 127                   # test small int
+    254, 254, 254, 254, 254, 127,                  # test small int
+    128,                                           # test set byte
 ])
+
+_new_bytearray = bytearray(100)
+_new_bytearray[41:41 + 1] = struct.pack("B", 128)       # byte_index=41, value=128, bytes=1
+_new_bytearray[42:42 + 1] = struct.pack("B", 255)       # byte_index=41, value=255, bytes=1
 
 
 class TestS7util(unittest.TestCase):
+
+    def test_get_byte(self):
+        test_array = bytearray(_new_bytearray)
+        byte_ = util.get_byte(test_array, 41)
+        self.assertEqual(byte_, 128)
+        byte_ = util.get_byte(test_array, 42)
+        self.assertEqual(byte_, 255)
+
+    def test_set_byte(self):
+        test_array = bytearray(_new_bytearray)
+        util.set_byte(test_array, 41, 127)
+        byte_ = util.get_byte(test_array, 41)
+        self.assertEqual(byte_, 127)
 
     def test_get_s5time(self):
         """
