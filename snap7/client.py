@@ -1,5 +1,5 @@
 """
-Snap7 client used for connection to a siemens7 server.
+Snap7 client used for connection to a siemens 7 server.
 """
 import logging
 import re
