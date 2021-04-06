@@ -50,7 +50,7 @@ class Client:
         """Creates a new `Client` instance.
 
         Args:
-            lib_location: Full path to the snap7.dll file. Defaults to None.
+            lib_location: Full path to the snap7.dll file. Optional.
 
         Examples:
             >>> import snap7
@@ -178,7 +178,7 @@ class Client:
             address: IP address of the PLC.
             rack: rack number where the PLC is located.
             slot: slot number where the CPU is located.
-            tcpport: port of the PLC. Defaults to 102.
+            tcpport: port of the PLC.
 
         Returns:
             Error code from snap7 library.
@@ -325,7 +325,7 @@ class Client:
 
         Args:
             data: buffer data.
-            block_num: new block number. Defaults to -1.
+            block_num: new block number.
 
         Returns:
             Error code from snap7 library.
@@ -720,7 +720,7 @@ class Client:
         """Performs the Copy Ram to Rom action asynchronously.
 
         Args:
-            timeout: time to wait unly fail. Default 1.
+            timeout: time to wait unly fail.
 
         Returns:
             Snap7 code.
@@ -1248,7 +1248,7 @@ class Client:
         """Performs the Copy Ram to Rom action.
 
         Args:
-            timeout: timeout time. Defaults to 1.
+            timeout: timeout time.
 
         Returns:
             Snap7 code.
@@ -1479,7 +1479,7 @@ class Client:
 
         Args:
             ssl_id: ssl id to be read.
-            index: index to be read. Default 0x0000
+            index: index to be read.
 
         Returns:
             SZL structure object.

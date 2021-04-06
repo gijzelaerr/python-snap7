@@ -33,7 +33,7 @@ class Snap7Library:
         sure the library is loaded only once.
 
     Attributes:
-        lib_location: full path to the `snap7.dll` file. Defaults to None
+        lib_location: full path to the `snap7.dll` file. Optional.
     """
     _instance = None
     lib_location: Optional[str]
@@ -49,7 +49,7 @@ class Snap7Library:
         """ Loads the snap7 library using ctypes cdll.
 
         Args:
-            lib_location: full path to the `snap7.dll` file. Defaults to None
+            lib_location: full path to the `snap7.dll` file. Optional.
 
         Raises:
             Snap7Exception: if `lib_location` is not found.
@@ -81,7 +81,7 @@ def check_error(code: int, context: str = "client") -> None:
 
     Args:
         code: error code number.
-        context: context in which is called. Defaults to "client"
+        context: context in which is called.
 
     Raises:
         Snap7Exception: if the code exists and is diferent from 1.
