@@ -33,7 +33,7 @@ class Snap7Library:
         sure the library is loaded only once.
 
     Attributes:
-        lib_location (str, Optional): full path to the `snap7.dll` file. Defaults to None
+        lib_location: full path to the `snap7.dll` file. Defaults to None
     """
     _instance = None
     lib_location: Optional[str]
@@ -49,7 +49,7 @@ class Snap7Library:
         """ Loads the snap7 library using ctypes cdll.
 
         Args:
-            lib_location (str, Optional): full path to the `snap7.dll` file. Defaults to None
+            lib_location: full path to the `snap7.dll` file. Defaults to None
 
         Raises:
             Snap7Exception: if `lib_location` is not found.
@@ -80,8 +80,8 @@ def check_error(code: int, context: str = "client") -> None:
         and an error is raised.
 
     Args:
-        code (int): error code number.
-        context (str, Optional): context in which is called. Defaults to "client"
+        code: error code number.
+        context: context in which is called. Defaults to "client"
 
     Raises:
         Snap7Exception: if the code exists and is diferent from 1.
@@ -96,11 +96,11 @@ def error_text(error, context: str = "client") -> bytes:
     """Returns a textual explanation of a given error number
 
     Args:
-        error (int): an error integer
-        context (str): context in which is called from, server, client or partner
+        error: an error integer
+        context: context in which is called from, server, client or partner
 
     Returns:
-        bytes: the error.
+        The error.
 
     Raises:
         TypeError: if the context is not in `["client", "server", "partner"]`
