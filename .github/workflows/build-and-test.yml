@@ -16,7 +16,8 @@ jobs:
 
       - name: Install choco packages
         run: |
-          choco install 7zip python wget
+          choco install 7zip python
+          choco install --allow-downgrade wget --version 1.20.3.20190531
 
       - name: Cache snap7-archive
         id: snap7-archive
