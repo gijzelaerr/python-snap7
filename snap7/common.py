@@ -29,9 +29,11 @@ class ADict(dict):
 
 
 class Snap7Library:
-    """
-    Snap7 loader and encapsulator. We make this a singleton to make
-    sure the library is loaded only once.
+    """Snap7 loader and encapsulator. We make this a singleton to make
+        sure the library is loaded only once.
+
+    Attributes:
+        lib_location (str, Optional): full path to the `snap7.dll` file. Defaults to None
     """
     _instance = None
     lib_location: Optional[str]
@@ -44,6 +46,14 @@ class Snap7Library:
         return cls._instance
 
     def __init__(self, lib_location: Optional[str] = None):
+        """ Loads the snap7 library using ctypes cdll.
+
+        Args:
+            lib_location (str, Optional): full path to the `snap7.dll` file. Defaults to None
+
+        Raises:
+            Snap7Exception: if `lib_location` is not found.
+        """
         if self.cdll:  # type: ignore
             return
         self.lib_location = (lib_location
@@ -58,16 +68,23 @@ class Snap7Library:
 
 
 def load_library(lib_location: Optional[str] = None):
-    """
-    :returns: a ctypes cdll object with the snap7 shared library loaded.
+    """ 
+    Returns:
+        cdll: a ctypes cdll object with the snap7 shared library loaded.
     """
     return Snap7Library(lib_location).cdll
 
 
-def check_error(code: int, context: str = "client"):
-    """
-    check if the error code is set. If so, a Python log message is generated
-    and an error is raised.
+def check_error(code: int, context: str = "client") -> None:
+    """Check if the error code is set. If so, a Python log message is generated
+        and an error is raised.
+    
+    Args:
+        code (int): error code number.
+        context (str, Optional): context in which is called. Defaults to "client"
+
+    Raises:
+        Snap7Exception: if the code exists and is diferent from 1.
     """
     if code and code != 1:
         error = error_text(code, context)
@@ -78,9 +95,15 @@ def check_error(code: int, context: str = "client"):
 def error_text(error, context: str = "client") -> bytes:
     """Returns a textual explanation of a given error number
 
-    :param error: an error integer
-    :param context: server, client or partner
-    :returns: the error string
+    Args:
+        error (int): an error integer
+        context (str): context in which is called from, server, client or partner
+
+    Returns:
+        bytes: the error.
+
+    Raises:
+        TypeError: if the context is not in `["client", "server", "partner"]`
     """
     if context not in ("client", "server", "partner"):
         raise TypeError(f"Unkown context {context} used, should be either client, server or partner")
