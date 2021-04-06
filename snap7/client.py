@@ -150,9 +150,9 @@ class Client:
         Examples:
             >>> cpu_info = client.get_cpu_info()
             >>> print(cpu_info)
-            "<S7CpuInfo ModuleTypeName: b'CPU 315-2 PN/DP' 
-                SerialNumber: b'S C-C2UR28922012' 
-                ASName: b'SNAP7-SERVER' Copyright: b'Original Siemens Equipment' 
+            "<S7CpuInfo ModuleTypeName: b'CPU 315-2 PN/DP'
+                SerialNumber: b'S C-C2UR28922012'
+                ASName: b'SNAP7-SERVER' Copyright: b'Original Siemens Equipment'
                 ModuleName: b'CPU 315-2 PN/DP'>
         """
         info = snap7.types.S7CpuInfo()
@@ -810,7 +810,7 @@ class Client:
             >>> data = (ctypes.c_uint8 * size_to_read)()  # In this ctypes array data will be stored.
             >>> result = client.as_db_read(1, 0, size_to_read, data)
             >>> result  # 0 = success
-            0 
+            0
         """
         result = self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data))
         check_error(result, context="client")
