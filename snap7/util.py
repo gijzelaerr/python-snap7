@@ -97,7 +97,7 @@ import time
 logger = logging.getLogger(__name__)
 
 
-def utc2local(utc: Union[date, datetime]) -> datetime:
+def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:
     """Returns the local datetime
 
     Args:
@@ -210,7 +210,7 @@ def get_byte(bytearray_: bytearray, byte_index: int) -> int:
 
 def set_word(bytearray_: bytearray, byte_index: int, _int: int):
     """Set value in bytearray to word
-    
+
     Notes:
         Word datatype is 2 bytes long.
 
@@ -256,7 +256,7 @@ def get_word(bytearray_: bytearray, byte_index: int) -> int:
 
 def set_int(bytearray_: bytearray, byte_index: int, _int: int):
     """Set value in bytearray to int
-    
+
     Notes:
         An datatype `int` in the PLC consists of two `bytes`.
 
@@ -306,7 +306,7 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
-def set_real(bytearray_: bytearray, byte_index: int, real: float) -> bytearray:
+def set_real(bytearray_: bytearray, byte_index: int, real) -> bytearray:
     """Set Real value
 
     Notes:
@@ -332,6 +332,7 @@ def set_real(bytearray_: bytearray, byte_index: int, real: float) -> bytearray:
     for i, b in enumerate(_bytes):
         bytearray_[byte_index + i] = b
     return bytearray_
+
 
 def get_real(bytearray_: bytearray, byte_index: int) -> float:
     """Get real value.
@@ -478,7 +479,7 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int):
 
 def get_dint(bytearray_: bytearray, byte_index: int) -> int:
     """Get dint value from bytearray.
-    
+
     Notes:
         Datatype `dint` consists in 4 bytes in the PLC.
         Maximum possible value is 2147483647.
@@ -505,7 +506,7 @@ def get_dint(bytearray_: bytearray, byte_index: int) -> int:
 
 def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
     """Set value in bytearray to dint
-    
+
     Notes:
         Datatype `dint` consists in 4 bytes in the PLC.
         Maximum possible value is 2147483647.
@@ -695,7 +696,7 @@ def parse_specification(db_specification: str) -> OrderedDict:
     """Create a db specification derived from a
         dataview of a db in which the byte layout
         is specified
-    
+
     Args:
         db_specification: string formatted table with the indexes, aliases and types.
 
@@ -819,7 +820,7 @@ class DB:
 
     def set_data(self, bytearray_: bytearray):
         """Set the new buffer data from the PLC to the current instance.
-        
+
         Args:
             bytearray_: buffer to save.
 
@@ -934,7 +935,7 @@ class DB_Row:
     def get_offset(self, byte_index: Union[str, int]) -> int:
         """ Calculate correct beginning position for a row
             the db_offset = row_size * index
-        
+
         Args:
             byte_index: byte index from where to start reading from.
 
@@ -959,7 +960,7 @@ class DB_Row:
         Returns:
             Value read according to the `type_`
         """
-        
+
         bytearray_ = self.get_bytearray()
 
         if type_ == 'BOOL':
