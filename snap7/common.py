@@ -68,7 +68,7 @@ class Snap7Library:
 
 
 def load_library(lib_location: Optional[str] = None):
-    """ 
+    """Loads the `snap7.dll` library.
     Returns:
         cdll: a ctypes cdll object with the snap7 shared library loaded.
     """
@@ -78,7 +78,7 @@ def load_library(lib_location: Optional[str] = None):
 def check_error(code: int, context: str = "client") -> None:
     """Check if the error code is set. If so, a Python log message is generated
         and an error is raised.
-    
+
     Args:
         code (int): error code number.
         context (str, Optional): context in which is called. Defaults to "client"

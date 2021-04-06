@@ -246,8 +246,7 @@ class Client:
             block_num (int): number of block.
 
         Returns:
-            :obj:`tuple` of :obj:`bytearray` and :obj:`int`: 
-                tuple of the buffer and size.
+            :obj:`tuple` of :obj:`bytearray` and :obj:`int`: tuple of the buffer and size.
         """
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
