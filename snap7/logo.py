@@ -47,7 +47,7 @@ class Logo:
 
     def destroy(self) -> int:
         """Destroy a client.
-        
+
         Returns:
             Error code from snap7 library.
 
@@ -57,7 +57,7 @@ class Logo:
 
     def disconnect(self) -> int:
         """Disconnect a client.
-        
+
         Returns:
             Error code from snap7 library.
         """
@@ -301,7 +301,7 @@ class Logo:
         Notes:
             This function has a bug, that returns `True` when the connection
                 is lost. This comes from the original `snap7 library`.
-        
+
         Returns:
             True if connected.
         """
@@ -331,7 +331,7 @@ class Logo:
 
         Args:
             number: Parameter type number
-        
+
         Returns:
             Parameter value
         """

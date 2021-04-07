@@ -138,7 +138,7 @@ def find_locally(fname: str = "snap7") -> Optional[str]:
 
 def find_in_package() -> Optional[str]:
     """Find the `snap7.dll` file according to the os used.
-    
+
     Returns:
         Full path to the `snap7.dll` file.
     """

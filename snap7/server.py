@@ -53,7 +53,7 @@ class Server:
         Args:
             event: an PSrvEvent struct object
 
-        Returns: 
+        Returns:
             The error string
         """
         logger.debug(f"error text for {hex(event.EvtCode)}")
@@ -136,7 +136,7 @@ class Server:
                 usrptr: not used
                 pevent: pointer to snap7 event struct
                 size:
-            
+
             Returns:
                 Should return an int
             """
@@ -160,7 +160,7 @@ class Server:
     @error_wrap
     def start(self, tcpport: int = 102):
         """Starts the server.
-        
+
         Args:
             tcpport: port that the server will listen. Optional.
         """
@@ -381,7 +381,6 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
         tcpport: port that the server will listen.
         init_standard_values: if `True` will init some defaults values to be read on DB0.
     """
-
 
     server = snap7.server.Server()
     size = 100
