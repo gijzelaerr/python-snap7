@@ -5,7 +5,7 @@ import pathlib
 import platform
 from ctypes import c_char
 from ctypes.util import find_library
-from typing import Optional, Union
+from typing import Optional
 
 from snap7.exceptions import Snap7Exception
 
@@ -121,7 +121,15 @@ def error_text(error, context: str = "client") -> bytes:
     return text.value
 
 
-def find_locally(fname):
+def find_locally(fname: str = "snap7") -> Optional[str]:
+    """Finds the `snap7.dll` file in the local project directory.
+
+    Args:
+        fname: file name to search for. Optional.
+
+    Returns:
+        Full path to the `snap7.dll` file.
+    """
     file = pathlib.Path.cwd() / f"{fname}.dll"
     if file.exists():
         return str(file)
@@ -129,6 +137,11 @@ def find_locally(fname):
 
 
 def find_in_package() -> Optional[str]:
+    """Find the `snap7.dll` file according to the os used.
+    
+    Returns:
+        Full path to the `snap7.dll` file.
+    """
     basedir = pathlib.Path(__file__).parent.absolute()
     if sys.platform == "darwin":
         lib = 'libsnap7.dylib'
