@@ -30,9 +30,11 @@ class Server:
     """
 
     def __init__(self, log: bool = True):
-        """
-        Create a fake S7 server. set log to false if you want to disable
-        event logging to python logging.
+        """Create a fake S7 server. set log to false if you want to disable
+            event logging to python logging.
+
+        Args:
+            log: `True` for enabling the event logging. Optinoal.
         """
         self._read_callback = None
         self._callback = Optional[Callable[..., Any]]
@@ -48,8 +50,11 @@ class Server:
     def event_text(self, event: snap7.types.SrvEvent) -> str:
         """Returns a textual explanation of a given event object
 
-        :param event: an PSrvEvent struct object
-        :returns: the error string
+        Args:
+            event: an PSrvEvent struct object
+
+        Returns: 
+            The error string
         """
         logger.debug(f"error text for {hex(event.EvtCode)}")
         len_ = 1024
@@ -61,8 +66,7 @@ class Server:
         return text.value.decode('ascii')
 
     def create(self):
-        """
-        create the server.
+        """Create the server.
         """
         logger.info("creating server")
         self.library.Srv_Create.restype = snap7.types.S7Object
@@ -71,29 +75,38 @@ class Server:
     @error_wrap
     def register_area(self, area_code: int, index: int, userdata):
         """Shares a memory area with the server. That memory block will be
-        visible by the clients.
+            visible by the clients.
+
+        Args:
+            area_code: memory area to register.
+            index: number of area to write.
+            userdata: buffer with the data to write.
+
+        Returns:
+            Error code from snap7 library.
         """
         size = ctypes.sizeof(userdata)
         logger.info(f"registering area {area_code}, index {index}, size {size}")
-        size = ctypes.sizeof(userdata)
         return self.library.Srv_RegisterArea(self.pointer, area_code, index, ctypes.byref(userdata), size)
 
     @error_wrap
     def set_events_callback(self, call_back: Callable[..., Any]) -> int:
         """Sets the user callback that the Server object has to call when an
-        event is created.
+            event is created.
         """
         logger.info("setting event callback")
         callback_wrap: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(snap7.types.SrvEvent), ctypes.c_int)
 
         def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: snap7.types.SrvEvent, size: int) -> int:
-            """
-            Wraps python function into a ctypes function
+            """Wraps python function into a ctypes function
 
-            :param usrptr: not used
-            :param pevent: pointer to snap7 event struct
-            :param size:
-            :returns: should return an int
+            Args:
+                usrptr: not used
+                pevent: pointer to snap7 event struct
+                size:
+
+            Returns:
+                Should return an int
             """
             logger.info(f"callback event: {self.event_text(pevent.contents)}")
             call_back(pevent.contents)
@@ -105,11 +118,11 @@ class Server:
 
     @error_wrap
     def set_read_events_callback(self, call_back: Callable[..., Any]):
-        """
-        Sets the user callback that the Server object has to call when a Read
-        event is created.
+        """Sets the user callback that the Server object has to call when a Read
+            event is created.
 
-        :param call_back: a callback function that accepts a pevent argument.
+        Args:
+            call_back: a callback function that accepts a pevent argument.
         """
         logger.info("setting read event callback")
         callback_wrapper: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
@@ -117,13 +130,15 @@ class Server:
                                                                 ctypes.c_int)
 
         def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: snap7.types.SrvEvent, size: int) -> int:
-            """
-            Wraps python function into a ctypes function
+            """Wraps python function into a ctypes function
 
-            :param usrptr: not used
-            :param pevent: pointer to snap7 event struct
-            :param size:
-            :returns: should return an int
+            Args:
+                usrptr: not used
+                pevent: pointer to snap7 event struct
+                size:
+            
+            Returns:
+                Should return an int
             """
             logger.info(f"callback event: {self.event_text(pevent.contents)}")
             call_back(pevent.contents)
@@ -134,8 +149,7 @@ class Server:
                                                       self._read_callback)
 
     def _set_log_callback(self):
-        """Sets a callback that logs the events
-        """
+        """Sets a callback that logs the events"""
         logger.debug("setting up event logger")
 
         def log_callback(event):
@@ -145,8 +159,10 @@ class Server:
 
     @error_wrap
     def start(self, tcpport: int = 102):
-        """
-        start the server.
+        """Starts the server.
+        
+        Args:
+            tcpport: port that the server will listen. Optional.
         """
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
@@ -156,25 +172,22 @@ class Server:
 
     @error_wrap
     def stop(self):
-        """
-        stop the server.
-        """
+        """Stop the server."""
         logger.info("stopping server")
         return self.library.Srv_Stop(self.pointer)
 
     def destroy(self):
-        """
-        destroy the server.
-        """
+        """Destroy the server."""
         logger.info("destroying server")
         if self.library:
             self.library.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self) -> Tuple[str, str, int]:
         """Reads the server status, the Virtual CPU status and the number of
-        the clients connected.
+            the clients connected.
 
-        :returns: server status, cpu status, client count
+        Returns:
+            Server status, cpu status, client count
         """
         logger.debug("get server status")
         server_status = ctypes.c_int()
@@ -194,13 +207,29 @@ class Server:
     @error_wrap
     def unregister_area(self, area_code: int, index: int):
         """'Unshares' a memory area previously shared with Srv_RegisterArea().
-        That memory block will be no longer visible by the clients.
+
+        Notes:
+            That memory block will be no longer visible by the clients.
+
+        Args:
+            area_code: memory area.
+            index: number of the memory area.
+
+        Returns:
+            Error code from snap7 library.
         """
         return self.library.Srv_UnregisterArea(self.pointer, area_code, index)
 
     @error_wrap
     def unlock_area(self, code: int, index: int):
         """Unlocks a previously locked shared memory area.
+
+        Args:
+            code: memory area.
+            index: number of the memory area.
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.debug(f"unlocking area code {code} index {index}")
         return self.library.Srv_UnlockArea(self.pointer, code, index)
@@ -208,14 +237,27 @@ class Server:
     @error_wrap
     def lock_area(self, code: int, index: int):
         """Locks a shared memory area.
+
+        Args:
+            code: memory area.
+            index: number of the memory area.
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.debug(f"locking area code {code} index {index}")
         return self.library.Srv_LockArea(self.pointer, code, index)
 
     @error_wrap
     def start_to(self, ip: str, tcpport: int = 102):
-        """
-        start server on a specific interface.
+        """Start server on a specific interface.
+
+        Args:
+            ip: IPV4 address where the server is located.
+            tcpport: port that the server will listening.
+
+        Raises:
+            :obj:`ValueError`: if the `ivp4` is not a valid IPV4
         """
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
@@ -228,6 +270,13 @@ class Server:
     @error_wrap
     def set_param(self, number: int, value: int):
         """Sets an internal Server object parameter.
+
+        Args:
+            number: number of the parameter.
+            value: value to be set.
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.debug(f"setting param number {number} to {value}")
         return self.library.Srv_SetParam(self.pointer, number,
@@ -236,6 +285,13 @@ class Server:
     @error_wrap
     def set_mask(self, kind: int, mask: int):
         """Writes the specified filter mask.
+
+        Args:
+            kind:
+            mask:
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.debug(f"setting mask kind {kind} to {mask}")
         return self.library.Srv_SetMask(self.pointer, kind, mask)
@@ -243,6 +299,15 @@ class Server:
     @error_wrap
     def set_cpu_status(self, status: int):
         """Sets the Virtual CPU status.
+
+        Args:
+            status: :obj:`snap7.types.cpu_statuses` object type.
+
+        Returns:
+            Error code from snap7 library.
+
+        Raises:
+            :obj:`ValueError`: if `status` is not in :obj:`snap7.types.cpu_statuses`.
         """
         if status not in snap7.types.cpu_statuses:
             raise ValueError(f"The cpu state ({status}) is invalid")
@@ -251,6 +316,9 @@ class Server:
 
     def pick_event(self) -> Optional[snap7.types.SrvEvent]:
         """Extracts an event (if available) from the Events queue.
+
+        Returns:
+            Server event.
         """
         logger.debug("checking event queue")
         event = snap7.types.SrvEvent()
@@ -266,6 +334,12 @@ class Server:
 
     def get_param(self, number) -> int:
         """Reads an internal Server object parameter.
+
+        Args:
+            number: number of the parameter to be set.
+
+        Returns:
+            Value of the parameter.
         """
         logger.debug(f"retreiving param number {number}")
         value = ctypes.c_int()
@@ -276,6 +350,12 @@ class Server:
 
     def get_mask(self, kind: int) -> ctypes.c_uint32:
         """Reads the specified filter mask.
+
+        Args:
+            kind:
+
+        Returns:
+            Mask
         """
         logger.debug(f"retrieving mask kind {kind}")
         mask = snap7.types.longword()
@@ -286,12 +366,23 @@ class Server:
     @error_wrap
     def clear_events(self) -> int:
         """Empties the Event queue.
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.debug("clearing event queue")
         return self.library.Srv_ClearEvents(self.pointer)
 
 
 def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
+    """Init a fake Snap7 server with some default values.
+
+    Args:
+        tcpport: port that the server will listen.
+        init_standard_values: if `True` will init some defaults values to be read on DB0.
+    """
+
+
     server = snap7.server.Server()
     size = 100
     DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
