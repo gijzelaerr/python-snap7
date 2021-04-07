@@ -40,10 +40,10 @@ class Client:
         True
         >>> data = client.db_read(1, 0, 4)
         >>> data
-        bytearray(b"\x00\x00\x00\x00")
+        bytearray(b"\\x00\\x00\\x00\\x00")
         >>> data[3] = 0b00000001
         >>> data
-        bytearray(b'\x00\x00\x00\x01')
+        bytearray(b'\\x00\\x00\\x00\\x01')
         >>> data.db_write(1, 0, data)
     """
 
@@ -216,7 +216,7 @@ class Client:
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = client.db_read(1, 10, 4)  # reads the db number 1 starting from the byte 10 until byte 14.
             >>> buffer
-            bytearray(b'\x00\x00')
+            bytearray(b'\\x00\\x00')
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
@@ -355,7 +355,7 @@ class Client:
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = client.db_get(1)  # reads the db number 1.
             >>> buffer
-            bytearray(b"\x00\x00\x00\x00\x00\x00\x00\x00...<truncated>\x00\x00")
+            bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00...<truncated>\\x00\\x00")
         """
         logger.debug(f"db_get db_number: {db_number}")
         _buffer = buffer_type()
@@ -387,7 +387,7 @@ class Client:
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = client.read_area(snap7.types.Areas.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
             >>> buffer
-            bytearray(b'\x00\x00')
+            bytearray(b'\\x00\\x00')
         """
         if area not in Areas:
             raise ValueError(f"{area} is not implemented in snap7.types")

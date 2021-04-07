@@ -271,7 +271,7 @@ def set_int(bytearray_: bytearray, byte_index: int, _int: int):
     Examples:
         >>> data = bytearray(2)
         >>> snap7.util.set_int(data, 0, 255)
-            bytearray(b'\x00\xff')
+            bytearray(b'\\x00\\xff')
     """
     # make sure were dealing with an int
     _int = int(_int)
@@ -375,7 +375,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
         >>> data = bytearray(20)
         >>> snap7.util.set_string(data, 0, "hello world", 255)
         >>> data
-            bytearray(b'\x00\x0bhello world\x00\x00\x00\x00\x00\x00\x00')
+            bytearray(b'\\x00\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
     """
     if not isinstance(value, str):
         raise TypeError(f"Value value:{value} is not from Type string")
