@@ -23,14 +23,15 @@ class Logo:
     There are two main comfort functions available :func:`Logo.read` and :func:`Logo.write`.
     This functions realize a high level access to the VM addresses of the Siemens Logo just use the form:
 
-    * V10.3 for bit values
-    * V10 for the complete byte
-    * VW12 for a word (used for analog values)
-
-    For more information see examples for Siemens Logo 7 and 8
+    Notes:
+        V10.3 for bit values
+        V10 for the complete byte
+        VW12 for a word (used for analog values)
+        For more information see examples for Siemens Logo 7 and 8
     """
 
     def __init__(self):
+        """Creates a new instance of :obj:`Logo`"""
         self.pointer = None
         self.library = load_library()
         self.create()
@@ -39,23 +40,26 @@ class Logo:
         self.destroy()
 
     def create(self):
-        """
-        create a SNAP7 client.
-        """
+        """Create a SNAP7 client."""
         logger.info("creating snap7 client")
         self.library.Cli_Create.restype = c_void_p
         self.pointer = S7Object(self.library.Cli_Create())
 
-    def destroy(self):
-        """
-        destroy a client.
+    def destroy(self) -> int:
+        """Destroy a client.
+
+        Returns:
+            Error code from snap7 library.
+
         """
         logger.info("destroying snap7 client")
         return self.library.Cli_Destroy(byref(self.pointer))
 
     def disconnect(self) -> int:
-        """
-        disconnect a client.
+        """Disconnect a client.
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.info("disconnecting snap7 client")
         result = self.library.Cli_Disconnect(self.pointer)
@@ -63,13 +67,18 @@ class Logo:
         return result
 
     def connect(self, ip_address: str, tsap_snap7: int, tsap_logo: int, tcpport: int = 102) -> int:
-        """
-        Connect to a Siemens LOGO server.
-        Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
+        """Connect to a Siemens LOGO server.
 
-        :param ip_address: IP ip_address of server
-        :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
-        :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
+        Notes:
+            Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
+
+        Args:
+            ip_address: IP ip_address of server
+            tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
+            tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.info(f"connecting to {ip_address}:{tcpport} tsap_snap7 {tsap_snap7} tsap_logo {tsap_logo}")
         # special handling for Siemens Logo
@@ -82,11 +91,13 @@ class Logo:
         return result
 
     def read(self, vm_address: str):
-        """
-        Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
+        """Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
 
-        :param vm_address: of Logo memory (e.g. V30.1, VW32, V24)
-        :returns: integer
+        Args:
+            vm_address: of Logo memory (e.g. V30.1, VW32, V24)
+
+        Returns:
+            integer
         """
         area = types.Areas.DB
         db_number = 1
@@ -141,12 +152,14 @@ class Logo:
             return struct.unpack_from(">l", data)[0]
 
     def write(self, vm_address: str, value: int) -> int:
-        """
-        Writes to VM addresses of Siemens Logo.
-        Example: write("VW10", 200) or write("V10.3", 1)
+        """Writes to VM addresses of Siemens Logo.
 
-        :param vm_address: write offset
-        :param value: integer
+        Args:
+            vm_address: write offset
+            value: integer
+
+        Examples:
+            >>> write("VW10", 200) or write("V10.3", 1)
         """
         area = types.Areas.DB
         db_number = 1
@@ -204,13 +217,15 @@ class Logo:
         return result
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
-        """
-        This is a lean function of Cli_ReadArea() to read PLC DB.
+        """This is a lean function of Cli_ReadArea() to read PLC DB.
 
-        :param db_number: for Logo only DB=1
-        :param start: start address for Logo7 0..951 / Logo8 0..1469
-        :param size: in bytes
-        :returns: array of bytes
+        Args:
+            db_number: for Logo only DB=1
+            start: start address for Logo7 0..951 / Logo8 0..1469
+            size: in bytes
+
+        Returns:
+            Array of bytes
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
@@ -223,12 +238,15 @@ class Logo:
         return bytearray(data)
 
     def db_write(self, db_number: int, start: int, data: bytearray) -> int:
-        """
-        Writes to a DB object.
+        """Writes to a DB object.
 
-        :param db_number: for Logo only DB=1
-        :param start: start address for Logo7 0..951 / Logo8 0..1469
-        :param data: bytearray
+        Args:
+            db_number: for Logo only DB=1
+            start: start address for Logo7 0..951 / Logo8 0..1469
+            data: bytearray
+
+        Returns:
+            Error code from snap7 library.
         """
         wordlen = WordLen.Byte
         type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
@@ -240,13 +258,19 @@ class Logo:
         return result
 
     def set_connection_params(self, ip_address: str, tsap_snap7: int, tsap_logo: int):
-        """
-        Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
-        This function must be called just before Cli_Connect().
+        """Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
 
-        :param ip_address: IP ip_address of server
-        :param tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
-        :param tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
+        Notes:
+            This function must be called just before Cli_Connect().
+
+        Args:
+            ip_address: IP ip_address of server
+            tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
+            tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
+
+        Raises:
+            :obj:`ValueError`: if the `ip_address` is not an IPV4.
+            :obj:`Snap7Exception`: if the snap7 error code is diferent from 0.
         """
         if not re.match(ipv4, ip_address):
             raise ValueError(f"{ip_address} is invalid ipv4")
@@ -257,11 +281,14 @@ class Logo:
             raise Snap7Exception("The parameter was invalid")
 
     def set_connection_type(self, connection_type: int):
-        """
-        Sets the connection resource type, i.e the way in which the Clients
-        connects to a PLC.
+        """Sets the connection resource type, i.e the way in which the Clients
+            connects to a PLC.
 
-        :param connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
+        Args:
+            connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
+
+        Raises:
+            :obj:`Snap7Exception`: if the snap7 error code is diferent from 0.
         """
         result = self.library.Cli_SetConnectionType(self.pointer,
                                                     c_uint16(connection_type))
@@ -269,10 +296,14 @@ class Logo:
             raise Snap7Exception("The parameter was invalid")
 
     def get_connected(self) -> bool:
-        """
-        Returns the connection status
+        """Returns the connection status
 
-        :returns: a boolean that indicates if connected.
+        Notes:
+            This function has a bug, that returns `True` when the connection
+                is lost. This comes from the original `snap7 library`.
+
+        Returns:
+            True if connected.
         """
         connected = c_int32()
         result = self.library.Cli_GetConnected(self.pointer, byref(connected))
@@ -282,8 +313,12 @@ class Logo:
     def set_param(self, number: int, value):
         """Sets an internal Server object parameter.
 
-        :param number: Parameter type number
-        :param value: Parameter value
+        Args:
+            number: Parameter type number
+            value: Parameter value
+
+        Returns:
+            Error code from snap7 library.
         """
         logger.debug(f"setting param number {number} to {value}")
         type_ = param_types[number]
@@ -294,8 +329,11 @@ class Logo:
     def get_param(self, number) -> int:
         """Reads an internal Logo object parameter.
 
-        :param number: Parameter type number
-        :returns: Parameter value
+        Args:
+            number: Parameter type number
+
+        Returns:
+            Parameter value
         """
         logger.debug(f"retreiving param number {number}")
         type_ = param_types[number]
