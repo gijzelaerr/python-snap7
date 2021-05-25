@@ -1,0 +1,87 @@
+name: build-and-test-wheels
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+env:
+  snap7-archive-url: https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
+jobs:
+  arm64-build:
+    name: Build arm64 wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Cache snap7-archive
+        id: snap7-archive
+        uses: actions/cache@v2
+        with:
+          path: snap7-full-1.4.2.7z
+          key: ${{ env.snap7-archive-url }}
+
+      - name: Get snap7
+        if: steps.snap7-archive.outputs.cache-hit != 'true'
+        run: |
+          wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
+      - name: Extract archive
+        run: 7z x snap7-full-1.4.2.7z
+
+      - name: Copy files
+        run: |
+          mkdir src
+          cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
+          cp .github/build_scripts/dummy.c ./
+          cp .github/build_scripts/aarch64-linux-gnu.mk snap7-full-1.4.2/build/unix/
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: arm64
+
+      - name: Build wheels
+        uses: joerick/cibuildwheel@v1.11.0
+        with:
+          output-dir: wheelhouse
+        env:
+          CIBW_ARCHS_LINUX: aarch64
+          CIBW_BUILD: cp36-*
+          CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
+          CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f aarch64-linux-gnu.mk install
+
+      - name: Build pure python wheel
+        run: python3 setup.py bdist_wheel --plat-name=manylinux2014_aarch64
+
+      - name: Repack wheel
+        run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: wheels
+          path: wheelhouse/*/*.whl
+  test-wheel:
+    name: testing wheel
+    needs: arm64-build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: actions/download-artifact@v2
+        with:
+          name: wheels
+          path: wheelhouse
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        with:
+          platforms: arm64
+      - name: Run tests in docker:arm64v8
+        run: |
+          docker run --rm --interactive -v $PWD/test:/test -v $PWD/wheelhouse:/wheelhouse "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
+          python -m pip install pytest $(ls wheelhouse/${{ runner.os }}/*.whl)
+          python -m pytest test/test_server.py test/test_util.py test/test_client.py test/test_mainloop.py test/test_partner.py
+          EOF

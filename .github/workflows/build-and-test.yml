@@ -15,9 +15,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install choco packages
-        run: |
-          choco install 7zip python
-          choco install --allow-downgrade wget --version 1.20.3.20190531
+        run: choco install --allow-downgrade wget --version 1.20.3.20190531
 
       - name: Cache snap7-archive
         id: snap7-archive
@@ -55,11 +53,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install Debian packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y python3-pip python3-setuptools p7zip
-
       - name: Cache snap7-archive
         id: snap7-archive
         uses: actions/cache@v2
@@ -69,8 +62,7 @@ jobs:
 
       - name: Get snap7
         if: steps.snap7-archive.outputs.cache-hit != 'true'
-        run: |
-          wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
+        run: wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
 
       - name: Extract archive
         run: 7z x snap7-full-1.4.2.7z
@@ -79,17 +71,14 @@ jobs:
         run: |
           mkdir src
           cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
-
-      - name: Install cibuildwheel and wheel
-        run: python3 -m pip install cibuildwheel==1.10.0 wheel --upgrade
-
+          cp .github/build_scripts/dummy.c ./
       - name: Build pure python wheel
         run: python3 setup.py bdist_wheel --plat-name=linux_x86_64
 
       - name: Build platform wheel
-        run: |
-          cp .github/build_scripts/dummy.c ./
-          python3 -m cibuildwheel --output-dir wheelhouse
+        uses: joerick/cibuildwheel@v1.11.0
+        with:
+          output-dir: wheelhouse
         env:
           CIBW_BUILD: cp36-manylinux_x86_64
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux1
@@ -97,11 +86,10 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f x86_64_linux.mk install
 
       - name: Repack wheel
-        run: |
-          bash .github/build_scripts/extract_lib.sh wheelhouse dist
-          bash .github/build_scripts/repack_wheel.sh dist dist wheelhouse/${{ runner.os }}
+        run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
-      - uses: actions/upload-artifact@v2
+      - name: upload artifacts
+        uses: actions/upload-artifact@v2
         with:
           name: wheels
           path: wheelhouse/*/*.whl
@@ -132,6 +120,7 @@ jobs:
         run: |
           mkdir src
           cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
+          cp .github/build_scripts/dummy.c ./
           pushd snap7-full-1.4.2/build/osx/
           make -f x86_64_osx.mk all
           cp ../bin/x86_64-osx/libsnap7.dylib  /usr/local/lib
@@ -144,20 +133,19 @@ jobs:
         run: python3 setup.py bdist_wheel --plat-name=macosx_10_9_x86_64
 
       - name: Build platform wheel
-        run: |
-          cp .github/build_scripts/dummy.c ./
-          python3 -m cibuildwheel --output-dir wheelhouse
+        uses: joerick/cibuildwheel@v1.11.0
+        with:
+          output-dir: wheelhouse
         env:
           CIBW_BUILD: cp36-macosx_x86_64
           CIBW_BUILD_VERBOSITY: 1
           CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
 
       - name: Repack wheel
-        run: |
-          bash .github/build_scripts/extract_lib.sh wheelhouse dist
-          bash .github/build_scripts/repack_wheel.sh dist dist wheelhouse/${{ runner.os }}
+        run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
-      - uses: actions/upload-artifact@v2
+      - name: upload artifacts
+        uses: actions/upload-artifact@v2
         with:
           name: wheels
           path: wheelhouse/*/*.whl
@@ -183,7 +171,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install pytest
-      
+
       - uses: actions/download-artifact@v2
         with:
           name: wheels
@@ -204,7 +192,7 @@ jobs:
       - name: Run tests required sudo
         if: ${{ runner.os == 'macOS'}}
         run: sudo pytest test/test_partner.py
-      
+
       - name: Run tests required sudo
         if: ${{ runner.os == 'Windows'}}
         run: pytest test/test_partner.py
