@@ -13,8 +13,12 @@ The full documentation is available on `Read The Docs <http://python-snap7.readt
 Installation
 ============
 
-Please read the
-`online installation documentation <http://python-snap7.readthedocs.org/en/latest/installation.html>`_.
+If you are running Windows 10, Mac OS X or GNU/Linux on an Intel x64 compatible platform you can use the binary wheel installation::
+
+   $ pip install python-snap7
+
+
+Ofterwise, please read the `online installation documentation <http://python-snap7.readthedocs.org/en/latest/installation.html>`_.
 
 
 Credits
