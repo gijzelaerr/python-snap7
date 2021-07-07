@@ -4,7 +4,7 @@ from setuptools import setup, find_packages, Extension
 
 __version__ = "1.1"
 
-tests_require = ['pytest', 'pytest-asyncio', 'mypy', 'pycodestyle']
+tests_require = ['pytest', 'pytest-asyncio', 'mypy', 'pycodestyle', 'types-setuptools']
 
 extras_require = {
     'test': tests_require,
