@@ -73,7 +73,7 @@ jobs:
           cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
           cp .github/build_scripts/dummy.c ./
       - name: Build pure python wheel
-        run: python3 setup.py bdist_wheel --plat-name=linux_x86_64
+        run: python3 setup.py bdist_wheel --plat-name=manylinux1_x86_64
 
       - name: Build platform wheel
         uses: joerick/cibuildwheel@v1.11.0
