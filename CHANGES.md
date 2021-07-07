@@ -5,6 +5,13 @@ CHANGES
 ---
 
 * Make a binary wheel for all platforms (#232)
+* Improve doc strings of all functions (#242)
+
+Special thanks for this release to
+ * Fabian Beitler
+ * Nikteliy
+ * Lautaro Nahuel Dapino
+
 1.0
 ---
 
