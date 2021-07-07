@@ -1,6 +1,10 @@
 CHANGES
 =======
 
+1.1
+---
+
+* Make a binary wheel for all platforms (#232)
 1.0
 ---
 

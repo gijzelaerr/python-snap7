@@ -14,12 +14,12 @@ Contents:
    introduction
    installation
    development
-   client
-   server
-   partner
-   logo
 
-   util
+   API/client
+   API/server
+   API/partner
+   API/logo
+   API/util
 
 
 
