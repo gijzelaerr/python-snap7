@@ -30,12 +30,13 @@ plc.db_write(reading, 31, 120, 1)    # write back the bytearray and now the bool
 
 # NOTE you could also use the read_area and write_area functions.
 # then you can specify an area to read from:
-# https://github.com/gijzelaerr/python-snap7/blob/master/snap7/snap7types.py
+# https://github.com/gijzelaerr/python-snap7/blob/master/snap7/types.py
 
-from snap7.types import area
+from snap7.types import areas
+
 
 # play with these functions.
-plc.read_area(area['MK'], dbnumber, start, size)
-plc.write_area(area['MK'], dbnumber, start, size)
+plc.read_area(areas['MK'], dbnumber, start, size)
+plc.write_area(areas['MK'], dbnumber, start, size)
 # read the client source code!
 # and official snap7 documentation
