@@ -50,3 +50,12 @@ doc/_build/
 .virtualenv3/
 .venv/
 .venv3/
+venv/
+
+.DS_Store
+
+# VSCode
+.vscode/
+
+# DLL
+snap7.dll

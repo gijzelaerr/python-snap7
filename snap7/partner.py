@@ -7,73 +7,78 @@ it, the peer to peer model sees two components with same rights, each of them
 can send data asynchronously. The only difference between them is the one who
 is requesting the connection.
 """
-import ctypes
+from ctypes import c_int32, c_uint32, byref, c_uint16, c_int, c_void_p
 import logging
 import re
+from typing import Tuple, Optional
+
+import snap7.types
 from snap7.common import load_library, check_error, ipv4
-import snap7.snap7types
-from snap7.snap7exceptions import Snap7Exception
+from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="partner")
+
     return f
 
 
-class Partner(object):
+class Partner:
     """
     A snap7 partner.
     """
-    def __init__(self, active=False):
-        self.pointer = None
-        self.library = load_library()
+    _pointer: Optional[c_void_p]
+
+    def __init__(self, active: bool = False):
+        self._library = load_library()
+        self._pointer = None
         self.create(active)
 
     def __del__(self):
         self.destroy()
-        
-    def as_b_send(self):
+
+    def as_b_send(self) -> int:
         """
         Sends a data packet to the partner. This function is asynchronous, i.e.
         it terminates immediately, a completion method is needed to know when
         the transfer is complete.
         """
-        return self.library.Par_AsBSend(self.pointer)
+        return self._library.Par_AsBSend(self._pointer)
 
-    def b_recv(self):
+    def b_recv(self) -> int:
         """
         Receives a data packet from the partner. This function is
         synchronous, it waits until a packet is received or the timeout
         supplied expires.
         """
-        return self.library.Par_BRecv(self.pointer)
+        return self._library.Par_BRecv(self._pointer)
 
-    def b_send(self):
+    def b_send(self) -> int:
         """
         Sends a data packet to the partner. This function is synchronous, i.e.
         it terminates when the transfer job (send+ack) is complete.
         """
-        return self.library.Par_BSend(self.pointer)
+        return self._library.Par_BSend(self._pointer)
 
-    def check_as_b_recv_completion(self):
+    def check_as_b_recv_completion(self) -> int:
         """
         Checks if a packed received was received.
         """
-        return self.library.Par_CheckAsBRecvCompletion(self.pointer)
+        return self._library.Par_CheckAsBRecvCompletion(self._pointer)
 
-    def check_as_b_send_completion(self):
+    def check_as_b_send_completion(self) -> Tuple[str, c_int32]:
         """
         Checks if the current asynchronous send job was completed and terminates
         immediately.
         """
-        op_result = ctypes.c_int32()
-        result = self.library.Par_CheckAsBSendCompletion(self.pointer,
-                                                 ctypes.byref(op_result))
+        op_result = c_int32()
+        result = self._library.Par_CheckAsBSendCompletion(self._pointer, byref(op_result))
         return_values = {
             0: "job complete",
             1: "job in progress",
@@ -85,7 +90,7 @@ class Partner(object):
 
         return return_values[result], op_result
 
-    def create(self, active=False):
+    def create(self, active: bool = False):
         """
         Creates a Partner and returns its handle, which is the reference that
         you have to use every time you refer to that Partner.
@@ -93,8 +98,8 @@ class Partner(object):
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self.library.Par_Create.restype = snap7.snap7types.S7Object
-        self.pointer = snap7.snap7types.S7Object(self.library.Par_Create(int(active)))
+        self._library.Par_Create.restype = snap7.types.S7Object
+        self._pointer = snap7.types.S7Object(self._library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -102,98 +107,99 @@ class Partner(object):
         Before destruction the Partner is stopped, all clients disconnected and
         all shared memory blocks released.
         """
-        return self.library.Par_Destroy(ctypes.byref(self.pointer))
+        if self._library:
+            return self._library.Par_Destroy(byref(self._pointer))
+        return None
 
-    def get_last_error(self):
+    def get_last_error(self) -> c_int32:
         """
         Returns the last job result.
         """
-        error = ctypes.c_int32()
-        result = self.library.Par_GetLastError(self.pointer, ctypes.byref(error))
+        error = c_int32()
+        result = self._library.Par_GetLastError(self._pointer, byref(error))
         check_error(result, "partner")
         return error
 
-    def get_param(self, number):
+    def get_param(self, number) -> int:
         """
         Reads an internal Partner object parameter.
         """
-        logger.debug("retreiving param number %s" % number)
-        type_ = snap7.snap7types.param_types[number]
+        logger.debug(f"retreiving param number {number}")
+        type_ = snap7.types.param_types[number]
         value = type_()
-        code = self.library.Par_GetParam(self.pointer, ctypes.c_int(number),
-                                         ctypes.byref(value))
+        code = self._library.Par_GetParam(self._pointer, c_int(number),
+                                          byref(value))
         check_error(code)
         return value.value
 
-    def get_stats(self):
+    def get_stats(self) -> Tuple[c_uint32, c_uint32, c_uint32, c_uint32]:
         """
         Returns some statistics.
 
         :returns: a tuple containing bytes send, received, send errors, recv errors
         """
-        sent = ctypes.c_uint32()
-        recv = ctypes.c_uint32()
-        send_errors = ctypes.c_uint32()
-        recv_errors = ctypes.c_uint32()
-        result = self.library.Par_GetStats(self.pointer, ctypes.byref(sent),
-                                   ctypes.byref(recv),
-                                   ctypes.byref(send_errors),
-                                   ctypes.byref(recv_errors))
+        sent = c_uint32()
+        recv = c_uint32()
+        send_errors = c_uint32()
+        recv_errors = c_uint32()
+        result = self._library.Par_GetStats(self._pointer, byref(sent),
+                                            byref(recv),
+                                            byref(send_errors),
+                                            byref(recv_errors))
         check_error(result, "partner")
         return sent, recv, send_errors, recv_errors
 
-    def get_status(self):
+    def get_status(self) -> c_int32:
         """
         Returns the Partner status.
         """
-        status = ctypes.c_int32()
-        result = self.library.Par_GetStatus(self.pointer, ctypes.byref(status))
+        status = c_int32()
+        result = self._library.Par_GetStatus(self._pointer, byref(status))
         check_error(result, "partner")
         return status
 
-    def get_times(self):
+    def get_times(self) -> Tuple[c_int32, c_int32]:
         """
         Returns the last send and recv jobs execution time in milliseconds.
         """
-        send_time = ctypes.c_int32()
-        recv_time = ctypes.c_int32()
-        result = self.library.Par_GetTimes(self.pointer, ctypes.byref(send_time),
-                                   ctypes.byref(recv_time))
+        send_time = c_int32()
+        recv_time = c_int32()
+        result = self._library.Par_GetTimes(self._pointer, byref(send_time), byref(recv_time))
         check_error(result, "partner")
         return send_time, recv_time
 
     @error_wrap
-    def set_param(self, number, value):
+    def set_param(self, number: int, value) -> int:
         """Sets an internal Partner object parameter.
         """
-        logger.debug("setting param number %s to %s" % (number, value))
-        return self.library.Par_SetParam(self.pointer, number,
-                                         ctypes.byref(ctypes.c_int(value)))
+        logger.debug(f"setting param number {number} to {value}")
+        return self._library.Par_SetParam(self._pointer, number,
+                                          byref(c_int(value)))
 
-    def set_recv_callback(self):
+    def set_recv_callback(self) -> int:
         """
         Sets the user callback that the Partner object has to call when a data
         packet is incoming.
         """
-        return self.library.Par_SetRecvCallback(self.pointer)
+        return self._library.Par_SetRecvCallback(self._pointer)
 
-    def set_send_callback(self):
+    def set_send_callback(self) -> int:
         """
         Sets the user callback that the Partner object has to call when the
         asynchronous data sent is complete.
         """
-        return self.library.Par_SetSendCallback(self.pointer)
+        return self._library.Par_SetSendCallback(self._pointer)
 
     @error_wrap
-    def start(self):
+    def start(self) -> int:
         """
         Starts the Partner and binds it to the specified IP address and the
         IsoTCP port.
         """
-        return self.library.Par_Start(self.pointer)
+        return self._library.Par_Start(self._pointer)
 
     @error_wrap
-    def start_to(self, local_ip, remote_ip, local_tsap, remote_tsap):
+    def start_to(self, local_ip: str, remote_ip: str, local_tsap: int, remote_tsap: int) -> int:
         """
         Starts the Partner and binds it to the specified IP address and the
         IsoTCP port.
@@ -203,23 +209,26 @@ class Partner(object):
         :param local_tsap: Local TSAP
         :param remote_tsap: PLC TSAP
         """
-        assert re.match(ipv4, local_ip), '%s is invalid ipv4' % local_ip
-        assert re.match(ipv4, remote_ip), '%s is invalid ipv4' % remote_ip
-        logger.info("starting partnering from %s to %s" % (local_ip, remote_ip))
-        return self.library.Par_StartTo(self.pointer, local_ip, remote_ip,
-                                        ctypes.c_uint16(local_tsap),
-                                        ctypes.c_uint16(remote_tsap))
 
-    def stop(self):
+        if not re.match(ipv4, local_ip):
+            raise ValueError(f"{local_ip} is invalid ipv4")
+        if not re.match(ipv4, remote_ip):
+            raise ValueError(f"{remote_ip} is invalid ipv4")
+        logger.info(f"starting partnering from {local_ip} to {remote_ip}")
+        return self._library.Par_StartTo(self._pointer, local_ip, remote_ip,
+                                         c_uint16(local_tsap),
+                                         c_uint16(remote_tsap))
+
+    def stop(self) -> int:
         """
         Stops the Partner, disconnects gracefully the remote partner.
         """
-        return self.library.Par_Stop(self.pointer)
+        return self._library.Par_Stop(self._pointer)
 
     @error_wrap
-    def wait_as_b_send_completion(self, timeout=0):
+    def wait_as_b_send_completion(self, timeout: int = 0) -> int:
         """
         Waits until the current asynchronous send job is done or the timeout
         expires.
         """
-        return self.library.Par_WaitAsBSendCompletion(self.pointer, timeout)
+        return self._library.Par_WaitAsBSendCompletion(self._pointer, timeout)

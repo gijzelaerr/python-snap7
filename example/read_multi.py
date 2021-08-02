@@ -5,12 +5,10 @@ This was tested against a S7-319 CPU
 """
 
 import ctypes
-import struct
 
 import snap7
 from snap7.common import check_error
-from snap7.snap7types import S7DataItem, S7AreaDB, S7WLByte
-
+from snap7.types import S7DataItem, S7AreaDB, S7WLByte
 
 client = snap7.client.Client()
 client.connect('10.100.5.2', 0, 2)
@@ -54,16 +52,17 @@ result, data_items = client.read_multi_vars(data_items)
 for di in data_items:
     check_error(di.Result)
 
-# struct formats
-fmts = ['>f', '>f', '>h']
+result_values = []
+# function to cast bytes to match data_types[] above
+byte_to_value = [util.get_real, util.get_real, util.get_int]
 
-# unpack and print the result of each read
+# unpack and test the result of each read
 for i in range(0, len(data_items)):
-    fmt = fmts[i]
+    btv = byte_to_value[i]
     di = data_items[i]
-    foo = ''.join([chr(di.pData[i]) for i in range(0, di.Amount)])
-    fnum = struct.unpack(fmt, foo)[0]
-    print(fnum)
+    value = btv(di.pData, 0)
+    result_values.append(value)
+print(result_values)
 
 client.disconnect()
 client.destroy()

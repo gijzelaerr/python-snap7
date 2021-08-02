@@ -1,23 +1,10 @@
-FROM ubuntu
-MAINTAINER gijs@pythonic.nl
-ENV DEBIAN_FRONTEND noninteractive
-
-# copy source to container
-ADD . /snap7
-
-# install ubuntu packages
+FROM ubuntu:20.04
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
-RUN apt-get install -y software-properties-common python-software-properties python-nose
-
-# add the snap7 launchpad PPA
+RUN apt-get install -y software-properties-common python3-pip
 RUN add-apt-repository ppa:gijzelaar/snap7
 RUN apt-get update
-
-# install snap7
-RUN apt-get install libsnap7-dev libsnap71
-RUN ldconfig
-
-# install python-snap7
-RUN cd /snap7 && python ./setup.py install
-
-#RUN cd /snap7 && ./run_tests.sh
+RUN apt-get install -y libsnap7-dev libsnap7-1
+ADD . /code
+WORKDIR /code
+RUN pip3 install .

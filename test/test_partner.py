@@ -1,9 +1,9 @@
 import logging
 import unittest as unittest
-import mock
-import snap7.partner
-from snap7.snap7exceptions import Snap7Exception
+from unittest import mock
 
+import snap7.partner
+from snap7.exceptions import Snap7Exception
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -12,6 +12,10 @@ class TestPartner(unittest.TestCase):
     def setUp(self):
         self.partner = snap7.partner.Partner()
         self.partner.start()
+
+    def tearDown(self):
+        self.partner.stop()
+        self.partner.destroy()
 
     def test_as_b_send(self):
         self.partner.as_b_send()
@@ -43,26 +47,25 @@ class TestPartner(unittest.TestCase):
 
     def test_get_param(self):
         expected = (
-            (snap7.snap7types.LocalPort, 0),
-            (snap7.snap7types.RemotePort, 102),
-            (snap7.snap7types.PingTimeout, 750),
-            (snap7.snap7types.SendTimeout, 10),
-            (snap7.snap7types.RecvTimeout, 3000),
-            (snap7.snap7types.SrcRef, 256),
-            (snap7.snap7types.DstRef, 0),
-            (snap7.snap7types.SrcTSap, 0),
-            (snap7.snap7types.PDURequest, 480),
-            (snap7.snap7types.WorkInterval, 100),
-            (snap7.snap7types.BSendTimeout, 3000),
-            (snap7.snap7types.BRecvTimeout, 3000),
-            (snap7.snap7types.RecoveryTime, 500),
-            (snap7.snap7types.KeepAliveTime, 5000),
+            (snap7.types.LocalPort, 0),
+            (snap7.types.RemotePort, 102),
+            (snap7.types.PingTimeout, 750),
+            (snap7.types.SendTimeout, 10),
+            (snap7.types.RecvTimeout, 3000),
+            (snap7.types.SrcRef, 256),
+            (snap7.types.DstRef, 0),
+            (snap7.types.PDURequest, 480),
+            (snap7.types.WorkInterval, 100),
+            (snap7.types.BSendTimeout, 3000),
+            (snap7.types.BRecvTimeout, 3000),
+            (snap7.types.RecoveryTime, 500),
+            (snap7.types.KeepAliveTime, 5000),
         )
         for param, value in expected:
             self.assertEqual(self.partner.get_param(param), value)
 
         self.assertRaises(Exception, self.partner.get_param,
-                          snap7.snap7types.MaxClients)
+                          snap7.types.MaxClients)
 
     def test_get_stats(self):
         self.partner.get_stats()
@@ -75,24 +78,24 @@ class TestPartner(unittest.TestCase):
 
     def test_set_param(self):
         values = (
-            (snap7.snap7types.PingTimeout, 800),
-            (snap7.snap7types.SendTimeout, 15),
-            (snap7.snap7types.RecvTimeout, 3500),
-            (snap7.snap7types.WorkInterval, 50),
-            (snap7.snap7types.SrcRef, 128),
-            (snap7.snap7types.DstRef, 128),
-            (snap7.snap7types.SrcTSap, 128),
-            (snap7.snap7types.PDURequest, 470),
-            (snap7.snap7types.BSendTimeout, 2000),
-            (snap7.snap7types.BRecvTimeout, 2000),
-            (snap7.snap7types.RecoveryTime, 400),
-            (snap7.snap7types.KeepAliveTime, 4000),
+            (snap7.types.PingTimeout, 800),
+            (snap7.types.SendTimeout, 15),
+            (snap7.types.RecvTimeout, 3500),
+            (snap7.types.WorkInterval, 50),
+            (snap7.types.SrcRef, 128),
+            (snap7.types.DstRef, 128),
+            (snap7.types.SrcTSap, 128),
+            (snap7.types.PDURequest, 470),
+            (snap7.types.BSendTimeout, 2000),
+            (snap7.types.BRecvTimeout, 2000),
+            (snap7.types.RecoveryTime, 400),
+            (snap7.types.KeepAliveTime, 4000),
         )
         for param, value in values:
             self.partner.set_param(param, value)
 
         self.assertRaises(Exception, self.partner.set_param,
-                          snap7.snap7types.RemotePort, 1)
+                          snap7.types.RemotePort, 1)
 
     def test_set_recv_callback(self):
         self.partner.set_recv_callback()

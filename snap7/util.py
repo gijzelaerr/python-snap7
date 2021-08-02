@@ -78,42 +78,80 @@ example::
 
     db1['test'].write()
 
-    db1['test'].read()
+    db1['test'].read(client)
 
 
 """
-try:
-    # try with the standard library
-    from collections import OrderedDict
-except ImportError:
-    # fallback to Python 2.6-2.4 back-port
-    from ordereddict import OrderedDict
-
-
+from snap7.common import ADict
 import struct
 import logging
-from snap7 import six
 import re
+from datetime import date, timedelta, datetime
+from collections import OrderedDict
+from typing import Dict, Optional, Union
+from snap7.types import Areas
+from snap7.client import Client
+from snap7.exceptions import Snap7Exception
+import time
 
 logger = logging.getLogger(__name__)
 
 
-def get_bool(_bytearray, byte_index, bool_index):
+def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:
+    """Returns the local datetime
+
+    Args:
+        utc: UTC type date or datetime.
+
+    Returns:
+        Local datetime.
     """
-    Get the boolean value from location in bytearray
+    epoch = time.mktime(utc.timetuple())
+    offset = datetime.fromtimestamp(epoch) - datetime.utcfromtimestamp(epoch)
+    return utc + offset
+
+
+def get_bool(bytearray_: bytearray, byte_index: int, bool_index: int) -> bool:
+    """Get the boolean value from location in bytearray
+
+    Args:
+        bytearray_: buffer data.
+        byte_index: byte index to read from.
+        bool_index: bit index to read from.
+
+    Returns:
+        True if the bit is 1, else 0.
+
+    Examples:
+        >>> buffer = bytearray([0b00000001])  # Only one byte length
+        >>> get_bool(buffer, 0, 0)  # The bit 0 starts at the right.
+            True
     """
     index_value = 1 << bool_index
-    byte_value = _bytearray[byte_index]
+    byte_value = bytearray_[byte_index]
     current_value = byte_value & index_value
     return current_value == index_value
 
 
-def set_bool(_bytearray, byte_index, bool_index, value):
+def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: bool):
+    """Set boolean value on location in bytearray.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index to write to.
+        bool_index: bit index to write to.
+        value: value to write.
+
+    Examples:
+        >>> buffer = bytearray([0b00000000])
+        >>> set_bool(buffer, 0, 0, True)
+        >>> buffer
+            bytearray(b"\\x01")
     """
-    Set boolean value on location in bytearray
-    """
-    assert value in [0, 1, True, False]
-    current_value = get_bool(_bytearray, byte_index, bool_index)
+    if value not in {0, 1, True, False}:
+        raise TypeError(f"Value value:{value} is not a boolean expression.")
+
+    current_value = get_bool(bytearray_, byte_index, bool_index)
     index_value = 1 << bool_index
 
     # check if bool already has correct value
@@ -122,131 +160,560 @@ def set_bool(_bytearray, byte_index, bool_index, value):
 
     if value:
         # make sure index_v is IN current byte
-        _bytearray[byte_index] += index_value
+        bytearray_[byte_index] += index_value
     else:
         # make sure index_v is NOT in current byte
-        _bytearray[byte_index] -= index_value
+        bytearray_[byte_index] -= index_value
 
 
-def set_int(_bytearray, byte_index, _int):
+def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+    """Set value in bytearray to byte
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index to write.
+        _int: value to write.
+
+    Returns:
+        buffer with the written value.
+
+    Examples:
+        >>> buffer = bytearray([0b00000000])
+        >>> set_byte(buffer, 0, 255)
+            bytearray(b"\\xFF")
     """
-    Set value in bytearray to int
+    _int = int(_int)
+    _bytes = struct.pack('B', _int)
+    bytearray_[byte_index:byte_index + 1] = _bytes
+    return bytearray_
+
+
+def get_byte(bytearray_: bytearray, byte_index: int) -> int:
+    """Get byte value from bytearray.
+
+    Notes:
+        WORD 8bit 1bytes Decimal number unsigned B#(0) to B#(255) => 0 to 255
+
+    Args:
+        bytearray_: buffer to be read from.
+        byte_index: byte index to be read.
+
+    Returns:
+        value get from the byte index.
+    """
+    data = bytearray_[byte_index:byte_index + 1]
+    data[0] = data[0] & 0xff
+    packed = struct.pack('B', *data)
+    value = struct.unpack('B', packed)[0]
+    return value
+
+
+def set_word(bytearray_: bytearray, byte_index: int, _int: int):
+    """Set value in bytearray to word
+
+    Notes:
+        Word datatype is 2 bytes long.
+
+    Args:
+        bytearray_: buffer to be written.
+        byte_index: byte index to start write from.
+        _int: value to be write.
+
+    Return:
+        buffer with the written value
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('2B', struct.pack('>H', _int))
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
+
+
+def get_word(bytearray_: bytearray, byte_index: int) -> int:
+    """Get word value from bytearray.
+
+    Notes:
+        WORD 16bit 2bytes Decimal number unsigned B#(0,0) to B#(255,255) => 0 to 65535
+
+    Args:
+        bytearray_: buffer to get the word from.
+        byte_index: byte index from where start reading from.
+
+    Returns:
+        Word value.
+
+    Examples:
+        >>> data = bytearray([0, 100])  # two bytes for a word
+        >>> snap7.util.get_word(data, 0)
+            100
+    """
+    data = bytearray_[byte_index:byte_index + 2]
+    data[1] = data[1] & 0xff
+    data[0] = data[0] & 0xff
+    packed = struct.pack('2B', *data)
+    value = struct.unpack('>H', packed)[0]
+    return value
+
+
+def set_int(bytearray_: bytearray, byte_index: int, _int: int):
+    """Set value in bytearray to int
+
+    Notes:
+        An datatype `int` in the PLC consists of two `bytes`.
+
+    Args:
+        bytearray_: buffer to write on.
+        byte_index: byte index to start writing from.
+        _int: int value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(2)
+        >>> snap7.util.set_int(data, 0, 255)
+            bytearray(b'\\x00\\xff')
     """
     # make sure were dealing with an int
     _int = int(_int)
     _bytes = struct.unpack('2B', struct.pack('>h', _int))
-    _bytearray[byte_index:byte_index + 2] = _bytes
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
 
 
-def get_int(_bytearray, byte_index):
+def get_int(bytearray_: bytearray, byte_index: int) -> int:
+    """Get int value from bytearray.
+
+    Notes:
+        Datatype `int` in the PLC is represented in two bytes
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to start reading from.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> data = bytearray([0, 255])
+        >>> snap7.util.get_int(data, 0)
+            255
     """
-    Get int value from bytearray.
-
-    int are represented in two bytes
-    """
-    data = _bytearray[byte_index:byte_index + 2]
-    value = struct.unpack('>h', struct.pack('2B', *data))[0]
+    data = bytearray_[byte_index:byte_index + 2]
+    data[1] = data[1] & 0xff
+    data[0] = data[0] & 0xff
+    packed = struct.pack('2B', *data)
+    value = struct.unpack('>h', packed)[0]
     return value
 
 
-def set_real(_bytearray, byte_index, real):
-    """
-    Set Real value
+def set_real(bytearray_: bytearray, byte_index: int, real) -> bytearray:
+    """Set Real value
 
-    make 4 byte data from real
+    Notes:
+        Datatype `real` is represented in 4 bytes in the PLC.
+        The packed representation uses the `IEEE 754 binary32`.
 
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index to start writing from.
+        real: value to be written.
+
+    Returns:
+        Buffer with the value written.
+
+    Examples:
+        >>> data = bytearray(4)
+        >>> snap7.util.set_real(data, 0, 123.321)
+            bytearray(b'B\\xf6\\xa4Z')
     """
     real = float(real)
     real = struct.pack('>f', real)
     _bytes = struct.unpack('4B', real)
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index + i] = b
+        bytearray_[byte_index + i] = b
+    return bytearray_
 
 
-def get_real(_bytearray, byte_index):
+def get_real(bytearray_: bytearray, byte_index: int) -> float:
+    """Get real value.
+
+    Notes:
+        Datatype `real` is represented in 4 bytes in the PLC.
+        The packed representation uses the `IEEE 754 binary32`.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to reading from.
+
+    Returns:
+        Real value.
+
+    Examples:
+        >>> data = bytearray(b'B\\xf6\\xa4Z')
+        >>> snap7.util.get_real(data, 0)
+            123.32099914550781
     """
-    Get real value. create float from 4 bytes
-    """
-    x = _bytearray[byte_index:byte_index + 4]
+    x = bytearray_[byte_index:byte_index + 4]
     real = struct.unpack('>f', struct.pack('4B', *x))[0]
     return real
 
 
-def set_string(_bytearray, byte_index, value, max_size):
-    """
-    Set string value
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int):
+    """Set string value
 
-    :params value: string data
-    :params max_size: max possible string size
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index to start writing from.
+        value: string to write.
+        max_size: maximum possible string size.
+
+    Raises:
+        :obj:`TypeError`: if the `value` is not a :obj:`str`.
+        :obj:`ValueError`: if the length of the  `value` is larger than the `max_size`.
+
+    Examples:
+        >>> data = bytearray(20)
+        >>> snap7.util.set_string(data, 0, "hello world", 255)
+        >>> data
+            bytearray(b'\\x00\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
     """
-    if six.PY2:
-        assert isinstance(value, (str, unicode))
-    else:
-        assert isinstance(value, str)
+    if not isinstance(value, str):
+        raise TypeError(f"Value value:{value} is not from Type string")
 
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
-        raise ValueError('size %s > max_size %s %s' % (size, max_size, value))
+        raise ValueError(f'size {size} > max_size {max_size} {value}')
     # set len count on first position
-    _bytearray[byte_index + 1] = len(value)
+    bytearray_[byte_index + 1] = len(value)
 
     i = 0
     # fill array which chr integers
     for i, c in enumerate(value):
-        _bytearray[byte_index + 2 + i] = ord(c)
+        bytearray_[byte_index + 2 + i] = ord(c)
 
     # fill the rest with empty space
-    for r in range(i + 1, _bytearray[byte_index]):
-        _bytearray[byte_index + 2 + r] = ord(' ')
+    for r in range(i + 1, bytearray_[byte_index]):
+        bytearray_[byte_index + 2 + r] = ord(' ')
 
 
-def get_string(_bytearray, byte_index, max_size):
+def get_string(bytearray_: bytearray, byte_index: int, max_size: int) -> str:
+    """Parse string from bytearray
+
+    Notes:
+        The first byte of the buffer will contain the max size posible for a string.
+        The second byte contains the length of the string that contains.
+
+    Args:
+        bytearray_: buffer from where to get the string.
+        byte_index: byte index from where to start reading.
+        max_size: maximum possible string size.
+
+    Returns:
+        String value.
+
+    Examples:
+        >>> data = bytearray([254, len("hello world")] + [ord(letter) for letter in "hello world"])
+        >>> snap7.util.get_string(data, 0, 255)
+        'hello world'
     """
-    parse string from bytearray
-    """
-    size = _bytearray[byte_index + 1]
+    size = bytearray_[byte_index + 1]
 
     if max_size < size:
-        logger.error("the string is to big for the size encountered in specification")
+        logger.error("the string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         size = max_size
 
-    data = map(chr, _bytearray[byte_index + 2:byte_index + 2 + size])
+    data = map(chr, bytearray_[byte_index + 2:byte_index + 2 + size])
     return "".join(data)
 
 
-def get_dword(_bytearray, byte_index):
-    data = _bytearray[byte_index:byte_index + 4]
+def get_dword(bytearray_: bytearray, byte_index: int) -> int:
+    """ Gets the dword from the buffer.
+
+    Notes:
+        Datatype `dword` consists in 8 bytes in the PLC.
+        The maximum value posible is `4294967295`
+
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> data = bytearray(8)
+        >>> data[:] = b"\\x12\\x34\\xAB\\xCD"
+        >>> snap7.util.get_dword(data, 0)
+            4294967295
+    """
+    data = bytearray_[byte_index:byte_index + 4]
     dword = struct.unpack('>I', struct.pack('4B', *data))[0]
     return dword
 
 
-def set_dword(_bytearray, byte_index, dword):
+def set_dword(bytearray_: bytearray, byte_index: int, dword: int):
+    """Set a DWORD to the buffer.
+
+    Notes:
+        Datatype `dword` consists in 8 bytes in the PLC.
+        The maximum value posible is `4294967295`
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to writing reading.
+        dword: value to write.
+
+    Examples:
+        >>> data = bytearray(4)
+        >>> snap7.util.set_dword(data,0, 4294967295)
+        >>> data
+            bytearray(b'\\xff\\xff\\xff\\xff')
+    """
     dword = int(dword)
     _bytes = struct.unpack('4B', struct.pack('>I', dword))
     for i, b in enumerate(_bytes):
-        _bytearray[byte_index + i] = b
+        bytearray_[byte_index + i] = b
 
 
-def parse_specification(db_specification):
+def get_dint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get dint value from bytearray.
+
+    Notes:
+        Datatype `dint` consists in 4 bytes in the PLC.
+        Maximum possible value is 2147483647.
+        Lower posible value is -2147483648.
+
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> import struct
+        >>> data = bytearray(4)
+        >>> data[:] = struct.pack(">i", 2147483647)
+        >>> snap7.util.get_dint(data, 0)
+            2147483647
     """
-    Create a db specification derived from a
-    dataview of a db in which the byte layout
-    is specified
+    data = bytearray_[byte_index:byte_index + 4]
+    dint = struct.unpack('>i', struct.pack('4B', *data))[0]
+    return dint
+
+
+def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
+    """Set value in bytearray to dint
+
+    Notes:
+        Datatype `dint` consists in 4 bytes in the PLC.
+        Maximum possible value is 2147483647.
+        Lower posible value is -2147483648.
+
+    Args:
+        bytearray_: buffer to write.
+        byte_index: byte index from where to start writing.
+
+    Examples:
+        >>> data = bytearray(4)
+        >>> snap7.util.set_dint(data, 0, 2147483647)
+        >>> data
+            bytearray(b'\\x7f\\xff\\xff\\xff')
+    """
+    dint = int(dint)
+    _bytes = struct.unpack('4B', struct.pack('>i', dint))
+    for i, b in enumerate(_bytes):
+        bytearray_[byte_index + i] = b
+
+
+def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
+    micro_to_milli = 1000
+    data_bytearray = bytearray_[byte_index:byte_index + 2]
+    s5time_data_int_like = list(data_bytearray.hex())
+    if s5time_data_int_like[0] == '0':
+        # 10ms
+        time_base = 10
+    elif s5time_data_int_like[0] == '1':
+        # 100ms
+        time_base = 100
+    elif s5time_data_int_like[0] == '2':
+        # 1s
+        time_base = 1000
+    elif s5time_data_int_like[0] == '3':
+        # 10s
+        time_base = 10000
+    else:
+        raise ValueError('This value should not be greater than 3')
+
+    s5time_bcd = \
+        int(s5time_data_int_like[1]) * 100 + \
+        int(s5time_data_int_like[2]) * 10 + \
+        int(s5time_data_int_like[3])
+    s5time_microseconds = time_base * s5time_bcd
+    s5time = timedelta(microseconds=s5time_microseconds * micro_to_milli)
+    # here we must return a string like variable, otherwise nothing will return
+    return "".join(str(s5time))
+
+
+def get_dt(bytearray_: bytearray, byte_index: int) -> str:
+    # 1990 - 1999, 2000 - 2089
+    micro_to_milli = 1000
+    data_bytearray = bytearray_[byte_index:byte_index + 8]
+    dt_lst = list(data_bytearray.hex())
+    date_time_list = []
+    for i in range(0, len(dt_lst), 2):
+        # last two bytearrays are the miliseconds and workday, they must be parsed together
+        if i != len(dt_lst) - 4:
+            if i == 0 and dt_lst[i] == '9':
+                date_time_list.append(int('19' + dt_lst[i] + dt_lst[i + 1]))
+            elif i == 0 and dt_lst[i] != '9':
+                date_time_list.append(int('20' + dt_lst[i] + dt_lst[i + 1]))
+            else:
+                date_time_list.append(int(dt_lst[i] + dt_lst[i + 1]))
+        else:
+            date_time_list.append(int(dt_lst[i] + dt_lst[i + 1] + dt_lst[i + 2]))
+            break
+    date_and_time = datetime(
+        date_time_list[0],
+        date_time_list[1],
+        date_time_list[2],
+        date_time_list[3],
+        date_time_list[4],
+        date_time_list[5],
+        date_time_list[6] * micro_to_milli).isoformat(timespec='microseconds')
+    return date_and_time
+
+
+def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+    """set unsigned small int
+
+    Notes:
+        Datatype `usint` (Unsigned small int) consists on 1 byte in the PLC.
+        Maximum posible value is 255.
+        Lower posible value is 0.
+
+    Args:
+         bytearray_: buffer to write.
+        byte_index: byte index from where to start writing.
+        _int: value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(1)
+        >>> snap7.util.set_usint(data, 0, 255)
+            bytearray(b'\\xff')
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('B', struct.pack('>B', _int))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
+def get_usint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get the unsigned small int from the bytearray
+
+    Notes:
+        Datatype `usint` (Unsigned small int) consists on 1 byte in the PLC.
+        Maximum posible value is 255.
+        Lower posible value is 0.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> data = bytearray([255])
+        >>> snap7.util.get_usint(data, 0)
+            255
+    """
+    data = bytearray_[byte_index] & 0xff
+    packed = struct.pack('B', data)
+    value = struct.unpack('>B', packed)[0]
+    return value
+
+
+def set_sint(bytearray_: bytearray, byte_index: int, _int) -> bytearray:
+    """Set small int to the buffer.
+
+    Notes:
+        Datatype `sint` (Small int) consists in 1 byte in the PLC.
+        Maximum value posible is 127.
+        Lowest value posible is -128.
+
+    Args:
+         bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        _int: value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(1)
+        >>> snap7.util.set_sint(data, 0, 127)
+            bytearray(b'\\x7f')
+    """
+    _int = int(_int)
+    _bytes = struct.unpack('B', struct.pack('>b', _int))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
+def get_sint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get the small int
+
+    Notes:
+        Datatype `sint` (Small int) consists in 1 byte in the PLC.
+        Maximum value posible is 127.
+        Lowest value posible is -128.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> data = bytearray([127])
+        >>> snap7.util.get_sint(data, 0)
+            127
+    """
+    data = bytearray_[byte_index]
+    packed = struct.pack('B', data)
+    value = struct.unpack('>b', packed)[0]
+    return value
+
+
+def parse_specification(db_specification: str) -> OrderedDict:
+    """Create a db specification derived from a
+        dataview of a db in which the byte layout
+        is specified
+
+    Args:
+        db_specification: string formatted table with the indexes, aliases and types.
+
+    Returns:
+        Parsed DB specification.
     """
     parsed_db_specification = OrderedDict()
 
     for line in db_specification.split('\n'):
-        if line and not line.startswith('#'):
-            row = line.split('#')[0]  # remove trailing comment
-            index, var_name, _type = row.split()
+        if line and not line.lstrip().startswith('#'):
+            index, var_name, _type = line.split('#')[0].split()
             parsed_db_specification[var_name] = (index, _type)
 
     return parsed_db_specification
 
 
-class DB(object):
+class DB:
     """
     Manage a DB bytearray block given a specification
     of the Layout.
@@ -254,43 +721,69 @@ class DB(object):
     It is possible to have many repetitive instances of
     a specification this is called a "row".
 
-    probably most usecases there is just one row
+    Probably most usecases there is just one row
 
-    db1[0]['testbool1'] = test
-    db1.write()   # puts data in plc
+    Attributes:
+        bytearray_: buffer data from the PLC.
+        specification: layout of the DB Rows.
+        row_size: bytes size of a db row.
+        layout_offset: at which byte in the row specificaion we
+            start reading the data.
+        db_offset: at which byte in the db starts reading.
+
+    Examples:
+        >>> db1[0]['testbool1'] = test
+        >>> db1.write()   # puts data in plc
     """
-    _bytearray = None      # data from plc
-    specification = None   # layout of db rows
-    row_size = None        # bytes size of a db row
-    layout_offset = None   # at which byte in row specification should
-                           # we start reading the data
-    db_offset = None       # at which byte in db should we start reading?
-                           # first fields could be be status data.
-                           # and only the last part could be control data
-                           # now you can be sure you will never overwrite
-                           # critical parts of db
+    bytearray_: Optional[bytearray] = None  # data from plc
+    specification: Optional[str] = None  # layout of db rows
+    row_size: Optional[int] = None  # bytes size of a db row
+    layout_offset: Optional[int] = None  # at which byte in row specification should
+    # we start reading the data
+    db_offset: Optional[int] = None  # at which byte in db should we start reading?
 
-    def __init__(self, db_number, _bytearray,
-                 specification, row_size, size, id_field=None,
-                 db_offset=0, layout_offset=0, row_offset=0):
+    # first fields could be be status data.
+    # and only the last part could be control data
+    # now you can be sure you will never overwrite
+    # critical parts of db
 
+    def __init__(self, db_number: int, bytearray_: bytearray,
+                 specification: str, row_size: int, size: int, id_field: Optional[str] = None,
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.DB):
+        """ Creates a new instance of the `Row` class.
+
+        Args:
+            db_number: number of the DB to read from. This value should be 0 if area!=Areas.DB.
+            bytearray_: initial buffer read from the PLC.
+            specification: layout of the PLC memory.
+            row_size: bytes size of a db row.
+            size: lenght of the memory area.
+            id_field: name to reference the row. Optional.
+            db_offset: at which byte in the db starts reading.
+            layout_offset: at which byte in the row specificaion we
+                start reading the data.
+            row_offset: offset between rows.
+            area: which memory area this row is representing.
+        """
         self.db_number = db_number
         self.size = size
         self.row_size = row_size
         self.id_field = id_field
+        self.area = area
 
         self.db_offset = db_offset
         self.layout_offset = layout_offset
         self.row_offset = row_offset
 
-        self._bytearray = _bytearray
+        self._bytearray = bytearray_
         self.specification = specification
         # loop over bytearray. make rowObjects
         # store index of id_field to row objects
-        self.index = OrderedDict()
+        self.index: OrderedDict = OrderedDict()
         self.make_rows()
 
     def make_rows(self):
+        """ Make each row for the DB. """
         id_field = self.id_field
         row_size = self.row_size
         specification = self.specification
@@ -305,16 +798,17 @@ class DB(object):
                          row_size=row_size,
                          db_offset=db_offset,
                          layout_offset=layout_offset,
-                         row_offset=self.row_offset)
+                         row_offset=self.row_offset,
+                         area=self.area)
 
             # store row object
             key = row[id_field] if id_field else i
             if key and key in self.index:
-                msg = '%s not unique!' % key
+                msg = f'{key} not unique!'
                 logger.error(msg)
             self.index[key] = row
 
-    def __getitem__(self, key, default=None):
+    def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, int, float, str, bool, datetime]:
         return self.index.get(key, default)
 
     def __iter__(self):
@@ -324,41 +818,83 @@ class DB(object):
     def __len__(self):
         return len(self.index)
 
-    def set_data(self, _bytearray):
-        assert(isinstance(_bytearray, bytearray))
-        self._bytearray = _bytearray
+    def set_data(self, bytearray_: bytearray):
+        """Set the new buffer data from the PLC to the current instance.
+
+        Args:
+            bytearray_: buffer to save.
+
+        Raises:
+            :obj:`TypeError`: if `bytearray_` is not an instance of :obj:`bytearray`
+        """
+        if not isinstance(bytearray_, bytearray):
+            raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
+        self._bytearray = bytearray_
 
 
-class DB_Row(object):
+class DB_Row:
     """
     Provide ROW API for DB bytearray
+
+    Attributes:
+        bytearray_: reference to the data of the parent DB.
+        _specification: row specification layout.
     """
-    _bytearray = None      # data of reference to parent DB
-    _specification = None  # row specification
+    bytearray_: bytearray  # data of reference to parent DB
+    _specification: OrderedDict = OrderedDict()  # row specification
 
-    def __init__(self, _bytearray, _specification, row_size=0,
-                 db_offset=0, layout_offset=0, row_offset=0):
+    def __init__(
+        self,
+        bytearray_: bytearray,
+        _specification: str,
+        row_size: Optional[int] = 0,
+        db_offset: int = 0,
+        layout_offset: int = 0,
+        row_offset: Optional[int] = 0,
+        area: Optional[Areas] = Areas.DB
+    ):
+        """Creates a new instance of the `DB_Row` class.
 
-        self.db_offset = db_offset          # start point of row data in db
+        Args:
+            bytearray_: reference to the data of the parent DB.
+            _specification: row specification layout.
+            row_size: Amount of bytes of the row.
+            db_offset: at which byte in the db starts reading.
+            layout_offset: at which byte in the row specificaion we
+                start reading the data.
+            row_offset: offset between rows.
+            area: which memory area this row is representing.
+
+        Raises:
+            :obj:`TypeError`: if `bytearray_` is not an instance of :obj:`bytearray` or :obj:`DB`.
+        """
+
+        self.db_offset = db_offset  # start point of row data in db
         self.layout_offset = layout_offset  # start point of row data in layout
-        self.row_size = row_size
-        self.row_offset = row_offset        # start of writable part of row
+        self.row_size = row_size  # lenght of the read
+        self.row_offset = row_offset  # start of writable part of row
+        self.area = area
 
-        assert(isinstance(_bytearray, (bytearray, DB)))
-        self._bytearray = _bytearray
+        if not isinstance(bytearray_, (bytearray, DB)):
+            raise TypeError(f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)")
+        self._bytearray = bytearray_
         self._specification = parse_specification(_specification)
 
-    def get_bytearray(self):
-        """
-        return bytearray from self or DB parent
+    def get_bytearray(self) -> bytearray:
+        """Gets bytearray from self or DB parent
+
+        Returns:
+            Buffer data corresponding to the row.
         """
         if isinstance(self._bytearray, DB):
             return self._bytearray._bytearray
         return self._bytearray
 
-    def export(self):
-        """
-        export dictionary with values
+    def export(self) -> Dict[str, Union[str, int, float, bool, datetime]]:
+        """ Export dictionary with values
+
+        Returns:
+            dictionary containing the values of each value of the row.
         """
         data = {}
         for key in self._specification:
@@ -369,12 +905,10 @@ class DB_Row(object):
         """
         Get a specific db field
         """
-        assert key in self._specification
         index, _type = self._specification[key]
         return self.get_value(index, _type)
 
     def __setitem__(self, key, value):
-        assert key in self._specification
         index, _type = self._specification[key]
         self.set_value(index, _type, value)
 
@@ -382,86 +916,191 @@ class DB_Row(object):
 
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = '%s\n%-20s %-10s' % (string, var_name,
-                                          self.get_value(index, _type))
+            string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
         return string
 
-    def unchanged(self, _bytearray):
-        if self.get_bytearray() == _bytearray:
+    def unchanged(self, bytearray_: bytearray) -> bool:
+        """ Checks if the bytearray is the same
+
+        Args:
+            bytearray_: buffer of data to check.
+
+        Returns:
+            True if the current `bytearray_` is equal to the new one. Otherwise is False.
+        """
+        if self.get_bytearray() == bytearray_:
             return True
         return False
 
-    def get_offset(self, byte_index):
-        """
-        Calculate correct beginning position for a row
-        the db_offset = row_size * index
-        """
-        return int(byte_index) - self.layout_offset + self.db_offset
+    def get_offset(self, byte_index: Union[str, int]) -> int:
+        """ Calculate correct beginning position for a row
+            the db_offset = row_size * index
 
-    def get_value(self, byte_index, _type):
-        _bytearray = self.get_bytearray()
+        Args:
+            byte_index: byte index from where to start reading from.
 
-        if _type == 'BOOL':
-            byte_index, bool_index = byte_index.split('.')
-            return get_bool(_bytearray, self.get_offset(byte_index),
+        Returns:
+            Amount of bytes to ignore.
+        """
+        # add float typ to avoid error because of
+        # the variable address with decimal point(like 0.0 or 4.0)
+        return int(float(byte_index)) - self.layout_offset + self.db_offset
+
+    def get_value(self, byte_index: Union[str, int], type_: str) -> Union[ValueError, int, float, str, datetime]:
+        """ Gets the value for a specific type.
+
+        Args:
+            byte_index: byte index from where start reading.
+            type_: type of data to read.
+
+        Raises:
+            :obj:`Snap7Exception`: if reading a `string` when checking the lenght of the string.
+            :obj:`ValueError`: if the `type_` is not handled.
+
+        Returns:
+            Value read according to the `type_`
+        """
+
+        bytearray_ = self.get_bytearray()
+
+        if type_ == 'BOOL':
+            byte_index, bool_index = str(byte_index).split('.')
+            return get_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index))
 
         # remove 4 from byte index since
         # first 4 bytes are used by db
         byte_index = self.get_offset(byte_index)
 
-        if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
-            max_size = int(max_size)
-            return get_string(_bytearray, byte_index, max_size)
+        if type_.startswith('STRING'):
+            max_size = re.search(r'\d+', type_)
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            return get_string(bytearray_, byte_index, max_size_int)
 
-        if _type == 'REAL':
-            return get_real(_bytearray, byte_index)
+        elif type_ == 'REAL':
+            return get_real(bytearray_, byte_index)
 
-        if _type == 'DWORD':
-            return get_dword(_bytearray, byte_index)
+        elif type_ == 'DWORD':
+            return get_dword(bytearray_, byte_index)
 
-        if _type == 'INT':
-            return get_int(_bytearray, byte_index)
+        elif type_ == 'DINT':
+            return get_dint(bytearray_, byte_index)
+
+        elif type_ == 'INT':
+            return get_int(bytearray_, byte_index)
+
+        elif type_ == 'WORD':
+            return get_word(bytearray_, byte_index)
+
+        elif type_ == 'S5TIME':
+            data_s5time = get_s5time(bytearray_, byte_index)
+            return data_s5time
+
+        elif type_ == 'DATE_AND_TIME':
+            data_dt = get_dt(bytearray_, byte_index)
+            return data_dt
+
+        elif type_ == 'USINT':
+            return get_usint(bytearray_, byte_index)
+
+        elif type_ == 'SINT':
+            return get_sint(bytearray_, byte_index)
+
+        # add these three not implemented data typ to avoid
+        # 'Unable to get repr for class<snap7.util.DB_ROW>' error
+        elif type_ == 'TIME':
+            return 'read TIME not implemented'
+
+        elif type_ == 'DATE':
+            return 'read DATE not implemented'
+
+        elif type_ == 'TIME_OF_DAY':
+            return 'read TIME_OF_DAY not implemented'
 
         raise ValueError
 
-    def set_value(self, byte_index, _type, value):
-        _bytearray = self.get_bytearray()
+    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+        """Sets the value for a specific type in the specified byte index.
 
-        if _type == 'BOOL':
-            byte_index, bool_index = byte_index.split('.')
-            return set_bool(_bytearray, self.get_offset(byte_index),
+        Args:
+            byte_index: byte index to start writing to.
+            type: type of value to write.
+            value: value to write.
+
+        Raises:
+            :obj:`Snap7Exception`: if reading a `string` when checking the lenght of the string.
+            :obj:`ValueError`: if the `type_` is not handled.
+
+        Returns:
+            Buffer data with the value written. Optional.
+        """
+        bytearray_ = self.get_bytearray()
+
+        if type == 'BOOL' and isinstance(value, bool):
+            byte_index, bool_index = str(byte_index).split(".")
+            return set_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
 
-        if _type.startswith('STRING'):
-            max_size = re.search('\d+', _type).group(0)
-            max_size = int(max_size)
-            return set_string(_bytearray, byte_index, value, max_size)
+        if type.startswith('STRING') and isinstance(value, str):
+            max_size = re.search(r'\d+', type)
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            return set_string(bytearray_, byte_index, value, max_size_int)
 
-        if _type == 'REAL':
-            return set_real(_bytearray, byte_index, value)
+        elif type == 'REAL':
+            return set_real(bytearray_, byte_index, value)
 
-        if _type == 'DWORD':
-            return set_dword(_bytearray, byte_index, value)
+        elif type == 'DWORD' and isinstance(value, int):
+            return set_dword(bytearray_, byte_index, value)
 
-        if _type == 'INT':
-            return set_int(_bytearray, byte_index, value)
+        elif type == 'DINT' and isinstance(value, int):
+            return set_dint(bytearray_, byte_index, value)
+
+        elif type == 'INT' and isinstance(value, int):
+            return set_int(bytearray_, byte_index, value)
+
+        elif type == 'WORD' and isinstance(value, int):
+            return set_word(bytearray_, byte_index, value)
+
+        elif type == 'USINT' and isinstance(value, int):
+            return set_usint(bytearray_, byte_index, value)
+
+        elif type == 'SINT' and isinstance(value, int):
+            return set_sint(bytearray_, byte_index, value)
+
+        if type == 'USINT' and isinstance(value, int):
+            return set_usint(bytearray_, byte_index, value)
+
+        if type == 'SINT' and isinstance(value, int):
+            return set_sint(bytearray_, byte_index, value)
 
         raise ValueError
 
-    def write(self, client):
+    def write(self, client: Client) -> None:
+        """Write current data to db in plc
+
+        Args:
+            client: :obj:`Client` snap7 instance.
+
+        Raises:
+            :obj:`TypeError`: if the `_bytearray` is not an instance of :obj:`DB` class.
+            :obj:`ValueError`: if the `row_size` is less than 0.
         """
-        Write current data to db in plc
-        """
-        assert(isinstance(self._bytearray, DB))
-        assert(self.row_size >= 0)
+        if not isinstance(self._bytearray, DB):
+            raise TypeError(f"Value self._bytearray: {self._bytearray} is not from type DB.")
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
 
         db_nr = self._bytearray.db_number
         offset = self.db_offset
-        data = self.get_bytearray()[offset:offset+self.row_size]
+        data = self.get_bytearray()[offset:offset + self.row_size]
         db_offset = self.db_offset
 
         # indicate start of write only area of row!
@@ -469,18 +1108,32 @@ class DB_Row(object):
             data = data[self.row_offset:]
             db_offset += self.row_offset
 
-        client.db_write(db_nr, db_offset, data)
+        if self.area == Areas.DB:
+            client.db_write(db_nr, db_offset, data)
+        else:
+            client.write_area(self.area, 0, db_offset, data)
 
-    def read(self, client):
+    def read(self, client: Client) -> None:
+        """Read current data of db row from plc.
+
+        Args:
+            client: :obj:`Client` snap7 instance.
+
+        Raises:
+            :obj:`TypeError`: if the `_bytearray` is not an instance of :obj:`DB` class.
+            :obj:`ValueError`: if the `row_size` is less than 0.
         """
-        read current data of db row from plc
-        """
-        assert(isinstance(self._bytearray, DB))
-        assert(self.row_size >= 0)
+        if not isinstance(self._bytearray, DB):
+            raise TypeError(f"Value self._bytearray:{self._bytearray} is not from type DB.")
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        _bytearray = client.db_read(db_nr, self.db_offset, self.row_size)
+        if self.area == Areas.DB:
+            bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
+        else:
+            bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray
-        for i, b in enumerate(_bytearray):
+        for i, b in enumerate(bytearray_):
             data[i + self.db_offset] = b

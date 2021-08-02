@@ -1,12 +1,23 @@
-Installation
-============
+Binary Wheel Installation 
+=========================
 
-here you can find out how to install python-snap7 on your system.
+We advice you to install python-snap7 using a binary wheel. The binary wheels
+should work on Windows 64x, OS X (intel) and Linux x64.
+python-snap7 is available on `PyPI <https://pypi.python.org/pypi/python-snap7/>`_. You can install
+it by using pip::
+
+  $ pip install python-snap7
+
+
+Manual Installation (not recommended)
+=====================================
+
+If you are running an unsupported platform you need to do a bit more work.
+This involves two steps. First, install the snap7 library,
+followed by the installation of the python-snap7 package.
 
 Snap7
 -----
-
-To use python-snap7 you need to have the snap7 library installed.
 
 Ubuntu
 ~~~~~~
@@ -16,42 +27,45 @@ If you are using Ubuntu you can use the Ubuntu packages from our
 
     $ sudo add-apt-repository ppa:gijzelaar/snap7
     $ sudo apt-get update
-    $ sudo apt-get install libsnap71 libsnap7-dev
+    $ sudo apt-get install libsnap7-1 libsnap7-dev
 
 Windows
 ~~~~~~~
 
 Download the zip file from the
 `sourceforce page <http://sourceforge.net/projects/snap7/files/>`_.
-Unzip the zip file, and copy* release\Windows\<Win64/Win32>\snap7.dll* somewhere
-in you system PATH, for example *C:\WINDOWS\system32*. Alternatively you can
+Unzip the zip file, and copy ``release\\Windows\\Win64\\snap7.dll`` somewhere
+in your system PATH, for example ``%systemroot%\System32\``. Alternatively you can
 copy the file somewhere on your file system and adjust the system PATH.
+
+OSX
+~~~
+
+The snap7 library is available on `Homebrew <https://brew.sh/>`_::
+
+  $ brew install snap7
 
 
 Compile from source
 ~~~~~~~~~~~~~~~~~~~
 
-If you are not using Ubuntu or if you want to have more control you can
-download the latest source from
+Download the latest source from
 `the sourceforce page <http://sourceforge.net/projects/snap7/files/>`_ and do
 a manual compile. Download the file and run::
 
      $ p7zip -d snap7-full-1.0.0.7z  # requires the p7 program
      $ cd build/<platform>           # where platform is unix or windows
-     $ make -f <arch>.mk             # where arch is your architecture, for example x86_64_linux
+     $ make -f <arch>.mk install     # where arch is your architecture, for example x86_64_linux
 
 For more information about or help with compilation please check out the
 documentation on the `snap7 website <http://snap7.sourceforge.net/>`_.
 
-snap7-python
+
+Python-Snap7
 ------------
 
-python-snap7 is available on `PyPI <https://pypi.python.org/pypi/python-snap7/>`_. You can install
-it by using pip::
-
-  $ pip install python-snap7
-
-You can also install it from the git repository or from a source tarball::
+Once snap7 is available in your library or system path, you can install it from the git
+repository or from a source tarball::
 
   $ python ./setup.py install
 

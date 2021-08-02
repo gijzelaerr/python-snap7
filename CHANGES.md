@@ -1,6 +1,54 @@
 CHANGES
 =======
 
+1.1
+---
+
+* Make a binary wheel for all platforms (#232)
+* Improve doc strings of all functions (#242)
+
+Special thanks for this release to
+ * Fabian Beitler
+ * Nikteliy
+ * Lautaro Nahuel Dapino
+
+1.0
+---
+
+ *  Drop python 2 support  (#214)
+ *  Feature request: ReadSZL()  (#196)   
+ *  Keep argument format across the functions  (#193)
+ *  Drop Python2 Tests  (#167)   
+ *  Support for S5TIME  (#163)   
+ *  Add type annotations  (#157) 
+ *  client.full_upload() return bytearray size 65536  (#127) 
+ *  Some client tests segfault on Linux  (#26)  
+ *  Not all functions are implemented yet  (#25)
+
+special thanks to [Fabian Beitler](https://github.com/swamper123) and
+[Nikteliy](https://github.com/nikteliy>) for their contributions to the 1.0 release!
+
+
+
+
+0.11
+----
+
+ * Update read_multi.py (#132)
+ * Added fixes to snap7/client.py read_area function to allow for Counter and Timer Reads  (#121)
+ * Post to a public docker repository? (#119)
+ * Implementation of Cli_SetDateTime, Cli_GetDateTime enhancement (#114)
+
+
+0.10
+----
+
+ * Fix OSX travis build #99
+ * util.get_int() broken #101
+ * Compatibility issue with Python3 #109
+ * Logo 8 improvements bug #105
+
+
 0.7
 ---
 
