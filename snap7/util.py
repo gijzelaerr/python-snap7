@@ -623,7 +623,9 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     minutes = seconds // 60
     hours = minutes // 60
     days = hours // 24
+
     time_str = f"{days * sign!s}:{hours % 24!s}:{minutes % 60}:{seconds % 60!s}.{milli_seconds!s}"
+
     return time_str
 
 
@@ -642,7 +644,9 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
 
         Examples:
             >>> data = bytearray(4)
+
             >>> snap7.util.set_time(data, 0, '-22:3:57:28.192')
+
             >>> data
                 bytearray(b'\x8d\xda\xaf\x00')
         """
@@ -650,6 +654,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     sign = 1
     bits = 32
     data_list = re.split('[: .]', time_string)
+
     days, hours, minutes, seconds, milli_seconds = [int(x) if c > 0 else x for c, x in enumerate(data_list)]
     if re.split(r'(\d+)$', days)[0:2][0] == '-':
         sign = -1
@@ -666,6 +671,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
         return bytearray_
     else:
         raise ValueError('time value out of range, please check the value interval')
+
 
 
 def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
