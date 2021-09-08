@@ -623,7 +623,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     minutes = seconds // 60
     hours = minutes // 60
     days = hours // 24
-    time_str = str(days * sign) + ":" + str(hours % 24) + ":" + str(minutes % 60) + ":" + str(seconds % 60) + "." + str(milli_seconds)
+    time_str = f"{days * sign!s}:{hours % 24!s}:{minutes % 60}:{seconds % 60!s}.{milli_seconds!s}"
     return time_str
 
 
@@ -642,7 +642,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
 
         Examples:
             >>> data = bytearray(4)
-            >>> snap7.util.set_dint(data, 0, '-22:3:57:28.192')
+            >>> snap7.util.set_time(data, 0, '-22:3:57:28.192')
             >>> data
                 bytearray(b'\x8d\xda\xaf\x00')
         """
@@ -650,17 +650,22 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     sign = 1
     bits = 32
     data_list = re.split('[: .]', time_string)
-    days, hours, minutes, seconds, milli_seconds = [int(x) for x in data_list]
-    if days < 0:
+    days, hours, minutes, seconds, milli_seconds = [int(x) if c > 0 else x for c, x in enumerate(data_list)]
+    if re.split(r'(\d+)$', days)[0:2][0] == '-':
         sign = -1
-    time_int = ((days * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
-    if sign < 0:
-        time_int = (1 << bits) + time_int
-    formatstring = '{:0%ib}' % bits
-    byte_hex = hex(int(formatstring.format(time_int), 2)).split('x')[1]
-    bytes_array = bytes.fromhex(byte_hex)
-    bytearray_[byte_index:byte_index + 4] = bytes_array
-    return bytearray_
+    if abs(int(days)) <= 24 and hours <= 23 and minutes <= 59 and seconds <= 59 and milli_seconds <= 999:
+        if int(days) * sign == 24 and hours > 20 and minutes > 31 and seconds > 23 and milli_seconds > 647 or \
+                int(days) * sign == -24 and hours > 20 and minutes > 31 and seconds > 23 and milli_seconds > 648:
+            raise ValueError('time value out of range, please check the value interval')
+
+        time_int = ((int(days) * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
+        if sign < 0:
+            time_int = (1 << bits) + time_int
+        bytes_array = time_int.to_bytes(4, byteorder='big')
+        bytearray_[byte_index:byte_index + 4] = bytes_array
+        return bytearray_
+    else:
+        raise ValueError('time value out of range, please check the value interval')
 
 
 def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
