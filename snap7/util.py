@@ -650,7 +650,6 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
             >>> data
                 bytearray(b'\x8d\xda\xaf\x00')
         """
-    import re
     sign = 1
     bits = 32
     data_list = re.split('[: .]', time_string)
