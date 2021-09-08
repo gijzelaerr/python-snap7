@@ -128,7 +128,7 @@ class TestS7util(unittest.TestCase):
     def test_set_time(self):
         test_array = bytearray(_new_bytearray)
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             util.set_time(test_array, 43, '-24:24:32:11.648')
             util.set_time(test_array, 43, '-25:23:32:11.648')
 
