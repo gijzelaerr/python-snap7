@@ -1100,8 +1100,7 @@ class DB_Row:
 
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[
-        bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
