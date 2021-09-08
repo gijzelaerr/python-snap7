@@ -614,7 +614,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     byte_str = data_bytearray.hex()
     val = int(byte_str, 16)
     if (val & (1 << (bits - 1))) != 0:
-        sign = -1 # if sign bit is set e.g., 8bit: 128-255
+        sign = -1  # if sign bit is set e.g., 8bit: 128-255
         val = val - (1 << bits)  # compute negative value
         val = val * sign
 
@@ -623,9 +623,8 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     minutes = seconds // 60
     hours = minutes // 60
     days = hours // 24
-    time = str(days * sign) + ":" + str(hours % 24) + ":" + str(minutes % 60) + \
-           ":" + str(seconds % 60) + "." + str(milli_seconds)
-    return time
+    time_str = str(days * sign) + ":" + str(hours % 24) + ":" + str(minutes % 60) + ":" + str(seconds % 60) + "." + str(milli_seconds)
+    return time_str
 
 
 def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytearray:
@@ -654,8 +653,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     days, hours, minutes, seconds, milli_seconds = [int(x) for x in data_list]
     if days < 0:
         sign = -1
-    time_int = ((days * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 +
-                milli_seconds) * sign
+    time_int = ((days * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
     if sign < 0:
         time_int = (1 << bits) + time_int
     formatstring = '{:0%ib}' % bits
@@ -664,8 +662,9 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     bytearray_[byte_index:byte_index + 4] = bytes_array
     return bytearray_
 
+
 def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
-    """set unsigned small int
+    """Set unsigned small int
 
     Notes:
         Datatype `usint` (Unsigned small int) consists on 1 byte in the PLC.
@@ -827,7 +826,8 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.DB):
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0,
+                 area: Optional[Areas] = Areas.DB):
         """ Creates a new instance of the `Row` class.
 
         Args:
@@ -922,14 +922,14 @@ class DB_Row:
     _specification: OrderedDict = OrderedDict()  # row specification
 
     def __init__(
-        self,
-        bytearray_: bytearray,
-        _specification: str,
-        row_size: Optional[int] = 0,
-        db_offset: int = 0,
-        layout_offset: int = 0,
-        row_offset: Optional[int] = 0,
-        area: Optional[Areas] = Areas.DB
+            self,
+            bytearray_: bytearray,
+            _specification: str,
+            row_size: Optional[int] = 0,
+            db_offset: int = 0,
+            layout_offset: int = 0,
+            row_offset: Optional[int] = 0,
+            area: Optional[Areas] = Areas.DB
     ):
         """Creates a new instance of the `DB_Row` class.
 
@@ -1100,7 +1100,8 @@ class DB_Row:
 
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[
+        bytearray, None]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
