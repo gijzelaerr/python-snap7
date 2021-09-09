@@ -657,7 +657,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     hours: int = int(data_list[1])
     minutes: int = int(data_list[2])
     seconds: int = int(data_list[3])
-    milli_seconds: int = int(data_list[4])
+    milli_seconds: int = int(data_list[4].ljust(3, '0'))
     if re.split(r'(\d+)$', days)[0:2][0] == '-':
         sign = -1
     if abs(int(days)) <= 24 and hours <= 23 and minutes <= 59 and seconds <= 59 and milli_seconds <= 999:
