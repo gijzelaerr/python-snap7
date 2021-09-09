@@ -653,8 +653,11 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     sign = 1
     bits = 32
     data_list = re.split('[: .]', time_string)
-
-    days, hours, minutes, seconds, milli_seconds = [int(x) if c > 0 else x for c, x in enumerate(data_list)]
+    days: str = data_list[0]
+    hours: int = int(data_list[1])
+    minutes: int = int(data_list[2])
+    seconds: int = int(data_list[3])
+    milli_seconds: int = int(data_list[4])
     if re.split(r'(\d+)$', days)[0:2][0] == '-':
         sign = -1
     if abs(int(days)) <= 24 and hours <= 23 and minutes <= 59 and seconds <= 59 and milli_seconds <= 999:
@@ -670,7 +673,6 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
         return bytearray_
     else:
         raise ValueError('time value out of range, please check the value interval')
-
 
 
 def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
