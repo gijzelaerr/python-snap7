@@ -22,10 +22,11 @@ test_spec = """
 21      testint2     INT
 23      testDint     DINT
 27      testWord     WORD
-29      tests5time   S5TIME
+29      testS5time   S5TIME
 31      testdateandtime DATE_AND_TIME
 43      testusint0      USINT
 44      testsint0       SINT
+46      testTime     TIME
 """
 
 test_spec_indented = """
@@ -70,11 +71,13 @@ _bytearray = bytearray([
                                                    # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
     254, 254, 254, 254, 254, 127,                  # test small int
     128,                                           # test set byte
+    143, 255, 255, 255                             # test time
 ])
 
 _new_bytearray = bytearray(100)
 _new_bytearray[41:41 + 1] = struct.pack("B", 128)       # byte_index=41, value=128, bytes=1
 _new_bytearray[42:42 + 1] = struct.pack("B", 255)       # byte_index=41, value=255, bytes=1
+_new_bytearray[43:43 + 4] = struct.pack("I", 286331153)  # byte_index=43, value=286331153(T#3D_7H_32M_11S_153MS), bytes=4
 
 
 class TestS7util(unittest.TestCase):
@@ -100,7 +103,7 @@ class TestS7util(unittest.TestCase):
 
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
 
-        self.assertEqual(row['tests5time'], '0:00:00.100000')
+        self.assertEqual(row['testS5time'], '0:00:00.100000')
 
     def test_get_dt(self):
         """
@@ -111,6 +114,22 @@ class TestS7util(unittest.TestCase):
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
 
         self.assertEqual(row['testdateandtime'], '2020-07-12T17:32:02.854000')
+
+    def test_get_time(self):
+        """
+        TIME extraction from bytearray
+        """
+        test_array = bytearray(_bytearray)
+
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+
+        self.assertEqual(row['testTime'], '-21:17:57:28.193')
+
+    def test_set_time(self):
+        test_array = bytearray(_new_bytearray)
+        util.set_time(test_array, 43, '3:7:32:11.153')
+        byte_ = util.get_time(test_array, 43)
+        self.assertEqual(byte_, '3:7:32:11.153')
 
     def test_get_string(self):
         """

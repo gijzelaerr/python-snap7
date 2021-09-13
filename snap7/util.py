@@ -609,8 +609,85 @@ def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
     return datetime(year,month,day,hour,min,sec,microsec)
 
 
+def get_time(bytearray_: bytearray, byte_index: int) -> str:
+    """Get time value from bytearray.
+
+        Notes:
+            Datatype `time` consists in 4 bytes in the PLC.
+            Maximum possible value is T#24D_20H_31M_23S_647MS(2147483647).
+            Lower posible value is T#-24D_20H_31M_23S_648MS(-2147483648).
+
+        Args:
+            bytearray_: buffer to read.
+            byte_index: byte index from where to start reading.
+
+        Returns:
+            Value read.
+
+        Examples:
+            >>> import struct
+            >>> data = bytearray(4)
+            >>> data[:] = struct.pack(">i", 2147483647)
+            >>> snap7.util.get_time(data, 0)
+                '24:20:31:23:647'
+        """
+    data_bytearray = bytearray_[byte_index:byte_index + 4]
+    bits = 32
+    sign = 1
+    byte_str = data_bytearray.hex()
+    val = int(byte_str, 16)
+    if (val & (1 << (bits - 1))) != 0:
+        sign = -1  # if sign bit is set e.g., 8bit: 128-255
+        val = val - (1 << bits)  # compute negative value
+        val = val * sign
+
+    milli_seconds = val % 1000
+    seconds = val // 1000
+    minutes = seconds // 60
+    hours = minutes // 60
+    days = hours // 24
+    time_str = str(days * sign) + ":" + str(hours % 24) + ":" + str(minutes % 60) + ":" + str(seconds % 60) + "." + str(milli_seconds)
+    return time_str
+
+
+def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytearray:
+    """Set value in bytearray to time
+
+        Notes:
+            Datatype `time` consists in 4 bytes in the PLC.
+            Maximum possible value is T#24D_20H_31M_23S_647MS(2147483647).
+            Lower posible value is T#-24D_20H_31M_23S_648MS(-2147483648).
+
+        Args:
+            bytearray_: buffer to write.
+            byte_index: byte index from where to start writing.
+            time_string: time value in string
+
+        Examples:
+            >>> data = bytearray(4)
+            >>> snap7.util.set_dint(data, 0, '-22:3:57:28.192')
+            >>> data
+                bytearray(b'\x8d\xda\xaf\x00')
+        """
+    import re
+    sign = 1
+    bits = 32
+    data_list = re.split('[: .]', time_string)
+    days, hours, minutes, seconds, milli_seconds = [int(x) for x in data_list]
+    if days < 0:
+        sign = -1
+    time_int = ((days * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
+    if sign < 0:
+        time_int = (1 << bits) + time_int
+    formatstring = '{:0%ib}' % bits
+    byte_hex = hex(int(formatstring.format(time_int), 2)).split('x')[1]
+    bytes_array = bytes.fromhex(byte_hex)
+    bytearray_[byte_index:byte_index + 4] = bytes_array
+    return bytearray_
+
+
 def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
-    """set unsigned small int
+    """Set unsigned small int
 
     Notes:
         Datatype `usint` (Unsigned small int) consists on 1 byte in the PLC.
@@ -772,7 +849,8 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0, area: Optional[Areas] = Areas.DB):
+                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0,
+                 area: Optional[Areas] = Areas.DB):
         """ Creates a new instance of the `Row` class.
 
         Args:
@@ -867,14 +945,14 @@ class DB_Row:
     _specification: OrderedDict = OrderedDict()  # row specification
 
     def __init__(
-        self,
-        bytearray_: bytearray,
-        _specification: str,
-        row_size: Optional[int] = 0,
-        db_offset: int = 0,
-        layout_offset: int = 0,
-        row_offset: Optional[int] = 0,
-        area: Optional[Areas] = Areas.DB
+            self,
+            bytearray_: bytearray,
+            _specification: str,
+            row_size: Optional[int] = 0,
+            db_offset: int = 0,
+            layout_offset: int = 0,
+            row_offset: Optional[int] = 0,
+            area: Optional[Areas] = Areas.DB
     ):
         """Creates a new instance of the `DB_Row` class.
 
@@ -1035,7 +1113,7 @@ class DB_Row:
         # add these three not implemented data typ to avoid
         # 'Unable to get repr for class<snap7.util.DB_ROW>' error
         elif type_ == 'TIME':
-            return 'read TIME not implemented'
+            return get_time(bytearray_, byte_index)
 
         elif type_ == 'DATE':
             return 'read DATE not implemented'
@@ -1103,6 +1181,9 @@ class DB_Row:
 
         if type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
+
+        if type == 'TIME' and isinstance(value, str):
+            return set_time(bytearray_, byte_index, value)
 
         raise ValueError
 
