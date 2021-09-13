@@ -651,19 +651,17 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
                 bytearray(b'\x8d\xda\xaf\x00')
         """
     sign = 1
-    bits = 32
-    data_list = re.split('[: .]', time_string)
-    days: str = data_list[0]
-    hours: int = int(data_list[1])
-    minutes: int = int(data_list[2])
-    seconds: int = int(data_list[3])
-    milli_seconds: int = int(data_list[4].ljust(3, '0'))
-    if re.match('^-\d{1,2}$', days):
-        sign = -1
-
     if re.fullmatch(r"(-?(2[0-3]|1?\d):(2[0-3]|1?\d|\d):([1-5]?\d):[1-5]?\d.\d{1,3})|"
                     r"(-24:(20|1?\d):(3[0-1]|[0-2]?\d):(2[0-3]|1?\d).(64[0-8]|6[0-3]\d|[0-5]\d{1,2}))|"
                     r"(24:(20|1?\d):(3[0-1]|[0-2]?\d):(2[0-3]|1?\d).(64[0-7]|6[0-3]\d|[0-5]\d{1,2}))", time_string):
+        data_list = re.split('[: .]', time_string)
+        days: str = data_list[0]
+        hours: int = int(data_list[1])
+        minutes: int = int(data_list[2])
+        seconds: int = int(data_list[3])
+        milli_seconds: int = int(data_list[4].ljust(3, '0'))
+        if re.match(r'^-\d{1,2}$', days):
+            sign = -1
 
         time_int = ((int(days) * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
         bytes_array = time_int.to_bytes(4, byteorder='big', signed=True)
