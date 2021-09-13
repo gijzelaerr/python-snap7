@@ -658,17 +658,15 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     minutes: int = int(data_list[2])
     seconds: int = int(data_list[3])
     milli_seconds: int = int(data_list[4].ljust(3, '0'))
-    if re.split(r'(\d+)$', days)[0:2][0] == '-':
+    if re.match('^-\d{1,2}$', days):
         sign = -1
-    if abs(int(days)) <= 24 and hours <= 23 and minutes <= 59 and seconds <= 59 and milli_seconds <= 999:
-        if int(days) * sign == 24 and hours > 20 and minutes > 31 and seconds > 23 and milli_seconds > 647 or \
-                int(days) * sign == -24 and hours > 20 and minutes > 31 and seconds > 23 and milli_seconds > 648:
-            raise ValueError('time value out of range, please check the value interval')
+
+    if re.fullmatch(r"(-?(2[0-3]|1?\d):(2[0-3]|1?\d|\d):([1-5]?\d):[1-5]?\d.\d{1,3})|"
+                    r"(-24:(20|1?\d):(3[0-1]|[0-2]?\d):(2[0-3]|1?\d).(64[0-8]|6[0-3]\d|[0-5]\d{1,2}))|"
+                    r"(24:(20|1?\d):(3[0-1]|[0-2]?\d):(2[0-3]|1?\d).(64[0-7]|6[0-3]\d|[0-5]\d{1,2}))", time_string):
 
         time_int = ((int(days) * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
-        if sign < 0:
-            time_int = (1 << bits) + time_int
-        bytes_array = time_int.to_bytes(4, byteorder='big')
+        bytes_array = time_int.to_bytes(4, byteorder='big', signed=True)
         bytearray_[byte_index:byte_index + 4] = bytes_array
         return bytearray_
     else:
