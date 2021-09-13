@@ -572,7 +572,7 @@ def get_dt(bytearray_: bytearray, byte_index: int) -> str:
         >>> get_dt(data,0) 
             '2020-07-12T17:32:02.854000'
     """
-    return  get_date_time_object(get_date_time,byte_index).isoformat(timespec='microseconds')
+    return  get_date_time_object(bytearray_,byte_index).isoformat(timespec='microseconds')
 
 def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
     """Get  DATE_AND_TIME Value from bytearray as python datetime object
