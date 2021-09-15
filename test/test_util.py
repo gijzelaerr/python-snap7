@@ -127,6 +127,24 @@ class TestS7util(unittest.TestCase):
 
     def test_set_time(self):
         test_array = bytearray(_new_bytearray)
+
+        with self.assertRaises(ValueError):
+            util.set_time(test_array, 43, '-24:25:30:23:193')
+        with self.assertRaises(ValueError):
+            util.set_time(test_array, 43, '-24:24:32:11.648')
+        with self.assertRaises(ValueError):
+            util.set_time(test_array, 43, '-25:23:32:11.648')
+        with self.assertRaises(ValueError):
+            util.set_time(test_array, 43, '24:24:30:23.620')
+
+        util.set_time(test_array, 43, '24:20:31:23.647')
+        byte_ = util.get_time(test_array, 43)
+        self.assertEqual(byte_, '24:20:31:23.647')
+
+        util.set_time(test_array, 43, '-24:20:31:23.648')
+        byte_ = util.get_time(test_array, 43)
+        self.assertEqual(byte_, '-24:20:31:23.648')
+
         util.set_time(test_array, 43, '3:7:32:11.153')
         byte_ = util.get_time(test_array, 43)
         self.assertEqual(byte_, '3:7:32:11.153')
