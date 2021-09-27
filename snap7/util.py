@@ -558,32 +558,53 @@ def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
 
 
 def get_dt(bytearray_: bytearray, byte_index: int) -> str:
-    # 1990 - 1999, 2000 - 2089
-    micro_to_milli = 1000
-    data_bytearray = bytearray_[byte_index:byte_index + 8]
-    dt_lst = list(data_bytearray.hex())
-    date_time_list = []
-    for i in range(0, len(dt_lst), 2):
-        # last two bytearrays are the miliseconds and workday, they must be parsed together
-        if i != len(dt_lst) - 4:
-            if i == 0 and dt_lst[i] == '9':
-                date_time_list.append(int('19' + dt_lst[i] + dt_lst[i + 1]))
-            elif i == 0 and dt_lst[i] != '9':
-                date_time_list.append(int('20' + dt_lst[i] + dt_lst[i + 1]))
-            else:
-                date_time_list.append(int(dt_lst[i] + dt_lst[i + 1]))
-        else:
-            date_time_list.append(int(dt_lst[i] + dt_lst[i + 1] + dt_lst[i + 2]))
-            break
-    date_and_time = datetime(
-        date_time_list[0],
-        date_time_list[1],
-        date_time_list[2],
-        date_time_list[3],
-        date_time_list[4],
-        date_time_list[5],
-        date_time_list[6] * micro_to_milli).isoformat(timespec='microseconds')
-    return date_and_time
+    """Get  DATE_AND_TIME Value from bytearray as ISO 8601 formatted Date String
+    Notes:
+        Datatype `DATE_AND_TIME` consists in 8 bytes in the PLC.
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start writing.
+    Examples:
+        >>> data = bytearray(8)
+        >>> data[:] = [32, 7, 18, 23, 50, 2, 133, 65]  #'2020-07-12T17:32:02.854000'
+        >>> get_dt(data,0)
+            '2020-07-12T17:32:02.854000'
+    """
+    return get_date_time_object(bytearray_, byte_index).isoformat(timespec='microseconds')
+
+
+def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
+    """Get  DATE_AND_TIME Value from bytearray as python datetime object
+    Notes:
+        Datatype `DATE_AND_TIME` consists in 8 bytes in the PLC.
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start writing.
+    Examples:
+        >>> data = bytearray(8)
+        >>> data[:] = [32, 7, 18, 23, 50, 2, 133, 65]  #date '2020-07-12 17:32:02.854'
+        >>> get_date_time_object(data,0)
+            datetime.datetime(2020, 7, 12, 17, 32, 2, 854000)
+    """
+
+    def bcd_to_byte(byte: int) -> int:
+        return (byte >> 4) * 10 + (byte & 0xF)
+
+    year = bcd_to_byte(bytearray_[byte_index])
+    # between 1990 and  2089, only last two digits are saved in DB 90 - 89
+    year = 2000 + year if year < 90 else 1900 + year
+    month = bcd_to_byte(bytearray_[byte_index + 1])
+    day = bcd_to_byte(bytearray_[byte_index + 2])
+    hour = bcd_to_byte(bytearray_[byte_index + 3])
+    min = bcd_to_byte(bytearray_[byte_index + 4])
+    sec = bcd_to_byte(bytearray_[byte_index + 5])
+    # plc save miliseconds in two bytes with the most signifanct byte used only
+    # in the last byte for microseconds the other for weekday
+    # * 1000 because pythoin datetime needs microseconds not milli
+    microsec = (bcd_to_byte(bytearray_[byte_index + 6]) * 10
+                + bcd_to_byte(bytearray_[byte_index + 7] >> 4)) * 1000
+
+    return datetime(year, month, day, hour, min, sec, microsec)
 
 
 def get_time(bytearray_: bytearray, byte_index: int) -> str:
