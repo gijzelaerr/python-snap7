@@ -1070,6 +1070,9 @@ class DB_Row:
 
         bytearray_ = self.get_bytearray()
 
+        # set parsing non case-sensitive
+        type_ = type_.upper()
+
         if type_ == 'BOOL':
             byte_index, bool_index = str(byte_index).split('.')
             return get_bool(bytearray_, self.get_offset(byte_index),
@@ -1101,6 +1104,9 @@ class DB_Row:
 
         elif type_ == 'WORD':
             return get_word(bytearray_, byte_index)
+
+        elif type_ == 'BYTE':
+            return get_byte(bytearray_, byte_index)
 
         elif type_ == 'S5TIME':
             data_s5time = get_s5time(bytearray_, byte_index)
