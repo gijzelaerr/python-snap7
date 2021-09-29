@@ -646,7 +646,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     days = hours // 24
 
     sign_str = '' if sign >= 0 else '-'
-    time_str = f"{sign_str}{days!s}:{hours % 24!s}:{minutes % 60}:{seconds % 60!s}.{milli_seconds!s}"
+    time_str = f"{sign_str}{days!s}:{hours % 24!s}:{minutes % 60!s}:{seconds % 60!s}.{milli_seconds!s}"
 
     return time_str
 
