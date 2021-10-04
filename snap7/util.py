@@ -582,6 +582,57 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
         bytearray_[byte_index + i] = b
 
 
+def get_udint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get unsigned dint value from bytearray.
+
+    Notes:
+        Datatype `udint` consists in 4 bytes in the PLC.
+        Maximum possible value is 4294967295.
+        Minimum posible value is 0.
+
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> import struct
+        >>> data = bytearray(4)
+        >>> data[:] = struct.pack(">I", 4294967295)
+        >>> snap7.util.get_udint(data, 0)
+            4294967295
+    """
+    data = bytearray_[byte_index:byte_index + 4]
+    dint = struct.unpack('>I', struct.pack('4B', *data))[0]
+    return dint
+
+
+def set_udint(bytearray_: bytearray, byte_index: int, dint: int):
+    """Set value in bytearray to unsigned dint
+
+    Notes:
+        Datatype `dint` consists in 4 bytes in the PLC.
+        Maximum possible value is 4294967295.
+        Minimum posible value is 0.
+
+    Args:
+        bytearray_: buffer to write.
+        byte_index: byte index from where to start writing.
+
+    Examples:
+        >>> data = bytearray(4)
+        >>> snap7.util.set_udint(data, 0, 4294967295)
+        >>> data
+            bytearray(b'\\xff\\xff\\xff\\xff')
+    """
+    dint = int(dint)
+    _bytes = struct.unpack('4B', struct.pack('>I', dint))
+    for i, b in enumerate(_bytes):
+        bytearray_[byte_index + i] = b
+
+
 def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
     micro_to_milli = 1000
     data_bytearray = bytearray_[byte_index:byte_index + 2]
