@@ -1198,8 +1198,14 @@ class DB_Row:
         elif type_ == 'DWORD':
             return get_dword(bytearray_, byte_index)
 
+        elif type_ == 'UDINT':
+            return get_udint(bytearray_, byte_index)
+
         elif type_ == 'DINT':
             return get_dint(bytearray_, byte_index)
+
+        elif type_ == 'UINT':
+            return get_uint(bytearray_, byte_index)
 
         elif type_ == 'INT':
             return get_int(bytearray_, byte_index)
@@ -1272,8 +1278,14 @@ class DB_Row:
         elif type == 'DWORD' and isinstance(value, int):
             return set_dword(bytearray_, byte_index, value)
 
+        elif type == 'UDINT' and isinstance(value, int):
+            return set_udint(bytearray_, byte_index, value)
+
         elif type == 'DINT' and isinstance(value, int):
             return set_dint(bytearray_, byte_index, value)
+
+        elif type == 'UINT' and isinstance(value, int):
+            return set_uint(bytearray_, byte_index, value)
 
         elif type == 'INT' and isinstance(value, int):
             return set_int(bytearray_, byte_index, value)
@@ -1287,13 +1299,13 @@ class DB_Row:
         elif type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
-        if type == 'USINT' and isinstance(value, int):
+        elif type == 'USINT' and isinstance(value, int):
             return set_usint(bytearray_, byte_index, value)
 
-        if type == 'SINT' and isinstance(value, int):
+        elif type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
-        if type == 'TIME' and isinstance(value, str):
+        elif type == 'TIME' and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
 
         raise ValueError
