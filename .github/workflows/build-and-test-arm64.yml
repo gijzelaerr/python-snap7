@@ -1,4 +1,4 @@
-name: build-and-test-wheels
+name: build-and-test-wheels-arm64
 on:
   push:
     branches: [master]
@@ -25,6 +25,7 @@ jobs:
         if: steps.snap7-archive.outputs.cache-hit != 'true'
         run: |
           wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
+
       - name: Extract archive
         run: 7z x snap7-full-1.4.2.7z
 
@@ -41,7 +42,7 @@ jobs:
           platforms: arm64
 
       - name: Build wheels
-        uses: joerick/cibuildwheel@v1.11.0
+        uses: pypa/cibuildwheel@v2.1.3
         with:
           output-dir: wheelhouse
         env:
@@ -56,13 +57,14 @@ jobs:
       - name: Repack wheel
         run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
-      - name: upload artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: wheels
           path: wheelhouse/*/*.whl
+
   test-wheel:
-    name: testing wheel
+    name: Testing wheel
     needs: arm64-build
     runs-on: ubuntu-latest
     strategy:
@@ -71,14 +73,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - uses: actions/download-artifact@v2
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
         with:
           name: wheels
           path: wheelhouse
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
         with:
           platforms: arm64
+
       - name: Run tests in docker:arm64v8
         run: |
           docker run --rm --interactive -v $PWD/test:/test -v $PWD/wheelhouse:/wheelhouse "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
