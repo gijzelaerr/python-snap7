@@ -599,6 +599,8 @@ class TestClient(unittest.TestCase):
             except Snap7Exception as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
+                # Wait for a thread to finish
+                time.sleep(0.1)
                 return
             except BaseException:
                 self.fail(f"While waiting another error appeared:>>>>>>>> {res2}")
