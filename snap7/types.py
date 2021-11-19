@@ -86,8 +86,11 @@ areas = ADict({
 class WordLen(Enum):
     Bit = 0x01
     Byte = 0x02
+    Char = 0x03
     Word = 0x04
+    Int = 0x05
     DWord = 0x06
+    DInt = 0x07
     Real = 0x08
     Counter = 0x1C
     Timer = 0x1D
@@ -96,8 +99,11 @@ class WordLen(Enum):
 # Leave it for now
 S7WLBit = 0x01
 S7WLByte = 0x02
+S7WLChar = 0x03
 S7WLWord = 0x04
+S7WLInt = 0x05
 S7WLDWord = 0x06
+S7WLDInt = 0x07
 S7WLReal = 0x08
 S7WLCounter = 0x1C
 S7WLTimer = 0x1D
