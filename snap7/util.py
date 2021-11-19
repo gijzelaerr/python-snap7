@@ -306,6 +306,60 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
+def set_uint(bytearray_: bytearray, byte_index: int, _int: int):
+    """Set value in bytearray to unsigned int
+
+    Notes:
+        An datatype `uint` in the PLC consists of two `bytes`.
+
+    Args:
+        bytearray_: buffer to write on.
+        byte_index: byte index to start writing from.
+        _int: int value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(2)
+        >>> snap7.util.set_uint(data, 0, 65535)
+            bytearray(b'\\xff\\xff')
+    """
+    # make sure were dealing with an int
+    _int = int(_int)
+    _bytes = struct.unpack('2B', struct.pack('>H', _int))
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
+
+
+def get_uint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get unsigned int value from bytearray.
+
+    Notes:
+        Datatype `uint` in the PLC is represented in two bytes
+        Maximum posible value is 65535.
+        Lower posible value is 0.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to start reading from.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> data = bytearray([255, 255])
+        >>> snap7.util.get_uint(data, 0)
+            65535
+    """
+    data = bytearray_[byte_index:byte_index + 2]
+    data[1] = data[1] & 0xff
+    data[0] = data[0] & 0xff
+    packed = struct.pack('2B', *data)
+    value = struct.unpack('>H', packed)[0]
+    return value
+
+
 def set_real(bytearray_: bytearray, byte_index: int, real) -> bytearray:
     """Set Real value
 
@@ -524,6 +578,57 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
     """
     dint = int(dint)
     _bytes = struct.unpack('4B', struct.pack('>i', dint))
+    for i, b in enumerate(_bytes):
+        bytearray_[byte_index + i] = b
+
+
+def get_udint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get unsigned dint value from bytearray.
+
+    Notes:
+        Datatype `udint` consists in 4 bytes in the PLC.
+        Maximum possible value is 4294967295.
+        Minimum posible value is 0.
+
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        >>> import struct
+        >>> data = bytearray(4)
+        >>> data[:] = struct.pack(">I", 4294967295)
+        >>> snap7.util.get_udint(data, 0)
+            4294967295
+    """
+    data = bytearray_[byte_index:byte_index + 4]
+    dint = struct.unpack('>I', struct.pack('4B', *data))[0]
+    return dint
+
+
+def set_udint(bytearray_: bytearray, byte_index: int, dint: int):
+    """Set value in bytearray to unsigned dint
+
+    Notes:
+        Datatype `dint` consists in 4 bytes in the PLC.
+        Maximum possible value is 4294967295.
+        Minimum posible value is 0.
+
+    Args:
+        bytearray_: buffer to write.
+        byte_index: byte index from where to start writing.
+
+    Examples:
+        >>> data = bytearray(4)
+        >>> snap7.util.set_udint(data, 0, 4294967295)
+        >>> data
+            bytearray(b'\\xff\\xff\\xff\\xff')
+    """
+    dint = int(dint)
+    _bytes = struct.unpack('4B', struct.pack('>I', dint))
     for i, b in enumerate(_bytes):
         bytearray_[byte_index + i] = b
 
@@ -1096,8 +1201,14 @@ class DB_Row:
         elif type_ == 'DWORD':
             return get_dword(bytearray_, byte_index)
 
+        elif type_ == 'UDINT':
+            return get_udint(bytearray_, byte_index)
+
         elif type_ == 'DINT':
             return get_dint(bytearray_, byte_index)
+
+        elif type_ == 'UINT':
+            return get_uint(bytearray_, byte_index)
 
         elif type_ == 'INT':
             return get_int(bytearray_, byte_index)
@@ -1173,8 +1284,14 @@ class DB_Row:
         elif type == 'DWORD' and isinstance(value, int):
             return set_dword(bytearray_, byte_index, value)
 
+        elif type == 'UDINT' and isinstance(value, int):
+            return set_udint(bytearray_, byte_index, value)
+
         elif type == 'DINT' and isinstance(value, int):
             return set_dint(bytearray_, byte_index, value)
+
+        elif type == 'UINT' and isinstance(value, int):
+            return set_uint(bytearray_, byte_index, value)
 
         elif type == 'INT' and isinstance(value, int):
             return set_int(bytearray_, byte_index, value)
@@ -1188,13 +1305,13 @@ class DB_Row:
         elif type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
-        if type == 'USINT' and isinstance(value, int):
+        elif type == 'USINT' and isinstance(value, int):
             return set_usint(bytearray_, byte_index, value)
 
-        if type == 'SINT' and isinstance(value, int):
+        elif type == 'SINT' and isinstance(value, int):
             return set_sint(bytearray_, byte_index, value)
 
-        if type == 'TIME' and isinstance(value, str):
+        elif type == 'TIME' and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
 
         raise ValueError
