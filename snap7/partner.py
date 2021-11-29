@@ -215,9 +215,9 @@ class Partner:
         if not re.match(ipv4, remote_ip):
             raise ValueError(f"{remote_ip} is invalid ipv4")
         logger.info(f"starting partnering from {local_ip} to {remote_ip}")
-        return self._library.Par_StartTo(self._pointer, local_ip, remote_ip,
-                                         c_uint16(local_tsap),
-                                         c_uint16(remote_tsap))
+        return self._library.Par_StartTo(self._pointer, local_ip.encode(), remote_ip.encode(),
+                                         snap7.types.word(local_tsap),
+                                         snap7.types.word(remote_tsap))
 
     def stop(self) -> int:
         """

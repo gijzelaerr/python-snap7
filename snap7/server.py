@@ -265,7 +265,7 @@ class Server:
         if not re.match(ipv4, ip):
             raise ValueError(f"{ip} is invalid ipv4")
         logger.info(f"starting server to {ip}:102")
-        return self.library.Srv_StartTo(self.pointer, ip)
+        return self.library.Srv_StartTo(self.pointer, ip.encode())
 
     @error_wrap
     def set_param(self, number: int, value: int):
