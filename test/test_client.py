@@ -1002,7 +1002,7 @@ class TestClient(unittest.TestCase):
         self._as_check_loop()
         self.assertEqual(expected, self.client.ct_read(0, 1))
         self.assertEqual(1, self.callback_counter)
-    
+
     def test_read_write_integer_area(self):
         amount = 1
         start = 1
