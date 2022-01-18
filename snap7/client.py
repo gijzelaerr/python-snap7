@@ -10,7 +10,7 @@ from typing import Union, Tuple, Optional, List
 
 import snap7
 from snap7.common import check_error, load_library, ipv4
-from snap7.exceptions import Snap7Exception
+from snap7.exceptions import Snap7Exception, Snap7InvalidArea
 from snap7.types import Areas, WordLen, S7Object, buffer_type, buffer_size, BlocksList, S7CpuInfo, S7DataItem, S7SZL, S7OrderCode, \
     S7Protection, S7SZLList, S7CpInfo
 from snap7.types import TS7BlockInfo, param_types, cpu_statuses
@@ -389,9 +389,11 @@ class Client:
             >>> buffer
             bytearray(b'\\x00\\x00')
         """
-        if area not in Areas:
-            raise ValueError(f"{area} is not implemented in snap7.types")
-        elif area == Areas.TM:
+        try:
+            area = Areas(area)
+        except ValueError:
+            raise Snap7InvalidArea(area)
+        if area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
             wordlen = WordLen.Counter
@@ -425,6 +427,10 @@ class Client:
             >>> buffer = bytearray([0b00000001])
             >>> client.write_area(snap7.types.Areas.DB, 1, 10, buffer)  # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
         """
+        try:
+            area = Areas(area)
+        except ValueError:
+            raise Snap7InvalidArea(area)
         if area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
@@ -992,9 +998,11 @@ class Client:
         return result
 
     def _prepare_as_read_area(self, area: Areas, size: int) -> Tuple[WordLen, Array]:
-        if area not in Areas:
-            raise ValueError(f"{area} is not implemented in snap7.types")
-        elif area == Areas.TM:
+        try:
+            area = Areas(area)
+        except ValueError:
+            raise Snap7InvalidArea(area)
+        if area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
             wordlen = WordLen.Counter
@@ -1025,9 +1033,11 @@ class Client:
         return result
 
     def _prepare_as_write_area(self, area: Areas, data: bytearray) -> Tuple[WordLen, Array]:
-        if area not in Areas:
-            raise ValueError(f"{area} is not implemented in snap7.types")
-        elif area == Areas.TM:
+        try:
+            area = Areas(area)
+        except ValueError:
+            raise Snap7InvalidArea(area)
+        if area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
             wordlen = WordLen.Counter

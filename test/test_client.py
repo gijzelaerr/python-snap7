@@ -12,7 +12,7 @@ from unittest import mock
 
 import snap7
 from snap7 import util
-from snap7.exceptions import Snap7Exception
+from snap7.exceptions import Snap7Exception, Snap7InvalidArea
 from snap7.common import check_error
 from snap7.server import mainloop
 from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object, Areas, WordLen
@@ -1002,6 +1002,20 @@ class TestClient(unittest.TestCase):
         self._as_check_loop()
         self.assertEqual(expected, self.client.ct_read(0, 1))
         self.assertEqual(1, self.callback_counter)
+    
+    def test_read_write_integer_area(self):
+        amount = 1
+        start = 1
+        valid_area = 28
+        dbnumber = 0
+        data = bytearray(b'\x13\x35')
+        self.client.write_area(valid_area, dbnumber, start, data)
+        res = self.client.read_area(valid_area, dbnumber, start, amount)
+        self.assertEqual(data, bytearray(res))
+
+        invalid_area = 777
+        self.assertRaises(Snap7InvalidArea, self.client.read_area, invalid_area, dbnumber, start, amount)
+        self.assertRaises(Snap7InvalidArea, self.client.write_area, invalid_area, dbnumber, start, data)
 
 
 class TestClientBeforeConnect(unittest.TestCase):
