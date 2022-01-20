@@ -89,5 +89,5 @@ jobs:
         run: |
           docker run --rm --interactive -v $PWD/test:/test -v $PWD/wheelhouse:/wheelhouse "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
           python -m pip install pytest $(ls wheelhouse/${{ runner.os }}/*.whl)
-          python -m pytest test/test_server.py test/test_util.py test/test_client.py test/test_mainloop.py test/test_partner.py
+          python -m pytest tests/test_server.py tests/test_util.py tests/test_client.py tests/test_mainloop.py tests/test_partner.py
           EOF

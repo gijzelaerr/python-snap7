@@ -19,4 +19,4 @@ jobs:
           sudo python3 -m pip install --upgrade pip
           sudo python3 -m pip install pycodestyle
       - name: Run pycodestyle
-        run: pycodestyle snap7 test
+        run: pycodestyle snap7 tests

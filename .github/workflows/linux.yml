@@ -32,5 +32,5 @@ jobs:
       - name: Run pytest
         run: |
           which pytest
-          pytest test/test_server.py test/test_client.py test/test_util.py test/test_mainloop.py
-          sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest test/test_partner.py
+          pytest tests/test_server.py tests/test_client.py tests/test_util.py tests/test_mainloop.py
+          sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest tests/test_partner.py

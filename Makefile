@@ -27,14 +27,14 @@ doc: venv/bin/sphinx-build
 	cd doc && make html
 
 pycodestyle: venv/bin/pytest
-	venv/bin/pycodestyle snap7 test
+	venv/bin/pycodestyle snap7 tests
 
 mypy: venv/bin/pytest
-	venv/bin/mypy snap7 test
+	venv/bin/mypy snap7 tests
 
 test: venv/bin/pytest
-	venv/bin/pytest test/test_server.py test/test_client.py test/test_util.py test/test_mainloop.py
-	sudo venv/bin/pytest test/test_partner.py  # run this as last to prevent pytest cache dir creates as root
+	venv/bin/pytest tests/test_server.py tests/test_client.py tests/test_util.py tests/test_mainloop.py
+	sudo venv/bin/pytest tests/test_partner.py  # run this as last to prevent pytest cache dir creates as root
 
 clean:
 	rm -rf venv python_snap7.egg-info .pytest_cache .tox dist .eggs
