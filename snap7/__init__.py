@@ -12,6 +12,6 @@ import snap7.types as types
 import snap7.util as util
 
 try:
-    __version__ = pkg_resources.require("snap7")[0].version
+    __version__ = pkg_resources.require("python-snap7")[0].version
 except pkg_resources.DistributionNotFound:
     __version__ = "0.0rc0"
