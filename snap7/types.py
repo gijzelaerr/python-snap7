@@ -2,9 +2,9 @@
 Python equivalent for snap7 specific types.
 """
 import ctypes
+from enum import Enum
 
 from snap7.common import ADict
-from enum import Enum
 
 S7Object = ctypes.c_void_p
 buffer_size = 65536

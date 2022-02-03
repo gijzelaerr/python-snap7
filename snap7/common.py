@@ -4,8 +4,8 @@ import logging
 import pathlib
 import platform
 from ctypes import c_char
-from ctypes.util import find_library
 from typing import Optional
+from ctypes.util import find_library
 
 from snap7.exceptions import Snap7Exception
 

@@ -1,8 +1,7 @@
 import ctypes
 import snap7
-from snap7.types import S7WLByte, S7DataItem, S7WLWord, S7WLReal, S7WLTimer
-from snap7.types import areas, wordlen_to_ctypes
-from snap7.util import set_int, set_real, set_word, get_int, get_real, get_s5time
+from snap7.types import Areas, S7DataItem, S7WLWord, S7WLReal, S7WLTimer
+from snap7.util import set_int, set_real, get_int, get_real, get_s5time
 
 
 client = snap7.client.Client()
@@ -34,9 +33,9 @@ set_real(real, 0, 42.5)
 
 counters = 0x2999.to_bytes(2, 'big') + 0x1111.to_bytes(2, 'big')
 
-item1 = set_data_item(area=areas.DB, word_len=S7WLWord, db_number=1, start=0, amount=4, data=ints)
-item2 = set_data_item(area=areas.DB, word_len=S7WLReal, db_number=1, start=8, amount=1, data=real)
-item3 = set_data_item(area=areas.TM, word_len=S7WLTimer, db_number=0, start=2, amount=2, data=counters)
+item1 = set_data_item(area=Areas.DB, word_len=S7WLWord, db_number=1, start=0, amount=4, data=ints)
+item2 = set_data_item(area=Areas.DB, word_len=S7WLReal, db_number=1, start=8, amount=1, data=real)
+item3 = set_data_item(area=Areas.TM, word_len=S7WLTimer, db_number=0, start=2, amount=2, data=counters)
 
 items.append(item1)
 items.append(item2)

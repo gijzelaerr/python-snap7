@@ -82,16 +82,17 @@ example::
 
 
 """
+import re
+import time
 import struct
 import logging
-import re
-from datetime import date, timedelta, datetime
+from typing import Dict, Union, Callable, Optional
+from datetime import date, datetime, timedelta
 from collections import OrderedDict
-from typing import Dict, Optional, Union
+
 from snap7.types import Areas
 from snap7.client import Client
 from snap7.exceptions import Snap7Exception
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -1171,9 +1172,6 @@ class DB_Row:
         Returns:
             Value read according to the `type_`
         """
-        print('******************')
-        print(type)
-
         bytearray_ = self.get_bytearray()
 
         # set parsing non case-sensitive
@@ -1196,7 +1194,7 @@ class DB_Row:
             max_size_int = int(max_size_grouped)
             return get_string(bytearray_, byte_index, max_size_int)
         else:
-            type_to_func = {
+            type_to_func: Dict[str, Callable] = {
                 'REAL': get_real,
                 'DWORD': get_dword,
                 'UDINT': get_udint,
