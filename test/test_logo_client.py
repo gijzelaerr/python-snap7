@@ -24,7 +24,7 @@ class TestLogoClient(unittest.TestCase):
         cls.process = Process(target=mainloop)
         cls.process.start()
         time.sleep(2)  # wait for server to start
-    
+
     @classmethod
     def tearDownClass(cls):
         cls.process.terminate()
