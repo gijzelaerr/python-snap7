@@ -82,7 +82,6 @@ example::
 
 
 """
-from snap7.common import ADict
 import struct
 import logging
 import re
@@ -1172,6 +1171,8 @@ class DB_Row:
         Returns:
             Value read according to the `type_`
         """
+        print('******************')
+        print(type)
 
         bytearray_ = self.get_bytearray()
 
@@ -1194,55 +1195,26 @@ class DB_Row:
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return get_string(bytearray_, byte_index, max_size_int)
-
-        elif type_ == 'REAL':
-            return get_real(bytearray_, byte_index)
-
-        elif type_ == 'DWORD':
-            return get_dword(bytearray_, byte_index)
-
-        elif type_ == 'UDINT':
-            return get_udint(bytearray_, byte_index)
-
-        elif type_ == 'DINT':
-            return get_dint(bytearray_, byte_index)
-
-        elif type_ == 'UINT':
-            return get_uint(bytearray_, byte_index)
-
-        elif type_ == 'INT':
-            return get_int(bytearray_, byte_index)
-
-        elif type_ == 'WORD':
-            return get_word(bytearray_, byte_index)
-
-        elif type_ == 'BYTE':
-            return get_byte(bytearray_, byte_index)
-
-        elif type_ == 'S5TIME':
-            data_s5time = get_s5time(bytearray_, byte_index)
-            return data_s5time
-
-        elif type_ == 'DATE_AND_TIME':
-            data_dt = get_dt(bytearray_, byte_index)
-            return data_dt
-
-        elif type_ == 'USINT':
-            return get_usint(bytearray_, byte_index)
-
-        elif type_ == 'SINT':
-            return get_sint(bytearray_, byte_index)
-
-        # add these three not implemented data typ to avoid
-        # 'Unable to get repr for class<snap7.util.DB_ROW>' error
-        elif type_ == 'TIME':
-            return get_time(bytearray_, byte_index)
-
-        elif type_ == 'DATE':
-            return 'read DATE not implemented'
-
-        elif type_ == 'TIME_OF_DAY':
-            return 'read TIME_OF_DAY not implemented'
+        else:
+            type_to_func = {
+                'REAL': get_real,
+                'DWORD': get_dword,
+                'UDINT': get_udint,
+                'DINT': get_dint,
+                'UINT': get_uint,
+                'INT': get_int,
+                'WORD': get_word,
+                'BYTE': get_byte,
+                'S5TIME': get_s5time,
+                'DATE_AND_TIME': get_dt,
+                'USINT': get_usint,
+                'SINT': get_sint,
+                'TIME': get_time,
+                'DATE': lambda *_: 'read DATE not implemented',
+                'TIME_OF_DAY': lambda *_: 'read TIME_OF_DAY not implemented',
+            }
+            if type_ in type_to_func:
+                return type_to_func[type_](bytearray_, byte_index)
 
         raise ValueError
 
@@ -1255,12 +1227,13 @@ class DB_Row:
             value: value to write.
 
         Raises:
-            :obj:`Snap7Exception`: if reading a `string` when checking the lenght of the string.
+            :obj:`Snap7Exception`: if reading a `string` when checking the length of the string.
             :obj:`ValueError`: if the `type_` is not handled.
 
         Returns:
             Buffer data with the value written. Optional.
         """
+
         bytearray_ = self.get_bytearray()
 
         if type == 'BOOL' and isinstance(value, bool):
@@ -1278,40 +1251,24 @@ class DB_Row:
             max_size_int = int(max_size_grouped)
             return set_string(bytearray_, byte_index, value, max_size_int)
 
-        elif type == 'REAL':
+        if type == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
-        elif type == 'DWORD' and isinstance(value, int):
-            return set_dword(bytearray_, byte_index, value)
+        if isinstance(value, int):
+            type_to_func = {
+                'DWORD': set_dword,
+                'UDINT': set_udint,
+                'DINT': set_dint,
+                'UINT': set_uint,
+                'INT': set_int,
+                'WORD': set_word,
+                'USINT': set_usint,
+                'SINT': set_sint,
+            }
+            if type in type_to_func:
+                return type_to_func[type](bytearray_, byte_index, value)
 
-        elif type == 'UDINT' and isinstance(value, int):
-            return set_udint(bytearray_, byte_index, value)
-
-        elif type == 'DINT' and isinstance(value, int):
-            return set_dint(bytearray_, byte_index, value)
-
-        elif type == 'UINT' and isinstance(value, int):
-            return set_uint(bytearray_, byte_index, value)
-
-        elif type == 'INT' and isinstance(value, int):
-            return set_int(bytearray_, byte_index, value)
-
-        elif type == 'WORD' and isinstance(value, int):
-            return set_word(bytearray_, byte_index, value)
-
-        elif type == 'USINT' and isinstance(value, int):
-            return set_usint(bytearray_, byte_index, value)
-
-        elif type == 'SINT' and isinstance(value, int):
-            return set_sint(bytearray_, byte_index, value)
-
-        elif type == 'USINT' and isinstance(value, int):
-            return set_usint(bytearray_, byte_index, value)
-
-        elif type == 'SINT' and isinstance(value, int):
-            return set_sint(bytearray_, byte_index, value)
-
-        elif type == 'TIME' and isinstance(value, str):
+        if type == 'TIME' and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
 
         raise ValueError

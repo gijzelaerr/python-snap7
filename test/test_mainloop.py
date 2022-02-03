@@ -1,10 +1,7 @@
-import ctypes
 import logging
 from multiprocessing.context import Process
-from os import get_inheritable
 import time
 import unittest
-from unittest import mock
 
 import snap7.error
 import snap7.server
