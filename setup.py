@@ -36,7 +36,7 @@ setup(
     url='https://github.com/gijzelaerr/python-snap7',
     packages=find_packages(),
     package_data={'snap7': ['py.typed']},
-    license='MIT licence',
+    license='MIT',
     long_description=read('README.rst'),
     scripts=['snap7/bin/snap7-server.py'],
     classifiers=[
