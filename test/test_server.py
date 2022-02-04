@@ -158,7 +158,7 @@ class TestLibraryIntegration(unittest.TestCase):
         self.loadlib_patch.stop()
 
     def test_create(self):
-        server = snap7.server.Server(log=False)
+        snap7.server.Server(log=False)
         self.mocklib.Srv_Create.assert_called_once()
 
     def test_gc(self):

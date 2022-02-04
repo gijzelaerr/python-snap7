@@ -15,7 +15,7 @@ from snap7 import util
 from snap7.exceptions import Snap7Exception
 from snap7.common import check_error
 from snap7.server import mainloop
-from snap7.types import S7AreaDB, S7WLByte, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object, Areas, WordLen
+from snap7.types import S7AreaDB, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object, Areas, WordLen
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -201,7 +201,6 @@ class TestClient(unittest.TestCase):
         # Test write area with a DB
         area = Areas.DB
         dbnumber = 1
-        size = 1
         start = 1
         data = bytearray(b'\x11')
         self.client.write_area(area, dbnumber, start, data)
@@ -211,7 +210,6 @@ class TestClient(unittest.TestCase):
         # Test write area with a TM
         area = Areas.TM
         dbnumber = 0
-        size = 2
         timer = bytearray(b'\x12\x00')
         res = self.client.write_area(area, dbnumber, start, timer)
         res = self.client.read_area(area, dbnumber, start, 1)
@@ -220,14 +218,13 @@ class TestClient(unittest.TestCase):
         # Test write area with a CT
         area = Areas.CT
         dbnumber = 0
-        size = 2
         timer = bytearray(b'\x13\x00')
         res = self.client.write_area(area, dbnumber, start, timer)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
     def test_list_blocks(self):
-        blockList = self.client.list_blocks()
+        self.client.list_blocks()
 
     def test_list_blocks_of_type(self):
         self.client.list_blocks_of_type('DB', 10)
@@ -375,8 +372,8 @@ class TestClient(unittest.TestCase):
     def test_as_db_fill(self):
         filler = 31
         expected = bytearray(filler.to_bytes(1, byteorder='big') * 100)
-        response = self.client.db_fill(1, filler)
-        result = self.client.wait_as_completion(500)
+        self.client.db_fill(1, filler)
+        self.client.wait_as_completion(500)
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
     def test_as_db_get(self):
@@ -479,7 +476,6 @@ class TestClient(unittest.TestCase):
 
         area = Areas.DB
         dbnumber = 1
-        size = 4
         start = 1
         data = b'\xDE\xAD\xBE\xEF'
 
@@ -574,7 +570,7 @@ class TestClient(unittest.TestCase):
         # start as_request and test
         wordlen, usrdata = self.client._prepare_as_read_area(area, size)
         pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pusrdata)
+        self.client.as_read_area(area, dbnumber, start, size, wordlen, pusrdata)
         self.client.wait_as_completion(timeout)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -591,11 +587,11 @@ class TestClient(unittest.TestCase):
         self.client.write_area(area, dbnumber, start, bytearray(data))
         # start as_request and wait for zero seconds to try trigger timeout
         for i in range(tries):
-            res = self.client.as_read_area(area, dbnumber, start, size, wordlen, pdata)
-            res2 = None
+            self.client.as_read_area(area, dbnumber, start, size, wordlen, pdata)
+            res = None
             try:
-                res2 = self.client.wait_as_completion(timeout)
-                check_error(res2)
+                res = self.client.wait_as_completion(timeout)
+                check_error(res)
             except Snap7Exception as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
@@ -603,7 +599,7 @@ class TestClient(unittest.TestCase):
                 time.sleep(0.1)
                 return
             except BaseException:
-                self.fail(f"While waiting another error appeared:>>>>>>>> {res2}")
+                self.fail(f"While waiting another error appeared:>>>>>>>> {res}")
 
         self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
                   f"a problem is existing in the method. Fail test.")
@@ -623,8 +619,8 @@ class TestClient(unittest.TestCase):
         # start as_request and test
         wordlen, cdata = self.client._prepare_as_read_area(area, size)
         pcdata = ctypes.byref(cdata)
-        res = self.client.as_read_area(area, db, start, size, wordlen, pcdata)
-        for i in range(10):
+        self.client.as_read_area(area, db, start, size, wordlen, pcdata)
+        for _ in range(10):
             self.client.check_as_completion(ctypes.byref(check_status))
             if check_status.value == 0:
                 self.assertEqual(data, bytearray(cdata))
@@ -648,7 +644,7 @@ class TestClient(unittest.TestCase):
         self.client.write_area(area, dbnumber, start, data)
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -659,7 +655,7 @@ class TestClient(unittest.TestCase):
         self.client.write_area(area, dbnumber, start, data)
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -670,7 +666,7 @@ class TestClient(unittest.TestCase):
         self.client.write_area(area, dbnumber, start, data)
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
-        res = self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
@@ -726,7 +722,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_full_upload(self):
         # Cli_AsFullUpload
-        response = self.client.as_full_upload('DB', 1)
+        self.client.as_full_upload('DB', 1)
         self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
 
     def test_as_list_blocks_of_type(self):
@@ -741,7 +737,7 @@ class TestClient(unittest.TestCase):
         type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
         data = (type_ * 1)()
         self.client.as_mb_read(0, 1, data)
-        result = bytearray(data)
+        bytearray(data)
         self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
 
     def test_as_mb_write(self):
@@ -1045,7 +1041,7 @@ class TestLibraryIntegration(unittest.TestCase):
         self.loadlib_patch.stop()
 
     def test_create(self):
-        client = snap7.client.Client()
+        snap7.client.Client()
         self.mocklib.Cli_Create.assert_called_once()
 
     @mock.patch('snap7.client.byref')

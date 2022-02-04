@@ -134,7 +134,7 @@ class TestLibraryIntegration(unittest.TestCase):
         self.loadlib_patch.stop()
 
     def test_create(self):
-        partner = snap7.partner.Partner()
+        snap7.partner.Partner()
         self.mocklib.Par_Create.assert_called_once()
 
     def test_gc(self):

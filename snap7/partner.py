@@ -7,13 +7,13 @@ it, the peer to peer model sees two components with same rights, each of them
 can send data asynchronously. The only difference between them is the one who
 is requesting the connection.
 """
-from ctypes import c_int32, c_uint32, byref, c_uint16, c_int, c_void_p
-import logging
 import re
+import logging
+from ctypes import byref, c_int, c_int32, c_uint32, c_void_p
 from typing import Tuple, Optional
 
 import snap7.types
-from snap7.common import load_library, check_error, ipv4
+from snap7.common import ipv4, check_error, load_library
 from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)

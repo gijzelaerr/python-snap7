@@ -1,18 +1,16 @@
 """
 Snap7 client used for connection to a siemens LOGO 7/8 server.
 """
-import logging
 import re
 import struct
-from ctypes import c_int, byref, c_uint16, c_int32
-from ctypes import c_void_p
+import logging
+from ctypes import byref, c_int, c_int32, c_uint16, c_void_p
 
 import snap7
 from snap7 import types
-from snap7.common import check_error, load_library, ipv4
+from snap7.types import WordLen, S7Object, param_types
+from snap7.common import ipv4, check_error, load_library
 from snap7.exceptions import Snap7Exception
-from snap7.types import S7Object, WordLen
-from snap7.types import param_types
 
 logger = logging.getLogger(__name__)
 

@@ -11,6 +11,8 @@ import snap7.server as server
 import snap7.types as types
 import snap7.util as util
 
+__all__ = ['client', 'common', 'error', 'logo', 'server', 'types', 'util']
+
 try:
     __version__ = pkg_resources.require("python-snap7")[0].version
 except pkg_resources.DistributionNotFound:

@@ -133,8 +133,8 @@ def close_row(row):
     row['CloseAut'] = 1
     row['OpenAut'] = 0
 
-#show_row(0)
-#show_row(1)
+# show_row(0)
+# show_row(1)
 
 
 def open_and_close():
@@ -152,7 +152,7 @@ def open_and_close():
 
 
 def set_part_db(start, size, _bytearray):
-    data = _bytearray[start:start+size]
+    data = _bytearray[start:start + size]
     set_db_row(1, start, size, data)
 
 
@@ -170,7 +170,7 @@ def open_and_close_db1():
 
     for x, (name, row) in enumerate(db1.index.items()):
         open_row(row)
-        #set_part_db(4+x*126, 126, all_data)
+        # set_part_db(4+x*126, 126, all_data)
 
     t = time.time()
     write_data_db(1, all_data, 4 + 126 * 450)
@@ -180,7 +180,7 @@ def open_and_close_db1():
     time.sleep(5)
     for x, (name, row) in enumerate(db1):
         close_row(row)
-        #set_part_db(4+x*126, 126, all_data)
+        # set_part_db(4+x*126, 126, all_data)
 
     print(time.time() - t)
 
@@ -237,12 +237,12 @@ def print_open():
             print(row)
 
 
-#read_tank_db()
-#open_and_close()
-#open_and_close_db1()
-#time.sleep(1)
-#show_row(2)
+# read_tank_db()
+# open_and_close()
+# open_and_close_db1()
+# time.sleep(1)
+# show_row(2)
 print_tag()
-#print_open()
+# print_open()
 
 client.disconnect()

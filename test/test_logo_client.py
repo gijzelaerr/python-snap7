@@ -28,6 +28,9 @@ class TestLogoClient(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.process.terminate()
+        cls.process.join(1)
+        if cls.process.is_alive():
+            cls.process.kill()
 
     def setUp(self):
         self.client = snap7.logo.Logo()

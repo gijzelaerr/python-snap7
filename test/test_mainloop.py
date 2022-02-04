@@ -1,10 +1,7 @@
-import ctypes
 import logging
 from multiprocessing.context import Process
-from os import get_inheritable
 import time
 import unittest
-from unittest import mock
 
 import snap7.error
 import snap7.server
@@ -51,7 +48,6 @@ class TestServer(unittest.TestCase):
     def test_read_prefill_db(self):
         data = self.client.db_read(0, 0, 7)
         boolean = snap7.util.get_bool(data, 0, 0)
-        print(data)
         self.assertEqual(boolean, True)
         integer = snap7.util.get_int(data, 1)
         self.assertEqual(integer, 128)

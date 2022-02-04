@@ -1,16 +1,16 @@
 """
 Snap7 server used for mimicking a siemens 7 server.
 """
-import logging
 import re
-import struct
 import time
 import ctypes
-from typing import Tuple, Optional, Callable, Any
+import struct
+import logging
+from typing import Any, Tuple, Callable, Optional
 
 import snap7
 import snap7.types
-from snap7.common import check_error, load_library, ipv4
+from snap7.common import ipv4, check_error, load_library
 
 logger = logging.getLogger(__name__)
 
