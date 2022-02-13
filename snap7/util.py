@@ -1000,10 +1000,11 @@ class DB:
         row_size = self.row_size
         specification = self.specification
         layout_offset = self.layout_offset
+        row_offset = self.row_offset
 
         for i in range(self.size):
             # calculate where row in bytearray starts
-            db_offset = i * row_size + self.db_offset
+            db_offset = i * (row_size + row_offset) + self.db_offset
             # create a row object
             row = DB_Row(self,
                          specification,
