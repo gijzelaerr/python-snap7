@@ -233,7 +233,7 @@ class Client:
 
         Args:
             db_number: number of the DB to be read.
-            start: byte index from where is start to read from.
+            start: byte index to start writing to.
             data: buffer to be write.
 
         Returns:
