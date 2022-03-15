@@ -905,6 +905,7 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     value = struct.unpack('>b', packed)[0]
     return value
 
+
 def get_lint(bytearray_: bytearray, byte_index: int) -> int:
     raw_lint = bytearray_[byte_index:byte_index + 8]
     lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
@@ -1016,7 +1017,7 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
     wstr_length_raw[0] = wstr_length_raw[0] & 0xff
     wstr_length = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]
 
-    if wstr_length > max_wstring_size or max_wstring_size > 16382:
+    if wstr_length > max_wstring_size or max_wstring_size > 0x7FFC:
         logger.error("The string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         raise TypeError("WString contains {} chars, but max. {} chars are expected or is larger than 16382."
@@ -1029,7 +1030,7 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
                     continue
                 wstring += chr(bytearray_[i + 5])
                 continue
-            wstring += chr(bytearray_[i + 4:i + 5])
+            wstring.join(bytearray_[i + 4:i + 5].decode('unicode'))
     except Exception as e:
         print(e)
     return wstring
