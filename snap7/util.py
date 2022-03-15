@@ -86,7 +86,7 @@ import re
 import time
 import struct
 import logging
-from typing import Dict, Union, Callable, Optional
+from typing import Dict, Union, Callable, Optional, List
 from datetime import date, datetime, timedelta
 from collections import OrderedDict
 
@@ -187,7 +187,7 @@ def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def get_byte(bytearray_: bytearray, byte_index: int) -> int:
+def get_byte(bytearray_: bytearray, byte_index: int) -> bytes:
     """Get byte value from bytearray.
 
     Notes:
@@ -227,7 +227,7 @@ def set_word(bytearray_: bytearray, byte_index: int, _int: int):
     return bytearray_
 
 
-def get_word(bytearray_: bytearray, byte_index: int) -> int:
+def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
     """Get word value from bytearray.
 
     Notes:
@@ -450,7 +450,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
         bytearray_[byte_index + 2 + r] = ord(' ')
 
 
-def get_string(bytearray_: bytearray, byte_index: int, max_size: int) -> str:
+def get_string(bytearray_: bytearray, byte_index: int) -> str:
     """Parse string from bytearray
 
     Notes:
@@ -460,7 +460,6 @@ def get_string(bytearray_: bytearray, byte_index: int, max_size: int) -> str:
     Args:
         bytearray_: buffer from where to get the string.
         byte_index: byte index from where to start reading.
-        max_size: maximum possible string size.
 
     Returns:
         String value.
@@ -470,14 +469,16 @@ def get_string(bytearray_: bytearray, byte_index: int, max_size: int) -> str:
         >>> snap7.util.get_string(data, 0, 255)
         'hello world'
     """
-    size = bytearray_[byte_index + 1]
 
-    if max_size < size:
-        logger.error("the string is too big for the size encountered in specification")
+    str_length = int(bytearray_[1])
+    max_string_size = int(bytearray_[0])
+
+    if str_length > max_string_size or max_string_size > 254:
+        logger.error("The string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
-        size = max_size
-
-    data = map(chr, bytearray_[byte_index + 2:byte_index + 2 + size])
+        raise TypeError("String contains {} chars, but max. {} chars are expected or is larger than 254."
+                        "Bytearray doesn't seem to be a valid string.".format(str_length, max_string_size))
+    data = map(chr, bytearray_[byte_index + 2:byte_index + 2 + str_length])
     return "".join(data)
 
 
@@ -568,6 +569,7 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
     Args:
         bytearray_: buffer to write.
         byte_index: byte index from where to start writing.
+        dint: double integer value
 
     Examples:
         >>> data = bytearray(4)
@@ -608,7 +610,7 @@ def get_udint(bytearray_: bytearray, byte_index: int) -> int:
     return dint
 
 
-def set_udint(bytearray_: bytearray, byte_index: int, dint: int):
+def set_udint(bytearray_: bytearray, byte_index: int, udint: int):
     """Set value in bytearray to unsigned dint
 
     Notes:
@@ -619,6 +621,7 @@ def set_udint(bytearray_: bytearray, byte_index: int, dint: int):
     Args:
         bytearray_: buffer to write.
         byte_index: byte index from where to start writing.
+        udint: unsigned double integer value
 
     Examples:
         >>> data = bytearray(4)
@@ -626,8 +629,8 @@ def set_udint(bytearray_: bytearray, byte_index: int, dint: int):
         >>> data
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
-    dint = int(dint)
-    _bytes = struct.unpack('4B', struct.pack('>I', dint))
+    udint = int(udint)
+    _bytes = struct.unpack('4B', struct.pack('>I', udint))
     for i, b in enumerate(_bytes):
         bytearray_[byte_index + i] = b
 
@@ -700,7 +703,7 @@ def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
     month = bcd_to_byte(bytearray_[byte_index + 1])
     day = bcd_to_byte(bytearray_[byte_index + 2])
     hour = bcd_to_byte(bytearray_[byte_index + 3])
-    min = bcd_to_byte(bytearray_[byte_index + 4])
+    min_ = bcd_to_byte(bytearray_[byte_index + 4])
     sec = bcd_to_byte(bytearray_[byte_index + 5])
     # plc save miliseconds in two bytes with the most signifanct byte used only
     # in the last byte for microseconds the other for weekday
@@ -708,7 +711,7 @@ def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
     microsec = (bcd_to_byte(bytearray_[byte_index + 6]) * 10
                 + bcd_to_byte(bytearray_[byte_index + 7] >> 4)) * 1000
 
-    return datetime(year, month, day, hour, min, sec, microsec)
+    return datetime(year, month, day, hour, min_, sec, microsec)
 
 
 def get_time(bytearray_: bytearray, byte_index: int) -> str:
@@ -901,6 +904,140 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     packed = struct.pack('B', data)
     value = struct.unpack('>b', packed)[0]
     return value
+
+def get_lint(bytearray_: bytearray, byte_index: int) -> int:
+    raw_lint = bytearray_[byte_index:byte_index + 8]
+    lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
+    return lint
+
+
+def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
+    x = bytearray_[byte_index:byte_index + 8]
+    lreal = struct.unpack('>d', struct.pack('8B', *x))[0]
+    return lreal
+
+
+def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
+    #  data = bytearray_[byte_index:byte_index + 4]
+    #  dword = struct.unpack('>Q', struct.pack('8B', *data))[0]
+    #  return bytearray(dword)
+    raise NotImplementedError
+
+
+def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
+    raw_ulint = bytearray_[byte_index:byte_index + 8]
+    lint = struct.unpack('>Q', struct.pack('8B', *raw_ulint))[0]
+    return lint
+
+
+def get_tod(bytearray_: bytearray, byte_index: int) -> timedelta:
+    len_bytearray_ = len(bytearray_)
+    byte_range = byte_index + 4
+    if len_bytearray_ < byte_range:
+        raise ValueError("Date can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
+    time_val = timedelta(milliseconds=int.from_bytes(bytearray_[byte_index:byte_range], byteorder='big'))
+    if time_val.days >= 1:
+        raise ValueError("Time_Of_Date can't be extracted from bytearray. Bytearray contains unexpected values.")
+    return time_val
+
+
+def get_date(bytearray_: bytearray, byte_index: int = 0) -> date:
+    len_bytearray_ = len(bytearray_)
+    byte_range = byte_index + 2
+    if len_bytearray_ < byte_range:
+        raise ValueError("Date can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
+    date_val = date(1990, 1, 1) + timedelta(days=int.from_bytes(bytearray_[byte_index:byte_range], byteorder='big'))
+    if date_val > date(2168, 12, 31):
+        raise ValueError("date_val is higher than specification allows.")
+    return date_val
+
+
+def get_ltime(bytearray_: bytearray, byte_index: int) -> str:
+    raise NotImplementedError
+
+
+def get_ltod(bytearray_: bytearray, byte_index: int) -> str:
+    raise NotImplementedError
+
+
+def get_ldt(bytearray_: bytearray, byte_index: int) -> str:
+    raise NotImplementedError
+
+
+def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
+    len_bytearray_ = len(bytearray_)
+    byte_range = byte_index + 12
+    if len_bytearray_ < byte_range:
+        raise ValueError("DTL can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
+    try:
+        time_to_datetime = datetime(
+            year=int.from_bytes(bytearray_[0:2], byteorder='big'),
+            month=int(bytearray_[2]),
+            day=int(bytearray_[3]),
+            hour=int(bytearray_[5]),
+            minute=int(bytearray_[6]),
+            second=int(bytearray_[7]),
+            microsecond=int(bytearray_[8]))  # --- ? noch nicht genau genug
+    except Exception as e:
+        print(e)
+        raise ValueError
+    if time_to_datetime > datetime(2554, 12, 31, 23, 59, 59):
+        raise ValueError("date_val is higher than specification allows.")
+    return time_to_datetime
+
+
+def get_char(bytearray_: bytearray, byte_index: int) -> str:
+    char = chr(bytearray_[byte_index])
+    if char.isascii():
+        return char
+    raise ValueError("Byte is not an ascii sign")
+
+
+def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
+    if bytearray_[byte_index] == 0:
+        return chr(bytearray_[1])
+    return str(bytearray_, 'unicode')
+
+
+def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
+    wstring = ''
+
+    # Byte 0 + 1 --> total length of wstring, should be bytearray_ - 4
+    # Byte 2, 3 --> used length of wstring
+
+    max_wstring_size = bytearray_[0:2]
+    max_wstring_size[1] = max_wstring_size[1] & 0xff
+    max_wstring_size[0] = max_wstring_size[0] & 0xff
+    packed = struct.pack('2B', *max_wstring_size)
+    max_wstring_size = struct.unpack('>H', packed)[0]
+
+    wstr_length_raw = bytearray_[2:4]
+    wstr_length_raw[1] = wstr_length_raw[1] & 0xff
+    wstr_length_raw[0] = wstr_length_raw[0] & 0xff
+    wstr_length = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]
+
+    if wstr_length > max_wstring_size or max_wstring_size > 16382:
+        logger.error("The string is too big for the size encountered in specification")
+        logger.error("WRONG SIZED STRING ENCOUNTERED")
+        raise TypeError("WString contains {} chars, but max. {} chars are expected or is larger than 16382."
+                        "Bytearray doesn't seem to be a valid string.".format(wstr_length, max_wstring_size))
+
+    try:
+        for i in range(len(bytearray_[4:]))[::2]:
+            if bytearray_[i + 4] == 0:
+                if bytearray_[i + 4 + 1] == 0:
+                    continue
+                wstring += chr(bytearray_[i + 5])
+                continue
+            wstring += chr(bytearray_[i + 4:i + 5])
+    except Exception as e:
+        print(e)
+    return wstring
+
+
+def get_array(bytearray_: bytearray, byte_index: int) -> List:
+    raise NotImplementedError
+# ---------------------------
 
 
 def parse_specification(db_specification: str) -> OrderedDict:
@@ -1191,9 +1328,7 @@ class DB_Row:
             max_size = re.search(r'\d+', type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
-            max_size_grouped = max_size.group(0)
-            max_size_int = int(max_size_grouped)
-            return get_string(bytearray_, byte_index, max_size_int)
+            return get_string(bytearray_, byte_index)
         else:
             type_to_func: Dict[str, Callable] = {
                 'REAL': get_real,
@@ -1209,20 +1344,22 @@ class DB_Row:
                 'USINT': get_usint,
                 'SINT': get_sint,
                 'TIME': get_time,
-                'DATE': lambda *_: 'read DATE not implemented',
-                'TIME_OF_DAY': lambda *_: 'read TIME_OF_DAY not implemented',
+                'DATE': get_date,
+                'TIME_OF_DAY': get_tod,
+                'LREAL': get_lreal,
+                'TOD': get_tod,
+                'CHAR': get_char
             }
             if type_ in type_to_func:
                 return type_to_func[type_](bytearray_, byte_index)
-
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
             byte_index: byte index to start writing to.
-            type: type of value to write.
+            type_: type of value to write.
             value: value to write.
 
         Raises:
@@ -1235,22 +1372,22 @@ class DB_Row:
 
         bytearray_ = self.get_bytearray()
 
-        if type == 'BOOL' and isinstance(value, bool):
+        if type_ == 'BOOL' and isinstance(value, bool):
             byte_index, bool_index = str(byte_index).split(".")
             return set_bool(bytearray_, self.get_offset(byte_index),
                             int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
 
-        if type.startswith('STRING') and isinstance(value, str):
-            max_size = re.search(r'\d+', type)
+        if type_.startswith('STRING') and isinstance(value, str):
+            max_size = re.search(r'\d+', type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return set_string(bytearray_, byte_index, value, max_size_int)
 
-        if type == 'REAL':
+        if type_ == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
         if isinstance(value, int):
@@ -1264,10 +1401,10 @@ class DB_Row:
                 'USINT': set_usint,
                 'SINT': set_sint,
             }
-            if type in type_to_func:
-                return type_to_func[type](bytearray_, byte_index, value)
+            if type_ in type_to_func:
+                return type_to_func[type_](bytearray_, byte_index, value)
 
-        if type == 'TIME' and isinstance(value, str):
+        if type_ == 'TIME' and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
 
         raise ValueError
