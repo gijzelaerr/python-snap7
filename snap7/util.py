@@ -966,22 +966,14 @@ def get_ldt(bytearray_: bytearray, byte_index: int) -> str:
 
 
 def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
-    len_bytearray_ = len(bytearray_)
-    byte_range = byte_index + 12
-    if len_bytearray_ < byte_range:
-        raise ValueError("DTL can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
-    try:
-        time_to_datetime = datetime(
-            year=int.from_bytes(bytearray_[0:2], byteorder='big'),
-            month=int(bytearray_[2]),
-            day=int(bytearray_[3]),
-            hour=int(bytearray_[5]),
-            minute=int(bytearray_[6]),
-            second=int(bytearray_[7]),
-            microsecond=int(bytearray_[8]))  # --- ? noch nicht genau genug
-    except Exception as e:
-        print(e)
-        raise ValueError
+    time_to_datetime = datetime(
+        year=int.from_bytes(bytearray_[byte_index:byte_index + 2], byteorder='big'),
+        month=int(bytearray_[byte_index + 2]),
+        day=int(bytearray_[byte_index + 3]),
+        hour=int(bytearray_[byte_index + 5]),
+        minute=int(bytearray_[byte_index + 6]),
+        second=int(bytearray_[byte_index + 7]),
+        microsecond=int(bytearray_[byte_index + 8]))  # --- ? noch nicht genau genug
     if time_to_datetime > datetime(2554, 12, 31, 23, 59, 59):
         raise ValueError("date_val is higher than specification allows.")
     return time_to_datetime
@@ -997,43 +989,28 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
 def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[1])
-    return str(bytearray_, 'unicode')
+    return bytearray_[byte_index:byte_index + 2].decode('utf-16-be')
 
 
 def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
-    wstring = ''
-
     # Byte 0 + 1 --> total length of wstring, should be bytearray_ - 4
     # Byte 2, 3 --> used length of wstring
+    wstring_start = byte_index + 4
 
-    max_wstring_size = bytearray_[0:2]
-    max_wstring_size[1] = max_wstring_size[1] & 0xff
-    max_wstring_size[0] = max_wstring_size[0] & 0xff
+    max_wstring_size = bytearray_[byte_index:byte_index + 2]
     packed = struct.pack('2B', *max_wstring_size)
-    max_wstring_size_int = struct.unpack('>H', packed)[0]
+    max_wstring_symbols = struct.unpack('>H', packed)[0] * 2
 
-    wstr_length_raw = bytearray_[2:4]
-    wstr_length_raw[1] = wstr_length_raw[1] & 0xff
-    wstr_length_raw[0] = wstr_length_raw[0] & 0xff
-    wstr_length_int = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]
+    wstr_length_raw = bytearray_[byte_index + 2:byte_index + 4]
+    wstr_symbols_amount = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]*2
 
-    if (wstr_length_int > max_wstring_size_int) or (max_wstring_size_int > 16382):
+    if wstr_symbols_amount > max_wstring_symbols or max_wstring_symbols > 16382:
         logger.error("The wstring is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         raise TypeError("WString contains {} chars, but max. {} chars are expected or is larger than 16382."
-                        "Bytearray doesn't seem to be a valid string.".format(wstr_length_int, max_wstring_size_int))
+                        "Bytearray doesn't seem to be a valid string.".format(wstr_symbols_amount, max_wstring_symbols))
 
-    try:
-        for i in range(len(bytearray_[4:]))[::2]:
-            if bytearray_[i + 4] == 0:
-                if bytearray_[i + 4 + 1] == 0:
-                    continue
-                wstring += chr(bytearray_[i + 5])
-                continue
-            wstring.join(bytearray_[i + 4:i + 5].decode('unicode'))
-    except Exception as e:
-        print(e)
-    return wstring
+    return bytearray_[wstring_start:wstring_start + wstr_symbols_amount].decode('utf-16-be')
 
 
 def get_array(bytearray_: bytearray, byte_index: int) -> List:
@@ -1330,6 +1307,11 @@ class DB_Row:
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             return get_string(bytearray_, byte_index)
+        elif type_.startswith('WSTRING'):
+            max_size = re.search(r'\d+', type_)
+            if max_size is None:
+                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+            return get_wstring(bytearray_, byte_index)
         else:
             type_to_func: Dict[str, Callable] = {
                 'REAL': get_real,
@@ -1349,7 +1331,9 @@ class DB_Row:
                 'TIME_OF_DAY': get_tod,
                 'LREAL': get_lreal,
                 'TOD': get_tod,
-                'CHAR': get_char
+                'CHAR': get_char,
+                'WCHAR': get_wchar,
+                'DTL': get_dtl
             }
             if type_ in type_to_func:
                 return type_to_func[type_](bytearray_, byte_index)
