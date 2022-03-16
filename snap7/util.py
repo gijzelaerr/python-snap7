@@ -470,8 +470,8 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
         'hello world'
     """
 
-    str_length = int(bytearray_[1])
-    max_string_size = int(bytearray_[0])
+    str_length = int(bytearray_[byte_index+1])
+    max_string_size = int(bytearray_[byte_index])
 
     if str_length > max_string_size or max_string_size > 254:
         logger.error("The string is too big for the size encountered in specification")
