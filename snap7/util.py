@@ -470,7 +470,7 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
         'hello world'
     """
 
-    str_length = int(bytearray_[byte_index+1])
+    str_length = int(bytearray_[byte_index + 1])
     max_string_size = int(bytearray_[byte_index])
 
     if str_length > max_string_size or max_string_size > 254:
@@ -1010,18 +1010,18 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
     max_wstring_size[1] = max_wstring_size[1] & 0xff
     max_wstring_size[0] = max_wstring_size[0] & 0xff
     packed = struct.pack('2B', *max_wstring_size)
-    max_wstring_size = struct.unpack('>H', packed)[0]
+    max_wstring_size_int = struct.unpack('>H', packed)[0]
 
     wstr_length_raw = bytearray_[2:4]
     wstr_length_raw[1] = wstr_length_raw[1] & 0xff
     wstr_length_raw[0] = wstr_length_raw[0] & 0xff
-    wstr_length = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]
+    wstr_length_int = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]
 
-    if wstr_length > max_wstring_size or max_wstring_size > 0x7FFC:
-        logger.error("The string is too big for the size encountered in specification")
+    if (wstr_length_int > max_wstring_size_int) or (max_wstring_size_int > 16382):
+        logger.error("The wstring is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         raise TypeError("WString contains {} chars, but max. {} chars are expected or is larger than 16382."
-                        "Bytearray doesn't seem to be a valid string.".format(wstr_length, max_wstring_size))
+                        "Bytearray doesn't seem to be a valid string.".format(wstr_length_int, max_wstring_size_int))
 
     try:
         for i in range(len(bytearray_[4:]))[::2]:
