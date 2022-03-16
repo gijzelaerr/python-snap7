@@ -138,7 +138,6 @@ class TestS7util(unittest.TestCase):
             data[:] = struct.pack(">i", value_to_test)
             self.assertEqual(util.get_time(data, 0), expected_value)
 
-
     def test_set_time(self):
         test_array = bytearray(_new_bytearray)
 
