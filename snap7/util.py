@@ -981,9 +981,7 @@ def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
 
 def get_char(bytearray_: bytearray, byte_index: int) -> str:
     char = chr(bytearray_[byte_index])
-    if char.isascii():
-        return char
-    raise ValueError("Byte is not an ascii sign")
+    return char
 
 
 def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
@@ -1002,7 +1000,7 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
     max_wstring_symbols = struct.unpack('>H', packed)[0] * 2
 
     wstr_length_raw = bytearray_[byte_index + 2:byte_index + 4]
-    wstr_symbols_amount = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0]*2
+    wstr_symbols_amount = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0] * 2
 
     if wstr_symbols_amount > max_wstring_symbols or max_wstring_symbols > 16382:
         logger.error("The wstring is too big for the size encountered in specification")

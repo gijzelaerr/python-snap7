@@ -453,7 +453,7 @@ class TestS7util(unittest.TestCase):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testDtl']
-        self.assertEqual(val, datetime.datetime(year=2022, month=3 , day=9, hour=12, minute=34, second=45))
+        self.assertEqual(val, datetime.datetime(year=2022, month=3, day=9, hour=12, minute=34, second=45))
 
 
 def print_row(data):
