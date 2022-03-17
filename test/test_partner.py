@@ -113,7 +113,7 @@ class TestPartner(unittest.TestCase):
         self.partner.stop()
 
     def test_wait_as_b_send_completion(self):
-        self.assertRaises(ValueError, self.partner.wait_as_b_send_completion)
+        self.assertRaises(RuntimeError, self.partner.wait_as_b_send_completion)
 
 
 class TestLibraryIntegration(unittest.TestCase):
