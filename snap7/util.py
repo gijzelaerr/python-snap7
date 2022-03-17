@@ -907,9 +907,10 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
 
 
 def get_lint(bytearray_: bytearray, byte_index: int) -> int:
-    raw_lint = bytearray_[byte_index:byte_index + 8]
-    lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
-    return lint
+    #raw_lint = bytearray_[byte_index:byte_index + 8]
+    #lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
+    #return lint
+    return NotImplementedError
 
 
 def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
@@ -918,9 +919,23 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
     return lreal
 
 
+def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray:
+    lreal = float(lreal)
+    _bytes = struct.unpack('8B', struct.pack('>d', lreal))
+    bytearray_[byte_index] = _bytes[0]
+    return bytearray_
+
+
 def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
     #  data = bytearray_[byte_index:byte_index + 4]
     #  dword = struct.unpack('>Q', struct.pack('8B', *data))[0]
+    #  return bytearray(dword)
+    raise NotImplementedError
+
+
+def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytearray:
+    #  data = bytearray_[byte_index:byte_index + 4]
+    #  dword = struct.unpack('8B', struct.pack('>Q', *data))[0]
     #  return bytearray(dword)
     raise NotImplementedError
 
@@ -982,6 +997,11 @@ def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
 def get_char(bytearray_: bytearray, byte_index: int) -> str:
     char = chr(bytearray_[byte_index])
     return char
+
+
+def set_char(bytearray_: bytearray, byte_index: int, chr_: chr) -> bytearray:
+    bytearray_[byte_index] = ord(chr_)
+    return bytearray_
 
 
 def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
