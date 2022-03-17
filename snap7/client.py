@@ -10,7 +10,6 @@ from typing import List, Optional, Tuple, Union
 
 import snap7
 from snap7.common import check_error, ipv4, load_library
-from snap7.exceptions import Snap7Exception
 from snap7.types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
 from snap7.types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
 from snap7.types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
@@ -125,7 +124,7 @@ class Client:
             Description of the cpu state.
 
         Raises:
-            :obj:`Snap7Exception`: if the cpu state is invalid.
+            :obj:`ValueError`: if the cpu state is invalid.
 
         Examples:
             >>> client.get_cpu_statE()
@@ -136,7 +135,7 @@ class Client:
         try:
             status_string = cpu_statuses[state.value]
         except KeyError:
-            raise Snap7Exception(f"The cpu state ({state.value}) is invalid")
+            raise ValueError(f"The cpu state ({state.value}) is invalid")
 
         logger.debug(f"CPU state is {status_string}")
         return status_string
@@ -481,12 +480,12 @@ class Client:
             If size is 0, it returns a 0, otherwise an `Array` of specified block type.
 
         Raises:
-            :obj:`Snap7Exception`: if the `blocktype` is not valid.
+            :obj:`ValueError`: if the `blocktype` is not valid.
         """
 
         _blocktype = snap7.types.block_types.get(blocktype)
         if not _blocktype:
-            raise Snap7Exception("The blocktype parameter was invalid")
+            raise ValueError("The blocktype parameter was invalid")
 
         logger.debug(f"listing blocks of type: {_blocktype} size: {size}")
 
@@ -516,7 +515,7 @@ class Client:
             Structure of information from block.
 
         Raises:
-            :obj:`Snap7Exception`: if the `blocktype` is not valid.
+            :obj:`ValueError`: if the `blocktype` is not valid.
 
         Examples:
             >>> block_info = client.get_block_info("DB", 1)
@@ -540,7 +539,7 @@ class Client:
         blocktype_ = snap7.types.block_types.get(blocktype)
 
         if not blocktype_:
-            raise Snap7Exception("The blocktype parameter was invalid")
+            raise ValueError("The blocktype parameter was invalid")
         logger.debug(f"retrieving block info for block {db_number} of type {blocktype_}")
 
         data = TS7BlockInfo()
@@ -589,7 +588,7 @@ class Client:
 
         Raises:
             :obj:`ValueError`: if the `address` is not a valid IPV4.
-            :obj:`Snap7Exception`: if the result of setting the connection params is
+            :obj:`ValueError`: if the result of setting the connection params is
                 different than 0.
         """
         if not re.match(ipv4, address):
@@ -598,7 +597,7 @@ class Client:
                                                        c_uint16(local_tsap),
                                                        c_uint16(remote_tsap))
         if result != 0:
-            raise Snap7Exception("The parameter was invalid")
+            raise ValueError("The parameter was invalid")
 
     def set_connection_type(self, connection_type: int):
         """ Sets the connection resource type, i.e the way in which the Clients connects to a PLC.
@@ -607,13 +606,13 @@ class Client:
             connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
 
         Raises:
-            :obj:`Snap7Exception`: if the result of setting the connection type is
+            :obj:`ValueError`: if the result of setting the connection type is
                 different than 0.
         """
         result = self._library.Cli_SetConnectionType(self._pointer,
                                                      c_uint16(connection_type))
         if result != 0:
-            raise Snap7Exception("The parameter was invalid")
+            raise ValueError("The parameter was invalid")
 
     def get_connected(self) -> bool:
         """Returns the connection status
@@ -1122,11 +1121,11 @@ class Client:
             Snap7 code.
 
         Raises:
-            :obj:`Snap7Exception`: if the `blocktype` is invalid
+            :obj:`ValueError`: if the `blocktype` is invalid
         """
         _blocktype = snap7.types.block_types.get(blocktype)
         if not _blocktype:
-            raise Snap7Exception("The blocktype parameter was invalid")
+            raise ValueError("The blocktype parameter was invalid")
         result = self._library.Cli_AsListBlocksOfType(self._pointer, _blocktype, byref(data), byref(count))
         check_error(result, context="client")
         return result

@@ -14,7 +14,6 @@ from typing import Tuple, Optional
 
 import snap7.types
 from snap7.common import ipv4, check_error, load_library
-from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +85,7 @@ class Partner:
         }
 
         if result == -2:
-            raise Snap7Exception("The Client parameter was invalid")
+            raise ValueError("The Client parameter was invalid")
 
         return return_values[result], op_result
 

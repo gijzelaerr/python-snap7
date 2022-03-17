@@ -92,7 +92,6 @@ from collections import OrderedDict
 
 from snap7.types import Areas
 from snap7.client import Client
-from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -1167,7 +1166,7 @@ class DB_Row:
             type_: type of data to read.
 
         Raises:
-            :obj:`Snap7Exception`: if reading a `string` when checking the lenght of the string.
+            :obj:`ValueError`: if reading a `string` when checking the lenght of the string.
             :obj:`ValueError`: if the `type_` is not handled.
 
         Returns:
@@ -1190,7 +1189,7 @@ class DB_Row:
         if type_.startswith('STRING'):
             max_size = re.search(r'\d+', type_)
             if max_size is None:
-                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+                raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return get_string(bytearray_, byte_index, max_size_int)
@@ -1226,7 +1225,7 @@ class DB_Row:
             value: value to write.
 
         Raises:
-            :obj:`Snap7Exception`: if reading a `string` when checking the length of the string.
+            :obj:`ValueError`: if reading a `string` when checking the length of the string.
             :obj:`ValueError`: if the `type_` is not handled.
 
         Returns:
@@ -1245,7 +1244,7 @@ class DB_Row:
         if type.startswith('STRING') and isinstance(value, str):
             max_size = re.search(r'\d+', type)
             if max_size is None:
-                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+                raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return set_string(bytearray_, byte_index, value, max_size_int)

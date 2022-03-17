@@ -12,7 +12,6 @@ from unittest import mock
 
 import snap7
 from snap7 import util
-from snap7.exceptions import Snap7Exception
 from snap7.common import check_error
 from snap7.server import mainloop
 from snap7.types import S7AreaDB, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, S7Object, Areas, WordLen
@@ -61,7 +60,7 @@ class TestClient(unittest.TestCase):
                 break
             time.sleep(0.5)
         else:
-            raise Snap7Exception(f"Async Request not finished after {check_times} times - Fail")
+            raise TimeoutError(f"Async Request not finished after {check_times} times - Fail")
         return check_status.value
 
     def test_db_read(self):
@@ -156,13 +155,13 @@ class TestClient(unittest.TestCase):
         this raises an exception due to missing authorization? maybe not
         implemented in server emulator
         """
-        self.assertRaises(Snap7Exception, self.client.upload, db_number)
+        self.assertRaises(RuntimeError, self.client.upload, db_number)
 
     def test_as_upload(self):
         _buffer = buffer_type()
         size = ctypes.c_int(ctypes.sizeof(_buffer))
         self.client.as_upload(1, _buffer, size)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     @unittest.skip("TODO: invalid block size")
     def test_download(self):
@@ -229,7 +228,7 @@ class TestClient(unittest.TestCase):
     def test_list_blocks_of_type(self):
         self.client.list_blocks_of_type('DB', 10)
 
-        self.assertRaises(Snap7Exception, self.client.list_blocks_of_type, 'NOblocktype', 10)
+        self.assertRaises(ValueError, self.client.list_blocks_of_type, 'NOblocktype', 10)
 
     def test_get_block_info(self):
         """test Cli_GetAgBlockInfo"""
@@ -592,7 +591,7 @@ class TestClient(unittest.TestCase):
             try:
                 res = self.client.wait_as_completion(timeout)
                 check_error(res)
-            except Snap7Exception as s7_err:
+            except RuntimeError as s7_err:
                 if not s7_err.args[0] == b'CLI : Job Timeout':
                     self.fail(f"While waiting another error appeared: {s7_err}")
                 # Wait for a thread to finish
@@ -712,24 +711,24 @@ class TestClient(unittest.TestCase):
         buffer = (type_ * 1)()
         response = self.client.as_eb_read(0, 1, buffer)
         self.assertEqual(0, response)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_eb_write(self):
         # Cli_AsEBWrite
         response = self.client.as_eb_write(0, 1, bytearray(b'\x00'))
         self.assertEqual(0, response)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_full_upload(self):
         # Cli_AsFullUpload
         self.client.as_full_upload('DB', 1)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_list_blocks_of_type(self):
         data = (ctypes.c_uint16 * 10)()
         count = ctypes.c_int()
         self.client.as_list_blocks_of_type('DB', data, count)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_mb_read(self):
         # Cli_AsMBRead
@@ -738,13 +737,13 @@ class TestClient(unittest.TestCase):
         data = (type_ * 1)()
         self.client.as_mb_read(0, 1, data)
         bytearray(data)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_mb_write(self):
         # Cli_AsMBWrite
         response = self.client.as_mb_write(0, 1, bytearray(b'\x00'))
         self.assertEqual(0, response)
-        self.assertRaises(Snap7Exception, self.client.wait_as_completion, 500)
+        self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_read_szl(self):
         # Cli_AsReadSZL
@@ -927,8 +926,8 @@ class TestClient(unittest.TestCase):
         # read_szl_invalid_id
         ssl_id = 0xffff
         index = 0xffff
-        self.assertRaises(Snap7Exception, self.client.read_szl, ssl_id)
-        self.assertRaises(Snap7Exception, self.client.read_szl, ssl_id, index)
+        self.assertRaises(RuntimeError, self.client.read_szl, ssl_id)
+        self.assertRaises(RuntimeError, self.client.read_szl, ssl_id, index)
 
     def test_read_szl_list(self):
         # Cli_ReadSZLList
@@ -952,7 +951,7 @@ class TestClient(unittest.TestCase):
         data = b'\x10\x01'
         self.assertEqual(0, self.client.tm_write(0, 1, bytearray(data)))
         self.assertEqual(data, self.client.tm_read(0, 1))
-        self.assertRaises(Snap7Exception, self.client.tm_write, 0, 100, bytes(200))
+        self.assertRaises(RuntimeError, self.client.tm_write, 0, 100, bytes(200))
         self.assertRaises(ValueError, self.client.tm_write, 0, 2, bytes(2))
 
     def test_write_multi_vars(self):
