@@ -7,8 +7,6 @@ from ctypes import c_char
 from typing import Optional
 from ctypes.util import find_library
 
-from snap7.exceptions import Snap7Exception
-
 if platform.system() == 'Windows':
     from ctypes import windll as cdll  # type: ignore
 else:
@@ -52,7 +50,7 @@ class Snap7Library:
             lib_location: full path to the `snap7.dll` file. Optional.
 
         Raises:
-            Snap7Exception: if `lib_location` is not found.
+            RuntimeError: if `lib_location` is not found.
         """
         if self.cdll:  # type: ignore
             return
@@ -62,8 +60,7 @@ class Snap7Library:
                              or find_library('snap7')
                              or find_locally('snap7'))
         if not self.lib_location:
-            msg = "can't find snap7 library. If installed, try running ldconfig"
-            raise Snap7Exception(msg)
+            raise RuntimeError("can't find snap7 library. If installed, try running ldconfig")
         self.cdll = cdll.LoadLibrary(self.lib_location)
 
 
@@ -84,12 +81,12 @@ def check_error(code: int, context: str = "client") -> None:
         context: context in which is called.
 
     Raises:
-        Snap7Exception: if the code exists and is diferent from 1.
+        RuntimeError: if the code exists and is different from 1.
     """
     if code and code != 1:
         error = error_text(code, context)
         logger.error(error)
-        raise Snap7Exception(error)
+        raise RuntimeError(error)
 
 
 def error_text(error, context: str = "client") -> bytes:

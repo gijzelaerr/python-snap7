@@ -10,7 +10,6 @@ import snap7
 from snap7 import types
 from snap7.types import WordLen, S7Object, param_types
 from snap7.common import ipv4, check_error, load_library
-from snap7.exceptions import Snap7Exception
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +267,7 @@ class Logo:
 
         Raises:
             :obj:`ValueError`: if the `ip_address` is not an IPV4.
-            :obj:`Snap7Exception`: if the snap7 error code is diferent from 0.
+            :obj:`ValueError`: if the snap7 error code is diferent from 0.
         """
         if not re.match(ipv4, ip_address):
             raise ValueError(f"{ip_address} is invalid ipv4")
@@ -276,7 +275,7 @@ class Logo:
                                                       c_uint16(tsap_snap7),
                                                       c_uint16(tsap_logo))
         if result != 0:
-            raise Snap7Exception("The parameter was invalid")
+            raise ValueError("The parameter was invalid")
 
     def set_connection_type(self, connection_type: int):
         """Sets the connection resource type, i.e the way in which the Clients
@@ -286,12 +285,12 @@ class Logo:
             connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
 
         Raises:
-            :obj:`Snap7Exception`: if the snap7 error code is diferent from 0.
+            :obj:`ValueError`: if the snap7 error code is diferent from 0.
         """
         result = self.library.Cli_SetConnectionType(self.pointer,
                                                     c_uint16(connection_type))
         if result != 0:
-            raise Snap7Exception("The parameter was invalid")
+            raise ValueError("The parameter was invalid")
 
     def get_connected(self) -> bool:
         """Returns the connection status
