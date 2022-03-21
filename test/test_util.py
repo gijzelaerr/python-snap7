@@ -116,14 +116,27 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row['testdateandtime'], '2020-07-12T17:32:02.854000')
 
     def test_get_time(self):
-        """
-        TIME extraction from bytearray
-        """
-        test_array = bytearray(_bytearray)
+        test_values = [
+            (0, '0:0:0:0.0'),
+            (1, '0:0:0:0.1'),  # T#1MS
+            (1000, '0:0:0:1.0'),  # T#1S
+            (60000, '0:0:1:0.0'),  # T#1M
+            (3600000, '0:1:0:0.0'),  # T#1H
+            (86400000, '1:0:0:0.0'),  # T#1D
+            (2147483647, '24:20:31:23.647'),  # max range
+            (-0, '0:0:0:0.0'),
+            (-1, '-0:0:0:0.1'),  # T#-1MS
+            (-1000, '-0:0:0:1.0'),  # T#-1S
+            (-60000, '-0:0:1:0.0'),  # T#-1M
+            (-3600000, '-0:1:0:0.0'),  # T#-1H
+            (-86400000, '-1:0:0:0.0'),  # T#-1D
+            (-2147483647, '-24:20:31:23.647'),  # min range
+        ]
 
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
-
-        self.assertEqual(row['testTime'], '-21:17:57:28.193')
+        data = bytearray(4)
+        for value_to_test, expected_value in test_values:
+            data[:] = struct.pack(">i", value_to_test)
+            self.assertEqual(util.get_time(data, 0), expected_value)
 
     def test_set_time(self):
         test_array = bytearray(_new_bytearray)
