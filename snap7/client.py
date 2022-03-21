@@ -43,7 +43,7 @@ class Client:
         >>> data[3] = 0b00000001
         >>> data
         bytearray(b'\\x00\\x00\\x00\\x01')
-        >>> data.db_write(1, 0, data)
+        >>> client.db_write(1, 0, data)
     """
 
     def __init__(self, lib_location: Optional[str] = None):
