@@ -906,10 +906,10 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
-def get_lint(bytearray_: bytearray, byte_index: int) -> int:
-    #raw_lint = bytearray_[byte_index:byte_index + 8]
-    #lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
-    #return lint
+def get_lint(bytearray_: bytearray, byte_index: int):
+    # raw_lint = bytearray_[byte_index:byte_index + 8]
+    # lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
+    # return lint
     return NotImplementedError
 
 
@@ -999,7 +999,7 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
     return char
 
 
-def set_char(bytearray_: bytearray, byte_index: int, chr_: chr) -> bytearray:
+def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
     bytearray_[byte_index] = ord(chr_)
     return bytearray_
 
@@ -1328,7 +1328,7 @@ class DB_Row:
         elif type_.startswith('WSTRING'):
             max_size = re.search(r'\d+', type_)
             if max_size is None:
-                raise Snap7Exception("Max size could not be determinate. re.search() returned None")
+                raise ValueError("Max size could not be determinate. re.search() returned None")
             return get_wstring(bytearray_, byte_index)
         else:
             type_to_func: Dict[str, Callable] = {
