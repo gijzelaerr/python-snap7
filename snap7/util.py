@@ -907,6 +907,29 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
 
 
 def get_lint(bytearray_: bytearray, byte_index: int):
+    """Get the long int
+
+    THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
+
+    Notes:
+        Datatype `lint` (long int) consists in 8 bytes in the PLC.
+        Maximum value posible is +9223372036854775807
+        Lowest value posible is -9223372036854775808
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        read lint value (here as example 12345) from DB1.10 of a PLC
+        >>> data = client.db_read(db_number=1, start=10, size=8)
+        >>> snap7.util.get_lint(data, 0)
+            12345
+    """
+
     # raw_lint = bytearray_[byte_index:byte_index + 8]
     # lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
     # return lint
@@ -914,12 +937,55 @@ def get_lint(bytearray_: bytearray, byte_index: int):
 
 
 def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
+    """Get the long real
+
+    Notes:
+        Datatype `lreal` (long real) consists in 8 bytes in the PLC.
+        Negative Range: -1.7976931348623158e+308 to -2.2250738585072014e-308
+        Positive Range: +2.2250738585072014e-308 to +1.7976931348623158e+308
+        Zero: ±0
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        read lreal value (here as example 12345.12345) from DB1.10 of a PLC
+        >>> data = client.db_read(db_number=1, start=10, size=8)
+        >>> snap7.util.get_lreal(data, 0)
+            12345.12345
+    """
     x = bytearray_[byte_index:byte_index + 8]
     lreal = struct.unpack('>d', struct.pack('8B', *x))[0]
     return lreal
 
 
 def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray:
+    """Set the long real
+
+    Notes:
+        Datatype `lreal` (long real) consists in 8 bytes in the PLC.
+        Negative Range: -1.7976931348623158e+308 to -2.2250738585072014e-308
+        Positive Range: +2.2250738585072014e-308 to +1.7976931348623158e+308
+        Zero: ±0
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+        lreal: float value to set
+
+    Returns:
+        Value to write.
+
+    Examples:
+        write lreal value (here as example 12345.12345) to DB1.10 of a PLC
+        >>> data = snap7.util.set_lreal(data, 12345.12345)
+        >>> client.db_write(db_number=1, start=10, data)
+
+    """
     lreal = float(lreal)
     _bytes = struct.unpack('8B', struct.pack('>d', lreal))
     bytearray_[byte_index] = _bytes[0]
@@ -927,6 +993,28 @@ def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray
 
 
 def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
+    """Get the long word
+
+    THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
+
+    Notes:
+        Datatype `lword` (long word) consists in 8 bytes in the PLC.
+        Maximum value posible is bytearray(b"\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF")
+        Lowest value posible is bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00")
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        Value read.
+
+    Examples:
+        read lword value (here as example 0xAB\0xCD) from DB1.10 of a PLC
+        >>> data = client.db_read(db_number=1, start=10, size=8)
+        >>> snap7.util.get_lword(data, 0)
+            bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
+    """
     #  data = bytearray_[byte_index:byte_index + 4]
     #  dword = struct.unpack('>Q', struct.pack('8B', *data))[0]
     #  return bytearray(dword)
@@ -934,6 +1022,29 @@ def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
 
 
 def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytearray:
+    """Set the long word
+
+    THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
+
+    Notes:
+        Datatype `lword` (long word) consists in 8 bytes in the PLC.
+        Maximum value posible is bytearray(b"\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF")
+        Lowest value posible is bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00")
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+        lword: Value to write
+
+    Returns:
+        Bytearray conform value.
+
+    Examples:
+        read lword value (here as example 0xAB\0xCD) from DB1.10 of a PLC
+        >>> data = snap7.util.set_lword(data, 0, bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD"))
+        bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
+        >>> client.db_write(db_number=1, start=10, data)
+    """
     #  data = bytearray_[byte_index:byte_index + 4]
     #  dword = struct.unpack('8B', struct.pack('>Q', *data))[0]
     #  return bytearray(dword)
@@ -941,6 +1052,24 @@ def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytea
 
 
 def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
+    """Get ulint value from bytearray.
+
+    Notes:
+        Datatype `int` in the PLC is represented in 8 bytes
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to start reading from.
+
+    Returns:
+        Value read.
+
+    Examples:
+        Read 8 Bytes raw from DB1.10, where an ulint value is stored. Return Python compatible value.
+        >>> data = client.db_read(db_number=1, start=10, size=8)
+        >>> snap7.util.get_ulint(data, 0)
+            12345
+    """
     raw_ulint = bytearray_[byte_index:byte_index + 8]
     lint = struct.unpack('>Q', struct.pack('8B', *raw_ulint))[0]
     return lint
@@ -995,11 +1124,48 @@ def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
 
 
 def get_char(bytearray_: bytearray, byte_index: int) -> str:
+    """Get char value from bytearray.
+
+    Notes:
+        Datatype `char` in the PLC is represented in 1 byte. It has to be in ASCII-format.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to start reading from.
+
+    Returns:
+        Value read.
+
+    Examples:
+        Read 1 Byte raw from DB1.10, where a char value is stored. Return Python compatible value.
+        >>> data = client.db_read(db_number=1, start=10, size=1)
+        >>> snap7.util.get_char(data, 0)
+            'C'
+    """
     char = chr(bytearray_[byte_index])
     return char
 
 
-def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
+def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueError, bytearray]:
+    """Set char value in a bytearray.
+
+    Notes:
+        Datatype `char` in the PLC is represented in 1 byte. It has to be in ASCII-format
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to start reading from.
+        chr_: Char to be set
+
+    Returns:
+        Value read.
+
+    Examples:
+        Read 1 Byte raw from DB1.10, where a char value is stored. Return Python compatible value.
+        >>> data = snap7.util.set_char(data, 0, 'C')
+        >>> client.db_write(db_number=1, start=10, data)
+            'bytearray('0x43')
+    """
     if chr_.isascii():
         bytearray_[byte_index] = ord(chr_)
         return bytearray_
@@ -1007,12 +1173,51 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
 
 
 def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
+    """Get wchar value from bytearray.
+
+    Notes:
+        Datatype `wchar` in the PLC is represented in 2 bytes. It has to be in utf-16-be format.
+
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index to start reading from.
+
+    Returns:
+        Value read.
+
+    Examples:
+        Read 2 Bytes raw from DB1.10, where a wchar value is stored. Return Python compatible value.
+        >>> data = client.db_read(db_number=1, start=10, size=2)
+        >>> snap7.util.get_wchar(data, 0)
+            'C'
+    """
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[1])
     return bytearray_[byte_index:byte_index + 2].decode('utf-16-be')
 
 
 def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
+    """Parse wstring from bytearray
+
+    Notes:
+        Byte 0 and 1 contains the max size posible for a string (2 Byte value).
+        byte 2 and 3 contains the length of the string that contains (2 Byte value).
+        The other bytes contain WCHARs (2Byte) in utf-16-be style.
+
+    Args:
+        bytearray_: buffer from where to get the string.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        String value.
+
+    Examples:
+        Read from DB1.10 22, where the WSTRING is stored, the raw 22 Bytes and convert them to a python string
+        >>> data = client.db_read(db_number=1, start=10, size=22)
+        >>> snap7.util.get_wstring(data, 0)
+        'hello world'
+    """
     # Byte 0 + 1 --> total length of wstring, should be bytearray_ - 4
     # Byte 2, 3 --> used length of wstring
     wstring_start = byte_index + 4
