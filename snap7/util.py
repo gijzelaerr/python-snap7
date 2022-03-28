@@ -1000,8 +1000,10 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
 
 
 def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
-    bytearray_[byte_index] = ord(chr_)
-    return bytearray_
+    if chr_.isascii():
+        bytearray_[byte_index] = ord(chr_)
+        return bytearray_
+    raise ValueError("chr_ : {} contains a None-Ascii value, but ASCII-only is allowed.".format(chr_))
 
 
 def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
