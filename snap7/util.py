@@ -411,7 +411,7 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
     return real
 
 
-def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int  = 255):
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 255):
     """Set string value
 
     Args:
