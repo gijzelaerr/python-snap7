@@ -411,14 +411,14 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
     return real
 
 
-def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int):
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int  = 255):
     """Set string value
 
     Args:
         bytearray_: buffer to write to.
         byte_index: byte index to start writing from.
         value: string to write.
-        max_size: maximum possible string size.
+        max_size: maximum possible string size, max. 255 as default.
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
@@ -433,6 +433,8 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     if not isinstance(value, str):
         raise TypeError(f"Value value:{value} is not from Type string")
 
+    if max_size > 255:
+        raise ValueError(f'max_size: {max_size} > max. allowed 255 chars')
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
@@ -473,7 +475,7 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
     str_length = int(bytearray_[byte_index + 1])
     max_string_size = int(bytearray_[byte_index])
 
-    if str_length > max_string_size or max_string_size > 254:
+    if str_length > max_string_size or max_string_size > 255:
         logger.error("The string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         raise TypeError("String contains {} chars, but max. {} chars are expected or is larger than 254."
