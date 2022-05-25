@@ -111,7 +111,7 @@ class TestServer(unittest.TestCase):
 
     def test_read_string(self):
         data = self.client.db_read(0, 100, 254)
-        self.assertEqual(get_string(data, 0, 254), "the brown fox jumps over the lazy dog")
+        self.assertEqual(get_string(data, 0), "the brown fox jumps over the lazy dog")
 
     def test_read_word(self):
         data = self.client.db_read(0, 400, 4 * 4)

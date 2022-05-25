@@ -1,3 +1,4 @@
+import datetime
 import re
 import unittest
 import struct
@@ -27,6 +28,16 @@ test_spec = """
 43      testusint0      USINT
 44      testsint0       SINT
 46      testTime     TIME
+50      testByte    BYTE
+51      testUint    UINT
+53      testUdint   UDINT
+57      testLreal   LREAL
+65      testChar    CHAR
+66      testWchar   WCHAR
+68      testWstring WSTRING[4]
+80      testDate    DATE
+82      testTod     TOD
+86      testDtl     DTL
 """
 
 test_spec_indented = """
@@ -50,7 +61,17 @@ test_spec_indented = """
     29      tests5time   S5TIME
 31      testdateandtime DATE_AND_TIME
         43      testusint0      USINT
-44      testsint0       SINT
+44        testsint0       SINT
+        50      testByte    BYTE
+    51      testUint    UINT
+            53      testUdint   UDINT
+57      testLreal   LREAL
+        65      testChar    CHAR
+66      testWchar   WCHAR
+            68      testWstring WSTRING[4]
+    80      testDate    DATE
+82      testTod     TOD
+    86      testDtl     DTL
 """
 
 
@@ -71,7 +92,17 @@ _bytearray = bytearray([
                                                    # https://support.industry.siemens.com/cs/document/36479/date_and_time-format-bei-s7-?dti=0&lc=de-DE
     254, 254, 254, 254, 254, 127,                  # test small int
     128,                                           # test set byte
-    143, 255, 255, 255                             # test time
+    143, 255, 255, 255,                            # test time
+    254,                                           # test byte              0xFE
+    48, 57,                                        # test uint              12345
+    7, 91, 205, 21,                            # test udint                 123456789
+    65, 157, 111, 52, 84, 126, 107, 117,           # test lreal             123456789.123456789
+    65,                                            # test char              A
+    3, 169,                                        # test wchar             Ω
+    0, 4, 0, 4, 3, 169, 0, ord('s'), 0, ord('t'), 0, 196,  # test wstring   Ω s t Ä
+    45, 235,                                          # test date           09.03.2022
+    2, 179, 41, 128,                                     # test tod         12:34:56
+    7, 230, 3, 9, 4, 12, 34, 45, 0, 0, 0, 0            # test dtl       09.03.2022 12:34:56
 ])
 
 _new_bytearray = bytearray(100)
@@ -369,6 +400,60 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(y_multi_space, True)
         self.assertEqual(y_single_indent, 0)
         self.assertEqual(y_multi_indent, 0)
+
+    def test_get_uint(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testUint']
+        self.assertEqual(val, 12345)
+
+    def test_get_udint(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testUdint']
+        self.assertEqual(val, 123456789)
+
+    def test_get_lreal(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testLreal']
+        self.assertEqual(val, 123456789.123456789)
+
+    def test_get_char(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testChar']
+        self.assertEqual(val, 'A')
+
+    def test_get_wchar(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testWchar']
+        self.assertEqual(val, 'Ω')
+
+    def test_get_wstring(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testWstring']
+        self.assertEqual(val, 'ΩstÄ')
+
+    def test_get_date(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testDate']
+        self.assertEqual(val, datetime.date(day=9, month=3, year=2022))
+
+    def test_get_tod(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testTod']
+        self.assertEqual(val, datetime.timedelta(hours=12, minutes=34, seconds=56))
+
+    def test_get_dtl(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        val = row['testDtl']
+        self.assertEqual(val, datetime.datetime(year=2022, month=3, day=9, hour=12, minute=34, second=45))
 
 
 def print_row(data):
