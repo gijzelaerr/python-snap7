@@ -1,6 +1,43 @@
 CHANGES
 =======
 
+1.2
+---
+
+* fix wheel tag for linux x86_64 by @nikteliy in https://github.com/gijzelaerr/python-snap7/pull/297
+* Fixed typo area doesn't exist areas does by @Ofloo in https://github.com/gijzelaerr/python-snap7/pull/306
+* add get_time and set_time in util by @Yingliangzhe in https://github.com/gijzelaerr/python-snap7/pull/308
+* modification of TIME data type by @Yingliangzhe in https://github.com/gijzelaerr/python-snap7/pull/311
+* added DATE_AND_TIME Value as Datetime object by @zsisamci in https://github.com/gijzelaerr/python-snap7/pull/312
+* #273 by @nikteliy in https://github.com/gijzelaerr/python-snap7/pull/321
+* Add byte type parsing to DB_Row API + set parsing case insensitive by @LoicGRENON in https://github.com/gijzelaerr/python-snap7/pull/315
+* added missing types in  WordLen by @zsisamci in https://github.com/gijzelaerr/python-snap7/pull/326
+* Add support for read/write unsigned value from bytearray by @LoicGRENON in https://github.com/gijzelaerr/python-snap7/pull/316
+* fixing ip string paramters to c function by @zsisamci in https://github.com/gijzelaerr/python-snap7/pull/329
+* Add py.typed marker file by @mthuurne in https://github.com/gijzelaerr/python-snap7/pull/342
+* require correct package name, fixes issue #344 by @gijzelaerr in https://github.com/gijzelaerr/python-snap7/pull/345
+* Fix warnings by @nikteliy in https://github.com/gijzelaerr/python-snap7/pull/350
+* Update license identifier by @Shortfinga in https://github.com/gijzelaerr/python-snap7/pull/349
+* Update client db_write docs by @pwablito in https://github.com/gijzelaerr/python-snap7/pull/352
+* Fix db_offset calculation error by @lubbbert in https://github.com/gijzelaerr/python-snap7/pull/351
+* fix #355 by @swamper123 in https://github.com/gijzelaerr/python-snap7/pull/359
+* fix #272 by @swamper123 in https://github.com/gijzelaerr/python-snap7/pull/360
+* fix get_time for small values by @swamper123 in https://github.com/gijzelaerr/python-snap7/pull/358
+* add more getter methods for utils by @swamper123 in https://github.com/gijzelaerr/python-snap7/pull/357
+* Prepare for 1.2 by @gijzelaerr in https://github.com/gijzelaerr/python-snap7/pull/364
+
+### New Contributors
+
+* @Ofloo made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/306
+* @zsisamci made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/312
+* @LoicGRENON made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/315
+* @mthuurne made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/342
+* @Shortfinga made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/349
+* @pwablito made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/352
+* @lubbbert made their first contribution in https://github.com/gijzelaerr/python-snap7/pull/351
+
+**Full Changelog**: https://github.com/gijzelaerr/python-snap7/compare/1.1...1.2
+
 1.1
 ---
 
