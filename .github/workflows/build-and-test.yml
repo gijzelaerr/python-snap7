@@ -82,7 +82,7 @@ jobs:
         with:
           output-dir: wheelhouse
         env:
-          CIBW_BUILD: cp36-manylinux_x86_64
+          CIBW_BUILD: cp37-manylinux_x86_64
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux1
           CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
           CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f x86_64_linux.mk install
