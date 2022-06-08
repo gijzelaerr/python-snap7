@@ -215,6 +215,10 @@ class TestS7util(unittest.TestCase):
             pass
         # value should still be empty
         self.assertEqual(row['NAME'], '')
+        try:
+            row['NAME'] = 'TrÖt'
+        except ValueError:
+            pass
 
     def test_get_int(self):
         test_array = bytearray(_bytearray)
