@@ -422,33 +422,42 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
-        :obj:`ValueError`: if the length of the  `value` is larger than the `max_size`.
+        :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
+        or 'max_size' is greater than 255 or 'value' contains non-ascii characters.
 
     Examples:
         >>> data = bytearray(20)
         >>> snap7.util.set_string(data, 0, "hello world", 255)
         >>> data
-            bytearray(b'\\x00\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
+            bytearray(b'\\xff\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
     """
     if not isinstance(value, str):
         raise TypeError(f"Value value:{value} is not from Type string")
 
     if max_size > 255:
         raise ValueError(f'max_size: {max_size} > max. allowed 255 chars')
+    if not value.isascii():
+        raise ValueError("Value contains non-ascii values, which is not compatible with PLC Type STRING."
+                         "Check encoding of value or try set_wstring() (utf-16 encoding needed).")
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
         raise ValueError(f'size {size} > max_size {max_size} {value}')
+
+    # set max string size
+    bytearray_[byte_index] = max_size
+
     # set len count on first position
     bytearray_[byte_index + 1] = len(value)
 
     i = 0
+
     # fill array which chr integers
     for i, c in enumerate(value):
         bytearray_[byte_index + 2 + i] = ord(c)
 
     # fill the rest with empty space
-    for r in range(i + 1, bytearray_[byte_index]):
+    for r in range(i + 1, bytearray_[byte_index] - 2):
         bytearray_[byte_index + 2 + r] = ord(' ')
 
 
@@ -468,7 +477,7 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
 
     Examples:
         >>> data = bytearray([254, len("hello world")] + [ord(letter) for letter in "hello world"])
-        >>> snap7.util.get_string(data, 0, 255)
+        >>> snap7.util.get_string(data, 0)
         'hello world'
     """
 
