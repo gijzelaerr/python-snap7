@@ -5,7 +5,7 @@ This is a ctypes based python wrapper for snap7. Snap7 is an open source,
 32/64 bit, multi-platform Ethernet communication suite for interfacing natively
 with Siemens S7 PLCs.
 
-Python-snap7 is tested with Python 3.6+, on Windows, Linux and OS X.
+Python-snap7 is tested with Python 3.7+, on Windows, Linux and OS X.
 
 The full documentation is available on `Read The Docs <http://python-snap7.readthedocs.org/en/latest/>`_.
 

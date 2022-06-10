@@ -47,7 +47,7 @@ jobs:
           output-dir: wheelhouse
         env:
           CIBW_ARCHS_LINUX: aarch64
-          CIBW_BUILD: cp36-*
+          CIBW_BUILD: cp37-*
           CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
           CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f aarch64-linux-gnu.mk install
 
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.6", "3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
     steps:
       - name: Checkout
         uses: actions/checkout@v2
