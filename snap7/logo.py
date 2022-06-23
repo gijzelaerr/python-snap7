@@ -67,7 +67,7 @@ class Logo:
         """Connect to a Siemens LOGO server.
 
         Notes:
-            Howto setup Logo communication configuration see: http://snap7.sourceforge.net/logo.html
+            Howto setup Logo communication configuration see: https://snap7.sourceforge.net/logo.html
 
         Args:
             ip_address: IP ip_address of server

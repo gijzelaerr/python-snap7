@@ -7,7 +7,7 @@ with Siemens S7 PLCs.
 
 Python-snap7 is tested with Python 3.7+, on Windows, Linux and OS X.
 
-The full documentation is available on `Read The Docs <http://python-snap7.readthedocs.org/en/latest/>`_.
+The full documentation is available on `Read The Docs <https://python-snap7.readthedocs.org/en/latest/>`_.
 
 
 Installation
@@ -18,7 +18,7 @@ If you are running Windows 10, Mac OS X or GNU/Linux on an Intel x64 compatible 
    $ pip install python-snap7
 
 
-Ofterwise, please read the `online installation documentation <http://python-snap7.readthedocs.org/en/latest/installation.html>`_.
+Ofterwise, please read the `online installation documentation <https://python-snap7.readthedocs.org/en/latest/installation.html>`_.
 
 
 Credits

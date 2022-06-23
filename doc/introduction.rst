@@ -2,7 +2,7 @@ Introduction
 ============
 
 python-snap7 is a Python wrapper for the
-`Snap7 library <http://snap7.sourceforge.net>`_. Snap7 is an open source,
+`Snap7 library <https://snap7.sourceforge.net>`_. Snap7 is an open source,
 32/64 bit, multi-platform Ethernet communication suite for interfacing natively
 with Siemens S7 PLCs.
 

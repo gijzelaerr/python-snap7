@@ -33,7 +33,7 @@ Windows
 ~~~~~~~
 
 Download the zip file from the
-`sourceforce page <http://sourceforge.net/projects/snap7/files/>`_.
+`sourceforce page <https://sourceforge.net/projects/snap7/files/>`_.
 Unzip the zip file, and copy ``release\\Windows\\Win64\\snap7.dll`` somewhere
 in your system PATH, for example ``%systemroot%\System32\``. Alternatively you can
 copy the file somewhere on your file system and adjust the system PATH.
@@ -50,7 +50,7 @@ Compile from source
 ~~~~~~~~~~~~~~~~~~~
 
 Download the latest source from
-`the sourceforce page <http://sourceforge.net/projects/snap7/files/>`_ and do
+`the sourceforce page <https://sourceforge.net/projects/snap7/files/>`_ and do
 a manual compile. Download the file and run::
 
      $ p7zip -d snap7-full-1.0.0.7z  # requires the p7 program
@@ -58,7 +58,7 @@ a manual compile. Download the file and run::
      $ make -f <arch>.mk install     # where arch is your architecture, for example x86_64_linux
 
 For more information about or help with compilation please check out the
-documentation on the `snap7 website <http://snap7.sourceforge.net/>`_.
+documentation on the `snap7 website <https://snap7.sourceforge.net/>`_.
 
 
 Python-Snap7
