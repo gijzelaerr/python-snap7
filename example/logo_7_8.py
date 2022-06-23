@@ -3,7 +3,7 @@ import logging
 import snap7
 
 # for setup the Logo connection please follow this link
-# http://snap7.sourceforge.net/logo.html
+# https://snap7.sourceforge.net/logo.html
 
 
 logging.basicConfig(level=logging.INFO)
