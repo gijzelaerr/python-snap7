@@ -754,8 +754,8 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     val = int(byte_str, 16)
     if (val & (1 << (bits - 1))) != 0:
         sign = -1  # if sign bit is set e.g., 8bit: 128-255
-        val = val - (1 << bits)  # compute negative value
-        val = val * sign
+        val -= (1 << bits)  # compute negative value
+        val *= sign
 
     milli_seconds = val % 1000
     seconds = val // 1000
@@ -1376,8 +1376,7 @@ class DB:
         return self.index.get(key, default)
 
     def __iter__(self):
-        for key, row in self.index.items():
-            yield key, row
+        yield from self.index.items()
 
     def __len__(self):
         return len(self.index)
@@ -1460,10 +1459,7 @@ class DB_Row:
         Returns:
             dictionary containing the values of each value of the row.
         """
-        data = {}
-        for key in self._specification:
-            data[key] = self[key]
-        return data
+        return {key: self[key] for key in self._specification}
 
     def __getitem__(self, key):
         """
@@ -1492,9 +1488,7 @@ class DB_Row:
         Returns:
             True if the current `bytearray_` is equal to the new one. Otherwise is False.
         """
-        if self.get_bytearray() == bytearray_:
-            return True
-        return False
+        return self.get_bytearray() == bytearray_
 
     def get_offset(self, byte_index: Union[str, int]) -> int:
         """ Calculate correct beginning position for a row
