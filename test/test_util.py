@@ -113,18 +113,30 @@ _new_bytearray[43:43 + 4] = struct.pack("I", 286331153)  # byte_index=43, value=
 
 class TestS7util(unittest.TestCase):
 
-    def test_get_byte(self):
+    def test_get_byte_new(self):
         test_array = bytearray(_new_bytearray)
         byte_ = util.get_byte(test_array, 41)
         self.assertEqual(byte_, 128)
         byte_ = util.get_byte(test_array, 42)
         self.assertEqual(byte_, 255)
 
-    def test_set_byte(self):
+    def test_set_byte_new(self):
         test_array = bytearray(_new_bytearray)
         util.set_byte(test_array, 41, 127)
         byte_ = util.get_byte(test_array, 41)
         self.assertEqual(byte_, 127)
+
+    def test_get_byte(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(50, 'BYTE')  # get value
+        self.assertEqual(value, 254)
+
+    def test_set_byte(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testByte'] = 255
+        self.assertEqual(row['testByte'], 255)
 
     def test_get_s5time(self):
         """
