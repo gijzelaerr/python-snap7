@@ -411,6 +411,44 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
     return real
 
 
+def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: int):
+    """Set space-padded fixed-length string value
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index to start writing from.
+        value: string to write.
+        max_length: maximum string length, i.e. the fixed size of the string.
+
+    Raises:
+        :obj:`TypeError`: if the `value` is not a :obj:`str`.
+        :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
+        or 'value' contains non-ascii characters.
+
+    Examples:
+        >>> data = bytearray(20)
+        >>> snap7.util.set_fstring(data, 0, "hello world", 15)
+        >>> data
+            bytearray(b'hello world    \x00\x00\x00\x00\x00')
+    """
+    if not value.isascii():
+        raise ValueError("Value contains non-ascii values.")
+    # FAIL HARD WHEN trying to write too much data into PLC
+    size = len(value)
+    if size > max_length:
+        raise ValueError(f'size {size} > max_length {max_length} {value}')
+
+    i = 0
+
+    # fill array which chr integers
+    for i, c in enumerate(value):
+        bytearray_[byte_index + i] = ord(c)
+
+    # fill the rest with empty space
+    for r in range(i + 1, max_length):
+        bytearray_[byte_index + r] = ord(' ')
+
+
 def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 255):
     """Set string value
 
@@ -459,6 +497,37 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     # fill the rest with empty space
     for r in range(i + 1, bytearray_[byte_index] - 2):
         bytearray_[byte_index + 2 + r] = ord(' ')
+
+
+def get_fstring(bytearray_: bytearray, byte_index: int, max_length: int, remove_padding: bool = True) -> str:
+    """Parse space-padded fixed-length string from bytearray
+
+    Notes:
+        This function supports fixed-length ASCII strings, right-padded with spaces.
+
+    Args:
+        bytearray_: buffer from where to get the string.
+        byte_index: byte index from where to start reading.
+        max_length: the maximum length of the string.
+        remove_padding: whether to remove the right-padding.
+
+    Returns:
+        String value.
+
+    Examples:
+        >>> data = [ord(letter) for letter in "hello world    "]
+        >>> snap7.util.get_fstring(data, 0, 15)
+        'hello world'
+        >>> snap7.util.get_fstring(data, 0, 15, remove_padding=false)
+        'hello world    '
+    """
+    data = map(chr, bytearray_[byte_index:byte_index + max_length])
+    string = "".join(data)
+
+    if remove_padding:
+        return string.rstrip(' ')
+    else:
+        return string
 
 
 def get_string(bytearray_: bytearray, byte_index: int) -> str:
@@ -1532,7 +1601,12 @@ class DB_Row:
         # first 4 bytes are used by db
         byte_index = self.get_offset(byte_index)
 
-        if type_.startswith('STRING'):
+        if type_.startswith('FSTRING'):
+            max_size = re.search(r'\d+', type_)
+            if max_size is None:
+                raise ValueError("Max size could not be determinate. re.search() returned None")
+            return get_fstring(bytearray_, byte_index, int(max_size[0]))
+        elif type_.startswith('STRING'):
             max_size = re.search(r'\d+', type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
@@ -1593,6 +1667,14 @@ class DB_Row:
                             int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
+
+        if type_.startswith('FSTRING') and isinstance(value, str):
+            max_size = re.search(r'\d+', type_)
+            if max_size is None:
+                raise ValueError("Max size could not be determinate. re.search() returned None")
+            max_size_grouped = max_size.group(0)
+            max_size_int = int(max_size_grouped)
+            return set_fstring(bytearray_, byte_index, value, max_size_int)
 
         if type_.startswith('STRING') and isinstance(value, str):
             max_size = re.search(r'\d+', type_)
