@@ -38,6 +38,7 @@ test_spec = """
 80      testDate    DATE
 82      testTod     TOD
 86      testDtl     DTL
+98      testFstring FSTRING[8]
 """
 
 test_spec_indented = """
@@ -72,6 +73,7 @@ test_spec_indented = """
     80      testDate    DATE
 82      testTod     TOD
     86      testDtl     DTL
+            98      testFstring FSTRING[8]
 """
 
 
@@ -95,14 +97,15 @@ _bytearray = bytearray([
     143, 255, 255, 255,                            # test time
     254,                                           # test byte              0xFE
     48, 57,                                        # test uint              12345
-    7, 91, 205, 21,                            # test udint                 123456789
+    7, 91, 205, 21,                                # test udint             123456789
     65, 157, 111, 52, 84, 126, 107, 117,           # test lreal             123456789.123456789
     65,                                            # test char              A
     3, 169,                                        # test wchar             Ω
     0, 4, 0, 4, 3, 169, 0, ord('s'), 0, ord('t'), 0, 196,  # test wstring   Ω s t Ä
-    45, 235,                                          # test date           09.03.2022
-    2, 179, 41, 128,                                     # test tod         12:34:56
-    7, 230, 3, 9, 4, 12, 34, 45, 0, 0, 0, 0            # test dtl       09.03.2022 12:34:56
+    45, 235,                                       # test date              09.03.2022
+    2, 179, 41, 128,                               # test tod               12:34:56
+    7, 230, 3, 9, 4, 12, 34, 45, 0, 0, 0, 0,       # test dtl               09.03.2022 12:34:56
+    116, 101, 115, 116, 32, 32, 32, 32             # test fstring           'test    '
 ])
 
 _new_bytearray = bytearray(100)
@@ -231,6 +234,40 @@ class TestS7util(unittest.TestCase):
             row['NAME'] = 'TrÖt'
         except ValueError:
             pass
+
+    def test_get_fstring(self):
+        data = [ord(letter) for letter in "hello world    "]
+        self.assertEqual(util.get_fstring(data, 0, 15), 'hello world')
+        self.assertEqual(util.get_fstring(data, 0, 15, remove_padding=False), 'hello world    ')
+
+    def test_get_fstring_name(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row['testFstring']
+        self.assertEqual(value, 'test')
+
+    def test_get_fstring_index(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        value = row.get_value(98, 'FSTRING[8]')  # get value
+        self.assertEqual(value, 'test')
+
+    def test_set_fstring(self):
+        data = bytearray(20)
+        util.set_fstring(data, 0, "hello world", 15)
+        self.assertEqual(data, bytearray(b'hello world    \x00\x00\x00\x00\x00'))
+
+    def test_set_fstring_name(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testFstring'] = 'TSET'
+        self.assertEqual(row['testFstring'], 'TSET')
+
+    def test_set_fstring_index(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row.set_value(98, 'FSTRING[8]', 'TSET')
+        self.assertEqual(row['testFstring'], 'TSET')
 
     def test_get_int(self):
         test_array = bytearray(_bytearray)
