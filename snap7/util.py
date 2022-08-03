@@ -1613,6 +1613,7 @@ class DB_Row:
                 'UINT': set_uint,
                 'INT': set_int,
                 'WORD': set_word,
+                'BYTE': set_byte,
                 'USINT': set_usint,
                 'SINT': set_sint,
             }
