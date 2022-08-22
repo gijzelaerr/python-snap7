@@ -1364,7 +1364,7 @@ class DB:
 
     Examples:
         >>> db1[0]['testbool1'] = test
-        >>> db1.write()   # puts data in plc
+        >>> db1.write(client)   # puts data in plc
     """
     bytearray_: Optional[bytearray] = None  # data from plc
     specification: Optional[str] = None  # layout of db rows
@@ -1463,6 +1463,58 @@ class DB:
             raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
         self._bytearray = bytearray_
 
+    def read(self, client: Client):
+        """Reads all the rows from the PLC to the :obj:`bytearray` of this instance.
+
+        Args:
+            client: :obj:`Client` snap7 instance.
+
+        Raises:
+            :obj:`ValueError`: if the `row_size` is less than 0.
+        """
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
+
+        total_size = self.size * (self.row_size + self.row_offset)
+        if self.area == Areas.DB:  # note: is it worth using the upload method?
+            bytearray_ = client.db_read(self.db_number, self.db_offset, total_size)
+        else:
+            bytearray_ = client.read_area(self.area, 0, self.db_offset, total_size)
+
+        # replace data in bytearray
+        for i, b in enumerate(bytearray_):
+            self._bytearray[i + self.db_offset] = b
+
+    def write(self, client):
+        """Writes all the rows from the :obj:`bytearray` of this instance to the PLC
+
+        Notes:
+            When the row_offset property has been set to something other than None while
+            constructing this object, this operation is not guaranteed to be atomic.
+
+        Args:
+            client: :obj:`Client` snap7 instance.
+
+        Raises:
+            :obj:`ValueError`: if the `row_size` is less than 0.
+        """
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
+
+        # special case: we have a row offset, so we must write each row individually
+        # this is because we don't want to change the data before the offset
+        if self.row_offset:
+            for _, v in self.index.items():
+                v.write(client)
+            return
+
+        total_size = self.size * (self.row_size + self.row_offset)
+        data = self._bytearray[self.db_offset:self.db_offset + total_size]
+
+        if self.area == Areas.DB:
+            client.db_write(self.db_number, self.db_offset, data)
+        else:
+            client.write_area(self.area, 0, self.db_offset, data)
 
 class DB_Row:
     """
@@ -1755,7 +1807,7 @@ class DB_Row:
         if self.area == Areas.DB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
-            bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
+            bytearray_ = client.read_area(self.area, 0, self.db_offset, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray
