@@ -1354,6 +1354,12 @@ class DB:
 
     Probably most usecases there is just one row
 
+    Note:
+        This class has some of the semantics of a dict. In particular, the membership operators
+        (``in``, ``not it``), the access operator (``[]``), as well as the :func:`~DB.keys()` and
+        :func:`~DB.items()` methods work as usual. Iteration, on the other hand, happens on items
+        instead of keys (much like :func:`~DB.items()` method).
+
     Attributes:
         bytearray_: buffer data from the PLC.
         specification: layout of the DB Rows.
@@ -1415,7 +1421,7 @@ class DB:
         self.make_rows()
 
     def make_rows(self):
-        """ Make each row for the DB. """
+        """ Make each row for the DB."""
         id_field = self.id_field
         row_size = self.row_size
         specification = self.specification
@@ -1442,13 +1448,65 @@ class DB:
             self.index[key] = row
 
     def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, int, float, str, bool, datetime]:
+        """Access a row of the table through its index.
+
+        Rows (values) are of type :class:`DB_Row`.
+
+        Notes:
+            This method has the same semantics as :class:`dict` access.
+        """
         return self.index.get(key, default)
 
     def __iter__(self):
+        """Iterate over the items contained in the table, in the physical order they are contained
+        in memory.
+
+        Notes:
+            This method does not have the same semantics as :class:`dict` iteration. Instead, it
+            has the same semantics as the :func:`~DB.items` method, yielding ``(index, row)``
+            tuples.
+        """
         yield from self.index.items()
 
     def __len__(self):
+        """Return the number of rows contained in the DB.
+
+        Notes:
+            If more than one row has the same index value, it is only counted once.
+        """
         return len(self.index)
+
+    def __contains__(self, key):
+        """Return whether the given key is the index of a row in the DB."""
+        return key in self.index
+
+    def keys(self):
+        """Return a *view object* of the keys that are used as indices for the rows in the
+        DB.
+        """
+        yield from self.index.keys()
+
+    def items(self):
+        """Return a *view object* of the items (``(index, row)`` pairs) that are used as indices
+        for the rows in the DB.
+        """
+        yield from self.index.items()
+
+    def export(self):
+        """Export the object to an :class:`OrderedDict`, where each item in the dictionary
+        has an index as the key, and the value of the DB row associated with that index
+        as a value, represented itself as a :class:`dict` (as returned by :func:`DB_Row.export`).
+
+        The outer dictionary contains the rows in the physical order they are contained in
+        memory.
+
+        Notes:
+            This function effectively returns a snapshot of the DB.
+        """
+        ret = OrderedDict()
+        for (k, v) in self.items():
+            ret[k] = v.export()
+        return ret
 
     def set_data(self, bytearray_: bytearray):
         """Set the new buffer data from the PLC to the current instance.
@@ -1484,6 +1542,10 @@ class DB:
         # replace data in bytearray
         for i, b in enumerate(bytearray_):
             self._bytearray[i + self.db_offset] = b
+
+        # todo: optimize by only rebuilding the index instead of all the DB_Row objects
+        self.index.clear()
+        self.make_rows()
 
     def write(self, client):
         """Writes all the rows from the :obj:`bytearray` of this instance to the PLC

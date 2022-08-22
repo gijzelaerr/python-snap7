@@ -373,6 +373,27 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row['testbool8'], 0)
             self.assertEqual(row['NAME'], 'test')
 
+    def test_db_export(self):
+        test_array = bytearray(_bytearray * 10)
+        test_db = util.DB(1, test_array, test_spec,
+                          row_size=len(_bytearray),
+                          size=10,
+                          layout_offset=4,
+                          db_offset=0)
+
+        db_export = test_db.export()
+        for i in db_export:
+            self.assertEqual(db_export[i]['testbool1'], 1)
+            self.assertEqual(db_export[i]['testbool2'], 1)
+            self.assertEqual(db_export[i]['testbool3'], 1)
+            self.assertEqual(db_export[i]['testbool4'], 1)
+
+            self.assertEqual(db_export[i]['testbool5'], 0)
+            self.assertEqual(db_export[i]['testbool6'], 0)
+            self.assertEqual(db_export[i]['testbool7'], 0)
+            self.assertEqual(db_export[i]['testbool8'], 0)
+            self.assertEqual(db_export[i]['NAME'], 'test')
+
     def test_get_real(self):
         test_array = bytearray(_bytearray)
         row = util.DB_Row(test_array, test_spec, layout_offset=4)
