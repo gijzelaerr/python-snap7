@@ -1373,11 +1373,11 @@ class DB:
         >>> db1.write(client)   # puts data in plc
     """
     bytearray_: Optional[bytearray] = None  # data from plc
-    specification: Optional[str] = None  # layout of db rows
-    row_size: Optional[int] = None  # bytes size of a db row
-    layout_offset: Optional[int] = None  # at which byte in row specification should
-    # we start reading the data
-    db_offset: Optional[int] = None  # at which byte in db should we start reading?
+    specification: Optional[str] = None     # layout of db rows
+    id_field: Optional[str] = None          # ID field of the rows
+    row_size: int = 0                       # bytes size of a db row
+    layout_offset: int = 0                  # at which byte in row specification should
+    db_offset: int = 0                      # at which byte in db should we start reading?
 
     # first fields could be be status data.
     # and only the last part could be control data
@@ -1386,8 +1386,8 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0,
-                 area: Optional[Areas] = Areas.DB):
+                 db_offset: int = 0, layout_offset: int = 0, row_offset: int = 0,
+                 area: Areas = Areas.DB):
         """ Creates a new instance of the `Row` class.
 
         Args:
@@ -1577,6 +1577,7 @@ class DB:
             client.db_write(self.db_number, self.db_offset, data)
         else:
             client.write_area(self.area, 0, self.db_offset, data)
+
 
 class DB_Row:
     """
