@@ -3,13 +3,13 @@ The Snap7 Python library.
 """
 import pkg_resources
 
-import snap7.client as client
-import snap7.common as common
-import snap7.error as error
-import snap7.logo as logo
-import snap7.server as server
-import snap7.types as types
-import snap7.util as util
+from . import client
+from . import common
+from . import error
+from . import logo
+from . import server
+from . import types
+from . import util
 
 __all__ = ['client', 'common', 'error', 'logo', 'server', 'types', 'util']
 

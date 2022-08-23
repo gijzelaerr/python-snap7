@@ -90,8 +90,8 @@ from typing import Dict, Union, Callable, Optional, List
 from datetime import date, datetime, timedelta
 from collections import OrderedDict
 
-from snap7.types import Areas
-from snap7.client import Client
+from .types import Areas
+from .client import Client
 
 logger = logging.getLogger(__name__)
 

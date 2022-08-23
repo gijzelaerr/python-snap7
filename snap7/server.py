@@ -8,9 +8,11 @@ import struct
 import logging
 from typing import Any, Tuple, Callable, Optional
 
-import snap7
-import snap7.types
-from snap7.common import ipv4, check_error, load_library
+from . import server as snap7server
+from .common import ipv4, check_error, load_library
+from .types import SrvEvent, LocalPort, cpu_statuses, server_statuses
+from .types import longword, wordlen_to_ctypes, WordLen, S7Object
+from .types import srvAreaDB, srvAreaPA, srvAreaTM, srvAreaCT
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +49,7 @@ class Server:
     def __del__(self):
         self.destroy()
 
-    def event_text(self, event: snap7.types.SrvEvent) -> str:
+    def event_text(self, event: SrvEvent) -> str:
         """Returns a textual explanation of a given event object
 
         Args:
@@ -69,8 +71,8 @@ class Server:
         """Create the server.
         """
         logger.info("creating server")
-        self.library.Srv_Create.restype = snap7.types.S7Object
-        self.pointer = snap7.types.S7Object(self.library.Srv_Create())
+        self.library.Srv_Create.restype = S7Object
+        self.pointer = S7Object(self.library.Srv_Create())
 
     @error_wrap
     def register_area(self, area_code: int, index: int, userdata):
@@ -95,9 +97,9 @@ class Server:
             event is created.
         """
         logger.info("setting event callback")
-        callback_wrap: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(snap7.types.SrvEvent), ctypes.c_int)
+        callback_wrap: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(SrvEvent), ctypes.c_int)
 
-        def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: snap7.types.SrvEvent, size: int) -> int:
+        def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: SrvEvent, size: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
@@ -126,10 +128,10 @@ class Server:
         """
         logger.info("setting read event callback")
         callback_wrapper: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
-                                                                ctypes.POINTER(snap7.types.SrvEvent),
+                                                                ctypes.POINTER(SrvEvent),
                                                                 ctypes.c_int)
 
-        def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: snap7.types.SrvEvent, size: int) -> int:
+        def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: SrvEvent, size: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
@@ -166,7 +168,7 @@ class Server:
         """
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
-            self.set_param(snap7.types.LocalPort, tcpport)
+            self.set_param(LocalPort, tcpport)
         logger.info(f"starting server on 0.0.0.0:{tcpport}")
         return self.library.Srv_Start(self.pointer)
 
@@ -199,8 +201,8 @@ class Server:
         check_error(error)
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
         return (
-            snap7.types.server_statuses[server_status.value],
-            snap7.types.cpu_statuses[cpu_status.value],
+            server_statuses[server_status.value],
+            cpu_statuses[cpu_status.value],
             clients_count.value
         )
 
@@ -261,7 +263,7 @@ class Server:
         """
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
-            self.set_param(snap7.types.LocalPort, tcpport)
+            self.set_param(LocalPort, tcpport)
         if not re.match(ipv4, ip):
             raise ValueError(f"{ip} is invalid ipv4")
         logger.info(f"starting server to {ip}:102")
@@ -301,27 +303,27 @@ class Server:
         """Sets the Virtual CPU status.
 
         Args:
-            status: :obj:`snap7.types.cpu_statuses` object type.
+            status: :obj:`cpu_statuses` object type.
 
         Returns:
             Error code from snap7 library.
 
         Raises:
-            :obj:`ValueError`: if `status` is not in :obj:`snap7.types.cpu_statuses`.
+            :obj:`ValueError`: if `status` is not in :obj:`cpu_statuses`.
         """
-        if status not in snap7.types.cpu_statuses:
+        if status not in cpu_statuses:
             raise ValueError(f"The cpu state ({status}) is invalid")
         logger.debug(f"setting cpu status to {status}")
         return self.library.Srv_SetCpuStatus(self.pointer, status)
 
-    def pick_event(self) -> Optional[snap7.types.SrvEvent]:
+    def pick_event(self) -> Optional[SrvEvent]:
         """Extracts an event (if available) from the Events queue.
 
         Returns:
             Server event.
         """
         logger.debug("checking event queue")
-        event = snap7.types.SrvEvent()
+        event = SrvEvent()
         ready = ctypes.c_int32()
         code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event),
                                           ctypes.byref(ready))
@@ -358,7 +360,7 @@ class Server:
             Mask
         """
         logger.debug(f"retrieving mask kind {kind}")
-        mask = snap7.types.longword()
+        mask = longword()
         code = self.library.Srv_GetMask(self.pointer, kind, ctypes.byref(mask))
         check_error(code)
         return mask
@@ -382,22 +384,22 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
         init_standard_values: if `True` will init some defaults values to be read on DB0.
     """
 
-    server = snap7.server.Server()
+    server = snap7server.Server()
     size = 100
-    DBdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
-    PAdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
-    TMdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
-    CTdata = (snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * size)()
-    server.register_area(snap7.types.srvAreaDB, 1, DBdata)
-    server.register_area(snap7.types.srvAreaPA, 1, PAdata)
-    server.register_area(snap7.types.srvAreaTM, 1, TMdata)
-    server.register_area(snap7.types.srvAreaCT, 1, CTdata)
+    DBdata = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
+    PAdata = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
+    TMdata = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
+    CTdata = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
+    server.register_area(srvAreaDB, 1, DBdata)
+    server.register_area(srvAreaPA, 1, PAdata)
+    server.register_area(srvAreaTM, 1, TMdata)
+    server.register_area(srvAreaCT, 1, CTdata)
 
     if init_standard_values:
         ba = _init_standard_values()
-        DBdata = snap7.types.wordlen_to_ctypes[snap7.types.WordLen.Byte.value] * len(ba)
+        DBdata = wordlen_to_ctypes[WordLen.Byte.value] * len(ba)
         DBdata = DBdata.from_buffer(ba)
-        server.register_area(snap7.types.srvAreaDB, 0, DBdata)
+        server.register_area(srvAreaDB, 0, DBdata)
 
     server.start(tcpport=tcpport)
     while True:

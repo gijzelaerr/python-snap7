@@ -6,10 +6,9 @@ import struct
 import logging
 from ctypes import byref, c_int, c_int32, c_uint16, c_void_p
 
-import snap7
-from snap7 import types
-from snap7.types import WordLen, S7Object, param_types
-from snap7.common import ipv4, check_error, load_library
+from .types import WordLen, S7Object, param_types
+from .types import RemotePort, Areas, wordlen_to_ctypes
+from .common import ipv4, check_error, load_library
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +80,7 @@ class Logo:
         # special handling for Siemens Logo
         # 1st set connection params
         # 2nd connect without any parameters
-        self.set_param(snap7.types.RemotePort, tcpport)
+        self.set_param(RemotePort, tcpport)
         self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
         result = self.library.Cli_Connect(self.pointer)
         check_error(result, context="client")
@@ -96,7 +95,7 @@ class Logo:
         Returns:
             integer
         """
-        area = types.Areas.DB
+        area = Areas.DB
         db_number = 1
         size = 1
         start = 0
@@ -130,7 +129,7 @@ class Logo:
             logger.info("Unknown address format")
             return 0
 
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
 
         logger.debug(f"start:{start}, wordlen:{wordlen.name}={wordlen.value}, data-length:{len(data)}")
@@ -158,7 +157,7 @@ class Logo:
         Examples:
             >>> write("VW10", 200) or write("V10.3", 1)
         """
-        area = types.Areas.DB
+        area = Areas.DB
         db_number = 1
         start = 0
         amount = 1
@@ -201,9 +200,9 @@ class Logo:
             return 1
 
         if wordlen == WordLen.Bit:
-            type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+            type_ = wordlen_to_ctypes[WordLen.Byte.value]
         else:
-            type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+            type_ = wordlen_to_ctypes[wordlen.value]
 
         cdata = (type_ * amount).from_buffer_copy(data)
 
@@ -226,7 +225,7 @@ class Logo:
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = (self.library.Cli_DBRead(
             self.pointer, db_number, start, size,
@@ -246,7 +245,7 @@ class Logo:
             Error code from snap7 library.
         """
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
