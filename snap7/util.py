@@ -1354,6 +1354,12 @@ class DB:
 
     Probably most usecases there is just one row
 
+    Note:
+        This class has some of the semantics of a dict. In particular, the membership operators
+        (``in``, ``not it``), the access operator (``[]``), as well as the :func:`~DB.keys()` and
+        :func:`~DB.items()` methods work as usual. Iteration, on the other hand, happens on items
+        instead of keys (much like :func:`~DB.items()` method).
+
     Attributes:
         bytearray_: buffer data from the PLC.
         specification: layout of the DB Rows.
@@ -1364,14 +1370,14 @@ class DB:
 
     Examples:
         >>> db1[0]['testbool1'] = test
-        >>> db1.write()   # puts data in plc
+        >>> db1.write(client)   # puts data in plc
     """
     bytearray_: Optional[bytearray] = None  # data from plc
-    specification: Optional[str] = None  # layout of db rows
-    row_size: Optional[int] = None  # bytes size of a db row
-    layout_offset: Optional[int] = None  # at which byte in row specification should
-    # we start reading the data
-    db_offset: Optional[int] = None  # at which byte in db should we start reading?
+    specification: Optional[str] = None     # layout of db rows
+    id_field: Optional[str] = None          # ID field of the rows
+    row_size: int = 0                       # bytes size of a db row
+    layout_offset: int = 0                  # at which byte in row specification should
+    db_offset: int = 0                      # at which byte in db should we start reading?
 
     # first fields could be be status data.
     # and only the last part could be control data
@@ -1380,8 +1386,8 @@ class DB:
 
     def __init__(self, db_number: int, bytearray_: bytearray,
                  specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: Optional[int] = 0, layout_offset: Optional[int] = 0, row_offset: Optional[int] = 0,
-                 area: Optional[Areas] = Areas.DB):
+                 db_offset: int = 0, layout_offset: int = 0, row_offset: int = 0,
+                 area: Areas = Areas.DB):
         """ Creates a new instance of the `Row` class.
 
         Args:
@@ -1415,7 +1421,7 @@ class DB:
         self.make_rows()
 
     def make_rows(self):
-        """ Make each row for the DB. """
+        """ Make each row for the DB."""
         id_field = self.id_field
         row_size = self.row_size
         specification = self.specification
@@ -1442,13 +1448,65 @@ class DB:
             self.index[key] = row
 
     def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, int, float, str, bool, datetime]:
+        """Access a row of the table through its index.
+
+        Rows (values) are of type :class:`DB_Row`.
+
+        Notes:
+            This method has the same semantics as :class:`dict` access.
+        """
         return self.index.get(key, default)
 
     def __iter__(self):
+        """Iterate over the items contained in the table, in the physical order they are contained
+        in memory.
+
+        Notes:
+            This method does not have the same semantics as :class:`dict` iteration. Instead, it
+            has the same semantics as the :func:`~DB.items` method, yielding ``(index, row)``
+            tuples.
+        """
         yield from self.index.items()
 
     def __len__(self):
+        """Return the number of rows contained in the DB.
+
+        Notes:
+            If more than one row has the same index value, it is only counted once.
+        """
         return len(self.index)
+
+    def __contains__(self, key):
+        """Return whether the given key is the index of a row in the DB."""
+        return key in self.index
+
+    def keys(self):
+        """Return a *view object* of the keys that are used as indices for the rows in the
+        DB.
+        """
+        yield from self.index.keys()
+
+    def items(self):
+        """Return a *view object* of the items (``(index, row)`` pairs) that are used as indices
+        for the rows in the DB.
+        """
+        yield from self.index.items()
+
+    def export(self):
+        """Export the object to an :class:`OrderedDict`, where each item in the dictionary
+        has an index as the key, and the value of the DB row associated with that index
+        as a value, represented itself as a :class:`dict` (as returned by :func:`DB_Row.export`).
+
+        The outer dictionary contains the rows in the physical order they are contained in
+        memory.
+
+        Notes:
+            This function effectively returns a snapshot of the DB.
+        """
+        ret = OrderedDict()
+        for (k, v) in self.items():
+            ret[k] = v.export()
+        return ret
 
     def set_data(self, bytearray_: bytearray):
         """Set the new buffer data from the PLC to the current instance.
@@ -1462,6 +1520,63 @@ class DB:
         if not isinstance(bytearray_, bytearray):
             raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
         self._bytearray = bytearray_
+
+    def read(self, client: Client):
+        """Reads all the rows from the PLC to the :obj:`bytearray` of this instance.
+
+        Args:
+            client: :obj:`Client` snap7 instance.
+
+        Raises:
+            :obj:`ValueError`: if the `row_size` is less than 0.
+        """
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
+
+        total_size = self.size * (self.row_size + self.row_offset)
+        if self.area == Areas.DB:  # note: is it worth using the upload method?
+            bytearray_ = client.db_read(self.db_number, self.db_offset, total_size)
+        else:
+            bytearray_ = client.read_area(self.area, 0, self.db_offset, total_size)
+
+        # replace data in bytearray
+        for i, b in enumerate(bytearray_):
+            self._bytearray[i + self.db_offset] = b
+
+        # todo: optimize by only rebuilding the index instead of all the DB_Row objects
+        self.index.clear()
+        self.make_rows()
+
+    def write(self, client):
+        """Writes all the rows from the :obj:`bytearray` of this instance to the PLC
+
+        Notes:
+            When the row_offset property has been set to something other than None while
+            constructing this object, this operation is not guaranteed to be atomic.
+
+        Args:
+            client: :obj:`Client` snap7 instance.
+
+        Raises:
+            :obj:`ValueError`: if the `row_size` is less than 0.
+        """
+        if self.row_size < 0:
+            raise ValueError("row_size must be greater equal zero.")
+
+        # special case: we have a row offset, so we must write each row individually
+        # this is because we don't want to change the data before the offset
+        if self.row_offset:
+            for _, v in self.index.items():
+                v.write(client)
+            return
+
+        total_size = self.size * (self.row_size + self.row_offset)
+        data = self._bytearray[self.db_offset:self.db_offset + total_size]
+
+        if self.area == Areas.DB:
+            client.db_write(self.db_number, self.db_offset, data)
+        else:
+            client.write_area(self.area, 0, self.db_offset, data)
 
 
 class DB_Row:
@@ -1755,7 +1870,7 @@ class DB_Row:
         if self.area == Areas.DB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
-            bytearray_ = client.read_area(self.area, 0, 0, self.row_size)
+            bytearray_ = client.read_area(self.area, 0, self.db_offset, self.row_size)
 
         data = self.get_bytearray()
         # replace data in bytearray
