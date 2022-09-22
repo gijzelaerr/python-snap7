@@ -12,8 +12,8 @@ import logging
 from ctypes import byref, c_int, c_int32, c_uint32, c_void_p
 from typing import Tuple, Optional
 
-import snap7.types
-from snap7.common import ipv4, check_error, load_library
+from .common import ipv4, check_error, load_library
+from .types import S7Object, param_types, word
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +97,8 @@ class Partner:
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self._library.Par_Create.restype = snap7.types.S7Object
-        self._pointer = snap7.types.S7Object(self._library.Par_Create(int(active)))
+        self._library.Par_Create.restype = S7Object
+        self._pointer = S7Object(self._library.Par_Create(int(active)))
 
     def destroy(self):
         """
@@ -124,7 +124,7 @@ class Partner:
         Reads an internal Partner object parameter.
         """
         logger.debug(f"retreiving param number {number}")
-        type_ = snap7.types.param_types[number]
+        type_ = param_types[number]
         value = type_()
         code = self._library.Par_GetParam(self._pointer, c_int(number),
                                           byref(value))
@@ -215,8 +215,8 @@ class Partner:
             raise ValueError(f"{remote_ip} is invalid ipv4")
         logger.info(f"starting partnering from {local_ip} to {remote_ip}")
         return self._library.Par_StartTo(self._pointer, local_ip.encode(), remote_ip.encode(),
-                                         snap7.types.word(local_tsap),
-                                         snap7.types.word(remote_tsap))
+                                         word(local_tsap),
+                                         word(remote_tsap))
 
     def stop(self) -> int:
         """

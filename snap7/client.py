@@ -8,11 +8,11 @@ from ctypes import Array, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c
 from datetime import datetime
 from typing import List, Optional, Tuple, Union
 
-import snap7
-from snap7.common import check_error, ipv4, load_library
-from snap7.types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
-from snap7.types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
-from snap7.types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
+from .common import check_error, ipv4, load_library
+from .types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
+from .types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
+from .types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
+from .types import S7CpuInfo, RemotePort, wordlen_to_ctypes, block_types
 logger = logging.getLogger(__name__)
 
 
@@ -154,7 +154,7 @@ class Client:
                 ASName: b'SNAP7-SERVER' Copyright: b'Original Siemens Equipment'
                 ModuleName: b'CPU 315-2 PN/DP'>
         """
-        info = snap7.types.S7CpuInfo()
+        info = S7CpuInfo()
         result = self._library.Cli_GetCpuInfo(self._pointer, byref(info))
         check_error(result, context="client")
         return info
@@ -189,7 +189,7 @@ class Client:
         """
         logger.info(f"connecting to {address}:{tcpport} rack {rack} slot {slot}")
 
-        self.set_param(snap7.types.RemotePort, tcpport)
+        self.set_param(RemotePort, tcpport)
         return self._library.Cli_ConnectTo(
             self._pointer, c_char_p(address.encode()),
             c_int(rack), c_int(slot))
@@ -218,7 +218,7 @@ class Client:
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = (self._library.Cli_DBRead(
             self._pointer, db_number, start, size,
@@ -246,7 +246,7 @@ class Client:
             >>> client.db_write(1, 10, buffer)  # writes the bit number 0 from the byte 10 to TRUE.
         """
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
@@ -264,7 +264,7 @@ class Client:
             Error code from snap7 library.
         """
         logger.info("deleting block")
-        blocktype = snap7.types.block_types[block_type]
+        blocktype = block_types[block_type]
         result = self._library.Cli_Delete(self._pointer, blocktype, block_num)
         return result
 
@@ -282,7 +282,7 @@ class Client:
         """
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
-        block_type = snap7.types.block_types[_type]
+        block_type = block_types[_type]
         result = self._library.Cli_FullUpload(self._pointer, block_type,
                                               block_num, byref(_buffer),
                                               byref(size))
@@ -302,7 +302,7 @@ class Client:
             Buffer with the uploaded block.
         """
         logger.debug(f"db_upload block_num: {block_num}")
-        block_type = snap7.types.block_types['DB']
+        block_type = block_types['DB']
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
@@ -383,19 +383,19 @@ class Client:
             >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
-            >>> buffer = client.read_area(snap7.types.Areas.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
+            >>> buffer = client.read_area(Areas.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
             >>> buffer
             bytearray(b'\\x00\\x00')
         """
         if area not in Areas:
-            raise ValueError(f"{area} is not implemented in snap7.types")
+            raise ValueError(f"{area} is not implemented in types")
         elif area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         logger.debug(f"reading area: {area.name} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen.name}={wordlen.value}")
         data = (type_ * size)()
         result = self._library.Cli_ReadArea(self._pointer, area.value, dbnumber, start,
@@ -421,7 +421,7 @@ class Client:
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = bytearray([0b00000001])
-            >>> client.write_area(snap7.types.Areas.DB, 1, 10, buffer)  # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
+            >>> client.write_area(Areas.DB, 1, 10, buffer)  # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
         """
         if area == Areas.TM:
             wordlen = WordLen.Timer
@@ -429,7 +429,7 @@ class Client:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         size = len(data)
         logger.debug(f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen.name}={wordlen.value} type: {type_}")
@@ -483,7 +483,7 @@ class Client:
             :obj:`ValueError`: if the `blocktype` is not valid.
         """
 
-        _blocktype = snap7.types.block_types.get(blocktype)
+        _blocktype = block_types.get(blocktype)
         if not _blocktype:
             raise ValueError("The blocktype parameter was invalid")
 
@@ -536,7 +536,7 @@ class Client:
             Family: b''
             Header: b''
         """
-        blocktype_ = snap7.types.block_types.get(blocktype)
+        blocktype_ = block_types.get(blocktype)
 
         if not blocktype_:
             raise ValueError("The blocktype parameter was invalid")
@@ -639,7 +639,7 @@ class Client:
             Buffer with the data read.
         """
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self._library.Cli_ABRead(self._pointer, start, size,
@@ -658,7 +658,7 @@ class Client:
             Snap7 code.
         """
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
@@ -693,7 +693,7 @@ class Client:
             Snap7 code.
         """
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
@@ -754,7 +754,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = wordlen_to_ctypes[WordLen.Counter.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_AsCTWrite(self._pointer, start, amount, byref(cdata))
         check_error(result, context="client")
@@ -991,14 +991,14 @@ class Client:
 
     def _prepare_as_read_area(self, area: Areas, size: int) -> Tuple[WordLen, Array]:
         if area not in Areas:
-            raise ValueError(f"{area} is not implemented in snap7.types")
+            raise ValueError(f"{area} is not implemented in types")
         elif area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         usrdata = (type_ * size)()
         return wordlen, usrdata
 
@@ -1024,14 +1024,14 @@ class Client:
 
     def _prepare_as_write_area(self, area: Areas, data: bytearray) -> Tuple[WordLen, Array]:
         if area not in Areas:
-            raise ValueError(f"{area} is not implemented in snap7.types")
+            raise ValueError(f"{area} is not implemented in types")
         elif area == Areas.TM:
             wordlen = WordLen.Timer
         elif area == Areas.CT:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return wordlen, cdata
 
@@ -1049,7 +1049,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         logger.debug(f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
                      f"wordlen {wordlen} type: {type_}")
         cdata = (type_ * len(pusrdata)).from_buffer_copy(pusrdata)
@@ -1083,7 +1083,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_AsEBWrite(self._pointer, start, size, byref(cdata))
         check_error(result, context="client")
@@ -1104,7 +1104,7 @@ class Client:
         """
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
-        block_type = snap7.types.block_types[_type]
+        block_type = block_types[_type]
         result = self._library.Cli_AsFullUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
@@ -1123,7 +1123,7 @@ class Client:
         Raises:
             :obj:`ValueError`: if the `blocktype` is invalid
         """
-        _blocktype = snap7.types.block_types.get(blocktype)
+        _blocktype = block_types.get(blocktype)
         if not _blocktype:
             raise ValueError("The blocktype parameter was invalid")
         result = self._library.Cli_AsListBlocksOfType(self._pointer, _blocktype, byref(data), byref(count))
@@ -1156,7 +1156,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_AsMBWrite(self._pointer, start, size, byref(cdata))
         check_error(result, context="client")
@@ -1218,7 +1218,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Timer.value]
+        type_ = wordlen_to_ctypes[WordLen.Timer.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_AsTMWrite(self._pointer, start, amount, byref(cdata))
         check_error(result)
@@ -1238,7 +1238,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        block_type = snap7.types.block_types['DB']
+        block_type = block_types['DB']
         result = self._library.Cli_AsUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
@@ -1266,7 +1266,7 @@ class Client:
         Returns:
             Buffer read.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = wordlen_to_ctypes[WordLen.Counter.value]
         data = (type_ * amount)()
         result = self._library.Cli_CTRead(self._pointer, start, amount, byref(data))
         check_error(result, context="client")
@@ -1283,7 +1283,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = wordlen_to_ctypes[WordLen.Counter.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_CTWrite(self._pointer, start, amount, byref(cdata))
         check_error(result)
@@ -1313,7 +1313,7 @@ class Client:
         Returns:
             Data read.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = self._library.Cli_EBRead(self._pointer, start, size, byref(data))
         check_error(result, context="client")
@@ -1330,7 +1330,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_EBWrite(self._pointer, start, size, byref(cdata))
         check_error(result)
@@ -1450,7 +1450,7 @@ class Client:
         Returns:
             Buffer with the data read.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
         result = self._library.Cli_MBRead(self._pointer, start, size, byref(data))
         check_error(result, context="client")
@@ -1467,7 +1467,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._library.Cli_MBWrite(self._pointer, start, size, byref(cdata))
         check_error(result)
@@ -1523,7 +1523,7 @@ class Client:
             Buffer read.
         """
         wordlen = WordLen.Timer
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * amount)()
         result = self._library.Cli_TMRead(self._pointer, start, amount, byref(data))
         check_error(result, context="client")
@@ -1541,7 +1541,7 @@ class Client:
             Snap7 code.
         """
         wordlen = WordLen.Timer
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._library.Cli_TMWrite(self._pointer, start, amount, byref(cdata))
         check_error(result)
