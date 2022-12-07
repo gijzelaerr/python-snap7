@@ -33,7 +33,7 @@ class Client:
     Examples:
         >>> import snap7
         >>> client = snap7.client.Client()
-        >>> client.connect("127.0.0.1", 0, 0, 1012)
+        >>> client.connect("127.0.0.1", 0, 0, 1102)
         >>> client.get_connected()
         True
         >>> data = client.db_read(1, 0, 4)
