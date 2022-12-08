@@ -8,11 +8,11 @@ from ctypes import Array, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c
 from datetime import datetime
 from typing import List, Optional, Tuple, Union
 
-from .common import check_error, ipv4, load_library
-from .types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
-from .types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
-from .types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
-from .types import S7CpuInfo, RemotePort, wordlen_to_ctypes, block_types
+from ..common import check_error, ipv4, load_library
+from ..types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
+from ..types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
+from ..types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
+from ..types import S7CpuInfo, RemotePort, wordlen_to_ctypes, block_types
 logger = logging.getLogger(__name__)
 
 
