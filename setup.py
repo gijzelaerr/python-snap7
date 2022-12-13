@@ -7,6 +7,7 @@ __version__ = "1.2"
 tests_require = ['pytest', 'pytest-asyncio', 'mypy', 'pycodestyle', 'types-setuptools']
 
 extras_require = {
+    'cli': ['click'],
     'test': tests_require,
     'doc': ['sphinx', 'sphinx_rtd_theme'],
 }
@@ -38,7 +39,11 @@ setup(
     package_data={'snap7': ['py.typed']},
     license='MIT',
     long_description=read('README.rst'),
-    scripts=['snap7/bin/snap7-server.py'],
+    entry_points={
+        'console_scripts': [
+            'snap7-server = snap7.server.__main__:main',
+        ]
+    },
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
@@ -50,7 +55,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",        
+        "Programming Language :: Python :: 3.10",
     ],
     python_requires='>=3.7',
     extras_require=extras_require,
