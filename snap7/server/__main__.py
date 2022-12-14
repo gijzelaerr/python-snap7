@@ -15,9 +15,8 @@ except ImportError as e:
     exit()
 
 from snap7 import __version__
-from snap7.server import mainloop
 from snap7.common import load_library
-
+from snap7.server import mainloop
 
 logger = logging.getLogger("Snap7.Server")
 
@@ -28,7 +27,7 @@ logger = logging.getLogger("Snap7.Server")
     "--dll",
     hidden=True,
     type=click.Path(exists=True, file_okay=True, dir_okay=False, resolve_path=True),
-    help="Path to the snap7 DLL (for emergencies if it cant be put on PATH).",
+    help="Path to the snap7 DLL (for emergencies if it can't be put on PATH).",
 )
 @click.option("-v", "--verbose", is_flag=True, help="Also print debug-output.")
 @click.version_option(__version__)
@@ -48,7 +47,7 @@ def main(port, dll, verbose):
         load_library(dll)
 
     # start the server mainloop
-    mainloop(port, True)
+    mainloop(port, init_standard_values=True)
 
 
 if __name__ == "__main__":
