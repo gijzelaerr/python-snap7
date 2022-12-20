@@ -8,11 +8,10 @@ import struct
 import logging
 from typing import Any, Tuple, Callable, Optional
 
-from . import server as snap7server
-from .common import ipv4, check_error, load_library
-from .types import SrvEvent, LocalPort, cpu_statuses, server_statuses
-from .types import longword, wordlen_to_ctypes, WordLen, S7Object
-from .types import srvAreaDB, srvAreaPA, srvAreaTM, srvAreaCT
+from ..common import ipv4, check_error, load_library
+from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses
+from ..types import longword, wordlen_to_ctypes, WordLen, S7Object
+from ..types import srvAreaDB, srvAreaPA, srvAreaTM, srvAreaCT
 
 logger = logging.getLogger(__name__)
 
@@ -384,7 +383,7 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
         init_standard_values: if `True` will init some defaults values to be read on DB0.
     """
 
-    server = snap7server.Server()
+    server = Server()
     size = 100
     DBdata = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
     PAdata = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
