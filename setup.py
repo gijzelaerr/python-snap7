@@ -2,7 +2,7 @@ import os
 
 from setuptools import setup, find_packages, Extension
 
-__version__ = "1.2"
+__version__ = "1.3"
 
 tests_require = ['pytest', 'pytest-asyncio', 'mypy', 'pycodestyle', 'types-setuptools']
 
@@ -56,6 +56,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     python_requires='>=3.7',
     extras_require=extras_require,
