@@ -73,6 +73,9 @@ jobs:
           mkdir src
           cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
           cp .github/build_scripts/dummy.c ./
+      
+      - name: Update wheel
+        run: python -m pip install --upgrade wheel
 
       - name: Build pure python wheel
         run: python3 setup.py bdist_wheel --plat-name=manylinux1_x86_64
