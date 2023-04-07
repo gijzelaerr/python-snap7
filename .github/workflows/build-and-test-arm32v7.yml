@@ -1,0 +1,105 @@
+name: build-and-test-wheels-arm32
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+env:
+  snap7-archive-url: https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
+jobs:
+  arm32-build:
+    name: Build arm32 wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Cache snap7-archive
+        id: snap7-archive
+        uses: actions/cache@v3
+        with:
+          path: snap7-full-1.4.2.7z
+          key: ${{ env.snap7-archive-url }}
+
+      - name: Get snap7
+        if: steps.snap7-archive.outputs.cache-hit != 'true'
+        run: |
+          wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
+
+      - name: Extract archive
+        run: 7z x snap7-full-1.4.2.7z
+
+      - name: Copy files
+        run: |
+          mkdir src
+          cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
+          cp .github/build_scripts/dummy.c ./
+          ls snap7-full-1.4.2
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: arm
+
+      - name: Update wheel
+        run: python -m pip install --upgrade wheel
+
+      - name: Build libsnap7.so
+        run: |
+          docker run --rm --interactive -v $PWD/snap7-full-1.4.2:/snap7-full-1.4.2 "arm32v7/gcc:latest" /bin/bash -s <<EOF 
+          cd snap7-full-1.4.2/build/unix/
+          make -f arm_v7_linux.mk all
+          EOF
+
+      - name: tmp check file
+        run: ls -la snap7-full-1.4.2/build/bin/arm_v7-linux
+
+      - name: Build pure python wheel
+        run: python3 setup.py bdist_wheel --plat-name=linux_armv7l
+
+      - name: Repack wheel
+        run: |
+          unpack_tmp_dir=unpack_tmp_dir
+          mkdir -p $unpack_tmp_dir
+          packagename=$(python3 -m wheel unpack $(ls dist/*linux_armv7l.whl) -d $unpack_tmp_dir | sed -e 's/.*\/\(.*\)...OK/\1/')
+          echo $packagename
+          mkdir -p $unpack_tmp_dir/$packagename/snap7/lib
+          cp snap7-full-1.4.2/build/bin/arm_v7-linux/libsnap7.so $unpack_tmp_dir/$packagename/snap7/lib/
+          mkdir -p wheelhouse/linux_armv7l
+          python3 -m wheel pack $unpack_tmp_dir/$packagename -d wheelhouse/linux_armv7l/
+
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: wheelhouse/*/*.whl
+
+  test-wheel:
+    name: Testing wheel
+    needs: arm32-build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels
+          path: wheelhouse
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: arm
+
+      - name: Run tests in docker:arm32v7
+        run: |
+          docker run --platform linux/arm/v7 --rm --interactive -v $PWD/test:/test -v $PWD/wheelhouse:/wheelhouse "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
+          python -m pip install pytest $(ls wheelhouse/linux_armv7l/*.whl)
+          python -m pytest test/test_server.py test/test_util.py test/test_client.py test/test_mainloop.py test/test_partner.py
+          EOF
