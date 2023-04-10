@@ -1,15 +1,15 @@
 name: OS X Test
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 jobs:
   osx_wheel:
     runs-on: macos-11
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install snap7
         run: brew install snap7
       - name: Upgrade pip

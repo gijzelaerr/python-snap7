@@ -12,11 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cache snap7-archive
         id: snap7-archive
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: snap7-full-1.4.2.7z
           key: ${{ env.snap7-archive-url }}
@@ -37,7 +37,7 @@ jobs:
           cp .github/build_scripts/aarch64-linux-gnu.mk snap7-full-1.4.2/build/unix/
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64
 
@@ -61,7 +61,7 @@ jobs:
         run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: wheelhouse/*/*.whl
@@ -75,16 +75,16 @@ jobs:
         python-version: ["3.7", "3.8", "3.9", "3.10"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: wheels
           path: wheelhouse
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64
 
