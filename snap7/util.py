@@ -1038,9 +1038,7 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
         >>> snap7.util.get_lreal(data, 0)
             12345.12345
     """
-    x = bytearray_[byte_index:byte_index + 8]
-    lreal = struct.unpack('>d', struct.pack('8B', *x))[0]
-    return lreal
+    return struct.unpack_from(">d", bytearray_, offset=byte_index)[0]
 
 
 def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray:
@@ -1067,8 +1065,7 @@ def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray
 
     """
     lreal = float(lreal)
-    _bytes = struct.unpack('8B', struct.pack('>d', lreal))
-    bytearray_[byte_index] = _bytes[0]
+    struct.pack_into(">d", bytearray_, byte_index, lreal)
     return bytearray_
 
 
