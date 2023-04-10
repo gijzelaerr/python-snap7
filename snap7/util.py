@@ -449,31 +449,31 @@ def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: 
         bytearray_[byte_index + r] = ord(' ')
 
 
-def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 255):
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 254):
     """Set string value
 
     Args:
         bytearray_: buffer to write to.
         byte_index: byte index to start writing from.
         value: string to write.
-        max_size: maximum possible string size, max. 255 as default.
+        max_size: maximum possible string size, max. 254 as default.
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
         :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
-        or 'max_size' is greater than 255 or 'value' contains non-ascii characters.
+        or 'max_size' is greater than 254 or 'value' contains non-ascii characters.
 
     Examples:
         >>> data = bytearray(20)
-        >>> snap7.util.set_string(data, 0, "hello world", 255)
+        >>> snap7.util.set_string(data, 0, "hello world", 254)
         >>> data
             bytearray(b'\\xff\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
     """
     if not isinstance(value, str):
         raise TypeError(f"Value value:{value} is not from Type string")
 
-    if max_size > 255:
-        raise ValueError(f'max_size: {max_size} > max. allowed 255 chars')
+    if max_size > 254:
+        raise ValueError(f'max_size: {max_size} > max. allowed 254 chars')
     if not value.isascii():
         raise ValueError("Value contains non-ascii values, which is not compatible with PLC Type STRING."
                          "Check encoding of value or try set_wstring() (utf-16 encoding needed).")
@@ -553,7 +553,7 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
     str_length = int(bytearray_[byte_index + 1])
     max_string_size = int(bytearray_[byte_index])
 
-    if str_length > max_string_size or max_string_size > 255:
+    if str_length > max_string_size or max_string_size > 254:
         logger.error("The string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
         raise TypeError("String contains {} chars, but max. {} chars are expected or is larger than 254."
