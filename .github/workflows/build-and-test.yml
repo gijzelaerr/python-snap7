@@ -12,14 +12,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install choco packages
         run: choco install --allow-downgrade wget --version 1.20.3.20190531
 
       - name: Cache snap7-archive
         id: snap7-archive
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: snap7-full-1.4.2.7z
           key: ${{ env.snap7-archive-url }}
@@ -42,7 +42,7 @@ jobs:
         run: .github/build_scripts/repack_wheel_windows.ps1 Win64 wheelhouse/${{ runner.os }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: wheelhouse/*/*.whl
@@ -52,11 +52,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cache snap7-archive
         id: snap7-archive
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: snap7-full-1.4.2.7z
           key: ${{ env.snap7-archive-url }}
@@ -94,7 +94,7 @@ jobs:
         run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: wheelhouse/*/*.whl
@@ -104,11 +104,11 @@ jobs:
     runs-on: macos-11
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Cache snap7-archive
         id: snap7-archive
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: snap7-full-1.4.2.7z
           key: ${{ env.snap7-archive-url }}
@@ -153,7 +153,7 @@ jobs:
         run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: wheels
           path: wheelhouse/*/*.whl
@@ -168,10 +168,10 @@ jobs:
         python-version: ["3.7", "3.8", "3.9", "3.10"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -181,7 +181,7 @@ jobs:
           python3 -m pip install pytest
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: wheels
           path: wheelhouse
