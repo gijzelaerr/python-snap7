@@ -3,6 +3,7 @@ import gc
 import logging
 import struct
 import time
+import pytest
 import unittest
 import platform
 from datetime import datetime, timedelta, date
@@ -25,7 +26,7 @@ db_number = 1
 rack = 1
 slot = 1
 
-
+@pytest.mark.client
 class TestClient(unittest.TestCase):
 
     process = None
@@ -998,7 +999,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, self.client.ct_read(0, 1))
         self.assertEqual(1, self.callback_counter)
 
-
+@pytest.mark.client
 class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.
@@ -1021,7 +1022,7 @@ class TestClientBeforeConnect(unittest.TestCase):
         for param, value in values:
             self.client.set_param(param, value)
 
-
+@pytest.mark.client
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
         # replace the function load_library with a mock

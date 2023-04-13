@@ -1,5 +1,6 @@
 import datetime
 import re
+import pytest
 import unittest
 import struct
 
@@ -113,7 +114,7 @@ _new_bytearray[41:41 + 1] = struct.pack("B", 128)       # byte_index=41, value=1
 _new_bytearray[42:42 + 1] = struct.pack("B", 255)       # byte_index=41, value=255, bytes=1
 _new_bytearray[43:43 + 4] = struct.pack("I", 286331153)  # byte_index=43, value=286331153(T#3D_7H_32M_11S_153MS), bytes=4
 
-
+@pytest.mark.util
 class TestS7util(unittest.TestCase):
 
     def test_get_byte_new(self):

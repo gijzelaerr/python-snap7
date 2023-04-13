@@ -1,4 +1,5 @@
 import logging
+import pytest
 import unittest as unittest
 from unittest import mock
 
@@ -7,7 +8,7 @@ from snap7.exceptions import Snap7Exception
 
 logging.basicConfig(level=logging.WARNING)
 
-
+@pytest.mark.partner
 class TestPartner(unittest.TestCase):
     def setUp(self):
         self.partner = snap7.partner.Partner()
@@ -115,7 +116,7 @@ class TestPartner(unittest.TestCase):
     def test_wait_as_b_send_completion(self):
         self.assertRaises(RuntimeError, self.partner.wait_as_b_send_completion)
 
-
+@pytest.mark.partner
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
         # replace the function load_library with a mock

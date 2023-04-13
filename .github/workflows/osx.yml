@@ -18,7 +18,7 @@ jobs:
         run: python3 -m pip install .[test]
       - name: Run pytest
         run: |
-          pytest test/test_server.py test/test_client.py test/test_util.py test/test_mainloop.py
-          sudo pytest test/test_partner.py
+          pytest -m "server or util or client or mainloop"
+          sudo pytest -m partner
 
 

@@ -1,5 +1,6 @@
 import ctypes
 import logging
+import pytest
 import unittest
 from unittest import mock
 
@@ -9,7 +10,7 @@ import snap7.types
 
 logging.basicConfig(level=logging.WARNING)
 
-
+@pytest.mark.server
 class TestServer(unittest.TestCase):
 
     def setUp(self):
@@ -127,7 +128,7 @@ class TestServer(unittest.TestCase):
         self.assertRaises(Exception, self.server.get_param,
                           snap7.types.RemotePort)
 
-
+@pytest.mark.server
 class TestServerBeforeStart(unittest.TestCase):
     """
     Tests for server before it is started
@@ -139,7 +140,7 @@ class TestServerBeforeStart(unittest.TestCase):
     def test_set_param(self):
         self.server.set_param(snap7.types.LocalPort, 1102)
 
-
+@pytest.mark.server
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
         # replace the function load_library with a mock

@@ -4,8 +4,6 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-env:
-  snap7-archive-url: https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
 jobs:
   windows-build:
     name: Build wheel for windows
@@ -14,26 +12,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install choco packages
-        run: choco install --allow-downgrade wget --version 1.20.3.20190531
-
-      - name: Cache snap7-archive
-        id: snap7-archive
-        uses: actions/cache@v3
-        with:
-          path: snap7-full-1.4.2.7z
-          key: ${{ env.snap7-archive-url }}
-
-      - name: Get snap7
-        if: steps.snap7-archive.outputs.cache-hit != 'true'
-        run: |
-          wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
-
-      - name: Extract archive
-        run: 7z x snap7-full-1.4.2.7z
-
-      - name: Update wheel
-        run: python3 -m pip install wheel --upgrade
+      - name: prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
 
       - name: Build wheel
         run: python3 setup.py bdist_wheel --plat-name win_amd64
@@ -54,28 +34,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Cache snap7-archive
-        id: snap7-archive
-        uses: actions/cache@v3
-        with:
-          path: snap7-full-1.4.2.7z
-          key: ${{ env.snap7-archive-url }}
-
-      - name: Get snap7
-        if: steps.snap7-archive.outputs.cache-hit != 'true'
-        run: wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
-
-      - name: Extract archive
-        run: 7z x snap7-full-1.4.2.7z
-
-      - name: Copy files
-        run: |
-          mkdir src
-          cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
-          cp .github/build_scripts/dummy.c ./
-      
-      - name: Update wheel
-        run: python -m pip install --upgrade wheel
+      - name: prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
 
       - name: Build pure python wheel
         run: python3 setup.py bdist_wheel --plat-name=manylinux1_x86_64
@@ -105,27 +65,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Cache snap7-archive
-        id: snap7-archive
-        uses: actions/cache@v3
-        with:
-          path: snap7-full-1.4.2.7z
-          key: ${{ env.snap7-archive-url }}
-
-      - name: Get snap7
-        if: steps.snap7-archive.outputs.cache-hit != 'true'
-        run: |
-          wget -nv -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
-
-      - name: Extract archive
-        run: 7z x snap7-full-1.4.2.7z
+      
+      - name: prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
 
       - name: Copy files
         run: |
-          mkdir src
-          cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
-          cp .github/build_scripts/dummy.c ./
           cp .github/build_scripts/arm64_osx.mk snap7-full-1.4.2/build/osx/
           pushd snap7-full-1.4.2/build/osx/
           make -f x86_64_osx.mk all
@@ -165,7 +110,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -178,7 +123,7 @@ jobs:
       - name: Install pytest
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install pytest
+          python3 -m pip install pytest pytest-asyncio
 
       - name: Download artifacts
         uses: actions/download-artifact@v3
@@ -192,16 +137,16 @@ jobs:
       - name: Run pytest
         run: |
           which pytest
-          pytest test/test_server.py test/test_util.py test/test_client.py test/test_mainloop.py
+          pytest -m "server or util or client or mainloop"
 
       - name: Run tests required sudo
         if: ${{ runner.os == 'Linux'}}
-        run: sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest test/test_partner.py
+        run: sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest -m partner
 
       - name: Run tests required sudo
         if: ${{ runner.os == 'macOS'}}
-        run: sudo pytest test/test_partner.py
+        run: sudo pytest -m partner
 
       - name: Run tests required sudo
         if: ${{ runner.os == 'Windows'}}
-        run: pytest test/test_partner.py
+        run: pytest -m partner
