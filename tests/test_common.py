@@ -10,6 +10,7 @@ logging.basicConfig(level=logging.WARNING)
 
 file_name_test = "test.dll"
 
+
 @pytest.mark.common
 class TestCommon(unittest.TestCase):
 

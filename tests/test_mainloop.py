@@ -19,6 +19,7 @@ db_number = 1
 rack = 1
 slot = 1
 
+
 @pytest.mark.mainloop
 class TestServer(unittest.TestCase):
 

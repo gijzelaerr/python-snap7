@@ -8,6 +8,7 @@ from snap7.exceptions import Snap7Exception
 
 logging.basicConfig(level=logging.WARNING)
 
+
 @pytest.mark.partner
 class TestPartner(unittest.TestCase):
     def setUp(self):
@@ -115,6 +116,7 @@ class TestPartner(unittest.TestCase):
 
     def test_wait_as_b_send_completion(self):
         self.assertRaises(RuntimeError, self.partner.wait_as_b_send_completion)
+
 
 @pytest.mark.partner
 class TestLibraryIntegration(unittest.TestCase):

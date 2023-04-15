@@ -10,6 +10,7 @@ import snap7.types
 
 logging.basicConfig(level=logging.WARNING)
 
+
 @pytest.mark.server
 class TestServer(unittest.TestCase):
 
@@ -128,6 +129,7 @@ class TestServer(unittest.TestCase):
         self.assertRaises(Exception, self.server.get_param,
                           snap7.types.RemotePort)
 
+
 @pytest.mark.server
 class TestServerBeforeStart(unittest.TestCase):
     """
@@ -139,6 +141,7 @@ class TestServerBeforeStart(unittest.TestCase):
 
     def test_set_param(self):
         self.server.set_param(snap7.types.LocalPort, 1102)
+
 
 @pytest.mark.server
 class TestLibraryIntegration(unittest.TestCase):

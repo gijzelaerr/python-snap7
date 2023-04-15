@@ -15,6 +15,7 @@ db_number = 1
 rack = 0x1000
 slot = 0x2000
 
+
 @pytest.mark.logo
 class TestLogoClient(unittest.TestCase):
 
@@ -93,6 +94,7 @@ class TestLogoClient(unittest.TestCase):
         # invalid param for client
         for param in non_client:
             self.assertRaises(Exception, self.client.get_param, non_client)
+
 
 @pytest.mark.logo
 class TestClientBeforeConnect(unittest.TestCase):
