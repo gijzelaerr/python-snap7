@@ -20,5 +20,5 @@ jobs:
           sudo python3 -m pip install flake8
       - name: Lint with flake8
         run: |
-          flake8 --count --select=E9,F63,F7,F82 --show-source --statistics snap7 test
-          flake8 --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics snap7 test
+          flake8 --count --select=E9,F63,F7,F82 --show-source --statistics snap7 tests
+          flake8 --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics snap7 tests
