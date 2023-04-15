@@ -1,5 +1,6 @@
 import logging
 import time
+import pytest
 import unittest
 from multiprocessing import Process
 
@@ -15,6 +16,7 @@ rack = 0x1000
 slot = 0x2000
 
 
+@pytest.mark.logo
 class TestLogoClient(unittest.TestCase):
 
     process = None
@@ -94,6 +96,7 @@ class TestLogoClient(unittest.TestCase):
             self.assertRaises(Exception, self.client.get_param, non_client)
 
 
+@pytest.mark.logo
 class TestClientBeforeConnect(unittest.TestCase):
     """
     Test suite of items that should run without an open connection.

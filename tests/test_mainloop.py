@@ -1,6 +1,7 @@
 import logging
 from multiprocessing.context import Process
 import time
+import pytest
 import unittest
 
 import snap7.error
@@ -19,6 +20,7 @@ rack = 1
 slot = 1
 
 
+@pytest.mark.mainloop
 class TestServer(unittest.TestCase):
 
     process = None

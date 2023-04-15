@@ -4,8 +4,6 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-env:
-  snap7-archive-url: https://sourceforge.net/projects/snap7/files/1.4.2/snap7-full-1.4.2.7z/download
 jobs:
   arm32-build:
     name: Build arm32 wheel
@@ -13,36 +11,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Cache snap7-archive
-        id: snap7-archive
-        uses: actions/cache@v3
-        with:
-          path: snap7-full-1.4.2.7z
-          key: ${{ env.snap7-archive-url }}
-
-      - name: Get snap7
-        if: steps.snap7-archive.outputs.cache-hit != 'true'
-        run: |
-          wget -O snap7-full-1.4.2.7z --content-disposition -c ${{ env.snap7-archive-url }}
-
-      - name: Extract archive
-        run: 7z x snap7-full-1.4.2.7z
-
-      - name: Copy files
-        run: |
-          mkdir src
-          cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
-          cp .github/build_scripts/dummy.c ./
-          ls snap7-full-1.4.2
+      
+      - name: prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm
-
-      - name: Update wheel
-        run: python -m pip install --upgrade wheel
 
       - name: Build libsnap7.so
         run: |
@@ -50,9 +26,6 @@ jobs:
           cd snap7-full-1.4.2/build/unix/
           make -f arm_v7_linux.mk all
           EOF
-
-      - name: tmp check file
-        run: ls -la snap7-full-1.4.2/build/bin/arm_v7-linux
 
       - name: Build pure python wheel
         run: python3 setup.py bdist_wheel --plat-name=linux_armv7l
@@ -67,7 +40,6 @@ jobs:
           cp snap7-full-1.4.2/build/bin/arm_v7-linux/libsnap7.so $unpack_tmp_dir/$packagename/snap7/lib/
           mkdir -p wheelhouse/linux_armv7l
           python3 -m wheel pack $unpack_tmp_dir/$packagename -d wheelhouse/linux_armv7l/
-
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -99,7 +71,8 @@ jobs:
 
       - name: Run tests in docker:arm32v7
         run: |
-          docker run --platform linux/arm/v7 --rm --interactive -v $PWD/test:/test -v $PWD/wheelhouse:/wheelhouse "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
-          python -m pip install pytest $(ls wheelhouse/linux_armv7l/*.whl)
-          python -m pytest test/test_server.py test/test_util.py test/test_client.py test/test_mainloop.py test/test_partner.py
+          docker run --platform linux/arm/v7 --rm --interactive -v $PWD/tests:/tests -v $PWD/setup.cfg:/setup.cfg \
+            -v $PWD/wheelhouse:/wheelhouse "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
+          python -m pip install pytest pytest-asyncio $(ls wheelhouse/linux_armv7l/*.whl)
+          python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF
