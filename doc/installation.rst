@@ -2,7 +2,7 @@ Binary Wheel Installation
 =========================
 
 We advice you to install python-snap7 using a binary wheel. The binary wheels
-should work on Windows 64x, OS X (intel) and Linux x64.
+should work on Windows 64x, OS X (intel), Linux x64 and Linux ARM.
 python-snap7 is available on `PyPI <https://pypi.python.org/pypi/python-snap7/>`_. You can install
 it by using pip::
 
