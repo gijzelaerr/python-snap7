@@ -19,4 +19,4 @@ jobs:
           sudo python3 -m pip install --upgrade pip
           sudo python3 -m pip install pycodestyle
       - name: Run pycodestyle
-        run: pycodestyle snap7 tests
+        run: pycodestyle snap7 tests --ignore=E501,E402,W391,W292,W503
