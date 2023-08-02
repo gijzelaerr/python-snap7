@@ -35,7 +35,10 @@ from snap7.types import areas
 
 
 # play with these functions.
-plc.read_area(areas['MK'], dbnumber, start, size)
-plc.write_area(areas['MK'], dbnumber, start, size)
+plc.read_area(area=areas['MK'], dbnumber=0, start=20, size=2)
+
+data = bytearray()
+snap7.util.set_int(data, 0, 127)
+plc.write_area(area=areas['MK'], dbnumber=0, start=20, data=data)
 # read the client source code!
 # and official snap7 documentation
