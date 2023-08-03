@@ -33,7 +33,7 @@ Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio", "mypy", "pycodestyle", "types-setuptools"]
 cli = ["rich", "click" ]
-docs= ["sphinx", "sphinx_rtd_theme"]
+doc = ["sphinx", "sphinx_rtd_theme"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed", "lib/libsnap7.so", "lib/snap7.dll", "lib/libsnap7.dylib"]
