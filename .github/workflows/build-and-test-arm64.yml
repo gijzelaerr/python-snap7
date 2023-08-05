@@ -5,50 +5,38 @@ on:
   pull_request:
     branches: [master]
 jobs:
-  arm64-build:
-    name: Build arm64 wheel
+  linux-build-aarch64:
+    name: Build wheel for linux arm64
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: prepare snap7 archive
+      - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
-
-      - name: Copy files
-        run: |
-          cp .github/build_scripts/aarch64-linux-gnu.mk snap7-full-1.4.2/build/unix/
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64
-
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.1.3
+      
+      - name: Build wheel
+        uses: ./.github/actions/manylinux_2_24_aarch64
         with:
-          output-dir: wheelhouse
-        env:
-          CIBW_ARCHS_LINUX: aarch64
-          CIBW_BUILD: cp37-*
-          CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
-          CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f aarch64-linux-gnu.mk install
-
-      - name: Build pure python wheel
-        run: python3 setup.py bdist_wheel --plat-name=manylinux2014_aarch64
-
-      - name: Repack wheel
-        run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
+          script: ./.github/build_scripts/build_package.sh
+          platform: manylinux_2_24_aarch64
+          makefile: aarch64-linux-gnu.mk
+          python: /opt/python/cp38-cp38/bin/python
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: wheels
-          path: wheelhouse/*/*.whl
+          path: wheelhouse/*.whl
 
-  test-wheel:
+  test-wheels-aarch64:
     name: Testing wheel
-    needs: arm64-build
+    needs: linux-build-aarch64
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -70,8 +58,12 @@ jobs:
 
       - name: Run tests in docker:arm64v8
         run: |
-          docker run --rm --interactive -v $PWD/tests:/tests -v $PWD/setup.cfg:/setup.cfg -v $PWD/wheelhouse:/wheelhouse \
+          docker run --rm --interactive -v $PWD/tests:/tests \
+            -v $PWD/pyproject.toml:/pyproject.toml \
+            -v $PWD/wheelhouse:/wheelhouse \
             "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
-          python3 -m pip install pytest pytest-asyncio $(ls wheelhouse/${{ runner.os }}/*.whl)
-          python3 -m pytest tests/ -m server -m util -m client -m mainloop -m partner
+          python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
+          python3 -m pip install pytest pytest-asyncio
+          python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF
+        

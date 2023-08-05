@@ -5,6 +5,31 @@ on:
   pull_request:
     branches: [master]
 jobs:
+  linux-build-86_64:
+    name: Build wheel for linux x86_64
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
+
+      - name: Build wheel
+        uses: ./.github/actions/manylinux_2_24_x86_64
+        with:
+          script: ./.github/build_scripts/build_package.sh
+          platform: manylinux_2_24_x86_64
+          makefile: x86_64_linux.mk
+          python: /opt/python/cp38-cp38/bin/python
+          wheeldir: wheelhouse/${{ runner.os }}/
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: wheelhouse/*/*.whl
+
   windows-build:
     name: Build wheel for windows
     runs-on: windows-latest
@@ -12,46 +37,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: prepare snap7 archive
+      - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
 
       - name: Build wheel
-        run: python3 setup.py bdist_wheel --plat-name win_amd64
-
-      - name: Repack wheel
-        run: .github/build_scripts/repack_wheel_windows.ps1 Win64 wheelhouse/${{ runner.os }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: wheels
-          path: wheelhouse/*/*.whl
-
-  linux-build:
-    name: Build wheel for linux
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: prepare snap7 archive
-        uses: ./.github/actions/prepare_snap7
-
-      - name: Build pure python wheel
-        run: python3 setup.py bdist_wheel --plat-name=manylinux1_x86_64
-
-      - name: Build platform wheel
-        uses: pypa/cibuildwheel@v2.1.3
-        with:
-          output-dir: wheelhouse
-        env:
-          CIBW_BUILD: cp37-manylinux_x86_64
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux1
-          CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
-          CIBW_BEFORE_ALL_LINUX: cd snap7-full-1.4.2/build/unix/;make -f x86_64_linux.mk install
-
-      - name: Repack wheel
-        run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
+        run: |
+          mkdir -p snap7/lib/
+          Copy-Item .\snap7-full-1.4.2\release\Windows\Win64\snap7.dll .\snap7\lib
+          python3 -m build . --wheel -C="--build-option=--plat-name=win_amd64"
+          mkdir -p wheelhouse/${{ runner.os }}/
+          cp dist/*.whl wheelhouse/${{ runner.os }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -66,10 +61,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: prepare snap7 archive
+      - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
 
-      - name: Copy files
+      - name: Prepare files
         run: |
           cp .github/build_scripts/arm64_osx.mk snap7-full-1.4.2/build/osx/
           pushd snap7-full-1.4.2/build/osx/
@@ -77,25 +72,16 @@ jobs:
           make -f arm64_osx.mk all
           lipo -create -output /usr/local/lib/libsnap7.dylib ../bin/x86_64-osx/libsnap7.dylib ../bin/arm64-osx/libsnap7.dylib
           install_name_tool -id /usr/local/lib/libsnap7.dylib /usr/local/lib/libsnap7.dylib
+          popd
+          mkdir -p snap7/lib/
+          cp /usr/local/lib/libsnap7.dylib snap7/lib/
 
-      - name: Install cibuildwheel
-        run: python3 -m pip install cibuildwheel wheel --upgrade
+      - name: Build wheel
+        run: |
+          python3 -m build . --wheel -C="--build-option=--plat-name=macosx_10_9_universal2"
+          mkdir -p wheelhouse/${{ runner.os }}/
+          cp dist/*.whl wheelhouse/${{ runner.os }}/
 
-      - name: Build pure python wheel
-        run: python3 setup.py bdist_wheel --plat-name=macosx_10_9_universal2
-
-      - name: Build platform wheel
-        uses: pypa/cibuildwheel@v2.1.3
-        with:
-          output-dir: wheelhouse
-        env:
-          CIBW_BUILD: cp38-macosx_universal2
-          CIBW_ARCHS_MACOS: universal2
-          CIBW_BUILD_VERBOSITY: 1
-          CIBW_ENVIRONMENT: "BUILD_WHEEL_WITH_EXTENSION=1"
-
-      - name: Repack wheel
-        run: bash .github/build_scripts/repack_wheel.sh wheelhouse dist wheelhouse/${{ runner.os }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -103,13 +89,14 @@ jobs:
           name: wheels
           path: wheelhouse/*/*.whl
 
-  test-wheels:
+
+  test-wheels-86_64:
     name: Testing wheels
-    needs: [windows-build, linux-build, osx-build]
+    needs: [linux-build-86_64, windows-build, osx-build]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
     steps:
       - name: Checkout

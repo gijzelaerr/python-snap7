@@ -1,0 +1,28 @@
+name: 'manylinux_2_24_x86_64'
+description: 'Builds manylinux_2_24_x86_64 package'
+inputs:
+  script:
+    description: 'Specifies the path to the build script'
+    required: true
+  platform:
+    description: 'Specifies the --plat-name option to the build command'
+    required: true
+  makefile:
+    description: 'Specifies the path to the .mk file'
+    required: true
+  python:
+    description: 'Specifies the path to the python interpreter'
+    default: /usr/bin/python3
+  wheeldir:
+    description: 'Specifies directory to store delocated wheels'
+    required: true
+    default: wheelhouse
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.script }}
+    - ${{ inputs.platform }}
+    - ${{ inputs.makefile }}
+    - ${{ inputs.python }}
+    - ${{ inputs.wheeldir }}

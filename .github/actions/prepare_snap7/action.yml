@@ -29,13 +29,6 @@ runs:
         shell: bash
         run: 7z x snap7-full-1.4.2.7z
 
-      - name: Copy files
-        shell: bash
-        run: |
-          mkdir src
-          cp snap7-full-1.4.2/release/Wrappers/c-cpp/snap7.h src
-          cp .github/build_scripts/dummy.c ./
-
       - name: Update wheel
         shell: bash
-        run: python -m pip install --upgrade pip wheel
+        run: python3 -m pip install --upgrade pip wheel build
