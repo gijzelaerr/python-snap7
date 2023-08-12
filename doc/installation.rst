@@ -1,4 +1,4 @@
-Binary Wheel Installation 
+Binary Wheel Installation
 =========================
 
 We advice you to install python-snap7 using a binary wheel. The binary wheels
@@ -68,4 +68,3 @@ Once snap7 is available in your library or system path, you can install it from 
 repository or from a source tarball::
 
   $ python ./setup.py install
-

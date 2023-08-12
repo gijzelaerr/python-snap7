@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-#
 # python-snap7 documentation build configuration file, created by
 # sphinx-quickstart on Sat Nov  9 14:57:44 2013.
 #
@@ -11,16 +9,16 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
-import os
 import sys
+from pathlib import Path
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath('..'))
+sys.path.insert(0, Path.resolve('..'))
 
-import snap7
+import snap7 # noqa: E402
 
 # -- General configuration -----------------------------------------------------
 
@@ -44,8 +42,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'python-snap7'
-copyright = u'2013, Gijs Molenaar, Stephan Preeker'
+project = 'python-snap7'
+copyright = '2013, Gijs Molenaar, Stephan Preeker' # noqa: A001
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -187,8 +185,8 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'python-snap7.tex', u'python-snap7 Documentation',
-   u'Gijs Molenaar, Stephan Preeker', 'manual'),
+  ('index', 'python-snap7.tex', 'python-snap7 Documentation',
+   'Gijs Molenaar, Stephan Preeker', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -217,8 +215,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'python-snap7', u'python-snap7 Documentation',
-     [u'Gijs Molenaar, Stephan Preeker'], 1)
+    ('index', 'python-snap7', 'python-snap7 Documentation',
+     ['Gijs Molenaar, Stephan Preeker'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -231,8 +229,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-  ('index', 'python-snap7', u'python-snap7 Documentation',
-   u'Gijs Molenaar, Stephan Preeker', 'python-snap7', 'One line description of project.',
+  ('index', 'python-snap7', 'python-snap7 Documentation',
+   'Gijs Molenaar, Stephan Preeker', 'python-snap7', 'One line description of project.',
    'Miscellaneous'),
 ]
 

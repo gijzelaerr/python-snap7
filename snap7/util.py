@@ -872,7 +872,9 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
         if re.match(r'^-\d{1,2}$', days):
             sign = -1
 
-        time_int = ((int(days) * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds) * sign
+        time_int = (
+            (int(days) * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds
+            ) * sign
         bytes_array = time_int.to_bytes(4, byteorder='big', signed=True)
         bytearray_[byte_index:byte_index + 4] = bytes_array
         return bytearray_
@@ -1246,7 +1248,7 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueEr
     if chr_.isascii():
         bytearray_[byte_index] = ord(chr_)
         return bytearray_
-    raise ValueError("chr_ : {} contains a None-Ascii value, but ASCII-only is allowed.".format(chr_))
+    raise ValueError(f"chr_ : {chr_} contains a None-Ascii value, but ASCII-only is allowed.")
 
 
 def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
@@ -1755,7 +1757,7 @@ class DB_Row:
                 return type_to_func[type_](bytearray_, byte_index)
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, int, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Union[bytearray, None]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:

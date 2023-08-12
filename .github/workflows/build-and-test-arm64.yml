@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
 
@@ -19,7 +19,7 @@ jobs:
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm64
-      
+
       - name: Build wheel
         uses: ./.github/actions/manylinux_2_24_aarch64
         with:
@@ -61,9 +61,8 @@ jobs:
           docker run --rm --interactive -v $PWD/tests:/tests \
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
-            "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
+            "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF
           python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
           python3 -m pip install pytest pytest-asyncio
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF
-        

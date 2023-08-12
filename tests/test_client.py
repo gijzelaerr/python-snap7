@@ -245,7 +245,7 @@ class TestClient(unittest.TestCase):
         self.client.get_cpu_state()
 
     def test_set_session_password(self):
-        password = 'abcdefgh'
+        password = 'abcdefgh' # noqa: S105
         self.client.set_session_password(password)
 
     def test_clear_session_password(self):

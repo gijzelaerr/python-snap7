@@ -1,8 +1,6 @@
 """
 Define DB blocks used.
-"""
 
-"""
 Below data comes from the dataview of DB1
 and shows the index of the first row of data
 the first 4 bytes are used for DB info

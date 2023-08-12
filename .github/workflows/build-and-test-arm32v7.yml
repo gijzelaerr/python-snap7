@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      
+
       - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
 
@@ -19,7 +19,7 @@ jobs:
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm
-      
+
       - name: Build wheel
         uses: ./.github/actions/linux_armv7l
         with:
@@ -55,14 +55,13 @@ jobs:
         uses: docker/setup-qemu-action@v2
         with:
           platforms: arm
-      
+
       - name: Run tests in docker:arm32v7
         run: |
           docker run --platform linux/arm/v7 --rm --interactive -v $PWD/tests:/tests \
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
-            "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF 
+            "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF
           python -m pip install pytest pytest-asyncio $(ls wheelhouse/*manylinux_2_24_armv7l.whl)
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF
-

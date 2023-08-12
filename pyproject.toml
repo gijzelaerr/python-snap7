@@ -31,7 +31,7 @@ Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio", "mypy", "pycodestyle", "types-setuptools"]
+test = ["pytest", "pytest-asyncio", "mypy", "types-setuptools", "ruff"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 
@@ -56,3 +56,25 @@ markers =[
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[tool.ruff]
+select = [
+    "E",
+    "F",
+    "UP",
+    "YTT",
+    "ASYNC",
+    "S",
+    "A",
+    "PIE",
+    "PYI",
+    "PTH",
+    "C90",
+]
+show-source = true
+line-length = 130
+ignore = []
+target-version = "py37"
+
+[tool.ruff.mccabe]
+max-complexity = 10
