@@ -1,21 +1,21 @@
 0	Start_of_PT
 2.0	Number_of_PTS
 
-4	RC_IF_ID	INT	
-6	RC_IF_NAME	STRING[16]		
+4	RC_IF_ID	INT
+6	RC_IF_NAME	STRING[16]
 
-24.0	LockAct		    BOOL	
+24.0	LockAct		    BOOL
 24.1	GrpErr		    BOOL
 24.2	RuyToStart	    BOOL
 24.3	RdyToReset	    BOOL
-24.4	LocalAct	    BOOL		
-24.5	AutAct		    BOOL		
-24.6	ManAct		    BOOL		
-24.7	OoSAct		    BOOL	
+24.4	LocalAct	    BOOL
+24.5	AutAct		    BOOL
+24.6	ManAct		    BOOL
+24.7	OoSAct		    BOOL
 
-25.0	FbkOpenOut	    BOOL		
-25.1	FbkCloseOut	    BOOL		
-25.2	FbkRunOut	    BOOL		
+25.0	FbkOpenOut	    BOOL
+25.1	FbkCloseOut	    BOOL
+25.2	FbkRunOut	    BOOL
 
 26	    PV_LiUnit	    INT
 28 	    PV_Li		    REAL

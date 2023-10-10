@@ -4,7 +4,6 @@ import unittest as unittest
 from unittest import mock
 
 import snap7.partner
-from snap7.exceptions import Snap7Exception
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -109,7 +108,7 @@ class TestPartner(unittest.TestCase):
         self.partner.start()
 
     def test_start_to(self):
-        self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0)
+        self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0) # noqa: S104
 
     def test_stop(self):
         self.partner.stop()

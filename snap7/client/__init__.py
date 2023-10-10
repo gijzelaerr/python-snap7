@@ -12,7 +12,7 @@ from ..common import check_error, ipv4, load_library
 from ..types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
 from ..types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
 from ..types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
-from ..types import S7CpuInfo, RemotePort, wordlen_to_ctypes, block_types
+from ..types import RemotePort, wordlen_to_ctypes, block_types
 logger = logging.getLogger(__name__)
 
 
@@ -396,7 +396,10 @@ class Client:
         else:
             wordlen = WordLen.Byte
         type_ = wordlen_to_ctypes[wordlen.value]
-        logger.debug(f"reading area: {area.name} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen.name}={wordlen.value}")
+        logger.debug(
+            f"reading area: {area.name} dbnumber: {dbnumber} start: {start} amount: {size} "
+            f"wordlen: {wordlen.name}={wordlen.value}"
+            )
         data = (type_ * size)()
         result = self._library.Cli_ReadArea(self._pointer, area.value, dbnumber, start,
                                             size, wordlen.value, byref(data))
@@ -1017,7 +1020,10 @@ class Client:
         Returns:
             Snap7 code.
         """
-        logger.debug(f"reading area: {area.name} dbnumber: {dbnumber} start: {start}: amount {size}: wordlen: {wordlen.name}={wordlen.value}")
+        logger.debug(
+            f"reading area: {area.name} dbnumber: {dbnumber} start: {start} amount: {size} "
+            f"wordlen: {wordlen.name}={wordlen.value}"
+            )
         result = self._library.Cli_AsReadArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, pusrdata)
         check_error(result, context="client")
         return result

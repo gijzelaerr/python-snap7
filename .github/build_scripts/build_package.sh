@@ -10,4 +10,3 @@ ${INPUT_PYTHON} -m pip install wheel build auditwheel patchelf
 ${INPUT_PYTHON} -m build . --wheel -C="--build-option=--plat-name=${INPUT_PLATFORM}"
 
 auditwheel repair dist/*${INPUT_PLATFORM}.whl --plat ${INPUT_PLATFORM} -w ${INPUT_WHEELDIR}
-

@@ -116,7 +116,7 @@ class TestServer(unittest.TestCase):
         self.assertFalse(self.server.clear_events())
 
     def test_start_to(self):
-        self.server.start_to('0.0.0.0')
+        self.server.start_to('0.0.0.0') # noqa: S104
         self.assertRaises(ValueError, self.server.start_to, 'bogus')
 
     def test_get_param(self):

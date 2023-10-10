@@ -20,5 +20,3 @@ jobs:
         run: |
           pytest -m "server or util or client or mainloop"
           sudo pytest -m partner
-
-

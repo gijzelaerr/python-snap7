@@ -463,13 +463,13 @@ class TestS7util(unittest.TestCase):
         y_multi_indent = row['testbool8']
 
         with self.assertRaises(KeyError):
-            fail_single_space = row['testbool4']
+            fail_single_space = row['testbool4'] # noqa: F841
         with self.assertRaises(KeyError):
-            fail_multiple_spaces = row['testbool5']
+            fail_multiple_spaces = row['testbool5'] # noqa: F841
         with self.assertRaises(KeyError):
-            fail_single_indent = row['testbool6']
+            fail_single_indent = row['testbool6'] # noqa: F841
         with self.assertRaises(KeyError):
-            fail_multiple_indent = row['testbool7']
+            fail_multiple_indent = row['testbool7'] # noqa: F841
 
         self.assertEqual(x, 0)
         self.assertEqual(y_single_space, True)

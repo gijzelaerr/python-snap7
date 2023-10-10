@@ -53,13 +53,13 @@ Special thanks for this release to
 ---
 
  *  Drop python 2 support  (#214)
- *  Feature request: ReadSZL()  (#196)   
+ *  Feature request: ReadSZL()  (#196)
  *  Keep argument format across the functions  (#193)
- *  Drop Python2 Tests  (#167)   
- *  Support for S5TIME  (#163)   
- *  Add type annotations  (#157) 
- *  client.full_upload() return bytearray size 65536  (#127) 
- *  Some client tests segfault on Linux  (#26)  
+ *  Drop Python2 Tests  (#167)
+ *  Support for S5TIME  (#163)
+ *  Add type annotations  (#157)
+ *  client.full_upload() return bytearray size 65536  (#127)
+ *  Some client tests segfault on Linux  (#26)
  *  Not all functions are implemented yet  (#25)
 
 special thanks to [Fabian Beitler](https://github.com/swamper123) and

@@ -1,8 +1,8 @@
-import os
 import sys
 import logging
 import pathlib
 import platform
+from pathlib import Path
 from ctypes import c_char
 from typing import Optional
 from ctypes.util import find_library
@@ -147,6 +147,6 @@ def find_in_package() -> Optional[str]:
     else:
         lib = 'libsnap7.so'
     full_path = basedir.joinpath('lib', lib)
-    if os.path.exists(full_path) and os.path.isfile(full_path):
+    if Path.exists(full_path) and Path.is_file(full_path):
         return str(full_path)
     return None
