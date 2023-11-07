@@ -1,10 +1,12 @@
 import datetime
-import re
 import pytest
 import unittest
 import struct
 
-from snap7 import util, types
+import snap7.util.db
+import snap7.util.getters
+import snap7.util.setters
+from snap7 import types
 
 test_spec = """
 
@@ -120,26 +122,26 @@ class TestS7util(unittest.TestCase):
 
     def test_get_byte_new(self):
         test_array = bytearray(_new_bytearray)
-        byte_ = util.get_byte(test_array, 41)
+        byte_ = snap7.util.getters.get_byte(test_array, 41)
         self.assertEqual(byte_, 128)
-        byte_ = util.get_byte(test_array, 42)
+        byte_ = snap7.util.getters.get_byte(test_array, 42)
         self.assertEqual(byte_, 255)
 
     def test_set_byte_new(self):
         test_array = bytearray(_new_bytearray)
-        util.set_byte(test_array, 41, 127)
-        byte_ = util.get_byte(test_array, 41)
+        snap7.util.setters.set_byte(test_array, 41, 127)
+        byte_ = snap7.util.getters.get_byte(test_array, 41)
         self.assertEqual(byte_, 127)
 
     def test_get_byte(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(50, 'BYTE')  # get value
         self.assertEqual(value, 254)
 
     def test_set_byte(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['testByte'] = 255
         self.assertEqual(row['testByte'], 255)
 
@@ -149,7 +151,7 @@ class TestS7util(unittest.TestCase):
         """
         test_array = bytearray(_bytearray)
 
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
 
         self.assertEqual(row['testS5time'], '0:00:00.100000')
 
@@ -159,7 +161,7 @@ class TestS7util(unittest.TestCase):
         """
         test_array = bytearray(_bytearray)
 
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
 
         self.assertEqual(row['testdateandtime'], '2020-07-12T17:32:02.854000')
 
@@ -184,30 +186,30 @@ class TestS7util(unittest.TestCase):
         data = bytearray(4)
         for value_to_test, expected_value in test_values:
             data[:] = struct.pack(">i", value_to_test)
-            self.assertEqual(util.get_time(data, 0), expected_value)
+            self.assertEqual(snap7.util.getters.get_time(data, 0), expected_value)
 
     def test_set_time(self):
         test_array = bytearray(_new_bytearray)
 
         with self.assertRaises(ValueError):
-            util.set_time(test_array, 43, '-24:25:30:23:193')
+            snap7.util.setters.set_time(test_array, 43, '-24:25:30:23:193')
         with self.assertRaises(ValueError):
-            util.set_time(test_array, 43, '-24:24:32:11.648')
+            snap7.util.setters.set_time(test_array, 43, '-24:24:32:11.648')
         with self.assertRaises(ValueError):
-            util.set_time(test_array, 43, '-25:23:32:11.648')
+            snap7.util.setters.set_time(test_array, 43, '-25:23:32:11.648')
         with self.assertRaises(ValueError):
-            util.set_time(test_array, 43, '24:24:30:23.620')
+            snap7.util.setters.set_time(test_array, 43, '24:24:30:23.620')
 
-        util.set_time(test_array, 43, '24:20:31:23.647')
-        byte_ = util.get_time(test_array, 43)
+        snap7.util.setters.set_time(test_array, 43, '24:20:31:23.647')
+        byte_ = snap7.util.getters.get_time(test_array, 43)
         self.assertEqual(byte_, '24:20:31:23.647')
 
-        util.set_time(test_array, 43, '-24:20:31:23.648')
-        byte_ = util.get_time(test_array, 43)
+        snap7.util.setters.set_time(test_array, 43, '-24:20:31:23.648')
+        byte_ = snap7.util.getters.get_time(test_array, 43)
         self.assertEqual(byte_, '-24:20:31:23.648')
 
-        util.set_time(test_array, 43, '3:7:32:11.153')
-        byte_ = util.get_time(test_array, 43)
+        snap7.util.setters.set_time(test_array, 43, '3:7:32:11.153')
+        byte_ = snap7.util.getters.get_time(test_array, 43)
         self.assertEqual(byte_, '3:7:32:11.153')
 
     def test_get_string(self):
@@ -216,12 +218,12 @@ class TestS7util(unittest.TestCase):
         """
         test_array = bytearray(_bytearray)
 
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row['NAME'], 'test')
 
     def test_write_string(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['NAME'] = 'abc'
         self.assertEqual(row['NAME'], 'abc')
         row['NAME'] = ''
@@ -239,41 +241,41 @@ class TestS7util(unittest.TestCase):
 
     def test_get_fstring(self):
         data = [ord(letter) for letter in "hello world    "]
-        self.assertEqual(util.get_fstring(data, 0, 15), 'hello world')
-        self.assertEqual(util.get_fstring(data, 0, 15, remove_padding=False), 'hello world    ')
+        self.assertEqual(snap7.util.getters.get_fstring(data, 0, 15), 'hello world')
+        self.assertEqual(snap7.util.getters.get_fstring(data, 0, 15, remove_padding=False), 'hello world    ')
 
     def test_get_fstring_name(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row['testFstring']
         self.assertEqual(value, 'test')
 
     def test_get_fstring_index(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(98, 'FSTRING[8]')  # get value
         self.assertEqual(value, 'test')
 
     def test_set_fstring(self):
         data = bytearray(20)
-        util.set_fstring(data, 0, "hello world", 15)
+        snap7.util.setters.set_fstring(data, 0, "hello world", 15)
         self.assertEqual(data, bytearray(b'hello world    \x00\x00\x00\x00\x00'))
 
     def test_set_fstring_name(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['testFstring'] = 'TSET'
         self.assertEqual(row['testFstring'], 'TSET')
 
     def test_set_fstring_index(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row.set_value(98, 'FSTRING[8]', 'TSET')
         self.assertEqual(row['testFstring'], 'TSET')
 
     def test_get_int(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         x = row['ID']
         y = row['testint2']
         self.assertEqual(x, 0)
@@ -281,31 +283,31 @@ class TestS7util(unittest.TestCase):
 
     def test_set_int(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['ID'] = 259
         self.assertEqual(row['ID'], 259)
 
     def test_get_usint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(43, 'USINT')  # get value
         self.assertEqual(value, 254)
 
     def test_set_usint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['testusint0'] = 255
         self.assertEqual(row['testusint0'], 255)
 
     def test_get_sint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(44, 'SINT')  # get value
         self.assertEqual(value, 127)
 
     def test_set_sint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['testsint0'] = 127
         self.assertEqual(row['testsint0'], 127)
 
@@ -313,13 +315,13 @@ class TestS7util(unittest.TestCase):
         DB1 = (types.wordlen_to_ctypes[types.S7WLByte] * 4)()
 
         for i in range(-(2 ** 15) + 1, (2 ** 15) - 1):
-            util.set_int(DB1, 0, i)
-            result = util.get_int(DB1, 0)
+            snap7.util.setters.set_int(DB1, 0, i)
+            result = snap7.util.getters.get_int(DB1, 0)
             self.assertEqual(i, result)
 
     def test_get_int_values(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         for value in (
                 -32768,
                 -16385,
@@ -338,13 +340,13 @@ class TestS7util(unittest.TestCase):
 
     def test_get_bool(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row['testbool1'], 1)
         self.assertEqual(row['testbool8'], 0)
 
     def test_set_bool(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['testbool8'] = True
         row['testbool1'] = False
 
@@ -354,11 +356,11 @@ class TestS7util(unittest.TestCase):
     def test_db_creation(self):
         test_array = bytearray(_bytearray * 10)
 
-        test_db = util.DB(1, test_array, test_spec,
-                          row_size=len(_bytearray),
-                          size=10,
-                          layout_offset=4,
-                          db_offset=0)
+        test_db = snap7.util.db.DB(1, test_array, test_spec,
+                                   row_size=len(_bytearray),
+                                   size=10,
+                                   layout_offset=4,
+                                   db_offset=0)
 
         self.assertEqual(len(test_db.index), 10)
 
@@ -377,11 +379,11 @@ class TestS7util(unittest.TestCase):
 
     def test_db_export(self):
         test_array = bytearray(_bytearray * 10)
-        test_db = util.DB(1, test_array, test_spec,
-                          row_size=len(_bytearray),
-                          size=10,
-                          layout_offset=4,
-                          db_offset=0)
+        test_db = snap7.util.db.DB(1, test_array, test_spec,
+                                   row_size=len(_bytearray),
+                                   size=10,
+                                   layout_offset=4,
+                                   db_offset=0)
 
         db_export = test_db.export()
         for i in db_export:
@@ -398,56 +400,56 @@ class TestS7util(unittest.TestCase):
 
     def test_get_real(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(0.01 > (row['testReal'] - 827.3) > -0.1)
 
     def test_set_real(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         row['testReal'] = 1337.1337
         self.assertTrue(0.01 > (row['testReal'] - 1337.1337) > -0.01)
 
     def test_set_dword(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 4294967295.
         row['testDword'] = 9999999
         self.assertEqual(row['testDword'], 9999999)
 
     def test_get_dword(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row['testDword'], 4294967295)
 
     def test_set_dint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is -2147483648 to 2147483647 +
         row.set_value(23, 'DINT', 2147483647)  # set value
         self.assertEqual(row['testDint'], 2147483647)
 
     def test_get_dint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(23, 'DINT')  # get value
         self.assertEqual(value, -2147483648)
 
     def test_set_word(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 65535
         row.set_value(27, 'WORD', 0)  # set value
         self.assertEqual(row['testWord'], 0)
 
     def test_get_word(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(27, 'WORD')  # get value
         self.assertEqual(value, 65535)
 
     def test_export(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec, layout_offset=4)
         data = row.export()
         self.assertIn('testDword', data)
         self.assertIn('testbool1', data)
@@ -455,7 +457,7 @@ class TestS7util(unittest.TestCase):
 
     def test_indented_layout(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         x = row['ID']
         y_single_space = row['testbool1']
         y_multi_space = row['testbool2']
@@ -479,90 +481,57 @@ class TestS7util(unittest.TestCase):
 
     def test_get_uint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testUint']
         self.assertEqual(val, 12345)
 
     def test_get_udint(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testUdint']
         self.assertEqual(val, 123456789)
 
     def test_get_lreal(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testLreal']
         self.assertEqual(val, 123456789.123456789)
 
     def test_get_char(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testChar']
         self.assertEqual(val, 'A')
 
     def test_get_wchar(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testWchar']
         self.assertEqual(val, 'Ω')
 
     def test_get_wstring(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testWstring']
         self.assertEqual(val, 'ΩstÄ')
 
     def test_get_date(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testDate']
         self.assertEqual(val, datetime.date(day=9, month=3, year=2022))
 
     def test_get_tod(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testTod']
         self.assertEqual(val, datetime.timedelta(hours=12, minutes=34, seconds=56))
 
     def test_get_dtl(self):
         test_array = bytearray(_bytearray)
-        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row = snap7.util.db.DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row['testDtl']
         self.assertEqual(val, datetime.datetime(year=2022, month=3, day=9, hour=12, minute=34, second=45))
-
-
-def print_row(data):
-    """print a single db row in chr and str
-    """
-    index_line = ""
-    pri_line1 = ""
-    chr_line2 = ""
-    asci = re.compile('[a-zA-Z0-9 ]')
-
-    for i, xi in enumerate(data):
-        # index
-        if not i % 5:
-            diff = len(pri_line1) - len(index_line)
-            i = str(i)
-            index_line += diff * ' '
-            index_line += i
-            # i = i + (ws - len(i)) * ' ' + ','
-
-        # byte array line
-        str_v = str(xi)
-        pri_line1 += str(xi) + ','
-        # char line
-        c = chr(xi)
-        c = c if asci.match(c) else ' '
-        # align white space
-        w = len(str_v)
-        c = c + (w - 1) * ' ' + ','
-        chr_line2 += c
-
-    print(index_line)
-    print(pri_line1)
-    print(chr_line2)
 
 
 if __name__ == '__main__':

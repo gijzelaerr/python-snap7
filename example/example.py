@@ -1,5 +1,6 @@
 import time
 
+import snap7.util.db
 from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
@@ -73,8 +74,8 @@ def show_row(x):
 
     while True:
         data = get_db_row(1, 4 + x * row_size, row_size)
-        row = snap7.util.DB_Row(data, rc_if_db_1_layout,
-                                layout_offset=4)
+        row = snap7.util.db.DB_Row(data, rc_if_db_1_layout,
+                                   layout_offset=4)
         print('name', row['RC_IF_NAME'])
         print(row['RC_IF_NAME'])
         break
@@ -86,7 +87,7 @@ def show_row(x):
 def get_row(x):
     row_size = 126
     data = get_db_row(1, 4 + x * row_size, row_size)
-    row = snap7.util.DB_Row(
+    row = snap7.util.db.DB_Row(
         data, rc_if_db_1_layout,
         layout_offset=4)
     return row
@@ -202,7 +203,7 @@ def make_item_db(db_number):
 
     print(f'getting all data took: {time.time() - t}')
 
-    db1 = snap7.util.DB(
+    db1 = snap7.util.db.DB(
         db_number,              # the db we use
         all_data,               # bytearray from the plc
         rc_if_db_1_layout,      # layout specification
@@ -219,7 +220,7 @@ def make_item_db(db_number):
 
 def make_tank_db():
     tank_data = client.db_upload(73)
-    db73 = snap7.util.DB(
+    db73 = snap7.util.db.DB(
         73, tank_data, tank_rc_if_db_layout,
         238, 2, id_field='RC_IF_NAME')
     return db73

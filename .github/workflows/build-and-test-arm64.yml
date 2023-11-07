@@ -63,6 +63,6 @@ jobs:
             -v $PWD/wheelhouse:/wheelhouse \
             "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF
           python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
-          python3 -m pip install pytest pytest-asyncio
+          python3 -m pip install pytest
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF

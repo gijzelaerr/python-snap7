@@ -396,9 +396,7 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
 
     if init_standard_values:
         ba = _init_standard_values()
-        DBdata = wordlen_to_ctypes[WordLen.Byte.value] * len(ba)
-        DBdata = DBdata.from_buffer(ba)
-        server.register_area(srvAreaDB, 0, DBdata)
+        server.register_area(srvAreaDB, 0, DBdata.from_buffer(wordlen_to_ctypes[WordLen.Byte.value] * len(ba)))
 
     server.start(tcpport=tcpport)
     while True:
