@@ -12,6 +12,8 @@ from unittest import mock
 
 
 import snap7
+import snap7.util.getters
+import snap7.util.setters
 from snap7 import util
 from snap7.common import check_error
 from snap7.server import mainloop
@@ -96,7 +98,7 @@ class TestClient(unittest.TestCase):
 
         test_value_3 = 123
         test_bytes_3 = bytearray([0, 0])
-        util.set_int(test_bytes_3, 0, test_value_3)
+        snap7.util.setters.set_int(test_bytes_3, 0, test_value_3)
         self.client.db_write(db, 8, test_bytes_3)
 
         test_values = [test_value_1, test_value_2, test_value_3]
@@ -139,7 +141,7 @@ class TestClient(unittest.TestCase):
 
         result_values = []
         # function to cast bytes to match data_types[] above
-        byte_to_value = [util.get_real, util.get_real, util.get_int]
+        byte_to_value = [snap7.util.getters.get_real, snap7.util.getters.get_real, snap7.util.getters.get_int]
 
         # unpack and test the result of each read
         for i in range(len(data_items)):

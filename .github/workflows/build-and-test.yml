@@ -110,7 +110,7 @@ jobs:
       - name: Install pytest
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install pytest pytest-asyncio
+          python3 -m pip install pytest
 
       - name: Download artifacts
         uses: actions/download-artifact@v3

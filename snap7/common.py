@@ -18,14 +18,6 @@ logger = logging.getLogger(__name__)
 ipv4 = r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 
-class ADict(dict):
-    """
-    Accessing dict keys like an attribute.
-    """
-    __getattr__ = dict.__getitem__
-    __setattr__ = dict.__setitem__  # type: ignore
-
-
 class Snap7Library:
     """Snap7 loader and encapsulator. We make this a singleton to make
         sure the library is loaded only once.
@@ -60,7 +52,22 @@ class Snap7Library:
                              or find_library('snap7')
                              or find_locally('snap7'))
         if not self.lib_location:
-            raise RuntimeError("can't find snap7 library. If installed, try running ldconfig")
+            import platform
+            error = f"""can't find snap7 shared library.
+            
+This probably means you are installing python-snap7 from source. When no binary wheel is found for you architecture, pip
+install falls back on a source install. For this to work, you need to manually install the snap7 library, which python-snap7
+uses under the hood.
+
+The shortest path to success is to try to get a binary wheel working. Probably you are running on an unsupported
+platform or python version. You are running:
+
+machine: {platform.machine()} 
+system: {platform.system()}
+python version: {platform.python_version()}
+"""
+            logger.error(error)
+            raise RuntimeError(error)
         self.cdll = cdll.LoadLibrary(self.lib_location)
 
 
