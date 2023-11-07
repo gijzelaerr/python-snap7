@@ -85,15 +85,15 @@ example::
 import re
 import time
 from typing import Union
-from datetime import date, datetime, UTC
+from datetime import date, datetime
 from collections import OrderedDict
 
-from .getters import (get_bool, get_byte, get_word, get_int, get_uint, get_real, get_fstring, get_string, get_dword,
-                      get_dint, get_udint, get_s5time, get_dt, get_time, get_usint, get_sint, get_lreal, get_tod,
-                      get_date, get_ulint, get_lint, get_ltime, get_lword, get_date_time_object, get_dtl, get_char,
-                      get_wchar, get_wstring)
-from .setters import (set_bool, set_byte, set_word, set_int, set_uint, set_real, set_fstring, set_string, set_dword,
-                      set_dint, set_udint, set_time, set_usint, set_sint, set_lreal, set_lword)
+from .setters import set_bool, set_fstring, set_string, set_real, set_dword, \
+    set_udint, set_dint, set_uint, set_int, set_word, set_byte, set_usint, set_sint, set_time  # noqa: F401
+
+from .getters import get_bool, get_fstring, get_string, get_wstring, get_real, get_dword, \
+    get_udint, get_dint, get_uint, get_int, get_word, get_byte, get_s5time, get_dt, get_usint, get_sint, get_time, \
+    get_date, get_tod, get_lreal, get_char, get_wchar, get_dtl  # noqa: F401
 
 
 def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:

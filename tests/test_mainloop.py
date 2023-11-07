@@ -26,6 +26,7 @@ slot = 1
 class TestServer(unittest.TestCase):
 
     process: Optional[Process] = None
+    client: Client
 
     @classmethod
     def setUpClass(cls):
@@ -46,8 +47,9 @@ class TestServer(unittest.TestCase):
         self.client.connect(ip, rack, slot, tcpport)
 
     def tearDown(self) -> None:
-        self.client.disconnect()
-        self.client.destroy()
+        if self.client:
+            self.client.disconnect()
+            self.client.destroy()
 
     @unittest.skip("TODO: only first test used")
     def test_read_prefill_db(self) -> None:

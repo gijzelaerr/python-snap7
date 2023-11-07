@@ -2,7 +2,7 @@ import re
 import struct
 from typing import Union
 
-from snap7.util import get_bool
+from .getters import get_bool
 
 
 def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: bool) -> None:

@@ -964,7 +964,7 @@ class TestClient(unittest.TestCase):
         items = []
         areas = [Areas.DB, Areas.CT, Areas.TM]
         expected_list = []
-        for i in range(0, items_count):
+        for i in range(items_count):
             item = S7DataItem()
             item.Area = ctypes.c_int32(areas[i].value)
             wordlen = WordLen.Byte
