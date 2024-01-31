@@ -1801,6 +1801,9 @@ class DB_Row:
         if type_ == 'REAL':
             return set_real(bytearray_, byte_index, value)
 
+        if type_ == 'LREAL':
+            return set_lreal(bytearray_, byte_index, value)
+
         if isinstance(value, int):
             type_to_func = {
                 'DWORD': set_dword,
