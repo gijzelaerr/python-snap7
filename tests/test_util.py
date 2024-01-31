@@ -143,6 +143,12 @@ class TestS7util(unittest.TestCase):
         row['testByte'] = 255
         self.assertEqual(row['testByte'], 255)
 
+    def test_set_lreal(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec, layout_offset=4)
+        row['testLreal'] = 123.123
+        self.assertEqual(row['testLreal'], 123.123)
+
     def test_get_s5time(self):
         """
         S5TIME extraction from bytearray
