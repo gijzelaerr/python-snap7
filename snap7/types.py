@@ -12,6 +12,7 @@ buffer_type = ctypes.c_ubyte * buffer_size
 time_t = ctypes.c_uint64  # TODO: check if this is valid for all platforms
 word = ctypes.c_uint16
 longword = ctypes.c_uint32
+base_encoding = 'utf-8'
 
 # // PARAMS LIST
 LocalPort = 1
@@ -70,7 +71,6 @@ S7AreaMK = 0x83
 S7AreaDB = 0x84
 S7AreaCT = 0x1C
 S7AreaTM = 0x1D
-
 
 areas = ADict({
     'PE': 0x81,
@@ -257,6 +257,41 @@ class S7CpuInfo(ctypes.Structure):
         ('ModuleName', ctypes.c_char * 25)
     ]
 
+    @property
+    def module_type_name(self) -> str | None:
+        if hasattr(self, 'ModuleTypeName'):
+            return str(self.ModuleTypeName, encoding=base_encoding)
+        else:
+            return None
+
+    @property
+    def serial_number(self) -> str | None:
+        if hasattr(self, 'SerialNumber'):
+            return str(self.SerialNumber, encoding=base_encoding)
+        else:
+            return None
+
+    @property
+    def as_name(self) -> str | None:
+        if hasattr(self, 'ASName'):
+            return str(self.ASName, encoding=base_encoding)
+        else:
+            return None
+
+    @property
+    def copyright(self) -> str | None:
+        if hasattr(self, 'Copyright'):
+            return str(self.Copyright, encoding=base_encoding)
+        else:
+            return None
+
+    @property
+    def module_name(self) -> str | None:
+        if hasattr(self, 'ModuleName'):
+            return str(self.ModuleName, encoding=base_encoding)
+        else:
+            return None
+
     def __str__(self):
         return f"<S7CpuInfo ModuleTypeName: {self.ModuleTypeName} SerialNumber: {self.SerialNumber} "\
                f"ASName: {self.ASName} Copyright: {self.Copyright} ModuleName: {self.ModuleName}>"
@@ -310,6 +345,34 @@ class S7CpInfo(ctypes.Structure):
         ('MaxMpiRate', ctypes.c_uint16),
         ('MaxBusRate', ctypes.c_uint16)
     ]
+
+    @property
+    def max_pdu_length(self) -> int | None:
+        if hasattr(self, 'MaxPduLength'):
+            return int(self.MaxPduLength)
+        else:
+            return None
+
+    @property
+    def max_connections(self) -> int | None:
+        if hasattr(self, 'MaxConnections'):
+            return int(self.MaxConnections)
+        else:
+            return None
+
+    @property
+    def max_mpi_rate(self) -> int | None:
+        if hasattr(self, 'MaxMpiRate'):
+            return int(self.MaxMpiRate)
+        else:
+            return None
+
+    @property
+    def max_bus_rate(self) -> int | None:
+        if hasattr(self, 'MaxBusRate'):
+            return int(self.MaxBusRate)
+        else:
+            return None
 
     def __str__(self) -> str:
         return f"<S7CpInfo MaxPduLength: {self.MaxPduLength} MaxConnections: {self.MaxConnections} "\
