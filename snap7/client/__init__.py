@@ -62,13 +62,15 @@ class Client:
         self._callback = None
         self._pointer = None
         self._library = load_library(lib_location)
-        self.create()
+        self._create()
 
     def __del__(self):
         self.destroy()
 
-    def create(self):
-        """Creates a SNAP7 client.
+    def _create(self):
+        """
+        Creates a SNAP7 client.
+        Private Method
         """
         logger.info("creating snap7 client")
         self._library.Cli_Create.restype = c_void_p
