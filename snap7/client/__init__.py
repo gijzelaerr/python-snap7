@@ -381,10 +381,10 @@ class Client:
             :obj:`ValueError`: if the area is not defined in the `Areas`
 
         Example:
-            >>> import snap7
+import snap7.util.db            >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
-            >>> buffer = client.read_area(Areas.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
+            >>> buffer = client.read_area(snap7.util.db.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
             >>> buffer
             bytearray(b'\\x00\\x00')
         """
@@ -421,11 +421,13 @@ class Client:
             Snap7 error code.
 
         Exmaple:
+            >>> import snap7.util.db
             >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = bytearray([0b00000001])
-            >>> client.write_area(Areas.DB, 1, 10, buffer)  # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
+            # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
+            >>> client.write_area(snap7.util.DB, 1, 10, buffer)
         """
         if area == Areas.TM:
             wordlen = WordLen.Timer

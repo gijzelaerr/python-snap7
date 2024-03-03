@@ -62,6 +62,6 @@ jobs:
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
             "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF
-          python -m pip install pytest pytest-asyncio $(ls wheelhouse/*manylinux_2_24_armv7l.whl)
+          python -m pip install pytest $(ls wheelhouse/*manylinux_2_24_armv7l.whl)
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF

@@ -4,8 +4,6 @@ Python equivalent for snap7 specific types.
 import ctypes
 from enum import Enum
 
-from .common import ADict
-
 S7Object = ctypes.c_void_p
 buffer_size = 65536
 buffer_type = ctypes.c_ubyte * buffer_size
@@ -30,7 +28,7 @@ BRecvTimeout = 13
 RecoveryTime = 14
 KeepAliveTime = 15
 
-param_types = ADict({
+param_types = {
     LocalPort: ctypes.c_uint16,
     RemotePort: ctypes.c_uint16,
     PingTimeout: ctypes.c_int32,
@@ -46,7 +44,7 @@ param_types = ADict({
     BRecvTimeout: ctypes.c_int32,
     RecoveryTime: ctypes.c_uint32,
     KeepAliveTime: ctypes.c_uint32,
-})
+}
 
 # mask types
 mkEvent = 0
@@ -71,14 +69,14 @@ S7AreaDB = 0x84
 S7AreaCT = 0x1C
 S7AreaTM = 0x1D
 
-areas = ADict({
-    'PE': 0x81,
-    'PA': 0x82,
-    'MK': 0x83,
-    'DB': 0x84,
-    'CT': 0x1C,
-    'TM': 0x1D,
-})
+areas = {
+    'PE': S7AreaPE,
+    'PA': S7AreaPA,
+    'MK': S7AreaMK,
+    'DB': S7AreaDB,
+    'CT': S7AreaCT,
+    'TM': S7AreaTM,
+}
 
 
 # Word Length
@@ -116,16 +114,16 @@ srvAreaCT = 3
 srvAreaTM = 4
 srvAreaDB = 5
 
-server_areas = ADict({
-    'PE': 0,
-    'PA': 1,
-    'MK': 2,
-    'CT': 3,
-    'TM': 4,
-    'DB': 5,
-})
+server_areas = {
+    'PE': srvAreaPE,
+    'PA': srvAreaPA,
+    'MK': srvAreaMK,
+    'CT': srvAreaCT,
+    'TM': srvAreaTM,
+    'DB': srvAreaDB,
+}
 
-wordlen_to_ctypes = ADict({
+wordlen_to_ctypes = {
     S7WLBit: ctypes.c_int16,
     S7WLByte: ctypes.c_int8,
     S7WLWord: ctypes.c_int16,
@@ -133,9 +131,9 @@ wordlen_to_ctypes = ADict({
     S7WLReal: ctypes.c_int32,
     S7WLCounter: ctypes.c_int16,
     S7WLTimer: ctypes.c_int16,
-})
+}
 
-block_types = ADict({
+block_types = {
     'OB': ctypes.c_int(0x38),
     'DB': ctypes.c_int(0x41),
     'SDB': ctypes.c_int(0x42),
@@ -143,7 +141,7 @@ block_types = ADict({
     'SFC': ctypes.c_int(0x44),
     'FB': ctypes.c_int(0x45),
     'SFB': ctypes.c_int(0x46),
-})
+}
 
 server_statuses = {
     0: 'SrvStopped',
