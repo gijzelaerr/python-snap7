@@ -70,7 +70,6 @@ class Client:
     def _create(self):
         """
         Creates a SNAP7 client.
-        Private Method
         """
         logger.info("creating snap7 client")
         self._library.Cli_Create.restype = c_void_p
