@@ -62,13 +62,14 @@ class Client:
         self._callback = None
         self._pointer = None
         self._library = load_library(lib_location)
-        self.create()
+        self._create()
 
     def __del__(self):
         self.destroy()
 
-    def create(self):
-        """Creates a SNAP7 client.
+    def _create(self):
+        """
+        Creates a SNAP7 client.
         """
         logger.info("creating snap7 client")
         self._library.Cli_Create.restype = c_void_p
@@ -127,7 +128,7 @@ class Client:
             :obj:`ValueError`: if the cpu state is invalid.
 
         Examples:
-            >>> client.get_cpu_statE()
+            >>> client.get_cpu_state()
             'S7CpuStatusRun'
         """
         state = c_int(0)
