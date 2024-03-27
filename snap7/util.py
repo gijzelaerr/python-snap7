@@ -1196,9 +1196,9 @@ def set_date(bytearray_: bytearray, byte_index: int, date: date) -> bytearray:
                 bytearray(b'\x30\xd8')
         """
     if date < date(1990, 1, 1):
-        raise ValueError("date_val is lower than specification allows.")
+        raise ValueError("date is lower than specification allows.")
     elif date > date(2168, 12, 31):
-        raise ValueError("date_val is higher than specification allows.")
+        raise ValueError("date is higher than specification allows.")
     _days = (date - date(1990, 1, 1)).days
     _bytes = struct.unpack('2B', struct.pack('>h', _days))
     bytearray_[byte_index:byte_index + 2] = _bytes
