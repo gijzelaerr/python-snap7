@@ -531,6 +531,12 @@ class TestS7util(unittest.TestCase):
         val = row['testDtl']
         self.assertEqual(val, datetime.datetime(year=2022, month=3, day=9, hour=12, minute=34, second=45))
 
+    def test_set_date(self):
+        test_array = bytearray(_bytearray)
+        row = util.DB_Row(test_array, test_spec_indented, layout_offset=4)
+        row['testDate'] = datetime.date(day=28, month=3, year=2024)
+        self.assertEqual(row['testDate'], datetime.date(day=28, month=3, year=2024))
+
 
 def print_row(data):
     """print a single db row in chr and str
