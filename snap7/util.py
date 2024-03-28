@@ -1175,6 +1175,35 @@ def get_date(bytearray_: bytearray, byte_index: int = 0) -> date:
         raise ValueError("date_val is higher than specification allows.")
     return date_val
 
+def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
+    """Set value in bytearray to date
+
+        Notes:
+            Datatype `date` consists in the number of days elapsed from 1990-01-01.
+            It is stored as an int (2 bytes) in the PLC.
+
+        Args:
+            bytearray_: buffer to write.
+            byte_index: byte index from where to start writing.
+            date: date object
+
+        Examples:
+            >>> data = bytearray(2)
+
+            >>> snap7.util.set_date(data, 0, date(2024, 3, 27))
+
+            >>> data
+                bytearray(b'\x30\xd8')
+        """
+    if date_ < date(1990, 1, 1):
+        raise ValueError("date is lower than specification allows.")
+    elif date_ > date(2168, 12, 31):
+        raise ValueError("date is higher than specification allows.")
+    _days = (date_ - date(1990, 1, 1)).days
+    _bytes = struct.unpack('2B', struct.pack('>h', _days))
+    bytearray_[byte_index:byte_index + 2] = _bytes
+    return bytearray_
+
 
 def get_ltime(bytearray_: bytearray, byte_index: int) -> str:
     raise NotImplementedError
@@ -1818,6 +1847,9 @@ class DB_Row:
 
         if type_ == 'TIME' and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
+        
+        if type_ == 'DATE' and isinstance(value, date):
+            return set_date(bytearray_, byte_index, value)
 
         raise ValueError
 
