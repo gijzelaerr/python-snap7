@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-snap7"
-version = "1.3"
+version = "1.3.1"
 description = "Python wrapper for the snap7 library"
 authors = [
     {name = "Gijs Molenaar", email = "gijs@pythonic.nl"},
