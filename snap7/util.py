@@ -1043,7 +1043,7 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
     return struct.unpack_from(">d", bytearray_, offset=byte_index)[0]
 
 
-def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray:
+def set_lreal(bytearray_: bytearray, byte_index: int, lreal) -> bytearray:
     """Set the long real
 
     Notes:
@@ -1800,6 +1800,9 @@ class DB_Row:
 
         if type_ == 'REAL':
             return set_real(bytearray_, byte_index, value)
+
+        if type_ == 'LREAL':
+            return set_lreal(bytearray_, byte_index, value)
 
         if isinstance(value, int):
             type_to_func = {
