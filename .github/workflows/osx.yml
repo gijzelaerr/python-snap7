@@ -15,9 +15,9 @@ jobs:
       - name: make a virtualenv
         run: python3 -m venv venv && source venv/bin/activate
       - name: Upgrade pip
-        run: python3 -m pip install --upgrade pip
+        run: python3 -m pip install --upgrade pip setuptools --break-system-packages
       - name: Install python-snap7
-        run: python3 -m pip install .[test]
+        run: python3 -m pip install -e .[test] --break-system-packages
       - name: Run pytest
         run: |
           pytest -m "server or util or client or mainloop"
