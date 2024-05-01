@@ -7,16 +7,16 @@ on:
 jobs:
   linux-build-arm32v7:
     name: Build arm32 wheel
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: arm
 
@@ -24,12 +24,12 @@ jobs:
         uses: ./.github/actions/linux_armv7l
         with:
           script: ./.github/build_scripts/build_package.sh
-          platform: manylinux_2_24_armv7l
+          platform: manylinux_2_28_armv7l
           makefile: arm_v7_linux.mk
           python: /usr/local/bin/python3
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: wheelhouse/*.whl
@@ -37,22 +37,22 @@ jobs:
   test-wheels-arm32:
     name: Testing wheel
     needs: linux-build-arm32v7
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: wheels
           path: wheelhouse
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: arm
 
@@ -61,7 +61,7 @@ jobs:
           docker run --platform linux/arm/v7 --rm --interactive -v $PWD/tests:/tests \
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
-            "arm32v7/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF
-          python -m pip install pytest $(ls wheelhouse/*manylinux_2_24_armv7l.whl)
+            "arm32v7/python:${{ matrix.python-version }}-bullseye" /bin/bash -s <<EOF
+          python -m pip install pytest $(ls wheelhouse/*manylinux_2_28_armv7l.whl)
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF

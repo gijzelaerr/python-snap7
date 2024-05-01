@@ -9,7 +9,7 @@ jobs:
     runs-on: macos-11
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install snap7
         run: brew install snap7
       - name: Upgrade pip

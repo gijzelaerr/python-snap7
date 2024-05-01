@@ -7,7 +7,7 @@ name = "python-snap7"
 version = "1.4"
 description = "Python wrapper for the snap7 library"
 authors = [
-    {name = "Gijs Molenaar", email = "gijs@pythonic.nl"},
+    {name = "Gijs Molenaar", email = "gijsmolenaar@gmail.com"},
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -17,7 +17,6 @@ classifiers = [
     "Intended Audience :: Manufacturing",
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -25,7 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 license = {text = "MIT"}
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 
 [project.urls]
 Homepage = "https://github.com/gijzelaerr/python-snap7"
@@ -74,7 +73,7 @@ select = [
 show-source = true
 line-length = 130
 ignore = []
-target-version = "py37"
+target-version = "py38"
 
 [tool.ruff.mccabe]
 max-complexity = 10

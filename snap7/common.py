@@ -52,7 +52,6 @@ class Snap7Library:
                              or find_library('snap7')
                              or find_locally('snap7'))
         if not self.lib_location:
-            import platform
             error = f"""can't find snap7 shared library.
             
 This probably means you are installing python-snap7 from source. When no binary wheel is found for you architecture, pip

@@ -1,5 +1,5 @@
-name: 'manylinux_2_24_x86_64'
-description: 'Builds manylinux_2_24_x86_64 package'
+name: 'manylinux_2_28_x86_64'
+description: 'Builds manylinux_2_28_x86_64 package'
 inputs:
   script:
     description: 'Specifies the path to the build script'
