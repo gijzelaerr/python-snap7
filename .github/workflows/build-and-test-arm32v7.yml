@@ -7,7 +7,7 @@ on:
 jobs:
   linux-build-arm32v7:
     name: Build arm32 wheel
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
           platforms: arm
 
       - name: Build wheel
-        uses: ./.github/actions/linux_armv7l
+        uses: ./.github/actions/manylinux_2_24_armv7l
         with:
           script: ./.github/build_scripts/build_package.sh
           platform: manylinux_2_28_armv7l
@@ -37,7 +37,7 @@ jobs:
   test-wheels-arm32:
     name: Testing wheel
     needs: linux-build-arm32v7
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]

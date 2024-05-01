@@ -7,7 +7,7 @@ on:
 jobs:
   linux-build-aarch64:
     name: Build wheel for linux arm64
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
   test-wheels-aarch64:
     name: Testing wheel
     needs: linux-build-aarch64
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]

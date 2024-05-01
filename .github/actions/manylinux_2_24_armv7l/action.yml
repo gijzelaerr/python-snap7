@@ -1,5 +1,5 @@
-name: 'linux_armv7l'
-description: 'Builds linux_armv7l package'
+name: 'manylinux_2_24_armv7l'
+description: 'Builds manylinux_2_24_armv7l package'
 inputs:
   script:
     description: 'Specifies the path to the build script'
