@@ -86,7 +86,7 @@ example::
 import re
 import time
 from typing import Union
-from datetime import date, datetime, UTC
+from datetime import date, datetime
 from collections import OrderedDict
 
 from .setters import (

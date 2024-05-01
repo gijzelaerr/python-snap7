@@ -519,7 +519,7 @@ class DB_Row:
         if type_ == "REAL":
             return set_real(bytearray_, byte_index, value)
 
-        if type_ == "LREAL":
+        if type_ == "LREAL" and isinstance(value, float):
             return set_lreal(bytearray_, byte_index, value)
 
         if isinstance(value, int):
