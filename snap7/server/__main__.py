@@ -9,7 +9,7 @@ import logging
 
 try:
     import click
-except ImportError as e:
+except ImportError:
     print("Try using 'pip install python-snap7[cli]'")
     raise
 
