@@ -15,7 +15,7 @@ import snap7.types
 
 logging.basicConfig(level=logging.WARNING)
 
-ip = '127.0.0.1'
+ip = "127.0.0.1"
 tcpport = 1102
 db_number = 1
 rack = 1
@@ -24,7 +24,6 @@ slot = 1
 
 @pytest.mark.mainloop
 class TestServer(unittest.TestCase):
-
     process: Optional[Process] = None
     client: Client
 
@@ -135,7 +134,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_dword(data, 24), 0xFFFFFFFF)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import logging
 
     logging.basicConfig()

@@ -38,6 +38,10 @@ doc = ["sphinx", "sphinx_rtd_theme"]
 [tool.setuptools.package-data]
 snap7 = ["py.typed", "lib/libsnap7.so", "lib/snap7.dll", "lib/libsnap7.dylib"]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["snap7"]
+
 [project.scripts]
 snap7-server = "snap7.server.__main__:main"
 
@@ -57,23 +61,10 @@ markers =[
 ignore_missing_imports = true
 
 [tool.ruff]
-select = [
-    "E",
-    "F",
-    "UP",
-    "YTT",
-    "ASYNC",
-    "S",
-    "A",
-    "PIE",
-    "PYI",
-    "PTH",
-    "C90",
-]
-show-source = true
+output-format = "full"
 line-length = 130
-ignore = []
 target-version = "py38"
 
-[tool.ruff.mccabe]
-max-complexity = 10
+[lint]
+ignore = []
+mccabe.max-complexity = 10

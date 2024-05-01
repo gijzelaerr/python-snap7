@@ -65,8 +65,7 @@ class TestPartner(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.partner.get_param(param), value)
 
-        self.assertRaises(Exception, self.partner.get_param,
-                          snap7.types.MaxClients)
+        self.assertRaises(Exception, self.partner.get_param, snap7.types.MaxClients)
 
     def test_get_stats(self):
         self.partner.get_stats()
@@ -95,8 +94,7 @@ class TestPartner(unittest.TestCase):
         for param, value in values:
             self.partner.set_param(param, value)
 
-        self.assertRaises(Exception, self.partner.set_param,
-                          snap7.types.RemotePort, 1)
+        self.assertRaises(Exception, self.partner.set_param, snap7.types.RemotePort, 1)
 
     def test_set_recv_callback(self):
         self.partner.set_recv_callback()
@@ -108,7 +106,7 @@ class TestPartner(unittest.TestCase):
         self.partner.start()
 
     def test_start_to(self):
-        self.partner.start_to('0.0.0.0', '0.0.0.0', 0, 0) # noqa: S104
+        self.partner.start_to("0.0.0.0", "0.0.0.0", 0, 0)  # noqa: S104
 
     def test_stop(self):
         self.partner.stop()
@@ -121,7 +119,7 @@ class TestPartner(unittest.TestCase):
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
         # replace the function load_library with a mock
-        self.loadlib_patch = mock.patch('snap7.partner.load_library')
+        self.loadlib_patch = mock.patch("snap7.partner.load_library")
         self.loadlib_func = self.loadlib_patch.start()
 
         # have load_library return another mock
@@ -145,5 +143,5 @@ class TestLibraryIntegration(unittest.TestCase):
         self.mocklib.Par_Destroy.assert_called_once()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

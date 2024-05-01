@@ -6,10 +6,47 @@ from logging import getLogger
 
 from snap7.client import Client
 from snap7.types import Areas
-from snap7.util import parse_specification, get_bool, get_fstring, get_string, get_wstring, get_real, get_dword, \
-    get_udint, get_dint, get_uint, get_int, get_word, get_byte, get_s5time, get_dt, get_usint, get_sint, get_time, \
-    get_date, get_tod, get_lreal, get_char, get_wchar, get_dtl, set_bool, set_fstring, set_string, set_real, set_dword, \
-    set_udint, set_dint, set_uint, set_int, set_word, set_byte, set_usint, set_sint, set_time
+from snap7.util import (
+    parse_specification,
+    get_bool,
+    get_fstring,
+    get_string,
+    get_wstring,
+    get_real,
+    get_dword,
+    get_udint,
+    get_dint,
+    get_uint,
+    get_int,
+    get_word,
+    get_byte,
+    get_s5time,
+    get_dt,
+    get_usint,
+    get_sint,
+    get_time,
+    get_date,
+    get_tod,
+    get_lreal,
+    get_char,
+    get_wchar,
+    get_dtl,
+    set_bool,
+    set_fstring,
+    set_string,
+    set_real,
+    set_dword,
+    set_udint,
+    set_dint,
+    set_uint,
+    set_int,
+    set_word,
+    set_byte,
+    set_usint,
+    set_sint,
+    set_time,
+)
+from snap7.util.setters import set_lreal
 
 logger = getLogger(__name__)
 
@@ -42,6 +79,7 @@ class DB:
         >>> db1[0]['testbool1'] = test
         >>> db1.write(client)   # puts data in plc
     """
+
     bytearray_: Optional[bytearray] = None  # data from plc
     specification: Optional[str] = None  # layout of db rows
     id_field: Optional[str] = None  # ID field of the rows
@@ -54,11 +92,20 @@ class DB:
     # now you can be sure you will never overwrite
     # critical parts of db
 
-    def __init__(self, db_number: int, bytearray_: bytearray,
-                 specification: str, row_size: int, size: int, id_field: Optional[str] = None,
-                 db_offset: int = 0, layout_offset: int = 0, row_offset: int = 0,
-                 area: Areas = Areas.DB):
-        """ Creates a new instance of the `Row` class.
+    def __init__(
+        self,
+        db_number: int,
+        bytearray_: bytearray,
+        specification: str,
+        row_size: int,
+        size: int,
+        id_field: Optional[str] = None,
+        db_offset: int = 0,
+        layout_offset: int = 0,
+        row_offset: int = 0,
+        area: Areas = Areas.DB,
+    ):
+        """Creates a new instance of the `Row` class.
 
         Args:
             db_number: number of the DB to read from. This value should be 0 if area!=Areas.DB.
@@ -91,7 +138,7 @@ class DB:
         self.make_rows()
 
     def make_rows(self):
-        """ Make each row for the DB."""
+        """Make each row for the DB."""
         id_field = self.id_field
         row_size = self.row_size
         specification = self.specification
@@ -102,18 +149,20 @@ class DB:
             # calculate where row in bytearray starts
             db_offset = i * (row_size + row_offset) + self.db_offset
             # create a row object
-            row = DB_Row(self,
-                         specification,
-                         row_size=row_size,
-                         db_offset=db_offset,
-                         layout_offset=layout_offset,
-                         row_offset=self.row_offset,
-                         area=self.area)
+            row = DB_Row(
+                self,
+                specification,
+                row_size=row_size,
+                db_offset=db_offset,
+                layout_offset=layout_offset,
+                row_offset=self.row_offset,
+                area=self.area,
+            )
 
             # store row object
             key = row[id_field] if id_field else i
             if key and key in self.index:
-                msg = f'{key} not unique!'
+                msg = f"{key} not unique!"
                 logger.error(msg)
             self.index[key] = row
 
@@ -174,7 +223,7 @@ class DB:
             This function effectively returns a snapshot of the DB.
         """
         ret = OrderedDict()
-        for (k, v) in self.items():
+        for k, v in self.items():
             ret[k] = v.export()
         return ret
 
@@ -241,7 +290,7 @@ class DB:
             return
 
         total_size = self.size * (self.row_size + self.row_offset)
-        data = self._bytearray[self.db_offset:self.db_offset + total_size]
+        data = self._bytearray[self.db_offset : self.db_offset + total_size]
 
         if self.area == Areas.DB:
             client.db_write(self.db_number, self.db_offset, data)
@@ -257,18 +306,19 @@ class DB_Row:
         bytearray_: reference to the data of the parent DB.
         _specification: row specification layout.
     """
+
     bytearray_: bytearray  # data of reference to parent DB
     _specification: OrderedDict = OrderedDict()  # row specification
 
     def __init__(
-            self,
-            bytearray_: bytearray,
-            _specification: str,
-            row_size: Optional[int] = 0,
-            db_offset: int = 0,
-            layout_offset: int = 0,
-            row_offset: Optional[int] = 0,
-            area: Optional[Areas] = Areas.DB
+        self,
+        bytearray_: bytearray,
+        _specification: str,
+        row_size: Optional[int] = 0,
+        db_offset: int = 0,
+        layout_offset: int = 0,
+        row_offset: Optional[int] = 0,
+        area: Optional[Areas] = Areas.DB,
     ):
         """Creates a new instance of the `DB_Row` class.
 
@@ -308,7 +358,7 @@ class DB_Row:
         return self._bytearray
 
     def export(self) -> Dict[str, Union[str, int, float, bool, datetime]]:
-        """ Export dictionary with values
+        """Export dictionary with values
 
         Returns:
             dictionary containing the values of each value of the row.
@@ -327,14 +377,13 @@ class DB_Row:
         self.set_value(index, _type, value)
 
     def __repr__(self):
-
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = f'{string}\n{var_name:<20} {self.get_value(index, _type):<10}'
+            string = f"{string}\n{var_name:<20} {self.get_value(index, _type):<10}"
         return string
 
     def unchanged(self, bytearray_: bytearray) -> bool:
-        """ Checks if the bytearray is the same
+        """Checks if the bytearray is the same
 
         Args:
             bytearray_: buffer of data to check.
@@ -345,7 +394,7 @@ class DB_Row:
         return self.get_bytearray() == bytearray_
 
     def get_offset(self, byte_index: Union[str, int]) -> int:
-        """ Calculate correct beginning position for a row
+        """Calculate correct beginning position for a row
             the db_offset = row_size * index
 
         Args:
@@ -359,7 +408,7 @@ class DB_Row:
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
     def get_value(self, byte_index: Union[str, int], type_: str) -> Union[ValueError, int, float, str, datetime]:
-        """ Gets the value for a specific type.
+        """Gets the value for a specific type.
 
         Args:
             byte_index: byte index from where start reading.
@@ -377,59 +426,57 @@ class DB_Row:
         # set parsing non case-sensitive
         type_ = type_.upper()
 
-        if type_ == 'BOOL':
-            byte_index, bool_index = str(byte_index).split('.')
-            return get_bool(bytearray_, self.get_offset(byte_index),
-                            int(bool_index))
+        if type_ == "BOOL":
+            byte_index, bool_index = str(byte_index).split(".")
+            return get_bool(bytearray_, self.get_offset(byte_index), int(bool_index))
 
         # remove 4 from byte index since
         # first 4 bytes are used by db
         byte_index = self.get_offset(byte_index)
 
-        if type_.startswith('FSTRING'):
-            max_size = re.search(r'\d+', type_)
+        if type_.startswith("FSTRING"):
+            max_size = re.search(r"\d+", type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             return get_fstring(bytearray_, byte_index, int(max_size[0]))
-        elif type_.startswith('STRING'):
-            max_size = re.search(r'\d+', type_)
+        elif type_.startswith("STRING"):
+            max_size = re.search(r"\d+", type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             return get_string(bytearray_, byte_index)
-        elif type_.startswith('WSTRING'):
-            max_size = re.search(r'\d+', type_)
+        elif type_.startswith("WSTRING"):
+            max_size = re.search(r"\d+", type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             return get_wstring(bytearray_, byte_index)
         else:
             type_to_func: Dict[str, Callable] = {
-                'REAL': get_real,
-                'DWORD': get_dword,
-                'UDINT': get_udint,
-                'DINT': get_dint,
-                'UINT': get_uint,
-                'INT': get_int,
-                'WORD': get_word,
-                'BYTE': get_byte,
-                'S5TIME': get_s5time,
-                'DATE_AND_TIME': get_dt,
-                'USINT': get_usint,
-                'SINT': get_sint,
-                'TIME': get_time,
-                'DATE': get_date,
-                'TIME_OF_DAY': get_tod,
-                'LREAL': get_lreal,
-                'TOD': get_tod,
-                'CHAR': get_char,
-                'WCHAR': get_wchar,
-                'DTL': get_dtl
+                "REAL": get_real,
+                "DWORD": get_dword,
+                "UDINT": get_udint,
+                "DINT": get_dint,
+                "UINT": get_uint,
+                "INT": get_int,
+                "WORD": get_word,
+                "BYTE": get_byte,
+                "S5TIME": get_s5time,
+                "DATE_AND_TIME": get_dt,
+                "USINT": get_usint,
+                "SINT": get_sint,
+                "TIME": get_time,
+                "DATE": get_date,
+                "TIME_OF_DAY": get_tod,
+                "LREAL": get_lreal,
+                "TOD": get_tod,
+                "CHAR": get_char,
+                "WCHAR": get_wchar,
+                "DTL": get_dtl,
             }
             if type_ in type_to_func:
                 return type_to_func[type_](bytearray_, byte_index)
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Union[
-        bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Union[bytearray, None]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
@@ -447,47 +494,50 @@ class DB_Row:
 
         bytearray_ = self.get_bytearray()
 
-        if type_ == 'BOOL' and isinstance(value, bool):
+        if type_ == "BOOL" and isinstance(value, bool):
             byte_index, bool_index = str(byte_index).split(".")
-            set_bool(bytearray_, self.get_offset(byte_index), int(bool_index), value)
+            return set_bool(bytearray_, self.get_offset(byte_index), int(bool_index), value)
 
         byte_index = self.get_offset(byte_index)
 
-        if type_.startswith('FSTRING') and isinstance(value, str):
-            max_size = re.search(r'\d+', type_)
+        if type_.startswith("FSTRING") and isinstance(value, str):
+            max_size = re.search(r"\d+", type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return set_fstring(bytearray_, byte_index, value, max_size_int)
 
-        if type_.startswith('STRING') and isinstance(value, str):
-            max_size = re.search(r'\d+', type_)
+        if type_.startswith("STRING") and isinstance(value, str):
+            max_size = re.search(r"\d+", type_)
             if max_size is None:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             return set_string(bytearray_, byte_index, value, max_size_int)
 
-        if type_ == 'REAL':
+        if type_ == "REAL":
             return set_real(bytearray_, byte_index, value)
+
+        if type_ == "LREAL":
+            return set_lreal(bytearray_, byte_index, value)
 
         if isinstance(value, int):
             type_to_func = {
-                'DWORD': set_dword,
-                'UDINT': set_udint,
-                'DINT': set_dint,
-                'UINT': set_uint,
-                'INT': set_int,
-                'WORD': set_word,
-                'BYTE': set_byte,
-                'USINT': set_usint,
-                'SINT': set_sint,
+                "DWORD": set_dword,
+                "UDINT": set_udint,
+                "DINT": set_dint,
+                "UINT": set_uint,
+                "INT": set_int,
+                "WORD": set_word,
+                "BYTE": set_byte,
+                "USINT": set_usint,
+                "SINT": set_sint,
             }
             if type_ in type_to_func:
                 return type_to_func[type_](bytearray_, byte_index, value)
 
-        if type_ == 'TIME' and isinstance(value, str):
+        if type_ == "TIME" and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
 
         raise ValueError
@@ -509,12 +559,12 @@ class DB_Row:
 
         db_nr = self._bytearray.db_number
         offset = self.db_offset
-        data = self.get_bytearray()[offset:offset + self.row_size]
+        data = self.get_bytearray()[offset : offset + self.row_size]
         db_offset = self.db_offset
 
         # indicate start of write only area of row!
         if self.row_offset:
-            data = data[self.row_offset:]
+            data = data[self.row_offset :]
             db_offset += self.row_offset
 
         if self.area == Areas.DB:

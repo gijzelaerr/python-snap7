@@ -41,10 +41,10 @@ def get_byte(bytearray_: bytearray, byte_index: int) -> bytes:
     Returns:
         value get from the byte index.
     """
-    data = bytearray_[byte_index:byte_index + 1]
-    data[0] = data[0] & 0xff
-    packed = struct.pack('B', *data)
-    value = struct.unpack('B', packed)[0]
+    data = bytearray_[byte_index : byte_index + 1]
+    data[0] = data[0] & 0xFF
+    packed = struct.pack("B", *data)
+    value = struct.unpack("B", packed)[0]
     return value
 
 
@@ -66,11 +66,11 @@ def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
         >>> snap7.util.get_word(data, 0)
             100
     """
-    data = bytearray_[byte_index:byte_index + 2]
-    data[1] = data[1] & 0xff
-    data[0] = data[0] & 0xff
-    packed = struct.pack('2B', *data)
-    value = struct.unpack('>H', packed)[0]
+    data = bytearray_[byte_index : byte_index + 2]
+    data[1] = data[1] & 0xFF
+    data[0] = data[0] & 0xFF
+    packed = struct.pack("2B", *data)
+    value = struct.unpack(">H", packed)[0]
     return value
 
 
@@ -92,11 +92,11 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_int(data, 0)
             255
     """
-    data = bytearray_[byte_index:byte_index + 2]
-    data[1] = data[1] & 0xff
-    data[0] = data[0] & 0xff
-    packed = struct.pack('2B', *data)
-    value = struct.unpack('>h', packed)[0]
+    data = bytearray_[byte_index : byte_index + 2]
+    data[1] = data[1] & 0xFF
+    data[0] = data[0] & 0xFF
+    packed = struct.pack("2B", *data)
+    value = struct.unpack(">h", packed)[0]
     return value
 
 
@@ -120,11 +120,11 @@ def get_uint(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_uint(data, 0)
             65535
     """
-    data = bytearray_[byte_index:byte_index + 2]
-    data[1] = data[1] & 0xff
-    data[0] = data[0] & 0xff
-    packed = struct.pack('2B', *data)
-    value = struct.unpack('>H', packed)[0]
+    data = bytearray_[byte_index : byte_index + 2]
+    data[1] = data[1] & 0xFF
+    data[0] = data[0] & 0xFF
+    packed = struct.pack("2B", *data)
+    value = struct.unpack(">H", packed)[0]
     return value
 
 
@@ -147,8 +147,8 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
         >>> snap7.util.get_real(data, 0)
             123.32099914550781
     """
-    x = bytearray_[byte_index:byte_index + 4]
-    real = struct.unpack('>f', struct.pack('4B', *x))[0]
+    x = bytearray_[byte_index : byte_index + 4]
+    real = struct.unpack(">f", struct.pack("4B", *x))[0]
     return real
 
 
@@ -174,11 +174,11 @@ def get_fstring(bytearray_: bytearray, byte_index: int, max_length: int, remove_
         >>> snap7.util.get_fstring(data, 0, 15, remove_padding=false)
         'hello world    '
     """
-    data = map(chr, bytearray_[byte_index:byte_index + max_length])
+    data = map(chr, bytearray_[byte_index : byte_index + max_length])
     string = "".join(data)
 
     if remove_padding:
-        return string.rstrip(' ')
+        return string.rstrip(" ")
     else:
         return string
 
@@ -209,14 +209,16 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
     if str_length > max_string_size or max_string_size > 254:
         logger.error("The string is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
-        raise TypeError("String contains {} chars, but max. {} chars are expected or is larger than 254."
-                        "Bytearray doesn't seem to be a valid string.".format(str_length, max_string_size))
-    data = map(chr, bytearray_[byte_index + 2:byte_index + 2 + str_length])
+        raise TypeError(
+            "String contains {str_length} chars, but max. {max_string_size} chars are expected or is "
+            "larger than 254. Bytearray doesn't seem to be a valid string."
+        )
+    data = map(chr, bytearray_[byte_index + 2 : byte_index + 2 + str_length])
     return "".join(data)
 
 
 def get_dword(bytearray_: bytearray, byte_index: int) -> int:
-    """ Gets the dword from the buffer.
+    """Gets the dword from the buffer.
 
     Notes:
         Datatype `dword` consists in 8 bytes in the PLC.
@@ -235,8 +237,8 @@ def get_dword(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_dword(data, 0)
             4294967295
     """
-    data = bytearray_[byte_index:byte_index + 4]
-    dword = struct.unpack('>I', struct.pack('4B', *data))[0]
+    data = bytearray_[byte_index : byte_index + 4]
+    dword = struct.unpack(">I", struct.pack("4B", *data))[0]
     return dword
 
 
@@ -262,8 +264,8 @@ def get_dint(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_dint(data, 0)
             2147483647
     """
-    data = bytearray_[byte_index:byte_index + 4]
-    dint = struct.unpack('>i', struct.pack('4B', *data))[0]
+    data = bytearray_[byte_index : byte_index + 4]
+    dint = struct.unpack(">i", struct.pack("4B", *data))[0]
     return dint
 
 
@@ -289,34 +291,31 @@ def get_udint(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_udint(data, 0)
             4294967295
     """
-    data = bytearray_[byte_index:byte_index + 4]
-    dint = struct.unpack('>I', struct.pack('4B', *data))[0]
+    data = bytearray_[byte_index : byte_index + 4]
+    dint = struct.unpack(">I", struct.pack("4B", *data))[0]
     return dint
 
 
 def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
     micro_to_milli = 1000
-    data_bytearray = bytearray_[byte_index:byte_index + 2]
+    data_bytearray = bytearray_[byte_index : byte_index + 2]
     s5time_data_int_like = list(data_bytearray.hex())
-    if s5time_data_int_like[0] == '0':
+    if s5time_data_int_like[0] == "0":
         # 10ms
         time_base = 10
-    elif s5time_data_int_like[0] == '1':
+    elif s5time_data_int_like[0] == "1":
         # 100ms
         time_base = 100
-    elif s5time_data_int_like[0] == '2':
+    elif s5time_data_int_like[0] == "2":
         # 1s
         time_base = 1000
-    elif s5time_data_int_like[0] == '3':
+    elif s5time_data_int_like[0] == "3":
         # 10s
         time_base = 10000
     else:
-        raise ValueError('This value should not be greater than 3')
+        raise ValueError("This value should not be greater than 3")
 
-    s5time_bcd = \
-        int(s5time_data_int_like[1]) * 100 + \
-        int(s5time_data_int_like[2]) * 10 + \
-        int(s5time_data_int_like[3])
+    s5time_bcd = int(s5time_data_int_like[1]) * 100 + int(s5time_data_int_like[2]) * 10 + int(s5time_data_int_like[3])
     s5time_microseconds = time_base * s5time_bcd
     s5time = timedelta(microseconds=s5time_microseconds * micro_to_milli)
     # here we must return a string like variable, otherwise nothing will return
@@ -336,7 +335,7 @@ def get_dt(bytearray_: bytearray, byte_index: int) -> str:
         >>> get_dt(data,0)
             '2020-07-12T17:32:02.854000'
     """
-    return get_date_time_object(bytearray_, byte_index).isoformat(timespec='microseconds')
+    return get_date_time_object(bytearray_, byte_index).isoformat(timespec="microseconds")
 
 
 def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
@@ -367,8 +366,7 @@ def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
     # plc save miliseconds in two bytes with the most signifanct byte used only
     # in the last byte for microseconds the other for weekday
     # * 1000 because pythoin datetime needs microseconds not milli
-    microsec = (bcd_to_byte(bytearray_[byte_index + 6]) * 10
-                + bcd_to_byte(bytearray_[byte_index + 7] >> 4)) * 1000
+    microsec = (bcd_to_byte(bytearray_[byte_index + 6]) * 10 + bcd_to_byte(bytearray_[byte_index + 7] >> 4)) * 1000
 
     return datetime(year, month, day, hour, min_, sec, microsec)
 
@@ -376,33 +374,33 @@ def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
 def get_time(bytearray_: bytearray, byte_index: int) -> str:
     """Get time value from bytearray.
 
-        Notes:
-            Datatype `time` consists in 4 bytes in the PLC.
-            Maximum possible value is T#24D_20H_31M_23S_647MS(2147483647).
-            Lower posible value is T#-24D_20H_31M_23S_648MS(-2147483648).
+    Notes:
+        Datatype `time` consists in 4 bytes in the PLC.
+        Maximum possible value is T#24D_20H_31M_23S_647MS(2147483647).
+        Lower posible value is T#-24D_20H_31M_23S_648MS(-2147483648).
 
-        Args:
-            bytearray_: buffer to read.
-            byte_index: byte index from where to start reading.
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start reading.
 
-        Returns:
-            Value read.
+    Returns:
+        Value read.
 
-        Examples:
-            >>> import struct
-            >>> data = bytearray(4)
-            >>> data[:] = struct.pack(">i", 2147483647)
-            >>> snap7.util.get_time(data, 0)
-                '24:20:31:23:647'
-        """
-    data_bytearray = bytearray_[byte_index:byte_index + 4]
+    Examples:
+        >>> import struct
+        >>> data = bytearray(4)
+        >>> data[:] = struct.pack(">i", 2147483647)
+        >>> snap7.util.get_time(data, 0)
+            '24:20:31:23:647'
+    """
+    data_bytearray = bytearray_[byte_index : byte_index + 4]
     bits = 32
     sign = 1
     byte_str = data_bytearray.hex()
     val = int(byte_str, 16)
     if (val & (1 << (bits - 1))) != 0:
         sign = -1  # if sign bit is set e.g., 8bit: 128-255
-        val -= (1 << bits)  # compute negative value
+        val -= 1 << bits  # compute negative value
         val *= sign
 
     milli_seconds = val % 1000
@@ -411,7 +409,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     hours = minutes // 60
     days = hours // 24
 
-    sign_str = '' if sign >= 0 else '-'
+    sign_str = "" if sign >= 0 else "-"
     time_str = f"{sign_str}{days!s}:{hours % 24!s}:{minutes % 60!s}:{seconds % 60!s}.{milli_seconds!s}"
 
     return time_str
@@ -437,9 +435,9 @@ def get_usint(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_usint(data, 0)
             255
     """
-    data = bytearray_[byte_index] & 0xff
-    packed = struct.pack('B', data)
-    value = struct.unpack('>B', packed)[0]
+    data = bytearray_[byte_index] & 0xFF
+    packed = struct.pack("B", data)
+    value = struct.unpack(">B", packed)[0]
     return value
 
 
@@ -464,8 +462,8 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
             127
     """
     data = bytearray_[byte_index]
-    packed = struct.pack('B', data)
-    value = struct.unpack('>b', packed)[0]
+    packed = struct.pack("B", data)
+    value = struct.unpack(">b", packed)[0]
     return value
 
 
@@ -572,8 +570,8 @@ def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
         >>> snap7.util.get_ulint(data, 0)
             12345
     """
-    raw_ulint = bytearray_[byte_index:byte_index + 8]
-    lint = struct.unpack('>Q', struct.pack('8B', *raw_ulint))[0]
+    raw_ulint = bytearray_[byte_index : byte_index + 8]
+    lint = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
     return lint
 
 
@@ -582,7 +580,7 @@ def get_tod(bytearray_: bytearray, byte_index: int) -> timedelta:
     byte_range = byte_index + 4
     if len_bytearray_ < byte_range:
         raise ValueError("Date can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
-    time_val = timedelta(milliseconds=int.from_bytes(bytearray_[byte_index:byte_range], byteorder='big'))
+    time_val = timedelta(milliseconds=int.from_bytes(bytearray_[byte_index:byte_range], byteorder="big"))
     if time_val.days >= 1:
         raise ValueError("Time_Of_Date can't be extracted from bytearray. Bytearray contains unexpected values.")
     return time_val
@@ -593,7 +591,7 @@ def get_date(bytearray_: bytearray, byte_index: int = 0) -> date:
     byte_range = byte_index + 2
     if len_bytearray_ < byte_range:
         raise ValueError("Date can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
-    date_val = date(1990, 1, 1) + timedelta(days=int.from_bytes(bytearray_[byte_index:byte_range], byteorder='big'))
+    date_val = date(1990, 1, 1) + timedelta(days=int.from_bytes(bytearray_[byte_index:byte_range], byteorder="big"))
     if date_val > date(2168, 12, 31):
         raise ValueError("date_val is higher than specification allows.")
     return date_val
@@ -613,13 +611,14 @@ def get_ldt(bytearray_: bytearray, byte_index: int) -> str:
 
 def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
     time_to_datetime = datetime(
-        year=int.from_bytes(bytearray_[byte_index:byte_index + 2], byteorder='big'),
+        year=int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big"),
         month=int(bytearray_[byte_index + 2]),
         day=int(bytearray_[byte_index + 3]),
         hour=int(bytearray_[byte_index + 5]),
         minute=int(bytearray_[byte_index + 6]),
         second=int(bytearray_[byte_index + 7]),
-        microsecond=int(bytearray_[byte_index + 8]))  # --- ? noch nicht genau genug
+        microsecond=int(bytearray_[byte_index + 8]),
+    )  # --- ? noch nicht genau genug
     if time_to_datetime > datetime(2554, 12, 31, 23, 59, 59):
         raise ValueError("date_val is higher than specification allows.")
     return time_to_datetime
@@ -670,7 +669,7 @@ def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
     """
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[1])
-    return bytearray_[byte_index:byte_index + 2].decode('utf-16-be')
+    return bytearray_[byte_index : byte_index + 2].decode("utf-16-be")
 
 
 def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
@@ -698,20 +697,22 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
     # Byte 2, 3 --> used length of wstring
     wstring_start = byte_index + 4
 
-    max_wstring_size = bytearray_[byte_index:byte_index + 2]
-    packed = struct.pack('2B', *max_wstring_size)
-    max_wstring_symbols = struct.unpack('>H', packed)[0] * 2
+    max_wstring_size = bytearray_[byte_index : byte_index + 2]
+    packed = struct.pack("2B", *max_wstring_size)
+    max_wstring_symbols = struct.unpack(">H", packed)[0] * 2
 
-    wstr_length_raw = bytearray_[byte_index + 2:byte_index + 4]
-    wstr_symbols_amount = struct.unpack('>H', struct.pack('2B', *wstr_length_raw))[0] * 2
+    wstr_length_raw = bytearray_[byte_index + 2 : byte_index + 4]
+    wstr_symbols_amount = struct.unpack(">H", struct.pack("2B", *wstr_length_raw))[0] * 2
 
     if wstr_symbols_amount > max_wstring_symbols or max_wstring_symbols > 16382:
         logger.error("The wstring is too big for the size encountered in specification")
         logger.error("WRONG SIZED STRING ENCOUNTERED")
-        raise TypeError("WString contains {} chars, but max. {} chars are expected or is larger than 16382."
-                        "Bytearray doesn't seem to be a valid string.".format(wstr_symbols_amount, max_wstring_symbols))
+        raise TypeError(
+            f"WString contains {wstr_symbols_amount} chars, but max {max_wstring_symbols} chars are "
+            f"expected or is larger than 16382. Bytearray doesn't seem to be a valid string."
+        )
 
-    return bytearray_[wstring_start:wstring_start + wstr_symbols_amount].decode('utf-16-be')
+    return bytearray_[wstring_start : wstring_start + wstr_symbols_amount].decode("utf-16-be")
 
 
 def get_array(bytearray_: bytearray, byte_index: int) -> List:

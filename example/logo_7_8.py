@@ -20,7 +20,7 @@ if plc.get_connected():
     logger.info("connected")
 
     # read I1 from logo
-    vm_address = ("V923.0" if Logo_7 else "V1024.0")
+    vm_address = "V923.0" if Logo_7 else "V1024.0"
     print(f"I1: {str(plc.read(vm_address))}")
 
     # write some values in VM addresses between 0 and 100

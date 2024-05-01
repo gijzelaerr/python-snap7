@@ -23,8 +23,12 @@ venv/bin/sphinx-build:  venv/
 doc: venv/bin/sphinx-build
 	cd doc && make html
 
-ruff: venv/bin/pytest
-	venv/bin/ruff snap7 tests
+check: venv/bin/pytest
+	venv/bin/ruff check snap7 tests example
+	 venv/bin/ruff format --diff snap7 tests example
+
+format: venv/bin/pytest
+	venv/bin/ruff format snap7 tests example
 
 mypy: venv/bin/pytest
 	venv/bin/mypy snap7 tests

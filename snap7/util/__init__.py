@@ -82,18 +82,55 @@ example::
 
 
 """
+
 import re
 import time
 from typing import Union
-from datetime import date, datetime
+from datetime import date, datetime, UTC
 from collections import OrderedDict
 
-from .setters import set_bool, set_fstring, set_string, set_real, set_dword, \
-    set_udint, set_dint, set_uint, set_int, set_word, set_byte, set_usint, set_sint, set_time  # noqa: F401
+from .setters import (
+    set_bool,  # noqa: F401
+    set_fstring,  # noqa: F401
+    set_string,  # noqa: F401
+    set_real,  # noqa: F401
+    set_dword,  # noqa: F401
+    set_udint,  # noqa: F401
+    set_dint,  # noqa: F401
+    set_uint,  # noqa: F401
+    set_int,  # noqa: F401
+    set_word,  # noqa: F401
+    set_byte,  # noqa: F401
+    set_usint,  # noqa: F401
+    set_sint,  # noqa: F401
+    set_time,  # noqa: F401
+)
 
-from .getters import get_bool, get_fstring, get_string, get_wstring, get_real, get_dword, \
-    get_udint, get_dint, get_uint, get_int, get_word, get_byte, get_s5time, get_dt, get_usint, get_sint, get_time, \
-    get_date, get_tod, get_lreal, get_char, get_wchar, get_dtl  # noqa: F401
+from .getters import (
+    get_bool,  # noqa: F401
+    get_fstring,  # noqa: F401
+    get_string,  # noqa: F401
+    get_wstring,  # noqa: F401
+    get_real,  # noqa: F401
+    get_dword,  # noqa: F401
+    get_udint,  # noqa: F401
+    get_dint,  # noqa: F401
+    get_uint,  # noqa: F401
+    get_int,  # noqa: F401
+    get_word,  # noqa: F401
+    get_byte,  # noqa: F401
+    get_s5time,  # noqa: F401
+    get_dt,  # noqa: F401
+    get_usint,  # noqa: F401
+    get_sint,  # noqa: F401
+    get_time,  # noqa: F401
+    get_date,  # noqa: F401
+    get_tod,  # noqa: F401
+    get_lreal,  # noqa: F401
+    get_char,  # noqa: F401
+    get_wchar,  # noqa: F401
+    get_dtl,  # noqa: F401
+)
 
 
 def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:
@@ -123,40 +160,39 @@ def parse_specification(db_specification: str) -> OrderedDict:
     """
     parsed_db_specification = OrderedDict()
 
-    for line in db_specification.split('\n'):
-        if line and not line.lstrip().startswith('#'):
-            index, var_name, _type = line.split('#')[0].split()
+    for line in db_specification.split("\n"):
+        if line and not line.lstrip().startswith("#"):
+            index, var_name, _type = line.split("#")[0].split()
             parsed_db_specification[var_name] = (index, _type)
 
     return parsed_db_specification
 
 
 def print_row(data):
-    """print a single db row in chr and str
-    """
+    """print a single db row in chr and str"""
     index_line = ""
     pri_line1 = ""
     chr_line2 = ""
-    asci = re.compile('[a-zA-Z0-9 ]')
+    asci = re.compile("[a-zA-Z0-9 ]")
 
     for i, xi in enumerate(data):
         # index
         if not i % 5:
             diff = len(pri_line1) - len(index_line)
             i = str(i)
-            index_line += diff * ' '
+            index_line += diff * " "
             index_line += i
             # i = i + (ws - len(i)) * ' ' + ','
 
         # byte array line
         str_v = str(xi)
-        pri_line1 += str(xi) + ','
+        pri_line1 += str(xi) + ","
         # char line
         c = chr(xi)
-        c = c if asci.match(c) else ' '
+        c = c if asci.match(c) else " "
         # align white space
         w = len(str_v)
-        c = c + (w - 1) * ' ' + ','
+        c = c + (w - 1) * " " + ","
         chr_line2 += c
 
     print(index_line)

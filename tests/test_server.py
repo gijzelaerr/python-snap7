@@ -13,7 +13,6 @@ logging.basicConfig(level=logging.WARNING)
 
 @pytest.mark.server
 class TestServer(unittest.TestCase):
-
     def setUp(self):
         self.server = snap7.server.Server()
         self.server.start(tcpport=1102)
@@ -45,6 +44,7 @@ class TestServer(unittest.TestCase):
 
     def test_lock_area(self):
         from threading import Thread
+
         area_code = snap7.types.srvAreaDB
         index = 1
         db1_type = ctypes.c_char * 1024
@@ -116,8 +116,8 @@ class TestServer(unittest.TestCase):
         self.assertFalse(self.server.clear_events())
 
     def test_start_to(self):
-        self.server.start_to('0.0.0.0') # noqa: S104
-        self.assertRaises(ValueError, self.server.start_to, 'bogus')
+        self.server.start_to("0.0.0.0")  # noqa: S104
+        self.assertRaises(ValueError, self.server.start_to, "bogus")
 
     def test_get_param(self):
         # check the defaults
@@ -126,8 +126,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(self.server.get_param(snap7.types.MaxClients), 1024)
 
         # invalid param for server
-        self.assertRaises(Exception, self.server.get_param,
-                          snap7.types.RemotePort)
+        self.assertRaises(Exception, self.server.get_param, snap7.types.RemotePort)
 
 
 @pytest.mark.server
@@ -147,7 +146,7 @@ class TestServerBeforeStart(unittest.TestCase):
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
         # replace the function load_library with a mock
-        self.loadlib_patch = mock.patch('snap7.server.load_library')
+        self.loadlib_patch = mock.patch("snap7.server.load_library")
         self.loadlib_func = self.loadlib_patch.start()
 
         # have load_library return another mock
@@ -171,7 +170,7 @@ class TestLibraryIntegration(unittest.TestCase):
         self.mocklib.Srv_Destroy.assert_called_once()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import logging
 
     logging.basicConfig()

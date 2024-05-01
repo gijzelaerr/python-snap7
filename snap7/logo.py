@@ -1,6 +1,7 @@
 """
 Snap7 client used for connection to a siemens LOGO 7/8 server.
 """
+
 import re
 import struct
 import logging
@@ -134,8 +135,7 @@ class Logo:
 
         logger.debug(f"start:{start}, wordlen:{wordlen.name}={wordlen.value}, data-length:{len(data)}")
 
-        result = self.library.Cli_ReadArea(self.pointer, area.value, db_number, start,
-                                           size, wordlen.value, byref(data))
+        result = self.library.Cli_ReadArea(self.pointer, area.value, db_number, start, size, wordlen.value, byref(data))
         check_error(result, context="client")
         # transform result to int value
         if wordlen == WordLen.Bit:
@@ -227,9 +227,7 @@ class Logo:
 
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
-        result = (self.library.Cli_DBRead(
-            self.pointer, db_number, start, size,
-            byref(data)))
+        result = self.library.Cli_DBRead(self.pointer, db_number, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -270,9 +268,9 @@ class Logo:
         """
         if not re.match(ipv4, ip_address):
             raise ValueError(f"{ip_address} is invalid ipv4")
-        result = self.library.Cli_SetConnectionParams(self.pointer, ip_address.encode(),
-                                                      c_uint16(tsap_snap7),
-                                                      c_uint16(tsap_logo))
+        result = self.library.Cli_SetConnectionParams(
+            self.pointer, ip_address.encode(), c_uint16(tsap_snap7), c_uint16(tsap_logo)
+        )
         if result != 0:
             raise ValueError("The parameter was invalid")
 
@@ -286,8 +284,7 @@ class Logo:
         Raises:
             :obj:`ValueError`: if the snap7 error code is diferent from 0.
         """
-        result = self.library.Cli_SetConnectionType(self.pointer,
-                                                    c_uint16(connection_type))
+        result = self.library.Cli_SetConnectionType(self.pointer, c_uint16(connection_type))
         if result != 0:
             raise ValueError("The parameter was invalid")
 
@@ -334,7 +331,6 @@ class Logo:
         logger.debug(f"retreiving param number {number}")
         type_ = param_types[number]
         value = type_()
-        code = self.library.Cli_GetParam(self.pointer, c_int(number),
-                                         byref(value))
+        code = self.library.Cli_GetParam(self.pointer, c_int(number), byref(value))
         check_error(code)
         return value.value

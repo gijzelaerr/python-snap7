@@ -7,7 +7,7 @@ from ctypes import c_char
 from typing import Optional
 from ctypes.util import find_library
 
-if platform.system() == 'Windows':
+if platform.system() == "Windows":
     from ctypes import windll as cdll  # type: ignore
 else:
     from ctypes import cdll
@@ -25,6 +25,7 @@ class Snap7Library:
     Attributes:
         lib_location: full path to the `snap7.dll` file. Optional.
     """
+
     _instance = None
     lib_location: Optional[str]
 
@@ -36,7 +37,7 @@ class Snap7Library:
         return cls._instance
 
     def __init__(self, lib_location: Optional[str] = None):
-        """ Loads the snap7 library using ctypes cdll.
+        """Loads the snap7 library using ctypes cdll.
 
         Args:
             lib_location: full path to the `snap7.dll` file. Optional.
@@ -46,11 +47,9 @@ class Snap7Library:
         """
         if self.cdll:  # type: ignore
             return
-        self.lib_location = (lib_location
-                             or self.lib_location
-                             or find_in_package()
-                             or find_library('snap7')
-                             or find_locally('snap7'))
+        self.lib_location = (
+            lib_location or self.lib_location or find_in_package() or find_library("snap7") or find_locally("snap7")
+        )
         if not self.lib_location:
             error = f"""can't find snap7 shared library.
             
@@ -147,12 +146,12 @@ def find_in_package() -> Optional[str]:
     """
     basedir = pathlib.Path(__file__).parent.absolute()
     if sys.platform == "darwin":
-        lib = 'libsnap7.dylib'
+        lib = "libsnap7.dylib"
     elif sys.platform == "win32":
-        lib = 'snap7.dll'
+        lib = "snap7.dll"
     else:
-        lib = 'libsnap7.so'
-    full_path = basedir.joinpath('lib', lib)
+        lib = "libsnap7.so"
+    full_path = basedir.joinpath("lib", lib)
     if Path.exists(full_path) and Path.is_file(full_path):
         return str(full_path)
     return None
