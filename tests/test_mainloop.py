@@ -3,17 +3,19 @@ from multiprocessing.context import Process
 import time
 import pytest
 import unittest
+from typing import Optional
 
 import snap7.error
 import snap7.server
 import snap7.util
+import snap7.util.getters
 from snap7.util import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
 from snap7.client import Client
 import snap7.types
 
 logging.basicConfig(level=logging.WARNING)
 
-ip = '127.0.0.1'
+ip = "127.0.0.1"
 tcpport = 1102
 db_number = 1
 rack = 1
@@ -22,8 +24,8 @@ slot = 1
 
 @pytest.mark.mainloop
 class TestServer(unittest.TestCase):
-
-    process = None
+    process: Optional[Process] = None
+    client: Client
 
     @classmethod
     def setUpClass(cls):
@@ -32,31 +34,33 @@ class TestServer(unittest.TestCase):
         time.sleep(2)  # wait for server to start
 
     @classmethod
-    def tearDownClass(cls):
-        cls.process.terminate()
-        cls.process.join(1)
-        if cls.process.is_alive():
-            cls.process.kill()
+    def tearDownClass(cls) -> None:
+        if cls.process:
+            cls.process.terminate()
+            cls.process.join(1)
+            if cls.process.is_alive():
+                cls.process.kill()
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.client: Client = snap7.client.Client()
         self.client.connect(ip, rack, slot, tcpport)
 
-    def tearDown(self):
-        self.client.disconnect()
-        self.client.destroy()
+    def tearDown(self) -> None:
+        if self.client:
+            self.client.disconnect()
+            self.client.destroy()
 
     @unittest.skip("TODO: only first test used")
-    def test_read_prefill_db(self):
+    def test_read_prefill_db(self) -> None:
         data = self.client.db_read(0, 0, 7)
-        boolean = snap7.util.get_bool(data, 0, 0)
+        boolean = snap7.util.getters.get_bool(data, 0, 0)
         self.assertEqual(boolean, True)
-        integer = snap7.util.get_int(data, 1)
+        integer = snap7.util.getters.get_int(data, 1)
         self.assertEqual(integer, 128)
-        real = snap7.util.get_real(data, 3)
+        real = snap7.util.getters.get_real(data, 3)
         self.assertEqual(real, -128)
 
-    def test_read_booleans(self):
+    def test_read_booleans(self) -> None:
         data = self.client.db_read(0, 0, 1)
         self.assertEqual(False, get_bool(data, 0, 0))
         self.assertEqual(True, get_bool(data, 0, 1))
@@ -67,7 +71,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(False, get_bool(data, 0, 6))
         self.assertEqual(True, get_bool(data, 0, 7))
 
-    def test_read_small_int(self):
+    def test_read_small_int(self) -> None:
         data = self.client.db_read(0, 10, 4)
         value_1 = get_sint(data, 0)
         value_2 = get_sint(data, 1)
@@ -130,7 +134,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_dword(data, 24), 0xFFFFFFFF)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import logging
 
     logging.basicConfig()

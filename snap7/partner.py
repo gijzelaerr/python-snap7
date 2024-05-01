@@ -7,6 +7,7 @@ it, the peer to peer model sees two components with same rights, each of them
 can send data asynchronously. The only difference between them is the one who
 is requesting the connection.
 """
+
 import re
 import logging
 from ctypes import byref, c_int, c_int32, c_uint32, c_void_p
@@ -32,6 +33,7 @@ class Partner:
     """
     A snap7 partner.
     """
+
     _pointer: Optional[c_void_p]
 
     def __init__(self, active: bool = False):
@@ -126,8 +128,7 @@ class Partner:
         logger.debug(f"retreiving param number {number}")
         type_ = param_types[number]
         value = type_()
-        code = self._library.Par_GetParam(self._pointer, c_int(number),
-                                          byref(value))
+        code = self._library.Par_GetParam(self._pointer, c_int(number), byref(value))
         check_error(code)
         return value.value
 
@@ -141,10 +142,7 @@ class Partner:
         recv = c_uint32()
         send_errors = c_uint32()
         recv_errors = c_uint32()
-        result = self._library.Par_GetStats(self._pointer, byref(sent),
-                                            byref(recv),
-                                            byref(send_errors),
-                                            byref(recv_errors))
+        result = self._library.Par_GetStats(self._pointer, byref(sent), byref(recv), byref(send_errors), byref(recv_errors))
         check_error(result, "partner")
         return sent, recv, send_errors, recv_errors
 
@@ -169,11 +167,9 @@ class Partner:
 
     @error_wrap
     def set_param(self, number: int, value) -> int:
-        """Sets an internal Partner object parameter.
-        """
+        """Sets an internal Partner object parameter."""
         logger.debug(f"setting param number {number} to {value}")
-        return self._library.Par_SetParam(self._pointer, number,
-                                          byref(c_int(value)))
+        return self._library.Par_SetParam(self._pointer, number, byref(c_int(value)))
 
     def set_recv_callback(self) -> int:
         """
@@ -214,9 +210,9 @@ class Partner:
         if not re.match(ipv4, remote_ip):
             raise ValueError(f"{remote_ip} is invalid ipv4")
         logger.info(f"starting partnering from {local_ip} to {remote_ip}")
-        return self._library.Par_StartTo(self._pointer, local_ip.encode(), remote_ip.encode(),
-                                         word(local_tsap),
-                                         word(remote_tsap))
+        return self._library.Par_StartTo(
+            self._pointer, local_ip.encode(), remote_ip.encode(), word(local_tsap), word(remote_tsap)
+        )
 
     def stop(self) -> int:
         """

@@ -12,6 +12,8 @@ from unittest import mock
 
 
 import snap7
+import snap7.util.getters
+import snap7.util.setters
 from snap7 import util
 from snap7.common import check_error
 from snap7.server import mainloop
@@ -20,7 +22,7 @@ from snap7.types import S7AreaDB, S7DataItem, S7SZL, S7SZLList, buffer_type, buf
 
 logging.basicConfig(level=logging.WARNING)
 
-ip = '127.0.0.1'
+ip = "127.0.0.1"
 tcpport = 1102
 db_number = 1
 rack = 1
@@ -29,7 +31,6 @@ slot = 1
 
 @pytest.mark.client
 class TestClient(unittest.TestCase):
-
     process = None
 
     @classmethod
@@ -87,16 +88,16 @@ class TestClient(unittest.TestCase):
 
         # build and write test values
         test_value_1 = 129.5
-        test_bytes_1 = bytearray(struct.pack('>f', test_value_1))
+        test_bytes_1 = bytearray(struct.pack(">f", test_value_1))
         self.client.db_write(db, 0, test_bytes_1)
 
         test_value_2 = -129.5
-        test_bytes_2 = bytearray(struct.pack('>f', test_value_2))
+        test_bytes_2 = bytearray(struct.pack(">f", test_value_2))
         self.client.db_write(db, 4, test_bytes_2)
 
         test_value_3 = 123
         test_bytes_3 = bytearray([0, 0])
-        util.set_int(test_bytes_3, 0, test_value_3)
+        snap7.util.setters.set_int(test_bytes_3, 0, test_value_3)
         self.client.db_write(db, 8, test_bytes_3)
 
         test_values = [test_value_1, test_value_2, test_value_3]
@@ -131,15 +132,14 @@ class TestClient(unittest.TestCase):
             # create the buffer
             dataBuffer = ctypes.create_string_buffer(di.Amount)
             # get a pointer to the buffer
-            pBuffer = ctypes.cast(ctypes.pointer(dataBuffer),
-                                  ctypes.POINTER(ctypes.c_uint8))
+            pBuffer = ctypes.cast(ctypes.pointer(dataBuffer), ctypes.POINTER(ctypes.c_uint8))
             di.pData = pBuffer
 
         result, data_items = self.client.read_multi_vars(data_items)
 
         result_values = []
         # function to cast bytes to match data_types[] above
-        byte_to_value = [util.get_real, util.get_real, util.get_int]
+        byte_to_value = [snap7.util.getters.get_real, snap7.util.getters.get_real, snap7.util.getters.get_int]
 
         # unpack and test the result of each read
         for i in range(len(data_items)):
@@ -177,7 +177,7 @@ class TestClient(unittest.TestCase):
         # Test read_area with a DB
         area = Areas.DB
         dbnumber = 1
-        data = bytearray(b'\x11')
+        data = bytearray(b"\x11")
         self.client.write_area(area, dbnumber, start, data)
         res = self.client.read_area(area, dbnumber, start, amount)
         self.assertEqual(data, bytearray(res))
@@ -185,7 +185,7 @@ class TestClient(unittest.TestCase):
         # Test read_area with a TM
         area = Areas.TM
         dbnumber = 0
-        data = bytearray(b'\x12\x34')
+        data = bytearray(b"\x12\x34")
         self.client.write_area(area, dbnumber, start, data)
         res = self.client.read_area(area, dbnumber, start, amount)
         self.assertEqual(data, bytearray(res))
@@ -193,7 +193,7 @@ class TestClient(unittest.TestCase):
         # Test read_area with a CT
         area = Areas.CT
         dbnumber = 0
-        data = bytearray(b'\x13\x35')
+        data = bytearray(b"\x13\x35")
         self.client.write_area(area, dbnumber, start, data)
         res = self.client.read_area(area, dbnumber, start, amount)
         self.assertEqual(data, bytearray(res))
@@ -203,7 +203,7 @@ class TestClient(unittest.TestCase):
         area = Areas.DB
         dbnumber = 1
         start = 1
-        data = bytearray(b'\x11')
+        data = bytearray(b"\x11")
         self.client.write_area(area, dbnumber, start, data)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(data, bytearray(res))
@@ -211,7 +211,7 @@ class TestClient(unittest.TestCase):
         # Test write area with a TM
         area = Areas.TM
         dbnumber = 0
-        timer = bytearray(b'\x12\x00')
+        timer = bytearray(b"\x12\x00")
         res = self.client.write_area(area, dbnumber, start, timer)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
@@ -219,7 +219,7 @@ class TestClient(unittest.TestCase):
         # Test write area with a CT
         area = Areas.CT
         dbnumber = 0
-        timer = bytearray(b'\x13\x00')
+        timer = bytearray(b"\x13\x00")
         res = self.client.write_area(area, dbnumber, start, timer)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
@@ -228,24 +228,23 @@ class TestClient(unittest.TestCase):
         self.client.list_blocks()
 
     def test_list_blocks_of_type(self):
-        self.client.list_blocks_of_type('DB', 10)
+        self.client.list_blocks_of_type("DB", 10)
 
-        self.assertRaises(ValueError, self.client.list_blocks_of_type, 'NOblocktype', 10)
+        self.assertRaises(ValueError, self.client.list_blocks_of_type, "NOblocktype", 10)
 
     def test_get_block_info(self):
         """test Cli_GetAgBlockInfo"""
-        self.client.get_block_info('DB', 1)
+        self.client.get_block_info("DB", 1)
 
-        self.assertRaises(Exception, self.client.get_block_info,
-                          'NOblocktype', 10)
-        self.assertRaises(Exception, self.client.get_block_info, 'DB', 10)
+        self.assertRaises(Exception, self.client.get_block_info, "NOblocktype", 10)
+        self.assertRaises(Exception, self.client.get_block_info, "DB", 10)
 
     def test_get_cpu_state(self):
         """this tests the get_cpu_state function"""
         self.client.get_cpu_state()
 
     def test_set_session_password(self):
-        password = 'abcdefgh' # noqa: S105
+        password = "abcdefgh"  # noqa: S105
         self.client.set_session_password(password)
 
     def test_clear_session_password(self):
@@ -278,7 +277,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(0, result)
 
     def test_as_ab_read(self):
-        expected = b'\x10\x01'
+        expected = b"\x10\x01"
         self.client.ab_write(0, bytearray(expected))
 
         wordlen = WordLen.Byte
@@ -290,7 +289,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, bytearray(buffer))
 
     def test_as_ab_write(self):
-        data = b'\x01\x11'
+        data = b"\x01\x11"
         response = self.client.as_ab_write(0, bytearray(data))
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
@@ -321,8 +320,7 @@ class TestClient(unittest.TestCase):
         for param, value in values:
             self.client.set_param(param, value)
 
-        self.assertRaises(Exception, self.client.set_param,
-                          snap7.types.RemotePort, 1)
+        self.assertRaises(Exception, self.client.set_param, snap7.types.RemotePort, 1)
 
     def test_get_param(self):
         expected = (
@@ -338,9 +336,15 @@ class TestClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
-        non_client = (snap7.types.LocalPort, snap7.types.WorkInterval, snap7.types.MaxClients,
-                      snap7.types.BSendTimeout, snap7.types.BRecvTimeout, snap7.types.RecoveryTime,
-                      snap7.types.KeepAliveTime)
+        non_client = (
+            snap7.types.LocalPort,
+            snap7.types.WorkInterval,
+            snap7.types.MaxClients,
+            snap7.types.BSendTimeout,
+            snap7.types.BRecvTimeout,
+            snap7.types.RecoveryTime,
+            snap7.types.KeepAliveTime,
+        )
 
         # invalid param for client
         for param in non_client:
@@ -353,7 +357,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_ct_read(self):
         # Cli_AsCTRead
-        expected = b'\x10\x01'
+        expected = b"\x10\x01"
         self.client.ct_write(0, 1, bytearray(expected))
         type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
         buffer = (type_ * 1)()
@@ -363,7 +367,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_ct_write(self):
         # Cli_CTWrite
-        data = b'\x01\x11'
+        data = b"\x01\x11"
         response = self.client.as_ct_write(0, 1, bytearray(data))
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
@@ -372,7 +376,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_db_fill(self):
         filler = 31
-        expected = bytearray(filler.to_bytes(1, byteorder='big') * 100)
+        expected = bytearray(filler.to_bytes(1, byteorder="big") * 100)
         self.client.db_fill(1, filler)
         self.client.wait_as_completion(500)
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
@@ -382,7 +386,7 @@ class TestClient(unittest.TestCase):
         size = ctypes.c_int(buffer_size)
         self.client.as_db_get(db_number, _buffer, size)
         self.client.wait_as_completion(500)
-        result = bytearray(_buffer)[:size.value]
+        result = bytearray(_buffer)[: size.value]
         self.assertEqual(100, len(result))
 
     def test_as_db_read(self):
@@ -431,22 +435,22 @@ class TestClient(unittest.TestCase):
 
     def test_get_cpu_info(self):
         expected = (
-            ('ModuleTypeName', 'CPU 315-2 PN/DP'),
-            ('SerialNumber', 'S C-C2UR28922012'),
-            ('ASName', 'SNAP7-SERVER'),
-            ('Copyright', 'Original Siemens Equipment'),
-            ('ModuleName', 'CPU 315-2 PN/DP')
+            ("ModuleTypeName", "CPU 315-2 PN/DP"),
+            ("SerialNumber", "S C-C2UR28922012"),
+            ("ASName", "SNAP7-SERVER"),
+            ("Copyright", "Original Siemens Equipment"),
+            ("ModuleName", "CPU 315-2 PN/DP"),
         )
         cpuInfo = self.client.get_cpu_info()
         for param, value in expected:
-            self.assertEqual(getattr(cpuInfo, param).decode('utf-8'), value)
+            self.assertEqual(getattr(cpuInfo, param).decode("utf-8"), value)
 
     def test_db_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
         original = self.client._library.Cli_DBWrite
         self.client._library.Cli_DBWrite = mock_write
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.db_write(db_number=1, start=0, data=bytearray(data))
@@ -460,7 +464,7 @@ class TestClient(unittest.TestCase):
         mock_download.return_value = None
         original = self.client._library.Cli_Download
         self.client._library.Cli_Download = mock_download
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.download(block_num=db_number, data=bytearray(data))
@@ -478,7 +482,7 @@ class TestClient(unittest.TestCase):
         area = Areas.DB
         dbnumber = 1
         start = 1
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.write_area(area, dbnumber, start, bytearray(data))
@@ -494,7 +498,7 @@ class TestClient(unittest.TestCase):
         self.client._library.Cli_ABWrite = mock_write
 
         start = 1
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.ab_write(start=start, data=bytearray(data))
@@ -511,7 +515,7 @@ class TestClient(unittest.TestCase):
         self.client._library.Cli_AsABWrite = mock_write
 
         start = 1
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.as_ab_write(start=start, data=bytearray(data))
@@ -526,7 +530,7 @@ class TestClient(unittest.TestCase):
         mock_write.return_value = None
         original = self.client._library.Cli_AsDBWrite
         self.client._library.Cli_AsDBWrite = mock_write
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.db_write(db_number=1, start=0, data=bytearray(data))
@@ -541,7 +545,7 @@ class TestClient(unittest.TestCase):
         mock_download.return_value = None
         original = self.client._library.Cli_AsDownload
         self.client._library.Cli_AsDownload = mock_download
-        data = b'\xDE\xAD\xBE\xEF'
+        data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.as_download(block_num=db_number, data=bytearray(data))
@@ -594,7 +598,7 @@ class TestClient(unittest.TestCase):
                 res = self.client.wait_as_completion(timeout)
                 check_error(res)
             except RuntimeError as s7_err:
-                if not s7_err.args[0] == b'CLI : Job Timeout':
+                if not s7_err.args[0] == b"CLI : Job Timeout":
                     self.fail(f"While waiting another error appeared: {s7_err}")
                 # Wait for a thread to finish
                 time.sleep(0.1)
@@ -602,15 +606,17 @@ class TestClient(unittest.TestCase):
             except BaseException:
                 self.fail(f"While waiting another error appeared:>>>>>>>> {res}")
 
-        self.fail(f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
-                  f"a problem is existing in the method. Fail test.")
+        self.fail(
+            f"After {tries} tries, no timout could be envoked by snap7. Either tests are passing to fast or"
+            f"a problem is existing in the method. Fail test."
+        )
 
     def test_check_as_completion(self, timeout=5):
         # Cli_CheckAsCompletion
         check_status = ctypes.c_int(-1)
         pending_checked = False
         # preparing Server values
-        data = bytearray(b'\x01\xFF')
+        data = bytearray(b"\x01\xff")
         size = len(data)
         area = Areas.DB
         db = 1
@@ -631,8 +637,7 @@ class TestClient(unittest.TestCase):
         else:
             self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
         if pending_checked is False:
-            logging.warning("Pending was never reached, because Server was to fast,"
-                            " but request to server was successfull.")
+            logging.warning("Pending was never reached, because Server was to fast," " but request to server was successfull.")
 
     def test_as_read_area(self):
         amount = 1
@@ -641,7 +646,7 @@ class TestClient(unittest.TestCase):
         # Test read_area with a DB
         area = Areas.DB
         dbnumber = 1
-        data = bytearray(b'\x11')
+        data = bytearray(b"\x11")
         self.client.write_area(area, dbnumber, start, data)
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
@@ -652,7 +657,7 @@ class TestClient(unittest.TestCase):
         # Test read_area with a TM
         area = Areas.TM
         dbnumber = 0
-        data = bytearray(b'\x12\x34')
+        data = bytearray(b"\x12\x34")
         self.client.write_area(area, dbnumber, start, data)
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
@@ -663,7 +668,7 @@ class TestClient(unittest.TestCase):
         # Test read_area with a CT
         area = Areas.CT
         dbnumber = 0
-        data = bytearray(b'\x13\x35')
+        data = bytearray(b"\x13\x35")
         self.client.write_area(area, dbnumber, start, data)
         wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
         pusrdata = ctypes.byref(usrdata)
@@ -677,7 +682,7 @@ class TestClient(unittest.TestCase):
         dbnumber = 1
         size = 1
         start = 1
-        data = bytearray(b'\x11')
+        data = bytearray(b"\x11")
         wordlen, cdata = self.client._prepare_as_write_area(area, data)
         res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
         self.client.wait_as_completion(1000)
@@ -688,7 +693,7 @@ class TestClient(unittest.TestCase):
         area = Areas.TM
         dbnumber = 0
         size = 2
-        timer = bytearray(b'\x12\x00')
+        timer = bytearray(b"\x12\x00")
         wordlen, cdata = self.client._prepare_as_write_area(area, timer)
         res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
         self.client.wait_as_completion(1000)
@@ -699,7 +704,7 @@ class TestClient(unittest.TestCase):
         area = Areas.CT
         dbnumber = 0
         size = 2
-        timer = bytearray(b'\x13\x00')
+        timer = bytearray(b"\x13\x00")
         wordlen, cdata = self.client._prepare_as_write_area(area, timer)
         res = self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
         self.client.wait_as_completion(1000)
@@ -717,19 +722,19 @@ class TestClient(unittest.TestCase):
 
     def test_as_eb_write(self):
         # Cli_AsEBWrite
-        response = self.client.as_eb_write(0, 1, bytearray(b'\x00'))
+        response = self.client.as_eb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_full_upload(self):
         # Cli_AsFullUpload
-        self.client.as_full_upload('DB', 1)
+        self.client.as_full_upload("DB", 1)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_list_blocks_of_type(self):
         data = (ctypes.c_uint16 * 10)()
         count = ctypes.c_int()
-        self.client.as_list_blocks_of_type('DB', data, count)
+        self.client.as_list_blocks_of_type("DB", data, count)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_mb_read(self):
@@ -743,14 +748,14 @@ class TestClient(unittest.TestCase):
 
     def test_as_mb_write(self):
         # Cli_AsMBWrite
-        response = self.client.as_mb_write(0, 1, bytearray(b'\x00'))
+        response = self.client.as_mb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_read_szl(self):
         # Cli_AsReadSZL
-        expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
-        ssl_id = 0x011c
+        expected = b"S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00"
+        ssl_id = 0x011C
         index = 0x0005
         s7_szl = S7SZL()
         size = ctypes.c_int(ctypes.sizeof(s7_szl))
@@ -761,7 +766,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_read_szl_list(self):
         # Cli_AsReadSZLList
-        expected = b'\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01'
+        expected = b"\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01"
         szl_list = S7SZLList()
         items_count = ctypes.c_int(ctypes.sizeof(szl_list))
         self.client.as_read_szl_list(szl_list, items_count)
@@ -771,7 +776,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_tm_read(self):
         # Cli_AsMBRead
-        expected = b'\x10\x01'
+        expected = b"\x10\x01"
         wordlen = WordLen.Timer
         self.client.tm_write(0, 1, bytearray(expected))
         type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
@@ -782,7 +787,7 @@ class TestClient(unittest.TestCase):
 
     def test_as_tm_write(self):
         # Cli_AsMBWrite
-        data = b'\x10\x01'
+        data = b"\x10\x01"
         response = self.client.as_tm_write(0, 1, bytearray(data))
         result = self.client.wait_as_completion(500)
         self.assertEqual(0, response)
@@ -795,21 +800,21 @@ class TestClient(unittest.TestCase):
 
     def test_ct_read(self):
         # Cli_CTRead
-        data = b'\x10\x01'
+        data = b"\x10\x01"
         self.client.ct_write(0, 1, bytearray(data))
         result = self.client.ct_read(0, 1)
         self.assertEqual(data, result)
 
     def test_ct_write(self):
         # Cli_CTWrite
-        data = b'\x01\x11'
+        data = b"\x01\x11"
         self.assertEqual(0, self.client.ct_write(0, 1, bytearray(data)))
         self.assertRaises(ValueError, self.client.ct_write, 0, 2, bytes(1))
 
     def test_db_fill(self):
         # Cli_DBFill
         filler = 31
-        expected = bytearray(filler.to_bytes(1, byteorder='big') * 100)
+        expected = bytearray(filler.to_bytes(1, byteorder="big") * 100)
         self.client.db_fill(1, filler)
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
@@ -823,7 +828,7 @@ class TestClient(unittest.TestCase):
     def test_eb_write(self):
         # Cli_EBWrite
         self.client._library.Cli_EBWrite = mock.Mock(return_value=0)
-        response = self.client.eb_write(0, 1, bytearray(b'\x00'))
+        response = self.client.eb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
 
     def test_error_text(self):
@@ -831,9 +836,9 @@ class TestClient(unittest.TestCase):
         CPU_INVALID_PASSWORD = 0x01E00000
         CPU_INVLID_VALUE = 0x00D00000
         CANNOT_CHANGE_PARAM = 0x02600000
-        self.assertEqual('CPU : Invalid password', self.client.error_text(CPU_INVALID_PASSWORD))
-        self.assertEqual('CPU : Invalid value supplied', self.client.error_text(CPU_INVLID_VALUE))
-        self.assertEqual('CLI : Cannot change this param now', self.client.error_text(CANNOT_CHANGE_PARAM))
+        self.assertEqual("CPU : Invalid password", self.client.error_text(CPU_INVALID_PASSWORD))
+        self.assertEqual("CPU : Invalid value supplied", self.client.error_text(CPU_INVLID_VALUE))
+        self.assertEqual("CLI : Cannot change this param now", self.client.error_text(CANNOT_CHANGE_PARAM))
 
     def test_get_cp_info(self):
         # Cli_GetCpInfo
@@ -854,7 +859,7 @@ class TestClient(unittest.TestCase):
 
     def test_get_order_code(self):
         # Cli_GetOrderCode
-        expected = b'6ES7 315-2EH14-0AB0 '
+        expected = b"6ES7 315-2EH14-0AB0 "
         result = self.client.get_order_code()
         self.assertEqual(expected, result.OrderCode)
 
@@ -868,12 +873,14 @@ class TestClient(unittest.TestCase):
         self.assertEqual(0, result.anl_sch)
 
     def test_get_pg_block_info(self):
-        valid_db_block = b'pp\x01\x01\x05\n\x00c\x00\x00\x00t\x00\x00\x00\x00\x01\x8d\xbe)2\xa1\x01' \
-                         b'\x85V\x1f2\xa1\x00*\x00\x00\x00\x00\x00\x02\x01\x0f\x05c\x00#\x00\x00\x00' \
-                         b'\x11\x04\x10\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01' \
-                         b'\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x00' \
-                         b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' \
-                         b'\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+        valid_db_block = (
+            b"pp\x01\x01\x05\n\x00c\x00\x00\x00t\x00\x00\x00\x00\x01\x8d\xbe)2\xa1\x01"
+            b"\x85V\x1f2\xa1\x00*\x00\x00\x00\x00\x00\x02\x01\x0f\x05c\x00#\x00\x00\x00"
+            b"\x11\x04\x10\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01"
+            b"\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x01\x04\x00"
+            b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+            b"\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        )
         block_info = self.client.get_pg_block_info(bytearray(valid_db_block))
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
@@ -883,11 +890,11 @@ class TestClient(unittest.TestCase):
 
     def test_iso_exchange_buffer(self):
         # Cli_IsoExchangeBuffer
-        self.client.db_write(1, 0, bytearray(b'\x11'))
+        self.client.db_write(1, 0, bytearray(b"\x11"))
         # PDU read DB1 1.0 BYTE
-        data = b'\x32\x01\x00\x00\x01\x00\x00\x0e\x00\x00\x04\x01\x12\x0a\x10\x02\x00\x01\x00\x01\x84\x00\x00\x00'
+        data = b"\x32\x01\x00\x00\x01\x00\x00\x0e\x00\x00\x04\x01\x12\x0a\x10\x02\x00\x01\x00\x01\x84\x00\x00\x00"
         # PDU response
-        expected = bytearray(b'2\x03\x00\x00\x01\x00\x00\x02\x00\x05\x00\x00\x04\x01\xff\x04\x00\x08\x11')
+        expected = bytearray(b"2\x03\x00\x00\x01\x00\x00\x02\x00\x05\x00\x00\x04\x01\xff\x04\x00\x08\x11")
         self.assertEqual(expected, self.client.iso_exchange_buffer(bytearray(data)))
 
     def test_mb_read(self):
@@ -900,40 +907,40 @@ class TestClient(unittest.TestCase):
     def test_mb_write(self):
         # Cli_MBWrite
         self.client._library.Cli_MBWrite = mock.Mock(return_value=0)
-        response = self.client.mb_write(0, 1, bytearray(b'\x00'))
+        response = self.client.mb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
 
     def test_read_szl(self):
         # read_szl_partial_list
         expected_number_of_records = 10
         expected_length_of_record = 34
-        ssl_id = 0x001c
+        ssl_id = 0x001C
         response = self.client.read_szl(ssl_id)
         self.assertEqual(expected_number_of_records, response.Header.NDR)
         self.assertEqual(expected_length_of_record, response.Header.LengthDR)
         # read_szl_single_data_record
-        expected = b'S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00'
-        ssl_id = 0x011c
+        expected = b"S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00"
+        ssl_id = 0x011C
         index = 0x0005
         response = self.client.read_szl(ssl_id, index)
         result = bytes(response.Data)[2:26]
         self.assertEqual(expected, result)
         # read_szl_order_number
-        expected = b'6ES7 315-2EH14-0AB0 '
+        expected = b"6ES7 315-2EH14-0AB0 "
         ssl_id = 0x0111
         index = 0x0001
         response = self.client.read_szl(ssl_id, index)
         result = bytes(response.Data[2:22])
         self.assertEqual(expected, result)
         # read_szl_invalid_id
-        ssl_id = 0xffff
-        index = 0xffff
+        ssl_id = 0xFFFF
+        index = 0xFFFF
         self.assertRaises(RuntimeError, self.client.read_szl, ssl_id)
         self.assertRaises(RuntimeError, self.client.read_szl, ssl_id, index)
 
     def test_read_szl_list(self):
         # Cli_ReadSZLList
-        expected = b'\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01'
+        expected = b"\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01"
         result = self.client.read_szl_list()
         self.assertEqual(expected, result[:16])
 
@@ -943,14 +950,14 @@ class TestClient(unittest.TestCase):
 
     def test_tm_read(self):
         # Cli_TMRead
-        data = b'\x10\x01'
+        data = b"\x10\x01"
         self.client.tm_write(0, 1, bytearray(data))
         result = self.client.tm_read(0, 1)
         self.assertEqual(data, result)
 
     def test_tm_write(self):
         # Cli_TMWrite
-        data = b'\x10\x01'
+        data = b"\x10\x01"
         self.assertEqual(0, self.client.tm_write(0, 1, bytearray(data)))
         self.assertEqual(data, self.client.tm_read(0, 1))
         self.assertRaises(RuntimeError, self.client.tm_write, 0, 100, bytes(200))
@@ -962,7 +969,7 @@ class TestClient(unittest.TestCase):
         items = []
         areas = [Areas.DB, Areas.CT, Areas.TM]
         expected_list = []
-        for i in range(0, items_count):
+        for i in range(items_count):
             item = S7DataItem()
             item.Area = ctypes.c_int32(areas[i].value)
             wordlen = WordLen.Byte
@@ -970,7 +977,7 @@ class TestClient(unittest.TestCase):
             item.DBNumber = ctypes.c_int32(1)
             item.Start = ctypes.c_int32(0)
             item.Amount = ctypes.c_int32(4)
-            data = (i + 1).to_bytes(1, byteorder='big') * 4
+            data = (i + 1).to_bytes(1, byteorder="big") * 4
             array_class = ctypes.c_uint8 * len(data)
             cdata = array_class.from_buffer_copy(data)
             item.pData = ctypes.cast(cdata, ctypes.POINTER(array_class)).contents
@@ -982,7 +989,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected_list[1], self.client.ct_read(0, 2))
         self.assertEqual(expected_list[2], self.client.tm_read(0, 2))
 
-    @unittest.skipIf(platform.system() in ['Windows', 'Darwin'], 'Access Violation error')
+    @unittest.skipIf(platform.system() in ["Windows", "Darwin"], "Access Violation error")
     def test_set_as_callback(self):
         expected = b"\x11\x11"
         self.callback_counter = 0
@@ -1029,7 +1036,7 @@ class TestClientBeforeConnect(unittest.TestCase):
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self):
         # replace the function load_library with a mock
-        self.loadlib_patch = mock.patch('snap7.client.load_library')
+        self.loadlib_patch = mock.patch("snap7.client.load_library")
         self.loadlib_func = self.loadlib_patch.start()
 
         # have load_library return another mock
@@ -1047,7 +1054,7 @@ class TestLibraryIntegration(unittest.TestCase):
         snap7.client.Client()
         self.mocklib.Cli_Create.assert_called_once()
 
-    @mock.patch('snap7.client.byref')
+    @mock.patch("snap7.client.byref")
     def test_gc(self, byref_mock):
         client = snap7.client.Client()
         client._pointer = 10
@@ -1056,5 +1063,5 @@ class TestLibraryIntegration(unittest.TestCase):
         self.mocklib.Cli_Destroy.assert_called_once()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

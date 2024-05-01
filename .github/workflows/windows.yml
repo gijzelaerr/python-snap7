@@ -7,10 +7,10 @@ on:
 jobs:
   windows_wheel:
     continue-on-error: true
-    runs-on: windows-2019
+    runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7

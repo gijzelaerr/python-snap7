@@ -1,6 +1,7 @@
 """
 Snap7 client used for connection to a siemens 7 server.
 """
+
 import re
 import logging
 from ctypes import byref, create_string_buffer, sizeof
@@ -13,6 +14,7 @@ from ..types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
 from ..types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
 from ..types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
 from ..types import RemotePort, wordlen_to_ctypes, block_types
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,8 +70,7 @@ class Client:
         self.destroy()
 
     def create(self):
-        """Creates a SNAP7 client.
-        """
+        """Creates a SNAP7 client."""
         logger.info("creating snap7 client")
         self._library.Cli_Create.restype = c_void_p
         self._pointer = S7Object(self._library.Cli_Create())
@@ -190,9 +191,7 @@ class Client:
         logger.info(f"connecting to {address}:{tcpport} rack {rack} slot {slot}")
 
         self.set_param(RemotePort, tcpport)
-        return self._library.Cli_ConnectTo(
-            self._pointer, c_char_p(address.encode()),
-            c_int(rack), c_int(slot))
+        return self._library.Cli_ConnectTo(self._pointer, c_char_p(address.encode()), c_int(rack), c_int(slot))
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """Reads a part of a DB from a PLC
@@ -220,9 +219,7 @@ class Client:
 
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
-        result = (self._library.Cli_DBRead(
-            self._pointer, db_number, start, size,
-            byref(data)))
+        result = self._library.Cli_DBRead(self._pointer, db_number, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -250,8 +247,7 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
-        return self._library.Cli_DBWrite(self._pointer, db_number, start, size,
-                                         byref(cdata))
+        return self._library.Cli_DBWrite(self._pointer, db_number, start, size, byref(cdata))
 
     def delete(self, block_type: str, block_num: int) -> int:
         """Delete a block into AG.
@@ -283,11 +279,9 @@ class Client:
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
         block_type = block_types[_type]
-        result = self._library.Cli_FullUpload(self._pointer, block_type,
-                                              block_num, byref(_buffer),
-                                              byref(size))
+        result = self._library.Cli_FullUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
-        return bytearray(_buffer)[:size.value], size.value
+        return bytearray(_buffer)[: size.value], size.value
 
     def upload(self, block_num: int) -> bytearray:
         """Uploads a block from AG.
@@ -302,15 +296,14 @@ class Client:
             Buffer with the uploaded block.
         """
         logger.debug(f"db_upload block_num: {block_num}")
-        block_type = block_types['DB']
+        block_type = block_types["DB"]
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
-        result = self._library.Cli_Upload(self._pointer, block_type, block_num,
-                                          byref(_buffer), byref(size))
+        result = self._library.Cli_Upload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
 
         check_error(result, context="client")
-        logger.info(f'received {size} bytes')
+        logger.info(f"received {size} bytes")
         return bytearray(_buffer)
 
     @error_wrap
@@ -332,8 +325,7 @@ class Client:
         type_ = c_byte
         size = len(data)
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self._library.Cli_Download(self._pointer, block_num,
-                                          byref(cdata), size)
+        return self._library.Cli_Download(self._pointer, block_num, byref(cdata), size)
 
     def db_get(self, db_number: int) -> bytearray:
         """Uploads a DB from AG using DBRead.
@@ -357,35 +349,33 @@ class Client:
         """
         logger.debug(f"db_get db_number: {db_number}")
         _buffer = buffer_type()
-        result = self._library.Cli_DBGet(
-            self._pointer, db_number, byref(_buffer),
-            byref(c_int(buffer_size)))
+        result = self._library.Cli_DBGet(self._pointer, db_number, byref(_buffer), byref(c_int(buffer_size)))
         check_error(result, context="client")
         return bytearray(_buffer)
 
     def read_area(self, area: Areas, dbnumber: int, start: int, size: int) -> bytearray:
         """Reads a data area from a PLC
-        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+                With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
-        Args:
-            area: area to be read from.
-            dbnumber: number of the db to be read from. In case of Inputs, Marks or Outputs, this should be equal to 0.
-            start: byte index to start reading.
-            size: number of bytes to read.
+                Args:
+                    area: area to be read from.
+                    dbnumber: number of the db to be read from. In case of Inputs, Marks or Outputs, this should be equal to 0.
+                    start: byte index to start reading.
+                    size: number of bytes to read.
 
-        Returns:
-            Buffer with the data read.
+                Returns:
+                    Buffer with the data read.
 
-        Raises:
-            :obj:`ValueError`: if the area is not defined in the `Areas`
+                Raises:
+                    :obj:`ValueError`: if the area is not defined in the `Areas`
 
-        Example:
-            >>> import snap7
-            >>> client = snap7.client.Client()
-            >>> client.connect("192.168.0.1", 0, 0)
-            >>> buffer = client.read_area(Areas.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
-            >>> buffer
-            bytearray(b'\\x00\\x00')
+                Example:
+        import snap7.util.db            >>> import snap7
+                    >>> client = snap7.client.Client()
+                    >>> client.connect("192.168.0.1", 0, 0)
+                    >>> buffer = client.read_area(snap7.util.db.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
+                    >>> buffer
+                    bytearray(b'\\x00\\x00')
         """
         if area not in Areas:
             raise ValueError(f"{area} is not implemented in types")
@@ -399,10 +389,9 @@ class Client:
         logger.debug(
             f"reading area: {area.name} dbnumber: {dbnumber} start: {start} amount: {size} "
             f"wordlen: {wordlen.name}={wordlen.value}"
-            )
+        )
         data = (type_ * size)()
-        result = self._library.Cli_ReadArea(self._pointer, area.value, dbnumber, start,
-                                            size, wordlen.value, byref(data))
+        result = self._library.Cli_ReadArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -420,11 +409,13 @@ class Client:
             Snap7 error code.
 
         Exmaple:
+            >>> import snap7.util.db
             >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = bytearray([0b00000001])
-            >>> client.write_area(Areas.DB, 1, 10, buffer)  # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
+            # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
+            >>> client.write_area(snap7.util.DB, 1, 10, buffer)
         """
         if area == Areas.TM:
             wordlen = WordLen.Timer
@@ -434,11 +425,12 @@ class Client:
             wordlen = WordLen.Byte
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         size = len(data)
-        logger.debug(f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
-                     f"wordlen {wordlen.name}={wordlen.value} type: {type_}")
+        logger.debug(
+            f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
+            f"wordlen {wordlen.name}={wordlen.value} type: {type_}"
+        )
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self._library.Cli_WriteArea(self._pointer, area.value, dbnumber, start,
-                                           size, wordlen.value, byref(cdata))
+        return self._library.Cli_WriteArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
 
     def read_multi_vars(self, items) -> Tuple[int, S7DataItem]:
         """Reads different kind of variables from a PLC simultaneously.
@@ -449,8 +441,7 @@ class Client:
         Returns:
             Tuple with the return code from the snap7 library and the list of items.
         """
-        result = self._library.Cli_ReadMultiVars(self._pointer, byref(items),
-                                                 c_int32(len(items)))
+        result = self._library.Cli_ReadMultiVars(self._pointer, byref(items), c_int32(len(items)))
         check_error(result, context="client")
         return result, items
 
@@ -497,10 +488,7 @@ class Client:
 
         data = (c_uint16 * size)()
         count = c_int(size)
-        result = self._library.Cli_ListBlocksOfType(
-            self._pointer, _blocktype,
-            byref(data),
-            byref(count))
+        result = self._library.Cli_ListBlocksOfType(self._pointer, _blocktype, byref(data), byref(count))
 
         logger.debug(f"number of items found: {count}")
 
@@ -566,8 +554,7 @@ class Client:
         """
         if len(password) > 8:
             raise ValueError("Maximum password length is 8")
-        return self._library.Cli_SetSessionPassword(self._pointer,
-                                                    c_char_p(password.encode()))
+        return self._library.Cli_SetSessionPassword(self._pointer, c_char_p(password.encode()))
 
     @error_wrap
     def clear_session_password(self) -> int:
@@ -596,14 +583,12 @@ class Client:
         """
         if not re.match(ipv4, address):
             raise ValueError(f"{address} is invalid ipv4")
-        result = self._library.Cli_SetConnectionParams(self._pointer, address,
-                                                       c_uint16(local_tsap),
-                                                       c_uint16(remote_tsap))
+        result = self._library.Cli_SetConnectionParams(self._pointer, address, c_uint16(local_tsap), c_uint16(remote_tsap))
         if result != 0:
             raise ValueError("The parameter was invalid")
 
     def set_connection_type(self, connection_type: int):
-        """ Sets the connection resource type, i.e the way in which the Clients connects to a PLC.
+        """Sets the connection resource type, i.e the way in which the Clients connects to a PLC.
 
         Args:
             connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
@@ -612,8 +597,7 @@ class Client:
             :obj:`ValueError`: if the result of setting the connection type is
                 different than 0.
         """
-        result = self._library.Cli_SetConnectionType(self._pointer,
-                                                     c_uint16(connection_type))
+        result = self._library.Cli_SetConnectionType(self._pointer, c_uint16(connection_type))
         if result != 0:
             raise ValueError("The parameter was invalid")
 
@@ -645,8 +629,7 @@ class Client:
         type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
-        result = self._library.Cli_ABRead(self._pointer, start, size,
-                                          byref(data))
+        result = self._library.Cli_ABRead(self._pointer, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -665,8 +648,7 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
-        return self._library.Cli_ABWrite(
-            self._pointer, start, size, byref(cdata))
+        return self._library.Cli_ABWrite(self._pointer, start, size, byref(cdata))
 
     def as_ab_read(self, start: int, size: int, data) -> int:
         """Reads a part of IPU area from a PLC asynchronously.
@@ -680,8 +662,7 @@ class Client:
             Snap7 code.
         """
         logger.debug(f"ab_read: start: {start}: size {size}: ")
-        result = self._library.Cli_AsABRead(self._pointer, start, size,
-                                            byref(data))
+        result = self._library.Cli_AsABRead(self._pointer, start, size, byref(data))
         check_error(result, context="client")
         return result
 
@@ -700,13 +681,12 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
-        result = self._library.Cli_AsABWrite(
-            self._pointer, start, size, byref(cdata))
+        result = self._library.Cli_AsABWrite(self._pointer, start, size, byref(cdata))
         check_error(result, context="client")
         return result
 
     def as_compress(self, time: int) -> int:
-        """	Performs the Compress action asynchronously.
+        """Performs the Compress action asynchronously.
 
         Args:
             time: timeout.
@@ -930,12 +910,7 @@ class Client:
         check_error(result, context="client")
 
         return datetime(
-            year=buffer[5] + 1900,
-            month=buffer[4] + 1,
-            day=buffer[3],
-            hour=buffer[2],
-            minute=buffer[1],
-            second=buffer[0]
+            year=buffer[5] + 1900, month=buffer[4] + 1, day=buffer[3], hour=buffer[2], minute=buffer[1], second=buffer[0]
         )
 
     @error_wrap
@@ -975,7 +950,7 @@ class Client:
     def set_as_callback(self, pfn_clicompletion, p_usr):
         # Cli_SetAsCallback
         result = self._library.Cli_SetAsCallback(self._pointer, pfn_clicompletion, p_usr)
-        check_error(result, context='client')
+        check_error(result, context="client")
         return result
 
     def wait_as_completion(self, timeout: int) -> int:
@@ -1023,7 +998,7 @@ class Client:
         logger.debug(
             f"reading area: {area.name} dbnumber: {dbnumber} start: {start} amount: {size} "
             f"wordlen: {wordlen.name}={wordlen.value}"
-            )
+        )
         result = self._library.Cli_AsReadArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, pusrdata)
         check_error(result, context="client")
         return result
@@ -1056,8 +1031,9 @@ class Client:
             Snap7 code.
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
-        logger.debug(f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
-                     f"wordlen {wordlen} type: {type_}")
+        logger.debug(
+            f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: " f"wordlen {wordlen} type: {type_}"
+        )
         cdata = (type_ * len(pusrdata)).from_buffer_copy(pusrdata)
         res = self._library.Cli_AsWriteArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
         check_error(res, context="client")
@@ -1244,7 +1220,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        block_type = block_types['DB']
+        block_type = block_types["DB"]
         result = self._library.Cli_AsUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
@@ -1356,7 +1332,7 @@ class Client:
         text = create_string_buffer(buffer_size)
         response = self._library.Cli_ErrorText(error_code, byref(text), text_length)
         check_error(response)
-        result = bytearray(text)[:text_length.value].decode().strip('\x00')
+        result = bytearray(text)[: text_length.value].decode().strip("\x00")
         return result
 
     def get_cp_info(self) -> S7CpInfo:
@@ -1443,7 +1419,7 @@ class Client:
         cdata = (c_byte * len(data)).from_buffer_copy(data)
         response = self._library.Cli_IsoExchangeBuffer(self._pointer, byref(cdata), byref(size))
         check_error(response)
-        result = bytearray(cdata)[:size.value]
+        result = bytearray(cdata)[: size.value]
         return result
 
     def mb_read(self, start: int, size: int) -> bytearray:
@@ -1505,7 +1481,7 @@ class Client:
         items_count = c_int(sizeof(szl_list))
         response = self._library.Cli_ReadSZLList(self._pointer, byref(szl_list), byref(items_count))
         check_error(response, context="client")
-        result = bytearray(szl_list.List)[:items_count.value]
+        result = bytearray(szl_list.List)[: items_count.value]
         return result
 
     def set_plc_system_datetime(self) -> int:

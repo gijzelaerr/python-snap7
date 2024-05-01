@@ -1,6 +1,7 @@
 """
 Snap7 server used for mimicking a siemens 7 server.
 """
+
 import re
 import time
 import ctypes
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 def error_wrap(func):
     """Parses a s7 error code returned the decorated function."""
+
     def f(*args, **kw):
         code = func(*args, **kw)
         check_error(code, context="server")
@@ -61,20 +63,18 @@ class Server:
         len_ = 1024
         text_type = ctypes.c_char * len_
         text = text_type()
-        error = self.library.Srv_EventText(ctypes.byref(event),
-                                           ctypes.byref(text), len_)
+        error = self.library.Srv_EventText(ctypes.byref(event), ctypes.byref(text), len_)
         check_error(error)
-        return text.value.decode('ascii')
+        return text.value.decode("ascii")
 
     def create(self):
-        """Create the server.
-        """
+        """Create the server."""
         logger.info("creating server")
         self.library.Srv_Create.restype = S7Object
         self.pointer = S7Object(self.library.Srv_Create())
 
     @error_wrap
-    def register_area(self, area_code: int, index: int, userdata):
+    def register_area(self, area_code: int, index: int, userdata: ctypes.Array[ctypes.c_int8]):
         """Shares a memory area with the server. That memory block will be
             visible by the clients.
 
@@ -93,7 +93,7 @@ class Server:
     @error_wrap
     def set_events_callback(self, call_back: Callable[..., Any]) -> int:
         """Sets the user callback that the Server object has to call when an
-            event is created.
+        event is created.
         """
         logger.info("setting event callback")
         callback_wrap: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(SrvEvent), ctypes.c_int)
@@ -126,9 +126,7 @@ class Server:
             call_back: a callback function that accepts a pevent argument.
         """
         logger.info("setting read event callback")
-        callback_wrapper: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p,
-                                                                ctypes.POINTER(SrvEvent),
-                                                                ctypes.c_int)
+        callback_wrapper: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(SrvEvent), ctypes.c_int)
 
         def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: SrvEvent, size: int) -> int:
             """Wraps python function into a ctypes function
@@ -146,8 +144,7 @@ class Server:
             return 0
 
         self._read_callback = callback_wrapper(wrapper)
-        return self.library.Srv_SetReadEventsCallback(self.pointer,
-                                                      self._read_callback)
+        return self.library.Srv_SetReadEventsCallback(self.pointer, self._read_callback)
 
     def _set_log_callback(self):
         """Sets a callback that logs the events"""
@@ -180,7 +177,7 @@ class Server:
     def destroy(self):
         """Destroy the server."""
         logger.info("destroying server")
-        if self.library:
+        if hasattr(self, "library") and self.library:
             self.library.Srv_Destroy(ctypes.byref(self.pointer))
 
     def get_status(self) -> Tuple[str, str, int]:
@@ -194,16 +191,12 @@ class Server:
         server_status = ctypes.c_int()
         cpu_status = ctypes.c_int()
         clients_count = ctypes.c_int()
-        error = self.library.Srv_GetStatus(self.pointer, ctypes.byref(server_status),
-                                           ctypes.byref(cpu_status),
-                                           ctypes.byref(clients_count))
+        error = self.library.Srv_GetStatus(
+            self.pointer, ctypes.byref(server_status), ctypes.byref(cpu_status), ctypes.byref(clients_count)
+        )
         check_error(error)
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
-        return (
-            server_statuses[server_status.value],
-            cpu_statuses[cpu_status.value],
-            clients_count.value
-        )
+        return (server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value)
 
     @error_wrap
     def unregister_area(self, area_code: int, index: int):
@@ -280,8 +273,7 @@ class Server:
             Error code from snap7 library.
         """
         logger.debug(f"setting param number {number} to {value}")
-        return self.library.Srv_SetParam(self.pointer, number,
-                                         ctypes.byref(ctypes.c_int(value)))
+        return self.library.Srv_SetParam(self.pointer, number, ctypes.byref(ctypes.c_int(value)))
 
     @error_wrap
     def set_mask(self, kind: int, mask: int):
@@ -324,8 +316,7 @@ class Server:
         logger.debug("checking event queue")
         event = SrvEvent()
         ready = ctypes.c_int32()
-        code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event),
-                                          ctypes.byref(ready))
+        code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event), ctypes.byref(ready))
         check_error(code)
         if ready:
             logger.debug(f"one event ready: {event}")
@@ -344,8 +335,7 @@ class Server:
         """
         logger.debug(f"retreiving param number {number}")
         value = ctypes.c_int()
-        code = self.library.Srv_GetParam(self.pointer, number,
-                                         ctypes.byref(value))
+        code = self.library.Srv_GetParam(self.pointer, number, ctypes.byref(value))
         check_error(code)
         return value.value
 
@@ -396,9 +386,8 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
 
     if init_standard_values:
         ba = _init_standard_values()
-        DBdata = wordlen_to_ctypes[WordLen.Byte.value] * len(ba)
-        DBdata = DBdata.from_buffer(ba)
-        server.register_area(srvAreaDB, 0, DBdata)
+        userdata = wordlen_to_ctypes[WordLen.Byte.value] * len(ba)
+        server.register_area(srvAreaDB, 0, userdata.from_buffer(ba))
 
     server.start(tcpport=tcpport)
     while True:
@@ -412,7 +401,7 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
 
 
 def _init_standard_values() -> bytearray:
-    ''' Standard values
+    """Standard values
     * Boolean
     BYTE    BIT     VALUE
     0       0       True
@@ -472,55 +461,55 @@ def _init_standard_values() -> bytearray:
     BYTE    VALUE
     400     \x00\x00
     404     \x12\x34
-    408     \xAB\xCD
-    412     \xFF\xFF
+    408     \xab\xcd
+    412     \xff\xff
 
     * Double Word
     BYTE    VALUE
     500     \x00\x00\x00\x00
     508     \x12\x34\x56\x78
-    516     \x12\x34\xAB\xCD
-    524     \xFF\xFF\xFF\xFF
-    '''
+    516     \x12\x34\xab\xcd
+    524     \xff\xff\xff\xff
+    """
 
     ba = bytearray(1000)
     # 1. Bool 1 byte
     ba[0] = 0b10101010
 
     # 2. Small int 1 byte
-    ba[10:10 + 1] = struct.pack(">b", -128)
-    ba[11:11 + 1] = struct.pack(">b", 0)
-    ba[12:12 + 1] = struct.pack(">b", 100)
-    ba[13:13 + 1] = struct.pack(">b", 127)
+    ba[10 : 10 + 1] = struct.pack(">b", -128)
+    ba[11 : 11 + 1] = struct.pack(">b", 0)
+    ba[12 : 12 + 1] = struct.pack(">b", 100)
+    ba[13 : 13 + 1] = struct.pack(">b", 127)
 
     # 3. Unsigned small int 1 byte
-    ba[20:20 + 1] = struct.pack("B", 0)
-    ba[21:21 + 1] = struct.pack("B", 255)
+    ba[20 : 20 + 1] = struct.pack("B", 0)
+    ba[21 : 21 + 1] = struct.pack("B", 255)
 
     # 4. Int 2 bytes
-    ba[30:30 + 2] = struct.pack(">h", -32768)
-    ba[32:32 + 2] = struct.pack(">h", -1234)
-    ba[34:34 + 2] = struct.pack(">h", 0)
-    ba[36:36 + 2] = struct.pack(">h", 1234)
-    ba[38:38 + 2] = struct.pack(">h", 32767)
+    ba[30 : 30 + 2] = struct.pack(">h", -32768)
+    ba[32 : 32 + 2] = struct.pack(">h", -1234)
+    ba[34 : 34 + 2] = struct.pack(">h", 0)
+    ba[36 : 36 + 2] = struct.pack(">h", 1234)
+    ba[38 : 38 + 2] = struct.pack(">h", 32767)
 
     # 5. DInt 4 bytes
-    ba[40:40 + 4] = struct.pack(">i", -2147483648)
-    ba[44:44 + 4] = struct.pack(">i", -32768)
-    ba[48:48 + 4] = struct.pack(">i", 0)
-    ba[52:52 + 4] = struct.pack(">i", 32767)
-    ba[56:56 + 4] = struct.pack(">i", 2147483647)
+    ba[40 : 40 + 4] = struct.pack(">i", -2147483648)
+    ba[44 : 44 + 4] = struct.pack(">i", -32768)
+    ba[48 : 48 + 4] = struct.pack(">i", 0)
+    ba[52 : 52 + 4] = struct.pack(">i", 32767)
+    ba[56 : 56 + 4] = struct.pack(">i", 2147483647)
 
     # 6. Real 4 bytes
-    ba[60:60 + 4] = struct.pack(">f", -3.402823e38)
-    ba[64:64 + 4] = struct.pack(">f", -3.402823e12)
-    ba[68:68 + 4] = struct.pack(">f", -175494351e-38)
-    ba[72:72 + 4] = struct.pack(">f", -1.175494351e-12)
-    ba[76:76 + 4] = struct.pack(">f", 0.0)
-    ba[80:80 + 4] = struct.pack(">f", 1.175494351e-38)
-    ba[84:84 + 4] = struct.pack(">f", 1.175494351e-12)
-    ba[88:88 + 4] = struct.pack(">f", 3.402823466e12)
-    ba[92:92 + 4] = struct.pack(">f", 3.402823466e38)
+    ba[60 : 60 + 4] = struct.pack(">f", -3.402823e38)
+    ba[64 : 64 + 4] = struct.pack(">f", -3.402823e12)
+    ba[68 : 68 + 4] = struct.pack(">f", -175494351e-38)
+    ba[72 : 72 + 4] = struct.pack(">f", -1.175494351e-12)
+    ba[76 : 76 + 4] = struct.pack(">f", 0.0)
+    ba[80 : 80 + 4] = struct.pack(">f", 1.175494351e-38)
+    ba[84 : 84 + 4] = struct.pack(">f", 1.175494351e-12)
+    ba[88 : 88 + 4] = struct.pack(">f", 3.402823466e12)
+    ba[92 : 92 + 4] = struct.pack(">f", 3.402823466e38)
 
     # 7. String 1 byte per char
     string = "the brown fox jumps over the lazy dog"  # len = 37
@@ -530,15 +519,15 @@ def _init_standard_values() -> bytearray:
         ba[i] = ord(letter)
 
     # 8. WORD 4 bytes
-    ba[400:400 + 4] = b"\x00\x00"
-    ba[404:404 + 4] = b"\x12\x34"
-    ba[408:408 + 4] = b"\xAB\xCD"
-    ba[412:412 + 4] = b"\xFF\xFF"
+    ba[400 : 400 + 4] = b"\x00\x00"
+    ba[404 : 404 + 4] = b"\x12\x34"
+    ba[408 : 408 + 4] = b"\xab\xcd"
+    ba[412 : 412 + 4] = b"\xff\xff"
 
     # # 9 DWORD 8 bytes
-    ba[500:500 + 8] = b"\x00\x00\x00\x00"
-    ba[508:508 + 8] = b"\x12\x34\x56\x78"
-    ba[516:516 + 8] = b"\x12\x34\xAB\xCD"
-    ba[524:524 + 8] = b"\xFF\xFF\xFF\xFF"
+    ba[500 : 500 + 8] = b"\x00\x00\x00\x00"
+    ba[508 : 508 + 8] = b"\x12\x34\x56\x78"
+    ba[516 : 516 + 8] = b"\x12\x34\xab\xcd"
+    ba[524 : 524 + 8] = b"\xff\xff\xff\xff"
 
     return ba

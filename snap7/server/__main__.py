@@ -9,10 +9,9 @@ import logging
 
 try:
     import click
-except ImportError as e:
-    print(e)
+except ImportError:
     print("Try using 'pip install python-snap7[cli]'")
-    exit()
+    raise
 
 from snap7 import __version__
 from snap7.common import load_library

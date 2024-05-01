@@ -51,6 +51,7 @@ doc/_build/
 .venv/
 .venv3/
 venv/
+venv*/
 
 .DS_Store
 

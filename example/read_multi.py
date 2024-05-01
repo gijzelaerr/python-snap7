@@ -6,13 +6,12 @@ This was tested against a S7-319 CPU
 
 import ctypes
 
-import snap7
+import snap7.util.getters
 from snap7.common import check_error
 from snap7.types import S7DataItem, S7AreaDB, S7WLByte
-from snap7 import util
 
 client = snap7.client.Client()
-client.connect('10.100.5.2', 0, 2)
+client.connect("10.100.5.2", 0, 2)
 
 data_items = (S7DataItem * 3)()
 
@@ -44,8 +43,7 @@ for di in data_items:
     buffer = ctypes.create_string_buffer(di.Amount)
 
     # cast the pointer to the buffer to the required type
-    pBuffer = ctypes.cast(ctypes.pointer(buffer),
-                          ctypes.POINTER(ctypes.c_uint8))
+    pBuffer = ctypes.cast(ctypes.pointer(buffer), ctypes.POINTER(ctypes.c_uint8))
     di.pData = pBuffer
 
 result, data_items = client.read_multi_vars(data_items)
@@ -55,7 +53,7 @@ for di in data_items:
 
 result_values = []
 # function to cast bytes to match data_types[] above
-byte_to_value = [util.get_real, util.get_real, util.get_int]
+byte_to_value = [snap7.util.getters.get_real, snap7.util.getters.get_real, snap7.util.getters.get_int]
 
 # unpack and test the result of each read
 for i in range(0, len(data_items)):

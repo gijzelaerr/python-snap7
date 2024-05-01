@@ -1,5 +1,6 @@
 import time
 
+import snap7.util.db
 from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
@@ -19,7 +20,7 @@ to create the test code with.
 """)
 
 client = snap7.client.Client()
-client.connect('192.168.200.24', 0, 3)
+client.connect("192.168.200.24", 0, 3)
 
 
 def get_db1():
@@ -29,10 +30,10 @@ def get_db1():
     """
     all_data = client.db_get(1)
 
-    for i in range(400):                 # items in db
-        row_size = 130                   # size of item
+    for i in range(400):  # items in db
+        row_size = 130  # size of item
         index = i * row_size
-        offset = index + row_size        # end of row in db
+        offset = index + row_size  # end of row in db
         util.print_row(all_data[index:offset])
 
 
@@ -73,10 +74,9 @@ def show_row(x):
 
     while True:
         data = get_db_row(1, 4 + x * row_size, row_size)
-        row = snap7.util.DB_Row(data, rc_if_db_1_layout,
-                                layout_offset=4)
-        print('name', row['RC_IF_NAME'])
-        print(row['RC_IF_NAME'])
+        row = snap7.util.db.DB_Row(data, rc_if_db_1_layout, layout_offset=4)
+        print("name", row["RC_IF_NAME"])
+        print(row["RC_IF_NAME"])
         break
         # do some write action..
 
@@ -86,9 +86,7 @@ def show_row(x):
 def get_row(x):
     row_size = 126
     data = get_db_row(1, 4 + x * row_size, row_size)
-    row = snap7.util.DB_Row(
-        data, rc_if_db_1_layout,
-        layout_offset=4)
+    row = snap7.util.db.DB_Row(data, rc_if_db_1_layout, layout_offset=4)
     return row
 
 
@@ -108,14 +106,14 @@ def open_row(row):
     """
     # row['AutAct'] = 1
 
-    row['Occupied'] = 1
-    row['BatchName'] = 'test'
-    row['AutModLi'] = 1
-    row['ManModLi'] = 0
-    row['ModLiOp'] = 1
+    row["Occupied"] = 1
+    row["BatchName"] = "test"
+    row["AutModLi"] = 1
+    row["ManModLi"] = 0
+    row["ModLiOp"] = 1
 
-    row['CloseAut'] = 0
-    row['OpenAut'] = 1
+    row["CloseAut"] = 0
+    row["OpenAut"] = 1
 
     # row['StartAut'] = True
     # row['StopAut'] = False
@@ -128,10 +126,11 @@ def close_row(row):
     close a valve
     """
     # print row['RC_IF_NAME']
-    row['BatchName'] = ''
-    row['Occupied'] = 0
-    row['CloseAut'] = 1
-    row['OpenAut'] = 0
+    row["BatchName"] = ""
+    row["Occupied"] = 0
+    row["CloseAut"] = 1
+    row["OpenAut"] = 0
+
 
 # show_row(0)
 # show_row(1)
@@ -152,7 +151,7 @@ def open_and_close():
 
 
 def set_part_db(start, size, _bytearray):
-    data = _bytearray[start:start + size]
+    data = _bytearray[start : start + size]
     set_db_row(1, start, size, data)
 
 
@@ -166,7 +165,7 @@ def open_and_close_db1():
     t = time.time()
     db1 = make_item_db(1)
     all_data = db1._bytearray
-    print(f'row objects: {len(db1.index)}')
+    print(f"row objects: {len(db1.index)}")
 
     for x, (name, row) in enumerate(db1.index.items()):
         open_row(row)
@@ -174,9 +173,9 @@ def open_and_close_db1():
 
     t = time.time()
     write_data_db(1, all_data, 4 + 126 * 450)
-    print(f'opening all valves took: {time.time() - t}')
+    print(f"opening all valves took: {time.time() - t}")
 
-    print('sleep...')
+    print("sleep...")
     time.sleep(5)
     for x, (name, row) in enumerate(db1):
         close_row(row)
@@ -186,7 +185,7 @@ def open_and_close_db1():
 
     t = time.time()
     write_data_db(1, all_data, 4 + 126 * 450)
-    print(f'closing all valves took: {time.time() - t}')
+    print(f"closing all valves took: {time.time() - t}")
 
 
 def read_tank_db():
@@ -200,18 +199,18 @@ def make_item_db(db_number):
     t = time.time()
     all_data = client.db_upload(db_number)
 
-    print(f'getting all data took: {time.time() - t}')
+    print(f"getting all data took: {time.time() - t}")
 
-    db1 = snap7.util.DB(
-        db_number,              # the db we use
-        all_data,               # bytearray from the plc
-        rc_if_db_1_layout,      # layout specification
-        126,                    # size of the specification
-        450,                    # number of row's / specifocations
-        id_field='RC_IF_NAME',  # field we can use to make row
-        layout_offset=4,        # sometimes specification does not start a 0
-        db_offset=4             # At which point in all_data should we start
-                                # parsing for data
+    db1 = snap7.util.db.DB(
+        db_number,  # the db we use
+        all_data,  # bytearray from the plc
+        rc_if_db_1_layout,  # layout specification
+        126,  # size of the specification
+        450,  # number of row's / specifocations
+        id_field="RC_IF_NAME",  # field we can use to make row
+        layout_offset=4,  # sometimes specification does not start a 0
+        db_offset=4,  # At which point in all_data should we start
+        # parsing for data
     )
 
     return db1
@@ -219,21 +218,19 @@ def make_item_db(db_number):
 
 def make_tank_db():
     tank_data = client.db_upload(73)
-    db73 = snap7.util.DB(
-        73, tank_data, tank_rc_if_db_layout,
-        238, 2, id_field='RC_IF_NAME')
+    db73 = snap7.util.db.DB(73, tank_data, tank_rc_if_db_layout, 238, 2, id_field="RC_IF_NAME")
     return db73
 
 
 def print_tag():
     db1 = make_item_db(1)
-    print(db1['5V315'])
+    print(db1["5V315"])
 
 
 def print_open():
     db1 = make_item_db(1)
     for x, (name, row) in enumerate(db1):
-        if row['BatchName']:
+        if row["BatchName"]:
             print(row)
 
 

@@ -7,29 +7,29 @@ on:
 jobs:
   linux-build-aarch64:
     name: Build wheel for linux arm64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Build wheel
-        uses: ./.github/actions/manylinux_2_24_aarch64
+        uses: ./.github/actions/manylinux_2_28_aarch64
         with:
           script: ./.github/build_scripts/build_package.sh
-          platform: manylinux_2_24_aarch64
+          platform: manylinux_2_28_aarch64
           makefile: aarch64-linux-gnu.mk
           python: /opt/python/cp38-cp38/bin/python
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: wheelhouse/*.whl
@@ -37,22 +37,22 @@ jobs:
   test-wheels-aarch64:
     name: Testing wheel
     needs: linux-build-aarch64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: wheels
           path: wheelhouse
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
@@ -61,8 +61,8 @@ jobs:
           docker run --rm --interactive -v $PWD/tests:/tests \
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
-            "arm64v8/python:${{ matrix.python-version }}-buster" /bin/bash -s <<EOF
+            "arm64v8/python:${{ matrix.python-version }}-bullseye" /bin/bash -s <<EOF
           python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
-          python3 -m pip install pytest pytest-asyncio
+          python3 -m pip install pytest
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
           EOF

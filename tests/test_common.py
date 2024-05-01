@@ -13,7 +13,6 @@ file_name_test = "test.dll"
 
 @pytest.mark.common
 class TestCommon(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         pass
@@ -35,5 +34,5 @@ class TestCommon(unittest.TestCase):
         self.assertEqual(file, str(self.BASE_DIR / file_name_test))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

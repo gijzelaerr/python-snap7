@@ -5,7 +5,7 @@ from snap7.util import set_int, set_real, get_int, get_real, get_s5time
 
 
 client = snap7.client.Client()
-client.connect('192.168.100.100', 0, 2)
+client.connect("192.168.100.100", 0, 2)
 
 items = []
 
@@ -31,7 +31,7 @@ for i, value in enumerate(int_values):
 real = bytearray(4)
 set_real(real, 0, 42.5)
 
-counters = 0x2999.to_bytes(2, 'big') + 0x1111.to_bytes(2, 'big')
+counters = 0x2999.to_bytes(2, "big") + 0x1111.to_bytes(2, "big")
 
 item1 = set_data_item(area=Areas.DB, word_len=S7WLWord, db_number=1, start=0, amount=4, data=ints)
 item2 = set_data_item(area=Areas.DB, word_len=S7WLReal, db_number=1, start=8, amount=1, data=real)
@@ -47,6 +47,6 @@ db_int = client.db_read(1, 0, 8)
 db_real = client.db_read(1, 8, 12)
 db_counters = client.ct_read(2, 2)
 
-print(f'int values: {[get_int(db_int, i * 2) for i in range(4)]}')
-print(f'real value: {get_real(db_real, 0)}')
-print(f'counters: {get_s5time(counters, 0)}, {get_s5time(counters, 2)}')
+print(f"int values: {[get_int(db_int, i * 2) for i in range(4)]}")
+print(f"real value: {get_real(db_real, 0)}")
+print(f"counters: {get_s5time(counters, 0)}, {get_s5time(counters, 2)}")

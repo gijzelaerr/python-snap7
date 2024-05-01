@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-snap7"
-version = "1.3"
+version = "1.4"
 description = "Python wrapper for the snap7 library"
 authors = [
-    {name = "Gijs Molenaar", email = "gijs@pythonic.nl"},
+    {name = "Gijs Molenaar", email = "gijsmolenaar@gmail.com"},
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -17,32 +17,35 @@ classifiers = [
     "Intended Audience :: Manufacturing",
     "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 license = {text = "MIT"}
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 
 [project.urls]
 Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio", "mypy", "types-setuptools", "ruff"]
+test = ["pytest", "mypy", "types-setuptools", "ruff"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed", "lib/libsnap7.so", "lib/snap7.dll", "lib/libsnap7.dylib"]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["snap7"]
+
 [project.scripts]
 snap7-server = "snap7.server.__main__:main"
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 testpaths = ["tests"]
 markers =[
     "client",
@@ -58,23 +61,10 @@ markers =[
 ignore_missing_imports = true
 
 [tool.ruff]
-select = [
-    "E",
-    "F",
-    "UP",
-    "YTT",
-    "ASYNC",
-    "S",
-    "A",
-    "PIE",
-    "PYI",
-    "PTH",
-    "C90",
-]
-show-source = true
+output-format = "full"
 line-length = 130
-ignore = []
-target-version = "py37"
+target-version = "py38"
 
-[tool.ruff.mccabe]
-max-complexity = 10
+[lint]
+ignore = []
+mccabe.max-complexity = 10

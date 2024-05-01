@@ -9,7 +9,7 @@ from snap7.server import mainloop
 
 logging.basicConfig(level=logging.WARNING)
 
-ip = '127.0.0.1'
+ip = "127.0.0.1"
 tcpport = 1102
 db_number = 1
 rack = 0x1000
@@ -18,7 +18,6 @@ slot = 0x2000
 
 @pytest.mark.logo
 class TestLogoClient(unittest.TestCase):
-
     process = None
 
     @classmethod
@@ -70,8 +69,7 @@ class TestLogoClient(unittest.TestCase):
         for param, value in values:
             self.client.set_param(param, value)
 
-        self.assertRaises(Exception, self.client.set_param,
-                          snap7.types.RemotePort, 1)
+        self.assertRaises(Exception, self.client.set_param, snap7.types.RemotePort, 1)
 
     def test_get_param(self):
         expected = (
@@ -87,9 +85,15 @@ class TestLogoClient(unittest.TestCase):
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
-        non_client = (snap7.types.LocalPort, snap7.types.WorkInterval, snap7.types.MaxClients,
-                      snap7.types.BSendTimeout, snap7.types.BRecvTimeout, snap7.types.RecoveryTime,
-                      snap7.types.KeepAliveTime)
+        non_client = (
+            snap7.types.LocalPort,
+            snap7.types.WorkInterval,
+            snap7.types.MaxClients,
+            snap7.types.BSendTimeout,
+            snap7.types.BRecvTimeout,
+            snap7.types.RecoveryTime,
+            snap7.types.KeepAliveTime,
+        )
 
         # invalid param for client
         for param in non_client:
@@ -120,5 +124,5 @@ class TestClientBeforeConnect(unittest.TestCase):
             self.client.set_param(param, value)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

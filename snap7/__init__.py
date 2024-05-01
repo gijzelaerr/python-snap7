@@ -1,7 +1,8 @@
 """
 The Snap7 Python library.
 """
-import pkg_resources
+
+from importlib.metadata import version, PackageNotFoundError
 
 from . import client
 from . import common
@@ -11,9 +12,9 @@ from . import server
 from . import types
 from . import util
 
-__all__ = ['client', 'common', 'error', 'logo', 'server', 'types', 'util']
+__all__ = ["client", "common", "error", "logo", "server", "types", "util"]
 
 try:
-    __version__ = pkg_resources.require("python-snap7")[0].version
-except pkg_resources.DistributionNotFound:
+    __version__ = version("python-snap7")
+except PackageNotFoundError:
     __version__ = "0.0rc0"
