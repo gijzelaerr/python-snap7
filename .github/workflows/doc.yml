@@ -21,10 +21,10 @@ jobs:
       - name: Install dependencies
         run: |
           python3 -m venv venv
-          source venv/bin/activate
           venv/bin/pip install --upgrade pip
           venv/bin/pip install ".[doc]"
       - name: Run doc
         run: |
+          source venv/bin/activate
           cd doc
           make html

@@ -10,7 +10,7 @@ runs:
   steps:
       - name: Cache snap7-archive
         id: snap7-archive
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: snap7-full-1.4.2.7z
           key: ${{ inputs.snap7-archive-url }}
