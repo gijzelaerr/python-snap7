@@ -65,5 +65,5 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
           python3 -m pip install pytest
-          python3 -m pytest tests/test_client.py tests/test_mainloop.py tests/test_server.py tests/test_util.py 
+          python3 -m pytest tests/test_client.py tests/test_mainloop.py tests/test_server.py tests/test_util.py
           EOF
