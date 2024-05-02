@@ -40,7 +40,7 @@ snap7 = ["py.typed", "lib/libsnap7.so", "lib/snap7.dll", "lib/libsnap7.dylib"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["snap7"]
+include = ["snap7", "snap7.lib"]
 
 [project.scripts]
 snap7-server = "snap7.server.__main__:main"

@@ -61,7 +61,7 @@ jobs:
           docker run --rm --interactive -v $PWD/tests:/tests \
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
-            "arm64v8/python:${{ matrix.python-version }}-bullseye" /bin/bash -s <<EOF
+            "arm64v8/python:${{ matrix.python-version }}-bookworm" /bin/bash -s <<EOF
           python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
           python3 -m pip install pytest
           python -m pytest tests/ -m "server or util or client or mainloop or partner"
