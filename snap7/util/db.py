@@ -6,8 +6,9 @@ from logging import getLogger
 
 from snap7.client import Client
 from snap7.types import Areas
-from snap7.util import (
-    parse_specification,
+
+from snap7.util import parse_specification
+from snap7.util.getters import (
     get_bool,
     get_fstring,
     get_string,
@@ -31,6 +32,8 @@ from snap7.util import (
     get_char,
     get_wchar,
     get_dtl,
+)
+from snap7.util.setters import (
     set_bool,
     set_fstring,
     set_string,

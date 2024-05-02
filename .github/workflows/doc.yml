@@ -14,11 +14,17 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y python3-pip make
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.9
       - name: Install dependencies
         run: |
-          sudo python3 -m pip install --upgrade pip
-          sudo python3 -m pip install .[doc]
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install ".[doc,cli]"
       - name: Run doc
         run: |
+          source venv/bin/activate
           cd doc
           make html
