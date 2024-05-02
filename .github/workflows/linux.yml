@@ -32,5 +32,5 @@ jobs:
           venv/bin/pip install ".[test]"
       - name: Run pytest
         run: |
-          venv/bin/pytest -m "server or util or client or mainloop"
-          sudo venv/bin/pytest -m partner
+          venv/bin/pytest tests/test_client.py tests/test_mainloop.py tests/test_server.py tests/test_util.py  
+          sudo venv/bin/pytest tests/test_partner.py

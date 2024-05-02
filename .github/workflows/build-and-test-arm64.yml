@@ -62,7 +62,8 @@ jobs:
             -v $PWD/pyproject.toml:/pyproject.toml \
             -v $PWD/wheelhouse:/wheelhouse \
             "arm64v8/python:${{ matrix.python-version }}-bookworm" /bin/bash -s <<EOF
+          python3 -m pip install --upgrade pip
           python3 -m pip install $(ls wheelhouse/*_aarch64.whl)
           python3 -m pip install pytest
-          python -m pytest tests/ -m "server or util or client or mainloop or partner"
+          python3 -m pytest tests/test_client.py tests/test_mainloop.py tests/test_server.py tests/test_util.py 
           EOF
