@@ -1,6 +1,6 @@
 import re
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Union, Dict, Callable
 from logging import getLogger
 
@@ -46,7 +46,7 @@ from snap7.util import (
     set_sint,
     set_time,
 )
-from snap7.util.setters import set_lreal
+from snap7.util.setters import set_lreal, set_date
 
 logger = getLogger(__name__)
 
@@ -539,6 +539,9 @@ class DB_Row:
 
         if type_ == "TIME" and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
+
+        if type_ == "DATE" and isinstance(value, date):
+            return set_date(bytearray_, byte_index, value)
 
         raise ValueError
 
