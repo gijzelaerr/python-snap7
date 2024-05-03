@@ -47,6 +47,11 @@ class Client:
         >>> client.db_write(1, 0, data)
     """
 
+    _lib: Any  # since this is dynamically loaded from a DLL we don't have the type signature.
+    _read_callback = None
+    _callback = None
+    _s7_client: Optional[S7Object] = None
+
     def __init__(self, lib_location: Optional[str] = None):
         """Creates a new `Client` instance.
 
@@ -60,10 +65,8 @@ class Client:
             >>> client
             <snap7.client.Client object at 0x0000028B257128E0>
         """
-        self._read_callback = None
-        self._callback = None
-        self._pointer = None
-        self._library = load_library(lib_location)
+
+        self._lib = load_library(lib_location)
         self.create()
 
     def __del__(self):
@@ -72,8 +75,8 @@ class Client:
     def create(self):
         """Creates a SNAP7 client."""
         logger.info("creating snap7 client")
-        self._library.Cli_Create.restype = c_void_p
-        self._pointer = S7Object(self._library.Cli_Create())
+        self._lib.Cli_Create.restype = S7Object
+        self._s7_client = S7Object(self._lib.Cli_Create())
 
     def destroy(self) -> Optional[int]:
         """Destroys the Client object.
@@ -86,9 +89,9 @@ class Client:
             640719840
         """
         logger.info("destroying snap7 client")
-        if self._pointer:
-            return self._library.Cli_Destroy(byref(self._pointer))
-        self._pointer = None
+        if self._lib and self._s7_client:
+            return self._lib.Cli_Destroy(byref(self._s7_client))
+        self._s7_client = None
         return None
 
     def plc_stop(self) -> int:
@@ -98,7 +101,7 @@ class Client:
             Error code from snap7 library.
         """
         logger.info("stopping plc")
-        return self._library.Cli_PlcStop(self._pointer)
+        return self._lib.Cli_PlcStop(self._s7_client)
 
     def plc_cold_start(self) -> int:
         """Puts the CPU in RUN mode performing a COLD START.
@@ -107,7 +110,7 @@ class Client:
             Error code from snap7 library.
         """
         logger.info("cold starting plc")
-        return self._library.Cli_PlcColdStart(self._pointer)
+        return self._lib.Cli_PlcColdStart(self._s7_client)
 
     def plc_hot_start(self) -> int:
         """Puts the CPU in RUN mode performing an HOT START.
@@ -116,7 +119,7 @@ class Client:
             Error code from snap7 library.
         """
         logger.info("hot starting plc")
-        return self._library.Cli_PlcHotStart(self._pointer)
+        return self._lib.Cli_PlcHotStart(self._s7_client)
 
     def get_cpu_state(self) -> str:
         """Returns the CPU status (running/stopped)
@@ -132,7 +135,7 @@ class Client:
             'S7CpuStatusRun'
         """
         state = c_int(0)
-        self._library.Cli_GetPlcStatus(self._pointer, byref(state))
+        self._lib.Cli_GetPlcStatus(self._s7_client, byref(state))
         try:
             status_string = cpu_statuses[state.value]
         except KeyError:
@@ -156,7 +159,7 @@ class Client:
                 ModuleName: b'CPU 315-2 PN/DP'>
         """
         info = S7CpuInfo()
-        result = self._library.Cli_GetCpuInfo(self._pointer, byref(info))
+        result = self._lib.Cli_GetCpuInfo(self._s7_client, byref(info))
         check_error(result, context="client")
         return info
 
@@ -168,7 +171,7 @@ class Client:
             Error code from snap7 library.
         """
         logger.info("disconnecting snap7 client")
-        return self._library.Cli_Disconnect(self._pointer)
+        return self._lib.Cli_Disconnect(self._s7_client)
 
     @error_wrap
     def connect(self, address: str, rack: int, slot: int, tcpport: int = 102) -> int:
@@ -191,7 +194,7 @@ class Client:
         logger.info(f"connecting to {address}:{tcpport} rack {rack} slot {slot}")
 
         self.set_param(RemotePort, tcpport)
-        return self._library.Cli_ConnectTo(self._pointer, c_char_p(address.encode()), c_int(rack), c_int(slot))
+        return self._lib.Cli_ConnectTo(self._s7_client, c_char_p(address.encode()), c_int(rack), c_int(slot))
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """Reads a part of a DB from a PLC
@@ -219,7 +222,7 @@ class Client:
 
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
-        result = self._library.Cli_DBRead(self._pointer, db_number, start, size, byref(data))
+        result = self._lib.Cli_DBRead(self._s7_client, db_number, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -247,7 +250,7 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
-        return self._library.Cli_DBWrite(self._pointer, db_number, start, size, byref(cdata))
+        return self._lib.Cli_DBWrite(self._s7_client, db_number, start, size, byref(cdata))
 
     def delete(self, block_type: str, block_num: int) -> int:
         """Delete a block into AG.
@@ -261,7 +264,7 @@ class Client:
         """
         logger.info("deleting block")
         blocktype = block_types[block_type]
-        result = self._library.Cli_Delete(self._pointer, blocktype, block_num)
+        result = self._lib.Cli_Delete(self._s7_client, blocktype, block_num)
         return result
 
     def full_upload(self, _type: str, block_num: int) -> Tuple[bytearray, int]:
@@ -279,7 +282,7 @@ class Client:
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
         block_type = block_types[_type]
-        result = self._library.Cli_FullUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_FullUpload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return bytearray(_buffer)[: size.value], size.value
 
@@ -300,7 +303,7 @@ class Client:
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
-        result = self._library.Cli_Upload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_Upload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
 
         check_error(result, context="client")
         logger.info(f"received {size} bytes")
@@ -325,7 +328,7 @@ class Client:
         type_ = c_byte
         size = len(data)
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self._library.Cli_Download(self._pointer, block_num, byref(cdata), size)
+        return self._lib.Cli_Download(self._s7_client, block_num, byref(cdata), size)
 
     def db_get(self, db_number: int) -> bytearray:
         """Uploads a DB from AG using DBRead.
@@ -349,7 +352,7 @@ class Client:
         """
         logger.debug(f"db_get db_number: {db_number}")
         _buffer = buffer_type()
-        result = self._library.Cli_DBGet(self._pointer, db_number, byref(_buffer), byref(c_int(buffer_size)))
+        result = self._lib.Cli_DBGet(self._s7_client, db_number, byref(_buffer), byref(c_int(buffer_size)))
         check_error(result, context="client")
         return bytearray(_buffer)
 
@@ -391,7 +394,7 @@ class Client:
             f"wordlen: {wordlen.name}={wordlen.value}"
         )
         data = (type_ * size)()
-        result = self._library.Cli_ReadArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(data))
+        result = self._lib.Cli_ReadArea(self._s7_client, area.value, dbnumber, start, size, wordlen.value, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -430,7 +433,7 @@ class Client:
             f"wordlen {wordlen.name}={wordlen.value} type: {type_}"
         )
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self._library.Cli_WriteArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
+        return self._lib.Cli_WriteArea(self._s7_client, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
 
     def read_multi_vars(self, items) -> Tuple[int, S7DataItem]:
         """Reads different kind of variables from a PLC simultaneously.
@@ -441,7 +444,7 @@ class Client:
         Returns:
             Tuple with the return code from the snap7 library and the list of items.
         """
-        result = self._library.Cli_ReadMultiVars(self._pointer, byref(items), c_int32(len(items)))
+        result = self._lib.Cli_ReadMultiVars(self._s7_client, byref(items), c_int32(len(items)))
         check_error(result, context="client")
         return result, items
 
@@ -458,7 +461,7 @@ class Client:
         """
         logger.debug("listing blocks")
         blocksList = BlocksList()
-        result = self._library.Cli_ListBlocks(self._pointer, byref(blocksList))
+        result = self._lib.Cli_ListBlocks(self._s7_client, byref(blocksList))
         check_error(result, context="client")
         logger.debug(f"blocks: {blocksList}")
         return blocksList
@@ -488,7 +491,7 @@ class Client:
 
         data = (c_uint16 * size)()
         count = c_int(size)
-        result = self._library.Cli_ListBlocksOfType(self._pointer, _blocktype, byref(data), byref(count))
+        result = self._lib.Cli_ListBlocksOfType(self._s7_client, _blocktype, byref(data), byref(count))
 
         logger.debug(f"number of items found: {count}")
 
@@ -535,7 +538,7 @@ class Client:
 
         data = TS7BlockInfo()
 
-        result = self._library.Cli_GetAgBlockInfo(self._pointer, blocktype_, db_number, byref(data))
+        result = self._lib.Cli_GetAgBlockInfo(self._s7_client, blocktype_, db_number, byref(data))
         check_error(result, context="client")
         return data
 
@@ -554,7 +557,7 @@ class Client:
         """
         if len(password) > 8:
             raise ValueError("Maximum password length is 8")
-        return self._library.Cli_SetSessionPassword(self._pointer, c_char_p(password.encode()))
+        return self._lib.Cli_SetSessionPassword(self._s7_client, c_char_p(password.encode()))
 
     @error_wrap
     def clear_session_password(self) -> int:
@@ -563,7 +566,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        return self._library.Cli_ClearSessionPassword(self._pointer)
+        return self._lib.Cli_ClearSessionPassword(self._s7_client)
 
     def set_connection_params(self, address: str, local_tsap: int, remote_tsap: int) -> None:
         """Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
@@ -583,7 +586,7 @@ class Client:
         """
         if not re.match(ipv4, address):
             raise ValueError(f"{address} is invalid ipv4")
-        result = self._library.Cli_SetConnectionParams(self._pointer, address, c_uint16(local_tsap), c_uint16(remote_tsap))
+        result = self._lib.Cli_SetConnectionParams(self._s7_client, address, c_uint16(local_tsap), c_uint16(remote_tsap))
         if result != 0:
             raise ValueError("The parameter was invalid")
 
@@ -597,7 +600,7 @@ class Client:
             :obj:`ValueError`: if the result of setting the connection type is
                 different than 0.
         """
-        result = self._library.Cli_SetConnectionType(self._pointer, c_uint16(connection_type))
+        result = self._lib.Cli_SetConnectionType(self._s7_client, c_uint16(connection_type))
         if result != 0:
             raise ValueError("The parameter was invalid")
 
@@ -611,7 +614,7 @@ class Client:
             True if is connected, otherwise false.
         """
         connected = c_int32()
-        result = self._library.Cli_GetConnected(self._pointer, byref(connected))
+        result = self._lib.Cli_GetConnected(self._s7_client, byref(connected))
         check_error(result, context="client")
         return bool(connected)
 
@@ -629,7 +632,7 @@ class Client:
         type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
-        result = self._library.Cli_ABRead(self._pointer, start, size, byref(data))
+        result = self._lib.Cli_ABRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -648,7 +651,7 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
-        return self._library.Cli_ABWrite(self._pointer, start, size, byref(cdata))
+        return self._lib.Cli_ABWrite(self._s7_client, start, size, byref(cdata))
 
     def as_ab_read(self, start: int, size: int, data) -> int:
         """Reads a part of IPU area from a PLC asynchronously.
@@ -662,7 +665,7 @@ class Client:
             Snap7 code.
         """
         logger.debug(f"ab_read: start: {start}: size {size}: ")
-        result = self._library.Cli_AsABRead(self._pointer, start, size, byref(data))
+        result = self._lib.Cli_AsABRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
         return result
 
@@ -681,7 +684,7 @@ class Client:
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
-        result = self._library.Cli_AsABWrite(self._pointer, start, size, byref(cdata))
+        result = self._lib.Cli_AsABWrite(self._s7_client, start, size, byref(cdata))
         check_error(result, context="client")
         return result
 
@@ -694,7 +697,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsCompress(self._pointer, time)
+        result = self._lib.Cli_AsCompress(self._s7_client, time)
         check_error(result, context="client")
         return result
 
@@ -707,7 +710,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsCopyRamToRom(self._pointer, timeout)
+        result = self._lib.Cli_AsCopyRamToRom(self._s7_client, timeout)
         check_error(result, context="client")
         return result
 
@@ -722,7 +725,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsCTRead(self._pointer, start, amount, byref(data))
+        result = self._lib.Cli_AsCTRead(self._s7_client, start, amount, byref(data))
         check_error(result, context="client")
         return result
 
@@ -739,7 +742,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Counter.value]
         cdata = (type_ * amount).from_buffer_copy(data)
-        result = self._library.Cli_AsCTWrite(self._pointer, start, amount, byref(cdata))
+        result = self._lib.Cli_AsCTWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result, context="client")
         return result
 
@@ -753,7 +756,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsDBFill(self._pointer, db_number, filler)
+        result = self._lib.Cli_AsDBFill(self._s7_client, db_number, filler)
         check_error(result, context="client")
         return result
 
@@ -771,7 +774,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsDBGet(self._pointer, db_number, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsDBGet(self._s7_client, db_number, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
 
@@ -794,7 +797,7 @@ class Client:
             >>> result  # 0 = success
             0
         """
-        result = self._library.Cli_AsDBRead(self._pointer, db_number, start, size, byref(data))
+        result = self._lib.Cli_AsDBRead(self._s7_client, db_number, start, size, byref(data))
         check_error(result, context="client")
         return result
 
@@ -810,7 +813,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsDBWrite(self._pointer, db_number, start, size, byref(data))
+        result = self._lib.Cli_AsDBWrite(self._s7_client, db_number, start, size, byref(data))
         check_error(result, context="client")
         return result
 
@@ -830,7 +833,7 @@ class Client:
         size = len(data)
         type_ = c_byte * len(data)
         cdata = type_.from_buffer_copy(data)
-        result = self._library.Cli_AsDownload(self._pointer, block_num, byref(cdata), size)
+        result = self._lib.Cli_AsDownload(self._s7_client, block_num, byref(cdata), size)
         check_error(result)
         return result
 
@@ -844,7 +847,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        return self._library.Cli_Compress(self._pointer, time)
+        return self._lib.Cli_Compress(self._s7_client, time)
 
     @error_wrap
     def set_param(self, number: int, value: int) -> int:
@@ -859,7 +862,7 @@ class Client:
         """
         logger.debug(f"setting param number {number} to {value}")
         type_ = param_types[number]
-        return self._library.Cli_SetParam(self._pointer, number, byref(type_(value)))
+        return self._lib.Cli_SetParam(self._s7_client, number, byref(type_(value)))
 
     def get_param(self, number: int) -> int:
         """Reads an internal Server parameter.
@@ -873,7 +876,7 @@ class Client:
         logger.debug(f"retreiving param number {number}")
         type_ = param_types[number]
         value = type_()
-        code = self._library.Cli_GetParam(self._pointer, c_int(number), byref(value))
+        code = self._lib.Cli_GetParam(self._s7_client, c_int(number), byref(value))
         check_error(code)
         return value.value
 
@@ -890,7 +893,7 @@ class Client:
         logger.info("getting PDU length")
         requested_ = c_uint16()
         negotiated_ = c_uint16()
-        code = self._library.Cli_GetPduLength(self._pointer, byref(requested_), byref(negotiated_))
+        code = self._lib.Cli_GetPduLength(self._s7_client, byref(requested_), byref(negotiated_))
         check_error(code)
         return negotiated_.value
 
@@ -906,7 +909,7 @@ class Client:
         """
         type_ = c_int32
         buffer = (type_ * 9)()
-        result = self._library.Cli_GetPlcDateTime(self._pointer, byref(buffer))
+        result = self._lib.Cli_GetPlcDateTime(self._s7_client, byref(buffer))
         check_error(result, context="client")
 
         return datetime(
@@ -932,7 +935,7 @@ class Client:
         buffer[4] = dt.month - 1
         buffer[5] = dt.year - 1900
 
-        return self._library.Cli_SetPlcDateTime(self._pointer, byref(buffer))
+        return self._lib.Cli_SetPlcDateTime(self._s7_client, byref(buffer))
 
     def check_as_completion(self, p_value) -> int:
         """Method to check Status of an async request. Result contains if the check was successful, not the data value itself
@@ -943,7 +946,7 @@ class Client:
         Returns:
             Snap7 code. If 0 - Job is done successfully. If 1 - Job is either pending or contains s7errors
         """
-        result = self._library.Cli_CheckAsCompletion(self._pointer, p_value)
+        result = self._lib.Cli_CheckAsCompletion(self._s7_client, p_value)
         check_error(result, context="client")
         return result
 
@@ -973,7 +976,7 @@ class Client:
         self._callback = callback_wrap(wrapper)
         usrPtr = c_void_p()
 
-        result = self._library.Cli_SetAsCallback(self._pointer, self._callback, usrPtr)
+        result = self._lib.Cli_SetAsCallback(self._s7_client, self._callback, usrPtr)
         check_error(result, context="client")
         return result
 
@@ -987,7 +990,7 @@ class Client:
             Snap7 code.
         """
         # Cli_WaitAsCompletion
-        result = self._library.Cli_WaitAsCompletion(self._pointer, c_ulong(timeout))
+        result = self._lib.Cli_WaitAsCompletion(self._s7_client, c_ulong(timeout))
         check_error(result, context="client")
         return result
 
@@ -1023,7 +1026,7 @@ class Client:
             f"reading area: {area.name} dbnumber: {dbnumber} start: {start} amount: {size} "
             f"wordlen: {wordlen.name}={wordlen.value}"
         )
-        result = self._library.Cli_AsReadArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, pusrdata)
+        result = self._lib.Cli_AsReadArea(self._s7_client, area.value, dbnumber, start, size, wordlen.value, pusrdata)
         check_error(result, context="client")
         return result
 
@@ -1059,7 +1062,7 @@ class Client:
             f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: " f"wordlen {wordlen} type: {type_}"
         )
         cdata = (type_ * len(pusrdata)).from_buffer_copy(pusrdata)
-        res = self._library.Cli_AsWriteArea(self._pointer, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
+        res = self._lib.Cli_AsWriteArea(self._s7_client, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
         check_error(res, context="client")
         return res
 
@@ -1074,7 +1077,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsEBRead(self._pointer, start, size, byref(data))
+        result = self._lib.Cli_AsEBRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
         return result
 
@@ -1091,7 +1094,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
-        result = self._library.Cli_AsEBWrite(self._pointer, start, size, byref(cdata))
+        result = self._lib.Cli_AsEBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result, context="client")
         return result
 
@@ -1111,7 +1114,7 @@ class Client:
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
         block_type = block_types[_type]
-        result = self._library.Cli_AsFullUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsFullUpload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
 
@@ -1132,7 +1135,7 @@ class Client:
         _blocktype = block_types.get(blocktype)
         if not _blocktype:
             raise ValueError("The blocktype parameter was invalid")
-        result = self._library.Cli_AsListBlocksOfType(self._pointer, _blocktype, byref(data), byref(count))
+        result = self._lib.Cli_AsListBlocksOfType(self._s7_client, _blocktype, byref(data), byref(count))
         check_error(result, context="client")
         return result
 
@@ -1147,7 +1150,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsMBRead(self._pointer, start, size, byref(data))
+        result = self._lib.Cli_AsMBRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
         return result
 
@@ -1164,7 +1167,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
-        result = self._library.Cli_AsMBWrite(self._pointer, start, size, byref(cdata))
+        result = self._lib.Cli_AsMBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result, context="client")
         return result
 
@@ -1180,7 +1183,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsReadSZL(self._pointer, ssl_id, index, byref(s7_szl), byref(size))
+        result = self._lib.Cli_AsReadSZL(self._s7_client, ssl_id, index, byref(s7_szl), byref(size))
         check_error(result, context="client")
         return result
 
@@ -1194,7 +1197,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsReadSZLList(self._pointer, byref(szl_list), byref(items_count))
+        result = self._lib.Cli_AsReadSZLList(self._s7_client, byref(szl_list), byref(items_count))
         check_error(result, context="client")
         return result
 
@@ -1209,7 +1212,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_AsTMRead(self._pointer, start, amount, byref(data))
+        result = self._lib.Cli_AsTMRead(self._s7_client, start, amount, byref(data))
         check_error(result, context="client")
         return result
 
@@ -1226,7 +1229,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Timer.value]
         cdata = (type_ * amount).from_buffer_copy(data)
-        result = self._library.Cli_AsTMWrite(self._pointer, start, amount, byref(cdata))
+        result = self._lib.Cli_AsTMWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result)
         return result
 
@@ -1245,7 +1248,7 @@ class Client:
             Snap7 code.
         """
         block_type = block_types["DB"]
-        result = self._library.Cli_AsUpload(self._pointer, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsUpload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
 
@@ -1258,7 +1261,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_CopyRamToRom(self._pointer, timeout)
+        result = self._lib.Cli_CopyRamToRom(self._s7_client, timeout)
         check_error(result, context="client")
         return result
 
@@ -1274,7 +1277,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Counter.value]
         data = (type_ * amount)()
-        result = self._library.Cli_CTRead(self._pointer, start, amount, byref(data))
+        result = self._lib.Cli_CTRead(self._s7_client, start, amount, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -1291,7 +1294,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Counter.value]
         cdata = (type_ * amount).from_buffer_copy(data)
-        result = self._library.Cli_CTWrite(self._pointer, start, amount, byref(cdata))
+        result = self._lib.Cli_CTWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result)
         return result
 
@@ -1305,7 +1308,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_DBFill(self._pointer, db_number, filler)
+        result = self._lib.Cli_DBFill(self._s7_client, db_number, filler)
         check_error(result)
         return result
 
@@ -1321,7 +1324,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
-        result = self._library.Cli_EBRead(self._pointer, start, size, byref(data))
+        result = self._lib.Cli_EBRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -1338,7 +1341,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
-        result = self._library.Cli_EBWrite(self._pointer, start, size, byref(cdata))
+        result = self._lib.Cli_EBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result)
         return result
 
@@ -1354,7 +1357,7 @@ class Client:
         text_length = c_int(256)
         error_code = c_int32(error)
         text = create_string_buffer(buffer_size)
-        response = self._library.Cli_ErrorText(error_code, byref(text), text_length)
+        response = self._lib.Cli_ErrorText(error_code, byref(text), text_length)
         check_error(response)
         result = bytearray(text)[: text_length.value].decode().strip("\x00")
         return result
@@ -1366,7 +1369,7 @@ class Client:
             Structure object containing the CP information.
         """
         cp_info = S7CpInfo()
-        result = self._library.Cli_GetCpInfo(self._pointer, byref(cp_info))
+        result = self._lib.Cli_GetCpInfo(self._s7_client, byref(cp_info))
         check_error(result)
         return cp_info
 
@@ -1377,7 +1380,7 @@ class Client:
             Execution time value.
         """
         time = c_int32()
-        result = self._library.Cli_GetExecTime(self._pointer, byref(time))
+        result = self._lib.Cli_GetExecTime(self._s7_client, byref(time))
         check_error(result)
         return time.value
 
@@ -1388,7 +1391,7 @@ class Client:
             Returns the last error value.
         """
         last_error = c_int32()
-        result = self._library.Cli_GetLastError(self._pointer, byref(last_error))
+        result = self._lib.Cli_GetLastError(self._s7_client, byref(last_error))
         check_error(result)
         return last_error.value
 
@@ -1399,7 +1402,7 @@ class Client:
             Order of the code in a structure object.
         """
         order_code = S7OrderCode()
-        result = self._library.Cli_GetOrderCode(self._pointer, byref(order_code))
+        result = self._lib.Cli_GetOrderCode(self._s7_client, byref(order_code))
         check_error(result)
         return order_code
 
@@ -1415,7 +1418,7 @@ class Client:
         block_info = TS7BlockInfo()
         size = c_int(len(block))
         buffer = (c_byte * len(block)).from_buffer_copy(block)
-        result = self._library.Cli_GetPgBlockInfo(self._pointer, byref(buffer), byref(block_info), size)
+        result = self._lib.Cli_GetPgBlockInfo(self._s7_client, byref(buffer), byref(block_info), size)
         check_error(result)
         return block_info
 
@@ -1426,7 +1429,7 @@ class Client:
             Structure object with protection attributes.
         """
         s7_protection = S7Protection()
-        result = self._library.Cli_GetProtection(self._pointer, byref(s7_protection))
+        result = self._lib.Cli_GetProtection(self._s7_client, byref(s7_protection))
         check_error(result)
         return s7_protection
 
@@ -1441,7 +1444,7 @@ class Client:
         """
         size = c_int(len(data))
         cdata = (c_byte * len(data)).from_buffer_copy(data)
-        response = self._library.Cli_IsoExchangeBuffer(self._pointer, byref(cdata), byref(size))
+        response = self._lib.Cli_IsoExchangeBuffer(self._s7_client, byref(cdata), byref(size))
         check_error(response)
         result = bytearray(cdata)[: size.value]
         return result
@@ -1458,7 +1461,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         data = (type_ * size)()
-        result = self._library.Cli_MBRead(self._pointer, start, size, byref(data))
+        result = self._lib.Cli_MBRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -1475,7 +1478,7 @@ class Client:
         """
         type_ = wordlen_to_ctypes[WordLen.Byte.value]
         cdata = (type_ * size).from_buffer_copy(data)
-        result = self._library.Cli_MBWrite(self._pointer, start, size, byref(cdata))
+        result = self._lib.Cli_MBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result)
         return result
 
@@ -1491,7 +1494,7 @@ class Client:
         """
         s7_szl = S7SZL()
         size = c_int(sizeof(s7_szl))
-        result = self._library.Cli_ReadSZL(self._pointer, ssl_id, index, byref(s7_szl), byref(size))
+        result = self._lib.Cli_ReadSZL(self._s7_client, ssl_id, index, byref(s7_szl), byref(size))
         check_error(result, context="client")
         return s7_szl
 
@@ -1503,7 +1506,7 @@ class Client:
         """
         szl_list = S7SZLList()
         items_count = c_int(sizeof(szl_list))
-        response = self._library.Cli_ReadSZLList(self._pointer, byref(szl_list), byref(items_count))
+        response = self._lib.Cli_ReadSZLList(self._s7_client, byref(szl_list), byref(items_count))
         check_error(response, context="client")
         result = bytearray(szl_list.List)[: items_count.value]
         return result
@@ -1514,7 +1517,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._library.Cli_SetPlcSystemDateTime(self._pointer)
+        result = self._lib.Cli_SetPlcSystemDateTime(self._s7_client)
         check_error(result)
         return result
 
@@ -1531,7 +1534,7 @@ class Client:
         wordlen = WordLen.Timer
         type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * amount)()
-        result = self._library.Cli_TMRead(self._pointer, start, amount, byref(data))
+        result = self._lib.Cli_TMRead(self._s7_client, start, amount, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -1549,7 +1552,7 @@ class Client:
         wordlen = WordLen.Timer
         type_ = wordlen_to_ctypes[wordlen.value]
         cdata = (type_ * amount).from_buffer_copy(data)
-        result = self._library.Cli_TMWrite(self._pointer, start, amount, byref(cdata))
+        result = self._lib.Cli_TMWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result)
         return result
 
@@ -1567,6 +1570,6 @@ class Client:
         for item in items:
             data += bytearray(item)
         cdata = (S7DataItem * len(items)).from_buffer_copy(data)
-        result = self._library.Cli_WriteMultiVars(self._pointer, byref(cdata), items_count)
+        result = self._lib.Cli_WriteMultiVars(self._s7_client, byref(cdata), items_count)
         check_error(result, context="client")
         return result

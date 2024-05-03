@@ -176,11 +176,13 @@ class Server:
         logger.info("stopping server")
         return self._lib.Srv_Stop(self._s7_server)
 
-    def destroy(self):
+    def destroy(self) -> Optional[int]:
         """Destroy the server."""
         logger.info("destroying server")
-        if self._lib:
-            self._lib.Srv_Destroy(byref(self._s7_server))
+        if self._lib and self._s7_server:
+            return self._lib.Srv_Destroy(byref(self._s7_server))
+        self._s7_server = None
+        return None
 
     def get_status(self) -> Tuple[str, str, int]:
         """Reads the server status, the Virtual CPU status and the number of

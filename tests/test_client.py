@@ -447,8 +447,8 @@ class TestClient(unittest.TestCase):
     def test_db_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
-        original = self.client._library.Cli_DBWrite
-        self.client._library.Cli_DBWrite = mock_write
+        original = self.client._lib.Cli_DBWrite
+        self.client._lib.Cli_DBWrite = mock_write
         data = b"\xde\xad\xbe\xef"
 
         try:
@@ -456,13 +456,13 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_DBWrite = original
+            self.client._lib.Cli_DBWrite = original
 
     def test_download_with_byte_literal_does_not_throw(self):
         mock_download = mock.MagicMock()
         mock_download.return_value = None
-        original = self.client._library.Cli_Download
-        self.client._library.Cli_Download = mock_download
+        original = self.client._lib.Cli_Download
+        self.client._lib.Cli_Download = mock_download
         data = b"\xde\xad\xbe\xef"
 
         try:
@@ -470,13 +470,13 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_Download = original
+            self.client._lib.Cli_Download = original
 
     def test_write_area_with_byte_literal_does_not_throw(self):
         mock_writearea = mock.MagicMock()
         mock_writearea.return_value = None
-        original = self.client._library.Cli_WriteArea
-        self.client._library.Cli_WriteArea = mock_writearea
+        original = self.client._lib.Cli_WriteArea
+        self.client._lib.Cli_WriteArea = mock_writearea
 
         area = Areas.DB
         dbnumber = 1
@@ -488,13 +488,13 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_WriteArea = original
+            self.client._lib.Cli_WriteArea = original
 
     def test_ab_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
-        original = self.client._library.Cli_ABWrite
-        self.client._library.Cli_ABWrite = mock_write
+        original = self.client._lib.Cli_ABWrite
+        self.client._lib.Cli_ABWrite = mock_write
 
         start = 1
         data = b"\xde\xad\xbe\xef"
@@ -504,14 +504,14 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_ABWrite = original
+            self.client._lib.Cli_ABWrite = original
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_ab_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
-        original = self.client._library.Cli_AsABWrite
-        self.client._library.Cli_AsABWrite = mock_write
+        original = self.client._lib.Cli_AsABWrite
+        self.client._lib.Cli_AsABWrite = mock_write
 
         start = 1
         data = b"\xde\xad\xbe\xef"
@@ -521,14 +521,14 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_AsABWrite = original
+            self.client._lib.Cli_AsABWrite = original
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_write_with_byte_literal_does_not_throw(self):
         mock_write = mock.MagicMock()
         mock_write.return_value = None
-        original = self.client._library.Cli_AsDBWrite
-        self.client._library.Cli_AsDBWrite = mock_write
+        original = self.client._lib.Cli_AsDBWrite
+        self.client._lib.Cli_AsDBWrite = mock_write
         data = b"\xde\xad\xbe\xef"
 
         try:
@@ -536,14 +536,14 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_AsDBWrite = original
+            self.client._lib.Cli_AsDBWrite = original
 
     @unittest.skip("TODO: not yet fully implemented")
     def test_as_download_with_byte_literal_does_not_throw(self):
         mock_download = mock.MagicMock()
         mock_download.return_value = None
-        original = self.client._library.Cli_AsDownload
-        self.client._library.Cli_AsDownload = mock_download
+        original = self.client._lib.Cli_AsDownload
+        self.client._lib.Cli_AsDownload = mock_download
         data = b"\xde\xad\xbe\xef"
 
         try:
@@ -551,7 +551,7 @@ class TestClient(unittest.TestCase):
         except TypeError as e:
             self.fail(str(e))
         finally:
-            self.client._library.Cli_AsDownload = original
+            self.client._lib.Cli_AsDownload = original
 
     def test_get_plc_time(self):
         self.assertAlmostEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime(), delta=timedelta(seconds=1))
@@ -819,14 +819,14 @@ class TestClient(unittest.TestCase):
 
     def test_eb_read(self):
         # Cli_EBRead
-        self.client._library.Cli_EBRead = mock.Mock(return_value=0)
+        self.client._lib.Cli_EBRead = mock.Mock(return_value=0)
         response = self.client.eb_read(0, 1)
         self.assertTrue(isinstance(response, bytearray))
         self.assertEqual(1, len(response))
 
     def test_eb_write(self):
         # Cli_EBWrite
-        self.client._library.Cli_EBWrite = mock.Mock(return_value=0)
+        self.client._lib.Cli_EBWrite = mock.Mock(return_value=0)
         response = self.client.eb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
 
@@ -898,14 +898,14 @@ class TestClient(unittest.TestCase):
 
     def test_mb_read(self):
         # Cli_MBRead
-        self.client._library.Cli_MBRead = mock.Mock(return_value=0)
+        self.client._lib.Cli_MBRead = mock.Mock(return_value=0)
         response = self.client.mb_read(0, 10)
         self.assertTrue(isinstance(response, bytearray))
         self.assertEqual(10, len(response))
 
     def test_mb_write(self):
         # Cli_MBWrite
-        self.client._library.Cli_MBWrite = mock.Mock(return_value=0)
+        self.client._lib.Cli_MBWrite = mock.Mock(return_value=0)
         response = self.client.mb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
 
