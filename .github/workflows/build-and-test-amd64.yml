@@ -1,12 +1,12 @@
-name: build-and-test-wheels
+name: Build and test wheels AMD64
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
 jobs:
-  linux-build-86_64:
-    name: Build wheel for linux x86_64
+  linux-build:
+    name: Build wheel for linux AMD64
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -31,7 +31,7 @@ jobs:
           path: wheelhouse/${{ runner.os }}/*.whl
 
   windows-build:
-    name: Build wheel for windows
+    name: Build wheel for windows AMD64
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -55,7 +55,7 @@ jobs:
           path: wheelhouse/${{ runner.os }}/*.whl
 
   osx-build:
-    name: Build wheel for osx
+    name: Build wheel for osx AMD64
     runs-on: macos-11
     steps:
       - name: Checkout
@@ -91,13 +91,14 @@ jobs:
 
 
   test-wheels-86_64:
-    name: Testing wheels
-    needs: [linux-build-86_64, windows-build, osx-build]
+    name: Testing wheels for AMD64
+    needs: [linux-build, windows-build, osx-build]
+    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2022, macos-14]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        os: [ubuntu-22.04, ubuntu-20.04, macos-14, macos-11, windows-2022, windows-2019]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

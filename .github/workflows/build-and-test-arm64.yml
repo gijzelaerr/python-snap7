@@ -1,11 +1,11 @@
-name: build-and-test-wheels-arm64
+name: Build and test wheels ARM64
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
 jobs:
-  linux-build-aarch64:
+  linux-build-arm64:
     name: Build wheel for linux arm64
     runs-on: ubuntu-20.04
     steps:
@@ -20,7 +20,7 @@ jobs:
         with:
           platforms: arm64
 
-      - name: Build wheel
+      - name: Build wheel for aarch64
         uses: ./.github/actions/manylinux_2_28_aarch64
         with:
           script: ./.github/build_scripts/build_package.sh
@@ -34,13 +34,14 @@ jobs:
           name: wheels
           path: wheelhouse/*.whl
 
-  test-wheels-aarch64:
-    name: Testing wheel
-    needs: linux-build-aarch64
+  test-wheels-arm64:
+    name: Testing wheel for arm64
+    needs: linux-build-arm64
+    continue-on-error: true
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

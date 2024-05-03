@@ -6,7 +6,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-20.04, macos-14, macos-11, windows-2022, windows-2019]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,27 +16,20 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install pytest
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pytest
-
       - name: install python-snap7
-        run: python3 -m pip install -i https://test.pypi.org/simple/ python-snap7
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install -i https://test.pypi.org/simple/ python-snap7[test]
 
       - name: Run pytest
         run: |
-          which pytest
-          pytest -m "server or util or client or mainloop"
+          venv/bin/pytest -m "server or util or client or mainloop"
 
-      - name: Run tests required sudo
-        if: ${{ runner.os == 'Linux'}}
-        run: sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest -m partner
+      - name: Run tests required sudo on Linux and macOS
+        if: ${{ runner.os == 'Linux' || runner.os == 'macOS'}}
+        run: sudo venv/bin/pytest -m partner
 
-      - name: Run tests required sudo
-        if: ${{ runner.os == 'macOS'}}
-        run: sudo pytest -m partner
-
-      - name: Run tests required sudo
+      - name: On windows we don't need sudo
         if: ${{ runner.os == 'Windows'}}
-        run: pytest -m partner
+        run: venv/bin/pytest  -m partner
