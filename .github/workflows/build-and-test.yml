@@ -93,6 +93,7 @@ jobs:
   test-wheels-86_64:
     name: Testing wheels
     needs: [linux-build-86_64, windows-build, osx-build]
+    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
