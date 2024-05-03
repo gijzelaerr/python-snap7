@@ -27,8 +27,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
-          path: wheelhouse/*/*.whl
+          name: wheels-${{ runner.os }}
+          path: wheelhouse/${{ runner.os }}/*.whl
 
   windows-build:
     name: Build wheel for windows AMD64
@@ -44,15 +44,15 @@ jobs:
         run: |
           mkdir -p snap7/lib/
           Copy-Item .\snap7-full-1.4.2\release\Windows\Win64\snap7.dll .\snap7\lib
-          python3 -m build . --wheel -C="--plat-name=win_amd64"
+          python3 -m build . --wheel -C="--build-option=--plat-name=win_amd64"
           mkdir -p wheelhouse/${{ runner.os }}/
           cp dist/*.whl wheelhouse/${{ runner.os }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
-          path: wheelhouse/*/*.whl
+          name: wheels-${{ runner.os }}
+          path: wheelhouse/${{ runner.os }}/*.whl
 
   osx-build:
     name: Build wheel for osx AMD64
@@ -78,7 +78,7 @@ jobs:
 
       - name: Build wheel
         run: |
-          python3 -m build . --wheel -C="--plat-name=macosx_10_9_universal2"
+          python3 -m build . --wheel -C="--build-option=--plat-name=macosx_10_9_universal2"
           mkdir -p wheelhouse/${{ runner.os }}/
           cp dist/*.whl wheelhouse/${{ runner.os }}/
 
@@ -86,8 +86,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
-          path: wheelhouse/*/*.whl
+          name: wheels-${{ runner.os }}
+          path: wheelhouse/${{ runner.os }}/*.whl
 
 
   test-wheels-86_64:
@@ -116,11 +116,11 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wheels
+          name: wheels-${{ runner.os }}
           path: wheelhouse
 
       - name: Install python-snap7
-        run: python3 -m pip install $(ls wheelhouse/${{ runner.os }}/*.whl)
+        run: python3 -m pip install $(ls wheelhouse/*.whl)
 
       - name: Run pytest
         run: |
