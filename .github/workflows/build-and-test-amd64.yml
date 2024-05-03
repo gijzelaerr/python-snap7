@@ -108,11 +108,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install pytest
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pytest
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -120,21 +115,20 @@ jobs:
           path: wheelhouse
 
       - name: Install python-snap7
-        run: python3 -m pip install $(ls wheelhouse/*.whl)
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install pytest
+          venv/bin/pip install $(ls wheelhouse/*.whl)
 
       - name: Run pytest
         run: |
-          which pytest
-          pytest -m "server or util or client or mainloop"
+          venv/bin/pytest -m "server or util or client or mainloop"
 
-      - name: Run tests required sudo
-        if: ${{ runner.os == 'Linux'}}
-        run: sudo /opt/hostedtoolcache/Python/${{ matrix.python-version }}*/x64/bin/pytest -m partner
+      - name: Run tests required sudo on Linux and macOS
+        if: ${{ runner.os == 'Linux' || runner.os == 'macOS'}}
+        run: sudo venv/bin/pytest -m partner
 
-      - name: Run tests required sudo
-        if: ${{ runner.os == 'macOS'}}
-        run: sudo pytest -m partner
-
-      - name: Run tests required sudo
+      - name: On windows we don't need sudo
         if: ${{ runner.os == 'Windows'}}
-        run: pytest -m partner
+        run: venv/bin/pytest  -m partner
