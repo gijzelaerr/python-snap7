@@ -4,10 +4,10 @@ Snap7 client used for connection to a siemens 7 server.
 
 import re
 import logging
-from ctypes import byref, create_string_buffer, sizeof
+from ctypes import CFUNCTYPE, byref, create_string_buffer, sizeof
 from ctypes import Array, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c_void_p
 from datetime import datetime
-from typing import List, Optional, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 from ..common import check_error, ipv4, load_library
 from ..types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
@@ -947,9 +947,29 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def set_as_callback(self, pfn_clicompletion, p_usr):
-        # Cli_SetAsCallback
-        result = self._library.Cli_SetAsCallback(self._pointer, pfn_clicompletion, p_usr)
+    def set_as_callback(self, call_back: Callable[..., Any]) -> int:
+        logger.info("setting event callback")
+        callback_wrap: Callable[..., Any] = CFUNCTYPE(None, c_void_p, c_int, c_int)
+
+        def wrapper(usrptr: Optional[c_void_p], op_code: int, op_result: int) -> int:
+            """Wraps python function into a ctypes function
+
+            Args:
+                usrptr: not used
+                op_code:
+                op_result:
+
+            Returns:
+                Should return an int
+            """
+            logger.info(f"callback event: op_code: {op_code} op_result: {op_result}")
+            call_back(op_code, op_result)
+            return 0
+
+        self._callback = callback_wrap(wrapper)
+        usrPtr = c_void_p()
+
+        result = self._library.Cli_SetAsCallback(self._pointer, self._callback, usrPtr)
         check_error(result, context="client")
         return result
 

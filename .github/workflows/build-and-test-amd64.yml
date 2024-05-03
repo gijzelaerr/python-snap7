@@ -93,7 +93,6 @@ jobs:
   test-wheels-unix-86_64:
     name: Testing wheels for AMD64 unix
     needs: [linux-build, osx-build]
-    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

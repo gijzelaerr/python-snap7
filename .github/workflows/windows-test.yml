@@ -6,7 +6,6 @@ on:
     branches: [master]
 jobs:
   windows_wheel:
-    continue-on-error: true
     strategy:
       matrix:
         runs-on: [ "windows-2022", "windows-2019" ]
