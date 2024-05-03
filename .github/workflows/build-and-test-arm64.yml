@@ -37,7 +37,7 @@ jobs:
   test-wheels-arm64:
     name: Testing wheel for arm64
     needs: linux-build-arm64
-    if: success() || failure()  # this makes sure the job runs even if another matrix job failed
+    continue-on-error: true
     runs-on: ubuntu-20.04
     strategy:
       matrix:

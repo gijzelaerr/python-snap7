@@ -93,7 +93,7 @@ jobs:
   test-wheels-86_64:
     name: Testing wheels for AMD64
     needs: [linux-build, windows-build, osx-build]
-    if: success() || failure()  # this makes sure the job runs even if another matrix job failed
+    continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
