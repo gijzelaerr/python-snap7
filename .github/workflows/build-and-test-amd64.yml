@@ -90,14 +90,14 @@ jobs:
           path: wheelhouse/${{ runner.os }}/*.whl
 
 
-  test-wheels-86_64:
-    name: Testing wheels for AMD64
-    needs: [linux-build, windows-build, osx-build]
+  test-wheels-unix-86_64:
+    name: Testing wheels for AMD64 unix
+    needs: [linux-build, osx-build]
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, ubuntu-20.04, macos-14, macos-11, windows-2022, windows-2019]
+        os: [ubuntu-22.04, ubuntu-20.04, macos-14, macos-11]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
@@ -116,19 +116,47 @@ jobs:
 
       - name: Install python-snap7
         run: |
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install pytest
-          venv/bin/pip install $(ls wheelhouse/*.whl)
+            python3 -m venv venv
+            venv/bin/pip install --upgrade pip
+            venv/bin/pip install pytest
+            venv/bin/pip install $(ls wheelhouse/*.whl)
+
+      - name: Run tests
+        run: |
+            venv/bin/pytest -m "server or util or client or mainloop"
+            sudo venv/bin/pytest -m partner
+
+
+
+  test-wheels-windows-86_64:
+    name: Testing wheels for AMD64 windows
+    needs: [windows-build,]
+    continue-on-error: true
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-2022, windows-2019]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}
+          path: wheelhouse
+
+      - name: Install python-snap7
+        run: |
+          python3 -m pip install --upgrade pip pytest
+          python3 -m pip install $(ls wheelhouse/*.whl)
 
       - name: Run pytest
         run: |
-          venv/bin/pytest -m "server or util or client or mainloop"
-
-      - name: Run tests required sudo on Linux and macOS
-        if: ${{ runner.os == 'Linux' || runner.os == 'macOS'}}
-        run: sudo venv/bin/pytest -m partner
-
-      - name: On windows we don't need sudo
-        if: ${{ runner.os == 'Windows'}}
-        run: venv/bin/pytest  -m partner
+            pytest -m "server or util or client or mainloop or partner"
