@@ -948,6 +948,10 @@ class Client:
         return result
 
     def set_as_callback(self, call_back: Callable[..., Any]) -> int:
+        """
+        Sets the user callback that is called when a asynchronous data sent is complete.
+
+        """
         logger.info("setting event callback")
         callback_wrap: Callable[..., Any] = CFUNCTYPE(None, c_void_p, c_int, c_int)
 

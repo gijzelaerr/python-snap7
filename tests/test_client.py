@@ -995,23 +995,6 @@ class TestClient(unittest.TestCase):
         self.client.set_as_callback(event_call_back)
 
 
-#        expected = b"\x11\x11"
-#        self.callback_counter = 0
-#        cObj = ctypes.cast(ctypes.pointer(ctypes.py_object(self)), S7Object)
-
-#        def callback(FUsrPtr, JobOp, response):
-#            self = ctypes.cast(FUsrPtr, ctypes.POINTER(ctypes.py_object)).contents.value
-#            self.callback_counter += 1
-#
-#        cfunc_type = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(S7Object), ctypes.c_int, ctypes.c_int)
-#        self.client.set_as_callback(cfunc_type(callback), cObj)
-#        self.client.as_ct_write(0, 1, bytearray(expected))
-
-#        self._as_check_loop()
-#        self.assertEqual(expected, self.client.ct_read(0, 1))
-#        self.assertEqual(1, self.callback_counter)
-
-
 @pytest.mark.client
 class TestClientBeforeConnect(unittest.TestCase):
     """
