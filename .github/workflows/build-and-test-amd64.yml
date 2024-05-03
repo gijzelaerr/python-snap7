@@ -1,11 +1,11 @@
-name: build-and-test-wheels
+name: Build and test wheels AMD64
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
 jobs:
-  linux-build-86_64:
+  linux-build:
     name: Build wheel for linux x86_64
     runs-on: ubuntu-20.04
     steps:
@@ -92,12 +92,12 @@ jobs:
 
   test-wheels-86_64:
     name: Testing wheels
-    needs: [linux-build-86_64, windows-build, osx-build]
+    needs: [linux-build, windows-build, osx-build]
     continue-on-error: true
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2022, macos-14]
+        os: [ubuntu-22.04, ubuntu-20.04, macos-14, macos-11, windows-2022, windows-2019]
         python-version: ["3.9", "3.10", "3.11", "3.12"]
     steps:
       - name: Checkout
