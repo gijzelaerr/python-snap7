@@ -131,7 +131,7 @@ class Client:
             :obj:`ValueError`: if the cpu state is invalid.
 
         Examples:
-            >>> client.get_cpu_statE()
+            >>> client.get_cpu_state()
             'S7CpuStatusRun'
         """
         state = c_int(0)

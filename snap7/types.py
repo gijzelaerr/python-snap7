@@ -253,6 +253,18 @@ class S7DataItem(ctypes.Structure):
 
 
 class S7CpuInfo(ctypes.Structure):
+    """
+    S7CpuInfo class for handling CPU with :
+        - ModuleTypeName => Model of S7-CPU
+        - SerialNumber => SN of the S7-CPU
+        - ASName => Family Class of the S7-CPU
+        - Copyright => Siemens Copyright
+        - ModuleName => TIA project name or for other S7-CPU, same as ModuleTypeName
+    Examples:
+        For str handling instead of bytes
+        >>> if hasattr(self, 'SerialNumber'):
+        >>>     return str(self.SerialNumber, encoding="utf-8")
+    """
     _fields_ = [
         ("ModuleTypeName", ctypes.c_char * 33),
         ("SerialNumber", ctypes.c_char * 25),
@@ -298,6 +310,19 @@ class S7OrderCode(ctypes.Structure):
 
 
 class S7CpInfo(ctypes.Structure):
+    """
+    S7 Cp class for Communication Information :
+        - MaxPduLength => Size of the maximum PDU length in bytes
+        - MaxConnections => Max connection allowed to S7-CPU or Server
+        - MaxMpiRate => MPI rate (MPI use is deprecated)
+        - MaxBusRate => Profibus rate
+    Every data packet exchanged with a PLC must fit within the PDU size,
+    whose is fixed from 240 up to 960 bytes.
+    For debugging S7 protocol, this informations are essentials !
+    Examples:
+        >>> if hasattr(self, 'MaxBusRate'):
+        >>>     return int(self.MaxBusRate)
+    """
     _fields_ = [
         ("MaxPduLength", ctypes.c_uint16),
         ("MaxConnections", ctypes.c_uint16),
