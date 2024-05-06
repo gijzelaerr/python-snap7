@@ -69,6 +69,12 @@ class Client:
         self._lib = load_library(lib_location)
         self.create()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.destroy()
+
     def __del__(self):
         self.destroy()
 

@@ -265,6 +265,7 @@ class S7CpuInfo(ctypes.Structure):
         >>> if hasattr(self, 'SerialNumber'):
         >>>     return str(self.SerialNumber, encoding="utf-8")
     """
+
     _fields_ = [
         ("ModuleTypeName", ctypes.c_char * 33),
         ("SerialNumber", ctypes.c_char * 25),
@@ -323,6 +324,7 @@ class S7CpInfo(ctypes.Structure):
         >>> if hasattr(self, 'MaxBusRate'):
         >>>     return int(self.MaxBusRate)
     """
+
     _fields_ = [
         ("MaxPduLength", ctypes.c_uint16),
         ("MaxConnections", ctypes.c_uint16),
