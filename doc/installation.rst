@@ -8,6 +8,10 @@ it by using pip::
 
   $ pip install python-snap7
 
+ If you want to use the CLI interface for running an emulator, you should install it with::
+
+  $ pip install "python-snap7[cli]"
+
 
 Manual Installation (not recommended)
 =====================================
@@ -65,6 +69,13 @@ Python-Snap7
 ------------
 
 Once snap7 is available in your library or system path, you can install it from the git
-repository or from a source tarball::
+repository or from a source tarball. It is recommended to install it in a virtualenv.
 
-  $ python ./setup.py install
+To create a virtualenv and activate it::
+
+  $ python3 -m venv venv
+  $ source venv/bin/activate
+
+Now you can install your python-snap7 package::
+
+  $ pip3 install .
