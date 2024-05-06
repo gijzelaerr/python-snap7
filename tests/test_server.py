@@ -1,4 +1,5 @@
 import ctypes
+import gc
 import logging
 import pytest
 import unittest
@@ -168,6 +169,12 @@ class TestLibraryIntegration(unittest.TestCase):
     def test_gc(self):
         server = Server(log=False)
         del server
+        gc.collect()
+        self.mocklib.Srv_Destroy.assert_called_once()
+
+    def test_context_manager(self):
+        with Server(log=False) as _:
+            pass
         self.mocklib.Srv_Destroy.assert_called_once()
 
 

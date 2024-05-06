@@ -9,15 +9,38 @@ from datetime import datetime, timedelta, date
 from multiprocessing import Process
 from unittest import mock
 
-
-import snap7
-import snap7.util.getters
-import snap7.util.setters
+from snap7.util.getters import get_real, get_int
+from snap7.util.setters import set_int
 from snap7 import util
 from snap7.common import check_error
 from snap7.server import mainloop
-from snap7.types import S7AreaDB, S7DataItem, S7SZL, S7SZLList, buffer_type, buffer_size, Areas, WordLen
-
+from snap7.client import Client
+from snap7.types import (
+    S7AreaDB,
+    S7DataItem,
+    S7SZL,
+    S7SZLList,
+    buffer_type,
+    buffer_size,
+    Areas,
+    WordLen,
+    wordlen_to_ctypes,
+    RemotePort,
+    LocalPort,
+    WorkInterval,
+    MaxClients,
+    BSendTimeout,
+    BRecvTimeout,
+    PingTimeout,
+    SendTimeout,
+    RecvTimeout,
+    SrcRef,
+    DstRef,
+    SrcTSap,
+    PDURequest,
+    RecoveryTime,
+    KeepAliveTime,
+)
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -46,7 +69,7 @@ class TestClient(unittest.TestCase):
             cls.process.kill()
 
     def setUp(self):
-        self.client = snap7.client.Client()
+        self.client = Client()
         self.client.connect(ip, rack, slot, tcpport)
 
     def tearDown(self):
@@ -96,7 +119,7 @@ class TestClient(unittest.TestCase):
 
         test_value_3 = 123
         test_bytes_3 = bytearray([0, 0])
-        snap7.util.setters.set_int(test_bytes_3, 0, test_value_3)
+        set_int(test_bytes_3, 0, test_value_3)
         self.client.db_write(db, 8, test_bytes_3)
 
         test_values = [test_value_1, test_value_2, test_value_3]
@@ -138,12 +161,11 @@ class TestClient(unittest.TestCase):
 
         result_values = []
         # function to cast bytes to match data_types[] above
-        byte_to_value = [snap7.util.getters.get_real, snap7.util.getters.get_real, snap7.util.getters.get_int]
+        byte_to_value = [get_real, get_real, get_int]
 
         # unpack and test the result of each read
-        for i in range(len(data_items)):
+        for i, di in enumerate(data_items):
             btv = byte_to_value[i]
-            di = data_items[i]
             value = btv(di.pData, 0)
             result_values.append(value)
 
@@ -280,7 +302,7 @@ class TestClient(unittest.TestCase):
         self.client.ab_write(0, bytearray(expected))
 
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         buffer = (type_ * 2)()
         self.client.as_ab_read(0, 2, buffer)
         result = self.client.wait_as_completion(500)
@@ -308,41 +330,41 @@ class TestClient(unittest.TestCase):
 
     def test_set_param(self):
         values = (
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
+            (PingTimeout, 800),
+            (SendTimeout, 15),
+            (RecvTimeout, 3500),
+            (SrcRef, 128),
+            (DstRef, 128),
+            (SrcTSap, 128),
+            (PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)
 
-        self.assertRaises(Exception, self.client.set_param, snap7.types.RemotePort, 1)
+        self.assertRaises(Exception, self.client.set_param, RemotePort, 1)
 
     def test_get_param(self):
         expected = (
-            (snap7.types.RemotePort, tcpport),
-            (snap7.types.PingTimeout, 750),
-            (snap7.types.SendTimeout, 10),
-            (snap7.types.RecvTimeout, 3000),
-            (snap7.types.SrcRef, 256),
-            (snap7.types.DstRef, 0),
-            (snap7.types.SrcTSap, 256),
-            (snap7.types.PDURequest, 480),
+            (RemotePort, tcpport),
+            (PingTimeout, 750),
+            (SendTimeout, 10),
+            (RecvTimeout, 3000),
+            (SrcRef, 256),
+            (DstRef, 0),
+            (SrcTSap, 256),
+            (PDURequest, 480),
         )
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
         non_client = (
-            snap7.types.LocalPort,
-            snap7.types.WorkInterval,
-            snap7.types.MaxClients,
-            snap7.types.BSendTimeout,
-            snap7.types.BRecvTimeout,
-            snap7.types.RecoveryTime,
-            snap7.types.KeepAliveTime,
+            LocalPort,
+            WorkInterval,
+            MaxClients,
+            BSendTimeout,
+            BRecvTimeout,
+            RecoveryTime,
+            KeepAliveTime,
         )
 
         # invalid param for client
@@ -358,7 +380,7 @@ class TestClient(unittest.TestCase):
         # Cli_AsCTRead
         expected = b"\x10\x01"
         self.client.ct_write(0, 1, bytearray(expected))
-        type_ = snap7.types.wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = wordlen_to_ctypes[WordLen.Counter.value]
         buffer = (type_ * 1)()
         self.client.as_ct_read(0, 1, buffer)
         self.client.wait_as_completion(500)
@@ -396,7 +418,7 @@ class TestClient(unittest.TestCase):
         self.client.db_write(db_number=db, start=start, data=expected)
 
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * size)()
         self.client.as_db_read(db, start, size, data)
         self.client.wait_as_completion(500)
@@ -406,7 +428,7 @@ class TestClient(unittest.TestCase):
         size = 40
         data = bytearray(size)
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         size = len(data)
         result = (type_ * size).from_buffer_copy(data)
         self.client.as_db_write(db_number=1, start=0, size=size, data=result)
@@ -713,7 +735,7 @@ class TestClient(unittest.TestCase):
     def test_as_eb_read(self):
         # Cli_AsEBRead
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         buffer = (type_ * 1)()
         response = self.client.as_eb_read(0, 1, buffer)
         self.assertEqual(0, response)
@@ -739,7 +761,7 @@ class TestClient(unittest.TestCase):
     def test_as_mb_read(self):
         # Cli_AsMBRead
         wordlen = WordLen.Byte
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         data = (type_ * 1)()
         self.client.as_mb_read(0, 1, data)
         bytearray(data)
@@ -778,7 +800,7 @@ class TestClient(unittest.TestCase):
         expected = b"\x10\x01"
         wordlen = WordLen.Timer
         self.client.tm_write(0, 1, bytearray(expected))
-        type_ = snap7.types.wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen_to_ctypes[wordlen.value]
         buffer = (type_ * 1)()
         self.client.as_tm_read(0, 1, buffer)
         self.client.wait_as_completion(500)
@@ -1002,18 +1024,18 @@ class TestClientBeforeConnect(unittest.TestCase):
     """
 
     def setUp(self):
-        self.client = snap7.client.Client()
+        self.client = Client()
 
     def test_set_param(self):
         values = (
-            (snap7.types.RemotePort, 1102),
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
+            (RemotePort, 1102),
+            (PingTimeout, 800),
+            (SendTimeout, 15),
+            (RecvTimeout, 3500),
+            (SrcRef, 128),
+            (DstRef, 128),
+            (SrcTSap, 128),
+            (PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)
@@ -1038,15 +1060,18 @@ class TestLibraryIntegration(unittest.TestCase):
         self.loadlib_patch.stop()
 
     def test_create(self):
-        snap7.client.Client()
+        Client()
         self.mocklib.Cli_Create.assert_called_once()
 
-    @mock.patch("snap7.client.byref")
-    def test_gc(self, byref_mock):
-        client = snap7.client.Client()
-        client._pointer = 10
+    def test_gc(self):
+        client = Client()
         del client
         gc.collect()
+        self.mocklib.Cli_Destroy.assert_called_once()
+
+    def test_context_manager(self):
+        with Client() as _:
+            pass
         self.mocklib.Cli_Destroy.assert_called_once()
 
 
