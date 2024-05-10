@@ -185,7 +185,7 @@ class Server:
     def destroy(self) -> Optional[int]:
         """Destroy the server."""
         logger.info("destroying server")
-        if self._lib and self._s7_server:
+        if self._lib and self._s7_server is not None:
             return self._lib.Srv_Destroy(byref(self._s7_server))
         self._s7_server = None
         return None

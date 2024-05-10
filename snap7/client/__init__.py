@@ -95,7 +95,7 @@ class Client:
             640719840
         """
         logger.info("destroying snap7 client")
-        if self._lib and self._s7_client:
+        if self._lib and self._s7_client is not None:
             return self._lib.Cli_Destroy(byref(self._s7_client))
         self._s7_client = None
         return None

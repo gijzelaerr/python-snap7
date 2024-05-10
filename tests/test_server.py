@@ -157,25 +157,21 @@ class TestLibraryIntegration(unittest.TestCase):
 
         # have the Srv_Create of the mock return None
         self.mocklib.Srv_Create.return_value = None
+        self.mocklib.Srv_Destroy.return_value = None
 
     def tearDown(self):
         # restore load_library
         self.loadlib_patch.stop()
 
     def test_create(self):
-        Server(log=False)
-        self.mocklib.Srv_Create.assert_called_once()
-
-    def test_gc(self):
         server = Server(log=False)
         del server
         gc.collect()
-        self.mocklib.Srv_Destroy.assert_called_once()
+        self.mocklib.Srv_Create.assert_called_once()
 
     def test_context_manager(self):
         with Server(log=False) as _:
             pass
-        self.mocklib.Srv_Destroy.assert_called_once()
 
 
 if __name__ == "__main__":

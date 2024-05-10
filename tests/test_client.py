@@ -1054,6 +1054,7 @@ class TestLibraryIntegration(unittest.TestCase):
 
         # have the Cli_Create of the mock return None
         self.mocklib.Cli_Create.return_value = None
+        self.mocklib.Cli_Destroy.return_value = None
 
     def tearDown(self):
         # restore load_library
