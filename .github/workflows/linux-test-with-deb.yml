@@ -11,7 +11,6 @@ jobs:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
         runs-on: ["ubuntu-20.04", "ubuntu-22.04"]
     runs-on: ${{ matrix.runs-on }}
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4

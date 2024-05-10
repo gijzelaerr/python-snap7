@@ -129,8 +129,7 @@ jobs:
 
   test-wheels-windows-86_64:
     name: Testing wheels for AMD64 windows
-    needs: [windows-build,]
-    continue-on-error: true
+    needs: [windows-build]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

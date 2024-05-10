@@ -4,7 +4,7 @@ Snap7 server used for mimicking a siemens 7 server.
 
 import re
 import time
-import ctypes
+from ctypes import c_char, byref, sizeof, c_int, c_int32, c_uint32, c_void_p, CFUNCTYPE, POINTER, Array, c_int8
 import struct
 import logging
 from typing import Any, Tuple, Callable, Optional
@@ -32,6 +32,11 @@ class Server:
     A fake S7 server.
     """
 
+    _lib: Any  # since this is dynamically loaded from a DLL we don't have the type signature.
+    _s7_server: Optional[S7Object] = None
+    _read_callback = None
+    _callback: Optional[Callable[..., Any]] = None
+
     def __init__(self, log: bool = True):
         """Create a fake S7 server. set log to false if you want to disable
             event logging to python logging.
@@ -39,13 +44,16 @@ class Server:
         Args:
             log: `True` for enabling the event logging. Optinoal.
         """
-        self._read_callback = None
-        self._callback = Optional[Callable[..., Any]]
-        self.pointer = None
-        self.library = load_library()
+        self._lib = load_library()
         self.create()
         if log:
             self._set_log_callback()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.destroy()
 
     def __del__(self):
         self.destroy()
@@ -61,20 +69,20 @@ class Server:
         """
         logger.debug(f"error text for {hex(event.EvtCode)}")
         len_ = 1024
-        text_type = ctypes.c_char * len_
+        text_type = c_char * len_
         text = text_type()
-        error = self.library.Srv_EventText(ctypes.byref(event), ctypes.byref(text), len_)
+        error = self._lib.Srv_EventText(byref(event), byref(text), len_)
         check_error(error)
         return text.value.decode("ascii")
 
     def create(self):
         """Create the server."""
         logger.info("creating server")
-        self.library.Srv_Create.restype = S7Object
-        self.pointer = S7Object(self.library.Srv_Create())
+        self._lib.Srv_Create.restype = S7Object
+        self._s7_server = S7Object(self._lib.Srv_Create())
 
     @error_wrap
-    def register_area(self, area_code: int, index: int, userdata: ctypes.Array[ctypes.c_int8]):
+    def register_area(self, area_code: int, index: int, userdata: Array[c_int8]):
         """Shares a memory area with the server. That memory block will be
             visible by the clients.
 
@@ -86,9 +94,9 @@ class Server:
         Returns:
             Error code from snap7 library.
         """
-        size = ctypes.sizeof(userdata)
+        size = sizeof(userdata)
         logger.info(f"registering area {area_code}, index {index}, size {size}")
-        return self.library.Srv_RegisterArea(self.pointer, area_code, index, ctypes.byref(userdata), size)
+        return self._lib.Srv_RegisterArea(self._s7_server, area_code, index, byref(userdata), size)
 
     @error_wrap
     def set_events_callback(self, call_back: Callable[..., Any]) -> int:
@@ -96,9 +104,9 @@ class Server:
         event is created.
         """
         logger.info("setting event callback")
-        callback_wrap: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(SrvEvent), ctypes.c_int)
+        callback_wrap: Callable[..., Any] = CFUNCTYPE(None, c_void_p, POINTER(SrvEvent), c_int)
 
-        def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: SrvEvent, size: int) -> int:
+        def wrapper(usrptr: Optional[c_void_p], pevent: SrvEvent, size: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
@@ -114,8 +122,8 @@ class Server:
             return 0
 
         self._callback = callback_wrap(wrapper)
-        usrPtr = ctypes.c_void_p()
-        return self.library.Srv_SetEventsCallback(self.pointer, self._callback, usrPtr)
+        usrPtr = c_void_p()
+        return self._lib.Srv_SetEventsCallback(self._s7_server, self._callback, usrPtr)
 
     @error_wrap
     def set_read_events_callback(self, call_back: Callable[..., Any]):
@@ -126,9 +134,9 @@ class Server:
             call_back: a callback function that accepts a pevent argument.
         """
         logger.info("setting read event callback")
-        callback_wrapper: Callable[..., Any] = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.POINTER(SrvEvent), ctypes.c_int)
+        callback_wrapper: Callable[..., Any] = CFUNCTYPE(None, c_void_p, POINTER(SrvEvent), c_int)
 
-        def wrapper(usrptr: Optional[ctypes.c_void_p], pevent: SrvEvent, size: int) -> int:
+        def wrapper(usrptr: Optional[c_void_p], pevent: SrvEvent, size: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
@@ -144,7 +152,7 @@ class Server:
             return 0
 
         self._read_callback = callback_wrapper(wrapper)
-        return self.library.Srv_SetReadEventsCallback(self.pointer, self._read_callback)
+        return self._lib.Srv_SetReadEventsCallback(self._s7_server, self._read_callback)
 
     def _set_log_callback(self):
         """Sets a callback that logs the events"""
@@ -166,19 +174,21 @@ class Server:
             logger.info(f"setting server TCP port to {tcpport}")
             self.set_param(LocalPort, tcpport)
         logger.info(f"starting server on 0.0.0.0:{tcpport}")
-        return self.library.Srv_Start(self.pointer)
+        return self._lib.Srv_Start(self._s7_server)
 
     @error_wrap
     def stop(self):
         """Stop the server."""
         logger.info("stopping server")
-        return self.library.Srv_Stop(self.pointer)
+        return self._lib.Srv_Stop(self._s7_server)
 
-    def destroy(self):
+    def destroy(self) -> Optional[int]:
         """Destroy the server."""
         logger.info("destroying server")
-        if hasattr(self, "library") and self.library:
-            self.library.Srv_Destroy(ctypes.byref(self.pointer))
+        if self._lib and self._s7_server is not None:
+            return self._lib.Srv_Destroy(byref(self._s7_server))
+        self._s7_server = None
+        return None
 
     def get_status(self) -> Tuple[str, str, int]:
         """Reads the server status, the Virtual CPU status and the number of
@@ -188,12 +198,10 @@ class Server:
             Server status, cpu status, client count
         """
         logger.debug("get server status")
-        server_status = ctypes.c_int()
-        cpu_status = ctypes.c_int()
-        clients_count = ctypes.c_int()
-        error = self.library.Srv_GetStatus(
-            self.pointer, ctypes.byref(server_status), ctypes.byref(cpu_status), ctypes.byref(clients_count)
-        )
+        server_status = c_int()
+        cpu_status = c_int()
+        clients_count = c_int()
+        error = self._lib.Srv_GetStatus(self._s7_server, byref(server_status), byref(cpu_status), byref(clients_count))
         check_error(error)
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
         return (server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value)
@@ -212,7 +220,7 @@ class Server:
         Returns:
             Error code from snap7 library.
         """
-        return self.library.Srv_UnregisterArea(self.pointer, area_code, index)
+        return self._lib.Srv_UnregisterArea(self._s7_server, area_code, index)
 
     @error_wrap
     def unlock_area(self, code: int, index: int):
@@ -226,7 +234,7 @@ class Server:
             Error code from snap7 library.
         """
         logger.debug(f"unlocking area code {code} index {index}")
-        return self.library.Srv_UnlockArea(self.pointer, code, index)
+        return self._lib.Srv_UnlockArea(self._s7_server, code, index)
 
     @error_wrap
     def lock_area(self, code: int, index: int):
@@ -240,7 +248,7 @@ class Server:
             Error code from snap7 library.
         """
         logger.debug(f"locking area code {code} index {index}")
-        return self.library.Srv_LockArea(self.pointer, code, index)
+        return self._lib.Srv_LockArea(self._s7_server, code, index)
 
     @error_wrap
     def start_to(self, ip: str, tcpport: int = 102):
@@ -259,7 +267,7 @@ class Server:
         if not re.match(ipv4, ip):
             raise ValueError(f"{ip} is invalid ipv4")
         logger.info(f"starting server to {ip}:102")
-        return self.library.Srv_StartTo(self.pointer, ip.encode())
+        return self._lib.Srv_StartTo(self._s7_server, ip.encode())
 
     @error_wrap
     def set_param(self, number: int, value: int):
@@ -273,7 +281,7 @@ class Server:
             Error code from snap7 library.
         """
         logger.debug(f"setting param number {number} to {value}")
-        return self.library.Srv_SetParam(self.pointer, number, ctypes.byref(ctypes.c_int(value)))
+        return self._lib.Srv_SetParam(self._s7_server, number, byref(c_int(value)))
 
     @error_wrap
     def set_mask(self, kind: int, mask: int):
@@ -287,7 +295,7 @@ class Server:
             Error code from snap7 library.
         """
         logger.debug(f"setting mask kind {kind} to {mask}")
-        return self.library.Srv_SetMask(self.pointer, kind, mask)
+        return self._lib.Srv_SetMask(self._s7_server, kind, mask)
 
     @error_wrap
     def set_cpu_status(self, status: int):
@@ -305,7 +313,7 @@ class Server:
         if status not in cpu_statuses:
             raise ValueError(f"The cpu state ({status}) is invalid")
         logger.debug(f"setting cpu status to {status}")
-        return self.library.Srv_SetCpuStatus(self.pointer, status)
+        return self._lib.Srv_SetCpuStatus(self._s7_server, status)
 
     def pick_event(self) -> Optional[SrvEvent]:
         """Extracts an event (if available) from the Events queue.
@@ -315,8 +323,8 @@ class Server:
         """
         logger.debug("checking event queue")
         event = SrvEvent()
-        ready = ctypes.c_int32()
-        code = self.library.Srv_PickEvent(self.pointer, ctypes.byref(event), ctypes.byref(ready))
+        ready = c_int32()
+        code = self._lib.Srv_PickEvent(self._s7_server, byref(event), byref(ready))
         check_error(code)
         if ready:
             logger.debug(f"one event ready: {event}")
@@ -334,12 +342,12 @@ class Server:
             Value of the parameter.
         """
         logger.debug(f"retreiving param number {number}")
-        value = ctypes.c_int()
-        code = self.library.Srv_GetParam(self.pointer, number, ctypes.byref(value))
+        value = c_int()
+        code = self._lib.Srv_GetParam(self._s7_server, number, byref(value))
         check_error(code)
         return value.value
 
-    def get_mask(self, kind: int) -> ctypes.c_uint32:
+    def get_mask(self, kind: int) -> c_uint32:
         """Reads the specified filter mask.
 
         Args:
@@ -350,7 +358,7 @@ class Server:
         """
         logger.debug(f"retrieving mask kind {kind}")
         mask = longword()
-        code = self.library.Srv_GetMask(self.pointer, kind, ctypes.byref(mask))
+        code = self._lib.Srv_GetMask(self._s7_server, kind, byref(mask))
         check_error(code)
         return mask
 
@@ -362,7 +370,7 @@ class Server:
             Error code from snap7 library.
         """
         logger.debug("clearing event queue")
-        return self.library.Srv_ClearEvents(self.pointer)
+        return self._lib.Srv_ClearEvents(self._s7_server)
 
 
 def mainloop(tcpport: int = 1102, init_standard_values: bool = False):

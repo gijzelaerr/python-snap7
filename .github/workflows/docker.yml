@@ -3,20 +3,16 @@ on:
   push:
     branches:
       - master
-      - container
     tags:
       - "*"
-  pull_request:
 env:
   IMAGE_NAME: python-snap7
-#
 jobs:
   push:
     runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
-      #
     steps:
       - uses: actions/checkout@v4
 
