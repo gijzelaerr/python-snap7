@@ -5,7 +5,7 @@ from typing import Optional, Union, Dict, Callable
 from logging import getLogger
 
 from snap7.client import Client
-from snap7.types import Areas
+from snap7.types import Area
 
 from snap7.util import parse_specification
 from snap7.util.getters import (
@@ -106,7 +106,7 @@ class DB:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: int = 0,
-        area: Areas = Areas.DB,
+        area: Area = Area.DB,
     ):
         """Creates a new instance of the `Row` class.
 
@@ -256,7 +256,7 @@ class DB:
             raise ValueError("row_size must be greater equal zero.")
 
         total_size = self.size * (self.row_size + self.row_offset)
-        if self.area == Areas.DB:  # note: is it worth using the upload method?
+        if self.area == Area.DB:  # note: is it worth using the upload method?
             bytearray_ = client.db_read(self.db_number, self.db_offset, total_size)
         else:
             bytearray_ = client.read_area(self.area, 0, self.db_offset, total_size)
@@ -295,7 +295,7 @@ class DB:
         total_size = self.size * (self.row_size + self.row_offset)
         data = self._bytearray[self.db_offset : self.db_offset + total_size]
 
-        if self.area == Areas.DB:
+        if self.area == Area.DB:
             client.db_write(self.db_number, self.db_offset, data)
         else:
             client.write_area(self.area, 0, self.db_offset, data)
@@ -321,7 +321,7 @@ class DB_Row:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: Optional[int] = 0,
-        area: Optional[Areas] = Areas.DB,
+        area: Optional[Area] = Area.DB,
     ):
         """Creates a new instance of the `DB_Row` class.
 
@@ -573,7 +573,7 @@ class DB_Row:
             data = data[self.row_offset :]
             db_offset += self.row_offset
 
-        if self.area == Areas.DB:
+        if self.area == Area.DB:
             client.db_write(db_nr, db_offset, data)
         else:
             client.write_area(self.area, 0, db_offset, data)
@@ -593,7 +593,7 @@ class DB_Row:
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        if self.area == Areas.DB:
+        if self.area == Area.DB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, self.db_offset, self.row_size)

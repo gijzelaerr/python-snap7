@@ -10,10 +10,10 @@ from datetime import datetime
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 from ..common import check_error, ipv4, load_library
-from ..types import S7SZL, Areas, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem
+from ..types import S7SZL, Area, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem, Block
 from ..types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
 from ..types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
-from ..types import RemotePort, wordlen_to_ctypes, block_types
+from ..types import RemotePort
 
 logger = logging.getLogger(__name__)
 
@@ -226,7 +226,7 @@ class Client:
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         data = (type_ * size)()
         result = self._lib.Cli_DBRead(self._s7_client, db_number, start, size, byref(data))
         check_error(result, context="client")
@@ -252,13 +252,13 @@ class Client:
             >>> client.db_write(1, 10, buffer)  # writes the bit number 0 from the byte 10 to TRUE.
         """
         wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen.ctype
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
         return self._lib.Cli_DBWrite(self._s7_client, db_number, start, size, byref(cdata))
 
-    def delete(self, block_type: str, block_num: int) -> int:
+    def delete(self, block_type: Block, block_num: int) -> int:
         """Delete a block into AG.
 
         Args:
@@ -269,17 +269,16 @@ class Client:
             Error code from snap7 library.
         """
         logger.info("deleting block")
-        blocktype = block_types[block_type]
-        result = self._lib.Cli_Delete(self._s7_client, blocktype, block_num)
+        result = self._lib.Cli_Delete(self._s7_client, block_type.ctype, block_num)
         return result
 
-    def full_upload(self, _type: str, block_num: int) -> Tuple[bytearray, int]:
+    def full_upload(self, block_type: Block, block_num: int) -> Tuple[bytearray, int]:
         """Uploads a block from AG with Header and Footer infos.
         The whole block (including header and footer) is copied into the user
         buffer.
 
         Args:
-            _type: type of block.
+            block_type: type of block.
             block_num: number of block.
 
         Returns:
@@ -287,8 +286,7 @@ class Client:
         """
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
-        block_type = block_types[_type]
-        result = self._lib.Cli_FullUpload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_FullUpload(self._s7_client, block_type.ctype, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return bytearray(_buffer)[: size.value], size.value
 
@@ -299,17 +297,16 @@ class Client:
             Upload means from the PLC to the PC.
 
         Args:
-            block_num: block to be upload.
+            block_num: block to be uploaded.
 
         Returns:
             Buffer with the uploaded block.
         """
         logger.debug(f"db_upload block_num: {block_num}")
-        block_type = block_types["DB"]
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
 
-        result = self._lib.Cli_Upload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_Upload(self._s7_client, Block.DB.ctype, block_num, byref(_buffer), byref(size))
 
         check_error(result, context="client")
         logger.info(f"received {size} bytes")
@@ -362,39 +359,39 @@ class Client:
         check_error(result, context="client")
         return bytearray(_buffer)
 
-    def read_area(self, area: Areas, dbnumber: int, start: int, size: int) -> bytearray:
+    def read_area(self, area: Area, dbnumber: int, start: int, size: int) -> bytearray:
         """Reads a data area from a PLC
-                With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
-                Args:
-                    area: area to be read from.
-                    dbnumber: number of the db to be read from. In case of Inputs, Marks or Outputs, this should be equal to 0.
-                    start: byte index to start reading.
-                    size: number of bytes to read.
+        Args:
+            area: area to be read from.
+            dbnumber: number of the db to be read from. In case of Inputs, Marks or Outputs, this should be equal to 0.
+            start: byte index to start reading.
+            size: number of bytes to read.
 
-                Returns:
-                    Buffer with the data read.
+        Returns:
+            Buffer with the data read.
 
-                Raises:
-                    :obj:`ValueError`: if the area is not defined in the `Areas`
+        Raises:
+            :obj:`ValueError`: if the area is not defined in the `Areas`
 
-                Example:
-        import snap7.util.db            >>> import snap7
-                    >>> client = snap7.client.Client()
-                    >>> client.connect("192.168.0.1", 0, 0)
-                    >>> buffer = client.read_area(snap7.util.db.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
-                    >>> buffer
-                    bytearray(b'\\x00\\x00')
+        Example:
+            >>> import snap7.util.db
+            >>> import snap7
+            >>> Client().connect("192.168.0.1", 0, 0)
+            >>> buffer = client.read_area(snap7.util.db.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
+            >>> buffer
+            bytearray(b'\\x00\\x00')
         """
-        if area not in Areas:
+        if area not in Area:
             raise ValueError(f"{area} is not implemented in types")
-        elif area == Areas.TM:
+        elif area == Area.TM:
             wordlen = WordLen.Timer
-        elif area == Areas.CT:
+        elif area == Area.CT:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen.ctype
         logger.debug(
             f"reading area: {area.name} dbnumber: {dbnumber} start: {start} amount: {size} "
             f"wordlen: {wordlen.name}={wordlen.value}"
@@ -405,34 +402,34 @@ class Client:
         return bytearray(data)
 
     @error_wrap
-    def write_area(self, area: Areas, dbnumber: int, start: int, data: bytearray) -> int:
+    def write_area(self, area: Area, dbnumber: int, start: int, data: bytearray) -> int:
         """Writes a data area into a PLC.
 
         Args:
-            area: area to be write.
-            dbnumber: number of the db to be write to. In case of Inputs, Marks or Outputs, this should be equal to 0.
+            area: area to be writen.
+            dbnumber: number of the db to be writen to. In case of Inputs, Marks or Outputs, this should be equal to 0.
             start: byte index to start writting.
-            data: buffer to be write.
+            data: buffer to be writen.
 
         Returns:
             Snap7 error code.
 
         Exmaple:
-            >>> import snap7.util.db
+            >>> from snap7.util.db import DB
             >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
             >>> buffer = bytearray([0b00000001])
             # Writes the bit 0 of the byte 10 from the DB number 1 to TRUE.
-            >>> client.write_area(snap7.util.DB, 1, 10, buffer)
+            >>> client.write_area(DB, 1, 10, buffer)
         """
-        if area == Areas.TM:
+        if area == Area.TM:
             wordlen = WordLen.Timer
-        elif area == Areas.CT:
+        elif area == Area.CT:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         size = len(data)
         logger.debug(
             f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: "
@@ -441,14 +438,14 @@ class Client:
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return self._lib.Cli_WriteArea(self._s7_client, area.value, dbnumber, start, size, wordlen.value, byref(cdata))
 
-    def read_multi_vars(self, items) -> Tuple[int, S7DataItem]:
+    def read_multi_vars(self, items) -> Tuple[int, Array[S7DataItem]]:
         """Reads different kind of variables from a PLC simultaneously.
 
         Args:
             items: list of items to be read.
 
         Returns:
-            Tuple with the return code from the snap7 library and the list of items.
+            return code from the snap7 library, the list of items.
         """
         result = self._lib.Cli_ReadMultiVars(self._s7_client, byref(items), c_int32(len(items)))
         check_error(result, context="client")
@@ -461,7 +458,7 @@ class Client:
             Block list structure object.
 
         Examples:
-            >>> block_list = client.list_blocks()
+            >>> block_list = Client().list_blocks()
             >>> print(block_list)
             <block list count OB: 0 FB: 0 FC: 0 SFB: 0 SFC: 0x0 DB: 1 SDB: 0>
         """
@@ -472,43 +469,39 @@ class Client:
         logger.debug(f"blocks: {blocksList}")
         return blocksList
 
-    def list_blocks_of_type(self, blocktype: str, size: int) -> Union[int, Array]:
+    def list_blocks_of_type(self, block_type: Block, size: int) -> Union[int, Array]:
         """This function returns the AG list of a specified block type.
 
         Args:
-            blocktype: specified block type.
+            block_type: specified block type.
             size: size of the block type.
 
         Returns:
             If size is 0, it returns a 0, otherwise an `Array` of specified block type.
 
         Raises:
-            :obj:`ValueError`: if the `blocktype` is not valid.
+            :obj:`ValueError`: if the `block_type` is not valid.
         """
 
-        _blocktype = block_types.get(blocktype)
-        if not _blocktype:
-            raise ValueError("The blocktype parameter was invalid")
-
-        logger.debug(f"listing blocks of type: {_blocktype} size: {size}")
+        logger.debug(f"listing blocks of type: {block_type} size: {size}")
 
         if size == 0:
             return 0
 
         data = (c_uint16 * size)()
         count = c_int(size)
-        result = self._lib.Cli_ListBlocksOfType(self._s7_client, _blocktype, byref(data), byref(count))
+        result = self._lib.Cli_ListBlocksOfType(self._s7_client, block_type.ctype, byref(data), byref(count))
 
         logger.debug(f"number of items found: {count}")
 
         check_error(result, context="client")
         return data
 
-    def get_block_info(self, blocktype: str, db_number: int) -> TS7BlockInfo:
+    def get_block_info(self, block_type: Block, db_number: int) -> TS7BlockInfo:
         """Returns detailed information about a block present in AG.
 
         Args:
-            blocktype: specified block type.
+            block_type: specified block type.
             db_number: number of db to get information from.
 
         Returns:
@@ -518,7 +511,7 @@ class Client:
             :obj:`ValueError`: if the `blocktype` is not valid.
 
         Examples:
-            >>> block_info = client.get_block_info("DB", 1)
+            >>> block_info = Client().get_block_info("DB", 1)
             >>> print(block_info)
             Block type: 10
             Block number: 1
@@ -536,15 +529,11 @@ class Client:
             Family: b''
             Header: b''
         """
-        blocktype_ = block_types.get(blocktype)
-
-        if not blocktype_:
-            raise ValueError("The blocktype parameter was invalid")
-        logger.debug(f"retrieving block info for block {db_number} of type {blocktype_}")
+        logger.debug(f"retrieving block info for block {db_number} of type {block_type}")
 
         data = TS7BlockInfo()
 
-        result = self._lib.Cli_GetAgBlockInfo(self._s7_client, blocktype_, db_number, byref(data))
+        result = self._lib.Cli_GetAgBlockInfo(self._s7_client, block_type.ctype, db_number, byref(data))
         check_error(result, context="client")
         return data
 
@@ -635,7 +624,7 @@ class Client:
             Buffer with the data read.
         """
         wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen.ctype
         data = (type_ * size)()
         logger.debug(f"ab_read: start: {start}: size {size}: ")
         result = self._lib.Cli_ABRead(self._s7_client, start, size, byref(data))
@@ -653,7 +642,7 @@ class Client:
             Snap7 code.
         """
         wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen.ctype
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
@@ -686,7 +675,7 @@ class Client:
             Snap7 code.
         """
         wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen.ctype
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"ab write: start: {start}: size: {size}: ")
@@ -746,7 +735,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = WordLen.Counter.ctype
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._lib.Cli_AsCTWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result, context="client")
@@ -879,7 +868,7 @@ class Client:
         Return:
             Value of the param read.
         """
-        logger.debug(f"retreiving param number {number}")
+        logger.debug(f"retrieving param number {number}")
         type_ = param_types[number]
         value = type_()
         code = self._lib.Cli_GetParam(self._s7_client, c_int(number), byref(value))
@@ -1000,22 +989,9 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def _prepare_as_read_area(self, area: Areas, size: int) -> Tuple[WordLen, Array]:
-        if area not in Areas:
-            raise ValueError(f"{area} is not implemented in types")
-        elif area == Areas.TM:
-            wordlen = WordLen.Timer
-        elif area == Areas.CT:
-            wordlen = WordLen.Counter
-        else:
-            wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
-        usrdata = (type_ * size)()
-        return wordlen, usrdata
-
-    def as_read_area(self, area: Areas, dbnumber: int, start: int, size: int, wordlen: WordLen, pusrdata) -> int:
+    def as_read_area(self, area: Area, dbnumber: int, start: int, size: int, wordlen: WordLen, pusrdata) -> int:
         """Reads a data area from a PLC asynchronously.
-        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+        With this you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
         Args:
             area: memory area to be read from.
@@ -1036,20 +1012,20 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def _prepare_as_write_area(self, area: Areas, data: bytearray) -> Tuple[WordLen, Array]:
-        if area not in Areas:
+    def _prepare_as_write_area(self, area: Area, data: bytearray) -> Tuple[WordLen, Array]:
+        if area not in Area:
             raise ValueError(f"{area} is not implemented in types")
-        elif area == Areas.TM:
+        elif area == Area.TM:
             wordlen = WordLen.Timer
-        elif area == Areas.CT:
+        elif area == Area.CT:
             wordlen = WordLen.Counter
         else:
             wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         cdata = (type_ * len(data)).from_buffer_copy(data)
         return wordlen, cdata
 
-    def as_write_area(self, area: Areas, dbnumber: int, start: int, size: int, wordlen: WordLen, pusrdata) -> int:
+    def as_write_area(self, area: Area, dbnumber: int, start: int, size: int, wordlen: WordLen, pusrdata) -> int:
         """Writes a data area into a PLC asynchronously.
 
         Args:
@@ -1063,7 +1039,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         logger.debug(
             f"writing area: {area.name} dbnumber: {dbnumber} start: {start}: size {size}: " f"wordlen {wordlen} type: {type_}"
         )
@@ -1098,20 +1074,20 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._lib.Cli_AsEBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result, context="client")
         return result
 
-    def as_full_upload(self, _type: str, block_num: int) -> int:
+    def as_full_upload(self, block_type: Block, block_num: int) -> int:
         """Uploads a block from AG with Header and Footer infos.
 
         Note:
             Upload means from PLC to PC.
 
         Args:
-            _type: type of block.
+            block_type: type of block.
             block_num: number of block to upload.
 
         Returns:
@@ -1119,29 +1095,22 @@ class Client:
         """
         _buffer = buffer_type()
         size = c_int(sizeof(_buffer))
-        block_type = block_types[_type]
-        result = self._lib.Cli_AsFullUpload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsFullUpload(self._s7_client, block_type.ctype, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
 
-    def as_list_blocks_of_type(self, blocktype: str, data, count) -> int:
+    def as_list_blocks_of_type(self, block_type: Block, data: Array[c_uint16], count: c_int) -> int:
         """Returns the AG blocks list of a given type.
 
         Args:
-            blocktype: block type.
+            block_type: block type.
             data: buffer where the data will be place.
             count: pass.
 
         Returns:
             Snap7 code.
-
-        Raises:
-            :obj:`ValueError`: if the `blocktype` is invalid
         """
-        _blocktype = block_types.get(blocktype)
-        if not _blocktype:
-            raise ValueError("The blocktype parameter was invalid")
-        result = self._lib.Cli_AsListBlocksOfType(self._s7_client, _blocktype, byref(data), byref(count))
+        result = self._lib.Cli_AsListBlocksOfType(self._s7_client, block_type.ctype, byref(data), byref(count))
         check_error(result, context="client")
         return result
 
@@ -1171,7 +1140,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._lib.Cli_AsMBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result, context="client")
@@ -1233,7 +1202,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Timer.value]
+        type_ = WordLen.Timer.ctype
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._lib.Cli_AsTMWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result)
@@ -1253,8 +1222,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        block_type = block_types["DB"]
-        result = self._lib.Cli_AsUpload(self._s7_client, block_type, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsUpload(self._s7_client, Block.DB.ctype, block_num, byref(_buffer), byref(size))
         check_error(result, context="client")
         return result
 
@@ -1281,7 +1249,7 @@ class Client:
         Returns:
             Buffer read.
         """
-        type_ = wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = WordLen.Counter.ctype
         data = (type_ * amount)()
         result = self._lib.Cli_CTRead(self._s7_client, start, amount, byref(data))
         check_error(result, context="client")
@@ -1298,7 +1266,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = WordLen.Counter.ctype
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._lib.Cli_CTWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result)
@@ -1328,7 +1296,7 @@ class Client:
         Returns:
             Data read.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         data = (type_ * size)()
         result = self._lib.Cli_EBRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
@@ -1345,7 +1313,8 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
+
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._lib.Cli_EBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result)
@@ -1465,7 +1434,7 @@ class Client:
         Returns:
             Buffer with the data read.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         data = (type_ * size)()
         result = self._lib.Cli_MBRead(self._s7_client, start, size, byref(data))
         check_error(result, context="client")
@@ -1482,7 +1451,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         cdata = (type_ * size).from_buffer_copy(data)
         result = self._lib.Cli_MBWrite(self._s7_client, start, size, byref(cdata))
         check_error(result)
@@ -1537,8 +1506,7 @@ class Client:
         Returns:
             Buffer read.
         """
-        wordlen = WordLen.Timer
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Timer.ctype
         data = (type_ * amount)()
         result = self._lib.Cli_TMRead(self._s7_client, start, amount, byref(data))
         check_error(result, context="client")
@@ -1550,13 +1518,12 @@ class Client:
         Args:
             start: byte index from where is start to write to.
             amount: amount of byte to be written.
-            data: data to be write.
+            data: data to be writen.
 
         Returns:
             Snap7 code.
         """
-        wordlen = WordLen.Timer
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Timer.ctype
         cdata = (type_ * amount).from_buffer_copy(data)
         result = self._lib.Cli_TMWrite(self._s7_client, start, amount, byref(cdata))
         check_error(result)

@@ -2,15 +2,32 @@
 Python equivalent for snap7 specific types.
 """
 
-import ctypes
+from ctypes import (
+    c_int16,
+    c_int8,
+    c_int32,
+    c_void_p,
+    c_ubyte,
+    c_uint64,
+    c_uint16,
+    c_uint32,
+    Structure,
+    POINTER,
+    c_char,
+    c_byte,
+    c_int,
+    c_uint8,
+)
 from enum import Enum
+from typing import Type, Dict
 
-S7Object = ctypes.c_void_p
+S7Object = c_void_p
 buffer_size = 65536
-buffer_type = ctypes.c_ubyte * buffer_size
-time_t = ctypes.c_uint64  # TODO: check if this is valid for all platforms
-word = ctypes.c_uint16
-longword = ctypes.c_uint32
+# noinspection PyTypeChecker
+buffer_type = c_ubyte * buffer_size
+time_t = c_uint64
+word = c_uint16
+longword = c_uint32
 
 # // PARAMS LIST
 LocalPort = 1
@@ -30,21 +47,21 @@ RecoveryTime = 14
 KeepAliveTime = 15
 
 param_types = {
-    LocalPort: ctypes.c_uint16,
-    RemotePort: ctypes.c_uint16,
-    PingTimeout: ctypes.c_int32,
-    SendTimeout: ctypes.c_int32,
-    RecvTimeout: ctypes.c_int32,
-    WorkInterval: ctypes.c_int32,
-    SrcRef: ctypes.c_uint16,
-    DstRef: ctypes.c_uint16,
-    SrcTSap: ctypes.c_uint16,
-    PDURequest: ctypes.c_int32,
-    MaxClients: ctypes.c_int32,
-    BSendTimeout: ctypes.c_int32,
-    BRecvTimeout: ctypes.c_int32,
-    RecoveryTime: ctypes.c_uint32,
-    KeepAliveTime: ctypes.c_uint32,
+    LocalPort: c_uint16,
+    RemotePort: c_uint16,
+    PingTimeout: c_int32,
+    SendTimeout: c_int32,
+    RecvTimeout: c_int32,
+    WorkInterval: c_int32,
+    SrcRef: c_uint16,
+    DstRef: c_uint16,
+    SrcTSap: c_uint16,
+    PDURequest: c_int32,
+    MaxClients: c_int32,
+    BSendTimeout: c_int32,
+    BRecvTimeout: c_int32,
+    RecoveryTime: c_uint32,
+    KeepAliveTime: c_uint32,
 }
 
 # mask types
@@ -53,33 +70,6 @@ mkLog = 1
 
 
 # Area ID
-class Areas(Enum):
-    PE = 0x81
-    PA = 0x82
-    MK = 0x83
-    DB = 0x84
-    CT = 0x1C
-    TM = 0x1D
-
-
-# Leave it for now
-S7AreaPE = 0x81
-S7AreaPA = 0x82
-S7AreaMK = 0x83
-S7AreaDB = 0x84
-S7AreaCT = 0x1C
-S7AreaTM = 0x1D
-
-areas = {
-    "PE": S7AreaPE,
-    "PA": S7AreaPA,
-    "MK": S7AreaMK,
-    "DB": S7AreaDB,
-    "CT": S7AreaCT,
-    "TM": S7AreaTM,
-}
-
-
 # Word Length
 class WordLen(Enum):
     Bit = 0x01
@@ -93,55 +83,79 @@ class WordLen(Enum):
     Counter = 0x1C
     Timer = 0x1D
 
+    @property
+    def ctype(self) -> Type[c_int8 | c_int16 | c_int32]:
+        map_: Dict[WordLen, Type[c_int8 | c_int16 | c_int32]] = {
+            WordLen.Bit: c_int16,
+            WordLen.Byte: c_int8,
+            WordLen.Word: c_int16,
+            WordLen.DWord: c_int32,
+            WordLen.Real: c_int32,
+            WordLen.Counter: c_int16,
+            WordLen.Timer: c_int16,
+        }
+        return map_[self]
 
-# Leave it for now
-S7WLBit = 0x01
-S7WLByte = 0x02
-S7WLChar = 0x03
-S7WLWord = 0x04
-S7WLInt = 0x05
-S7WLDWord = 0x06
-S7WLDInt = 0x07
-S7WLReal = 0x08
-S7WLCounter = 0x1C
-S7WLTimer = 0x1D
 
-# Server Area ID  (use with Register/unregister - Lock/unlock Area)
-# NOTE: these are not the same for the client!!
-srvAreaPE = 0
-srvAreaPA = 1
-srvAreaMK = 2
-srvAreaCT = 3
-srvAreaTM = 4
-srvAreaDB = 5
+class Area(Enum):
+    PE = 0x81
+    PA = 0x82
+    MK = 0x83
+    DB = 0x84
+    CT = 0x1C
+    TM = 0x1D
 
-server_areas = {
-    "PE": srvAreaPE,
-    "PA": srvAreaPA,
-    "MK": srvAreaMK,
-    "CT": srvAreaCT,
-    "TM": srvAreaTM,
-    "DB": srvAreaDB,
-}
+    def wordlen(self) -> WordLen:
+        if self == Area.TM:
+            return WordLen.Timer
+        elif self == Area.CT:
+            return WordLen.Counter
+        return WordLen.Byte
 
-wordlen_to_ctypes = {
-    S7WLBit: ctypes.c_int16,
-    S7WLByte: ctypes.c_int8,
-    S7WLWord: ctypes.c_int16,
-    S7WLDWord: ctypes.c_int32,
-    S7WLReal: ctypes.c_int32,
-    S7WLCounter: ctypes.c_int16,
-    S7WLTimer: ctypes.c_int16,
-}
+
+class SrvArea(Enum):
+    """
+    NOTE: these values are DIFFERENT from the normal area IDs.
+    """
+
+    PE = 0
+    PA = 1
+    MK = 2
+    CT = 3
+    TM = 4
+    DB = 5
+
+
+class Block(Enum):
+    OB = 0x38
+    DB = 0x41
+    SDB = 0x42
+    FC = 0x43
+    SFC = 0x44
+    FB = 0x45
+    SFB = 0x46
+
+    @property
+    def ctype(self) -> c_int:
+        return {
+            Block.OB: c_int(0x38),
+            Block.DB: c_int(0x41),
+            Block.SDB: c_int(0x42),
+            Block.FC: c_int(0x43),
+            Block.SFC: c_int(0x44),
+            Block.FB: c_int(0x45),
+            Block.SFB: c_int(0x46),
+        }[self]
+
 
 block_types = {
-    "OB": ctypes.c_int(0x38),
-    "DB": ctypes.c_int(0x41),
-    "SDB": ctypes.c_int(0x42),
-    "FC": ctypes.c_int(0x43),
-    "SFC": ctypes.c_int(0x44),
-    "FB": ctypes.c_int(0x45),
-    "SFB": ctypes.c_int(0x46),
+    "OB": c_int(0x38),
+    "DB": c_int(0x41),
+    "SDB": c_int(0x42),
+    "FC": c_int(0x43),
+    "SFC": c_int(0x44),
+    "FB": c_int(0x45),
+    "SFB": c_int(0x46),
 }
 
 server_statuses = {
@@ -157,10 +171,10 @@ cpu_statuses = {
 }
 
 
-class SrvEvent(ctypes.Structure):
+class SrvEvent(Structure):
     _fields_ = [
         ("EvtTime", time_t),
-        ("EvtSender", ctypes.c_int),
+        ("EvtSender", c_int),
         ("EvtCode", longword),
         ("EvtRetCode", word),
         ("EvtParam1", word),
@@ -177,15 +191,15 @@ class SrvEvent(ctypes.Structure):
         )
 
 
-class BlocksList(ctypes.Structure):
+class BlocksList(Structure):
     _fields_ = [
-        ("OBCount", ctypes.c_int32),
-        ("FBCount", ctypes.c_int32),
-        ("FCCount", ctypes.c_int32),
-        ("SFBCount", ctypes.c_int32),
-        ("SFCCount", ctypes.c_int32),
-        ("DBCount", ctypes.c_int32),
-        ("SDBCount", ctypes.c_int32),
+        ("OBCount", c_int32),
+        ("FBCount", c_int32),
+        ("FCCount", c_int32),
+        ("SFBCount", c_int32),
+        ("SFCCount", c_int32),
+        ("DBCount", c_int32),
+        ("SDBCount", c_int32),
     ]
 
     def __str__(self) -> str:
@@ -195,23 +209,24 @@ class BlocksList(ctypes.Structure):
         )
 
 
-class TS7BlockInfo(ctypes.Structure):
+# noinspection PyTypeChecker
+class TS7BlockInfo(Structure):
     _fields_ = [
-        ("BlkType", ctypes.c_int32),
-        ("BlkNumber", ctypes.c_int32),
-        ("BlkLang", ctypes.c_int32),
-        ("BlkFlags", ctypes.c_int32),
-        ("MC7Size", ctypes.c_int32),
-        ("LoadSize", ctypes.c_int32),
-        ("LocalData", ctypes.c_int32),
-        ("SBBLength", ctypes.c_int32),
-        ("CheckSum", ctypes.c_int32),
-        ("Version", ctypes.c_int32),
-        ("CodeDate", ctypes.c_char * 11),
-        ("IntfDate", ctypes.c_char * 11),
-        ("Author", ctypes.c_char * 9),
-        ("Family", ctypes.c_char * 9),
-        ("Header", ctypes.c_char * 9),
+        ("BlkType", c_int32),
+        ("BlkNumber", c_int32),
+        ("BlkLang", c_int32),
+        ("BlkFlags", c_int32),
+        ("MC7Size", c_int32),
+        ("LoadSize", c_int32),
+        ("LocalData", c_int32),
+        ("SBBLength", c_int32),
+        ("CheckSum", c_int32),
+        ("Version", c_int32),
+        ("CodeDate", c_char * 11),
+        ("IntfDate", c_char * 11),
+        ("Author", c_char * 9),
+        ("Family", c_char * 9),
+        ("Header", c_char * 9),
     ]
 
     def __str__(self) -> str:
@@ -233,16 +248,16 @@ class TS7BlockInfo(ctypes.Structure):
     Header: {self.Header}"""
 
 
-class S7DataItem(ctypes.Structure):
+class S7DataItem(Structure):
     _pack_ = 1
     _fields_ = [
-        ("Area", ctypes.c_int32),
-        ("WordLen", ctypes.c_int32),
-        ("Result", ctypes.c_int32),
-        ("DBNumber", ctypes.c_int32),
-        ("Start", ctypes.c_int32),
-        ("Amount", ctypes.c_int32),
-        ("pData", ctypes.POINTER(ctypes.c_uint8)),
+        ("Area", c_int32),
+        ("WordLen", c_int32),
+        ("Result", c_int32),
+        ("DBNumber", c_int32),
+        ("Start", c_int32),
+        ("Amount", c_int32),
+        ("pData", POINTER(c_uint8)),
     ]
 
     def __str__(self) -> str:
@@ -252,7 +267,8 @@ class S7DataItem(ctypes.Structure):
         )
 
 
-class S7CpuInfo(ctypes.Structure):
+# noinspection PyTypeChecker
+class S7CpuInfo(Structure):
     """
     S7CpuInfo class for handling CPU with :
         - ModuleTypeName => Model of S7-CPU
@@ -260,18 +276,15 @@ class S7CpuInfo(ctypes.Structure):
         - ASName => Family Class of the S7-CPU
         - Copyright => Siemens Copyright
         - ModuleName => TIA project name or for other S7-CPU, same as ModuleTypeName
-    Examples:
-        For str handling instead of bytes
-        >>> if hasattr(self, 'SerialNumber'):
-        >>>     return str(self.SerialNumber, encoding="utf-8")
+
     """
 
     _fields_ = [
-        ("ModuleTypeName", ctypes.c_char * 33),
-        ("SerialNumber", ctypes.c_char * 25),
-        ("ASName", ctypes.c_char * 25),
-        ("Copyright", ctypes.c_char * 27),
-        ("ModuleName", ctypes.c_char * 25),
+        ("ModuleTypeName", c_char * 33),
+        ("SerialNumber", c_char * 25),
+        ("ASName", c_char * 25),
+        ("Copyright", c_char * 27),
+        ("ModuleName", c_char * 25),
     ]
 
     def __str__(self):
@@ -281,55 +294,53 @@ class S7CpuInfo(ctypes.Structure):
         )
 
 
-class S7SZLHeader(ctypes.Structure):
+class S7SZLHeader(Structure):
     """
     LengthDR: Length of a data record of the partial list in bytes
     NDR: Number of data records contained in the partial list
     """
 
-    _fields_ = [("LengthDR", ctypes.c_uint16), ("NDR", ctypes.c_uint16)]
+    _fields_ = [("LengthDR", c_uint16), ("NDR", c_uint16)]
 
     def __str__(self) -> str:
         return f"<S7SZLHeader LengthDR: {self.LengthDR}, NDR: {self.NDR}>"
 
 
-class S7SZL(ctypes.Structure):
+class S7SZL(Structure):
     """See §33.1 of System Software for S7-300/400 System and Standard Functions"""
 
-    _fields_ = [("Header", S7SZLHeader), ("Data", ctypes.c_byte * (0x4000 - 4))]
+    _fields_ = [("Header", S7SZLHeader), ("Data", c_byte * (0x4000 - 4))]
 
     def __str__(self) -> str:
         return f"<S7SZL Header: {self.S7SZHeader}, Data: {self.Data}>"
 
 
-class S7SZLList(ctypes.Structure):
+class S7SZLList(Structure):
     _fields_ = [("Header", S7SZLHeader), ("List", word * (0x4000 - 2))]
 
 
-class S7OrderCode(ctypes.Structure):
-    _fields_ = [("OrderCode", ctypes.c_char * 21), ("V1", ctypes.c_byte), ("V2", ctypes.c_byte), ("V3", ctypes.c_byte)]
+class S7OrderCode(Structure):
+    _fields_ = [("OrderCode", c_char * 21), ("V1", c_byte), ("V2", c_byte), ("V3", c_byte)]
 
 
-class S7CpInfo(ctypes.Structure):
+class S7CpInfo(Structure):
     """
     S7 Cp class for Communication Information :
         - MaxPduLength => Size of the maximum PDU length in bytes
         - MaxConnections => Max connection allowed to S7-CPU or Server
         - MaxMpiRate => MPI rate (MPI use is deprecated)
         - MaxBusRate => Profibus rate
+
     Every data packet exchanged with a PLC must fit within the PDU size,
     whose is fixed from 240 up to 960 bytes.
-    For debugging S7 protocol, this informations are essentials !
-    Examples:
-        >>> if hasattr(self, 'MaxBusRate'):
-        >>>     return int(self.MaxBusRate)
+
     """
 
     _fields_ = [
-        ("MaxPduLength", ctypes.c_uint16),
-        ("MaxConnections", ctypes.c_uint16),
-        ("MaxMpiRate", ctypes.c_uint16),
-        ("MaxBusRate", ctypes.c_uint16),
+        ("MaxPduLength", c_uint16),
+        ("MaxConnections", c_uint16),
+        ("MaxMpiRate", c_uint16),
+        ("MaxBusRate", c_uint16),
     ]
 
     def __str__(self) -> str:
@@ -339,7 +350,7 @@ class S7CpInfo(ctypes.Structure):
         )
 
 
-class S7Protection(ctypes.Structure):
+class S7Protection(Structure):
     """See §33.19 of System Software for S7-300/400 System and Standard Functions"""
 
     _fields_ = [

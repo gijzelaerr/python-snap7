@@ -8,7 +8,7 @@ on:
 env:
   IMAGE_NAME: python-snap7
 jobs:
-  push:
+  build-and-push-container-image:
     runs-on: ubuntu-latest
     permissions:
       packages: write

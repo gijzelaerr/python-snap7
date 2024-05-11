@@ -26,21 +26,21 @@ plc.connect("192.168.200.24", 0, 3)
 # In this example boolean in DB 31 at byte 120 and bit 5 is changed. = 120.5
 
 reading = plc.db_read(31, 120, 1)  # read 1 byte from db 31 staring from byte 120
-snap7.util.setters.set_bool(reading, 0, 5)  # set a value of fifth bit
+snap7.util.setters.set_bool(reading, 0, 5, True)  # set a value of fifth bit
 plc.db_write(reading, 31, 120, 1)  # write back the bytearray and now the boolean value is changed in the PLC.
 
 # NOTE you could also use the read_area and write_area functions.
 # then you can specify an area to read from:
 # https://github.com/gijzelaerr/python-snap7/blob/master/snap7/types.py
 
-from snap7.types import areas  # noqa: E402
+from snap7.types import Area  # noqa: E402
 
 
 # play with these functions.
-plc.read_area(area=areas["MK"], dbnumber=0, start=20, size=2)
+plc.read_area(area=Area.MK, dbnumber=0, start=20, size=2)
 
 data = bytearray()
 snap7.util.setters.set_int(data, 0, 127)
-plc.write_area(area=areas["MK"], dbnumber=0, start=20, data=data)
+plc.write_area(area=Area.MK, dbnumber=0, start=20, data=data)
 # read the client source code!
 # and official snap7 documentation

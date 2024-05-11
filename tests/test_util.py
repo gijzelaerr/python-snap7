@@ -6,7 +6,7 @@ import struct
 from snap7.util.db import DB_Row, DB
 from snap7.util.getters import get_byte, get_time, get_fstring, get_int
 from snap7.util.setters import set_byte, set_time, set_fstring, set_int
-from snap7 import types
+from snap7.types import WordLen
 
 test_spec = """
 
@@ -196,6 +196,7 @@ _new_bytearray[42 : 42 + 1] = struct.pack("B", 255)  # byte_index=41, value=255,
 _new_bytearray[43 : 43 + 4] = struct.pack("I", 286331153)  # byte_index=43, value=286331153(T#3D_7H_32M_11S_153MS), bytes=4
 
 
+# noinspection PyTypeChecker
 @pytest.mark.util
 class TestS7util(unittest.TestCase):
     def test_get_byte_new(self):
@@ -396,7 +397,7 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row["testsint0"], 127)
 
     def test_set_int_roundtrip(self):
-        DB1 = (types.wordlen_to_ctypes[types.S7WLByte] * 4)()
+        DB1 = (WordLen.Byte.ctype * 4)()
 
         for i in range(-(2**15) + 1, (2**15) - 1):
             set_int(DB1, 0, i)

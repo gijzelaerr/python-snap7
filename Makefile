@@ -36,17 +36,20 @@ check: venv/bin/pytest
 	venv/bin/ruff check snap7 tests example
 	 venv/bin/ruff format --diff snap7 tests example
 
-.PHONY: format
-format: venv/bin/tox
+.PHONY: ruff
+ruff: venv/bin/tox
 	venv/bin/tox -e ruff
+
+.PHONY: format
+format: ruff
 
 .PHONY: mypy
 mypy: venv/bin/pytest
 	venv/bin/mypy snap7 tests example
 
 .PHONY: test
-test: venv/bin/tox
-	venv/bin/tox -e py312
+test: venv/bin/pytest
+	venv/bin/pytest
 
 .PHONY: clean
 clean:
