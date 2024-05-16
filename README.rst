@@ -1,24 +1,19 @@
 .. image:: https://img.shields.io/pypi/v/python-snap7?label=python-snap7&link=https%3A%2F%2Fpypi.org%2Fproject%2Fpython-snap7%2F
    :alt: PyPI - Version
-
 .. image:: https://img.shields.io/github/actions/workflow/status/gijzelaerr/python-snap7/build-and-test-amd64.yml?branch=master
    :alt: GitHub Actions Workflow Status
-
 .. image:: https://img.shields.io/github/issues/gijzelaerr/python-snap7
    :alt: GitHub Issues or Pull Requests
-
 .. image:: https://img.shields.io/pypi/pyversions/python-snap7
    :alt: PyPI - Python Version
-
 .. image:: https://img.shields.io/github/discussions/gijzelaerr/python-snap7
    :alt: GitHub Discussions
-
 .. image:: https://img.shields.io/pypi/l/python-snap7
-   :alt: PyPI - License
+   :alt: PyPI - License 
+
 
 python-snap7
-===========
-
+================
 
 This is a ctypes-based Python wrapper for snap7. Snap7 is an open-source,
 32/64 bit, multi-platform Ethernet communication suite for interfacing natively
@@ -47,7 +42,7 @@ Compatible architectures :
 - ARM64
 
 Usage
-====
+================
 
 The python-snap7 library provides a comprehensive set of tools for communicating with Siemens S7 PLCs over Ethernet. It offers a variety of modules, each catering to specific communication needs, including:
 
@@ -63,7 +58,7 @@ For more information, please read the `online installation documentation <https:
 
 
 How to Contribute
-================
+====================
 
 There are many ways to contribute to the python-snap7 project. Here are a few ideas:
 
