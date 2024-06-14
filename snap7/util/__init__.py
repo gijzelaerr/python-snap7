@@ -89,6 +89,11 @@ from typing import Union
 from datetime import date, datetime
 from collections import OrderedDict
 
+from .db import (
+    DB,
+    DB_Row,
+)
+
 from .setters import (
     set_bool,  # noqa: F401
     set_fstring,  # noqa: F401
@@ -162,7 +167,7 @@ def parse_specification(db_specification: str) -> OrderedDict:
 
     for line in db_specification.split("\n"):
         if line and not line.lstrip().startswith("#"):
-            index, var_name, _type = line.split("#")[0].split()
+            index, var_name, _type = line.lstrip().split("#")[0].split()
             parsed_db_specification[var_name] = (index, _type)
 
     return parsed_db_specification
