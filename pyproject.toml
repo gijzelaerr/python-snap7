@@ -32,7 +32,7 @@ Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "mypy", "types-setuptools", "ruff", "tox"]
+test = ["pytest", "mypy", "types-setuptools", "ruff", "tox", "types-click"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 
@@ -59,6 +59,9 @@ markers =[
 
 [tool.mypy]
 ignore_missing_imports = true
+strict = true
+# https://github.com/python/mypy/issues/2427#issuecomment-1419206807
+disable_error_code = ["method-assign", "attr-defined"]
 
 [tool.ruff]
 output-format = "full"

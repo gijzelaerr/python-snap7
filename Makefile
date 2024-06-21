@@ -44,8 +44,8 @@ ruff: venv/bin/tox
 format: ruff
 
 .PHONY: mypy
-mypy: venv/bin/pytest
-	venv/bin/mypy snap7 tests example
+mypy: venv/
+	venv/bin/tox -e mypy
 
 .PHONY: test
 test: venv/bin/pytest

@@ -1,7 +1,7 @@
 import re
 from collections import OrderedDict
-from datetime import datetime, date
-from typing import Optional, Union, Dict, Callable
+from datetime import datetime, date, timedelta
+from typing import Any, Iterator, Optional, Tuple, Union, Dict, Callable
 from logging import getLogger
 
 from snap7.client import Client
@@ -53,6 +53,8 @@ from snap7.util.setters import set_lreal, set_date
 
 logger = getLogger(__name__)
 
+ValueType = Union[int, float, str, datetime, bytearray, bytes, date, timedelta]
+
 
 class DB:
     """
@@ -79,12 +81,13 @@ class DB:
         db_offset: at which byte in the db starts reading.
 
     Examples:
-        >>> db1[0]['testbool1'] = test
-        >>> db1.write(client)   # puts data in plc
+        >>> db = DB()
+        >>> db[0]['testbool1'] = "test"
+        >>> db.write(Client())   # puts data in plc
     """
 
     bytearray_: Optional[bytearray] = None  # data from plc
-    specification: Optional[str] = None  # layout of db rows
+    specification: str  # layout of db rows
     id_field: Optional[str] = None  # ID field of the rows
     row_size: int = 0  # bytes size of a db row
     layout_offset: int = 0  # at which byte in row specification should
@@ -115,10 +118,10 @@ class DB:
             bytearray_: initial buffer read from the PLC.
             specification: layout of the PLC memory.
             row_size: bytes size of a db row.
-            size: lenght of the memory area.
+            size: length of the memory area.
             id_field: name to reference the row. Optional.
             db_offset: at which byte in the db starts reading.
-            layout_offset: at which byte in the row specificaion we
+            layout_offset: at which byte in the row specification we
                 start reading the data.
             row_offset: offset between rows.
             area: which memory area this row is representing.
@@ -137,10 +140,10 @@ class DB:
         self.specification = specification
         # loop over bytearray. make rowObjects
         # store index of id_field to row objects
-        self.index: OrderedDict = OrderedDict()
+        self.index: OrderedDict[str, DB_Row] = OrderedDict()
         self.make_rows()
 
-    def make_rows(self):
+    def make_rows(self) -> None:
         """Make each row for the DB."""
         id_field = self.id_field
         row_size = self.row_size
@@ -169,7 +172,7 @@ class DB:
                 logger.error(msg)
             self.index[key] = row
 
-    def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, int, float, str, bool, datetime]:
+    def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, "DB_Row"]:
         """Access a row of the table through its index.
 
         Rows (values) are of type :class:`DB_Row`.
@@ -179,7 +182,7 @@ class DB:
         """
         return self.index.get(key, default)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[str, Any]]:
         """Iterate over the items contained in the table, in the physical order they are contained
         in memory.
 
@@ -190,7 +193,7 @@ class DB:
         """
         yield from self.index.items()
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Return the number of rows contained in the DB.
 
         Notes:
@@ -198,23 +201,23 @@ class DB:
         """
         return len(self.index)
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         """Return whether the given key is the index of a row in the DB."""
         return key in self.index
 
-    def keys(self):
+    def keys(self) -> Iterator[str]:
         """Return a *view object* of the keys that are used as indices for the rows in the
         DB.
         """
         yield from self.index.keys()
 
-    def items(self):
+    def items(self) -> Iterator[Tuple[str, Any]]:
         """Return a *view object* of the items (``(index, row)`` pairs) that are used as indices
         for the rows in the DB.
         """
         yield from self.index.items()
 
-    def export(self):
+    def export(self) -> OrderedDict[str, Any]:
         """Export the object to an :class:`OrderedDict`, where each item in the dictionary
         has an index as the key, and the value of the DB row associated with that index
         as a value, represented itself as a :class:`dict` (as returned by :func:`DB_Row.export`).
@@ -230,7 +233,7 @@ class DB:
             ret[k] = v.export()
         return ret
 
-    def set_data(self, bytearray_: bytearray):
+    def set_data(self, bytearray_: bytearray) -> None:
         """Set the new buffer data from the PLC to the current instance.
 
         Args:
@@ -243,7 +246,7 @@ class DB:
             raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
         self._bytearray = bytearray_
 
-    def read(self, client: Client):
+    def read(self, client: Client) -> None:
         """Reads all the rows from the PLC to the :obj:`bytearray` of this instance.
 
         Args:
@@ -269,7 +272,7 @@ class DB:
         self.index.clear()
         self.make_rows()
 
-    def write(self, client):
+    def write(self, client: Client) -> None:
         """Writes all the rows from the :obj:`bytearray` of this instance to the PLC
 
         Notes:
@@ -311,17 +314,17 @@ class DB_Row:
     """
 
     bytearray_: bytearray  # data of reference to parent DB
-    _specification: OrderedDict = OrderedDict()  # row specification
+    _specification: OrderedDict[str, Any] = OrderedDict()  # row specification
 
     def __init__(
         self,
-        bytearray_: bytearray,
+        bytearray_: Union[bytearray, "DB"],
         _specification: str,
-        row_size: Optional[int] = 0,
+        row_size: int = 0,
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: Optional[int] = 0,
-        area: Optional[Area] = Area.DB,
+        area: Area = Area.DB,
     ):
         """Creates a new instance of the `DB_Row` class.
 
@@ -368,21 +371,21 @@ class DB_Row:
         """
         return {key: self[key] for key in self._specification}
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         """
         Get a specific db field
         """
         index, _type = self._specification[key]
         return self.get_value(index, _type)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: str, value: Any) -> None:
         index, _type = self._specification[key]
         self.set_value(index, _type, value)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         string = ""
         for var_name, (index, _type) in self._specification.items():
-            string = f"{string}\n{var_name:<20} {self.get_value(index, _type):<10}"
+            string = f"{string}\n{var_name:<20} {self.get_value(index, _type)!r:<10}"
         return string
 
     def unchanged(self, bytearray_: bytearray) -> bool:
@@ -410,7 +413,7 @@ class DB_Row:
         # the variable address with decimal point(like 0.0 or 4.0)
         return int(float(byte_index)) - self.layout_offset + self.db_offset
 
-    def get_value(self, byte_index: Union[str, int], type_: str) -> Union[ValueError, int, float, str, datetime]:
+    def get_value(self, byte_index: Union[str, int], type_: str) -> ValueType:
         """Gets the value for a specific type.
 
         Args:
@@ -453,7 +456,7 @@ class DB_Row:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             return get_wstring(bytearray_, byte_index)
         else:
-            type_to_func: Dict[str, Callable] = {
+            type_to_func: Dict[str, Callable[[bytearray, int], ValueType]] = {
                 "REAL": get_real,
                 "DWORD": get_dword,
                 "UDINT": get_udint,
@@ -479,7 +482,7 @@ class DB_Row:
                 return type_to_func[type_](bytearray_, byte_index)
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Optional[bytearray]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
@@ -509,7 +512,8 @@ class DB_Row:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
-            return set_fstring(bytearray_, byte_index, value, max_size_int)
+            set_fstring(bytearray_, byte_index, value, max_size_int)
+            return None
 
         if type_.startswith("STRING") and isinstance(value, str):
             max_size = re.search(r"\d+", type_)
@@ -517,7 +521,8 @@ class DB_Row:
                 raise ValueError("Max size could not be determinate. re.search() returned None")
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
-            return set_string(bytearray_, byte_index, value, max_size_int)
+            set_string(bytearray_, byte_index, value, max_size_int)
+            return None
 
         if type_ == "REAL":
             return set_real(bytearray_, byte_index, value)

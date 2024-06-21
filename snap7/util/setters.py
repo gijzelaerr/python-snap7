@@ -62,7 +62,7 @@ def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_word(bytearray_: bytearray, byte_index: int, _int: int):
+def set_word(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """Set value in bytearray to word
 
     Notes:
@@ -82,7 +82,7 @@ def set_word(bytearray_: bytearray, byte_index: int, _int: int):
     return bytearray_
 
 
-def set_int(bytearray_: bytearray, byte_index: int, _int: int):
+def set_int(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """Set value in bytearray to int
 
     Notes:
@@ -108,7 +108,7 @@ def set_int(bytearray_: bytearray, byte_index: int, _int: int):
     return bytearray_
 
 
-def set_uint(bytearray_: bytearray, byte_index: int, _int: int):
+def set_uint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """Set value in bytearray to unsigned int
 
     Notes:
@@ -134,7 +134,7 @@ def set_uint(bytearray_: bytearray, byte_index: int, _int: int):
     return bytearray_
 
 
-def set_real(bytearray_: bytearray, byte_index: int, real) -> bytearray:
+def set_real(bytearray_: bytearray, byte_index: int, real: Union[bool, str, float, int]) -> bytearray:
     """Set Real value
 
     Notes:
@@ -154,15 +154,14 @@ def set_real(bytearray_: bytearray, byte_index: int, real) -> bytearray:
         >>> snap7.util.set_real(data, 0, 123.321)
             bytearray(b'B\\xf6\\xa4Z')
     """
-    real = float(real)
-    real = struct.pack(">f", real)
-    _bytes = struct.unpack("4B", real)
+    real_packed = struct.pack(">f", float(real))
+    _bytes = struct.unpack("4B", real_packed)
     for i, b in enumerate(_bytes):
         bytearray_[byte_index + i] = b
     return bytearray_
 
 
-def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: int):
+def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: int) -> None:
     """Set space-padded fixed-length string value
 
     Args:
@@ -200,7 +199,7 @@ def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: 
         bytearray_[byte_index + r] = ord(" ")
 
 
-def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 254):
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 254) -> None:
     """Set string value
 
     Args:
@@ -252,7 +251,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
         bytearray_[byte_index + 2 + r] = ord(" ")
 
 
-def set_dword(bytearray_: bytearray, byte_index: int, dword: int):
+def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> None:
     """Set a DWORD to the buffer.
 
     Notes:
@@ -276,7 +275,7 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int):
         bytearray_[byte_index + i] = b
 
 
-def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
+def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> None:
     """Set value in bytearray to dint
 
     Notes:
@@ -301,7 +300,7 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int):
         bytearray_[byte_index + i] = b
 
 
-def set_udint(bytearray_: bytearray, byte_index: int, udint: int):
+def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> None:
     """Set value in bytearray to unsigned dint
 
     Notes:
@@ -400,7 +399,7 @@ def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_sint(bytearray_: bytearray, byte_index: int, _int) -> bytearray:
+def set_sint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """Set small int to the buffer.
 
     Notes:

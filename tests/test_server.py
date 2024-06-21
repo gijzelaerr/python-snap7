@@ -1,7 +1,6 @@
-from ctypes import c_char, Array
+from ctypes import c_char
 import gc
 import logging
-from typing import Type
 
 import pytest
 import unittest
@@ -27,7 +26,7 @@ class TestServer(unittest.TestCase):
         self.server.destroy()
 
     def test_register_area(self) -> None:
-        db1_type: Type[Array[c_char]] = c_char * 1024
+        db1_type = c_char * 1024
         self.server.register_area(SrvArea.DB, 3, db1_type())
 
     def test_error(self) -> None:
@@ -97,13 +96,13 @@ class TestServer(unittest.TestCase):
         self.server.unregister_area(area_code, index)
 
     def test_events_callback(self) -> None:
-        def event_call_back(event) -> None:
+        def event_call_back(event: str) -> None:
             logging.debug(event)
 
         self.server.set_events_callback(event_call_back)
 
     def test_read_events_callback(self) -> None:
-        def read_events_call_back(event) -> None:
+        def read_events_call_back(event: str) -> None:
             logging.debug(event)
 
         self.server.set_read_events_callback(read_events_call_back)

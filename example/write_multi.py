@@ -10,7 +10,7 @@ client.connect("192.168.100.100", 0, 2)
 items = []
 
 
-def set_data_item(area, word_len, db_number: int, start: int, amount: int, data: bytearray) -> S7DataItem:
+def set_data_item(area: Area, word_len: int, db_number: int, start: int, amount: int, data: bytearray) -> S7DataItem:
     item = S7DataItem()
     item.Area = ctypes.c_int32(area)
     item.WordLen = ctypes.c_int32(word_len)

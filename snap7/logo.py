@@ -5,7 +5,7 @@ Snap7 client used for connection to a siemens LOGO 7/8 server.
 import re
 import struct
 import logging
-from ctypes import byref, c_int, c_int32, c_uint16, c_void_p
+from ctypes import byref, c_int, c_int32, c_uint16
 
 from .types import WordLen, S7Object, param_types
 from .types import RemotePort, Area
@@ -27,19 +27,19 @@ class Logo:
         For more information see examples for Siemens Logo 7 and 8
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Creates a new instance of :obj:`Logo`"""
-        self.pointer = None
+        self.pointer: S7Object
         self.library = load_library()
         self.create()
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.destroy()
 
-    def create(self):
+    def create(self) -> None:
         """Create a SNAP7 client."""
         logger.info("creating snap7 client")
-        self.library.Cli_Create.restype = c_void_p
+        self.library.Cli_Create.restype = S7Object  # type: ignore[attr-defined]
         self.pointer = S7Object(self.library.Cli_Create())
 
     def destroy(self) -> int:
@@ -87,7 +87,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def read(self, vm_address: str):
+    def read(self, vm_address: str) -> int:
         """Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
 
         Args:
@@ -139,13 +139,14 @@ class Logo:
         check_error(result, context="client")
         # transform result to int value
         if wordlen == WordLen.Bit:
-            return data[0]
+            result = int(data[0])
         if wordlen == WordLen.Byte:
-            return struct.unpack_from(">B", data)[0]
+            result = struct.unpack_from(">B", data)[0]
         if wordlen == WordLen.Word:
-            return struct.unpack_from(">h", data)[0]
+            result = struct.unpack_from(">h", data)[0]
         if wordlen == WordLen.DWord:
-            return struct.unpack_from(">l", data)[0]
+            result = struct.unpack_from(">l", data)[0]
+        return result
 
     def write(self, vm_address: str, value: int) -> int:
         """Writes to VM addresses of Siemens Logo.
@@ -250,7 +251,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def set_connection_params(self, ip_address: str, tsap_snap7: int, tsap_logo: int):
+    def set_connection_params(self, ip_address: str, tsap_snap7: int, tsap_logo: int) -> None:
         """Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
 
         Notes:
@@ -273,7 +274,7 @@ class Logo:
         if result != 0:
             raise ValueError("The parameter was invalid")
 
-    def set_connection_type(self, connection_type: int):
+    def set_connection_type(self, connection_type: int) -> None:
         """Sets the connection resource type, i.e the way in which the Clients
             connects to a PLC.
 
@@ -302,7 +303,7 @@ class Logo:
         check_error(result, context="client")
         return bool(connected)
 
-    def set_param(self, number: int, value):
+    def set_param(self, number: int, value: int) -> int:
         """Sets an internal Server object parameter.
 
         Args:
@@ -318,7 +319,7 @@ class Logo:
         check_error(result, context="client")
         return result
 
-    def get_param(self, number) -> int:
+    def get_param(self, number: int) -> int:
         """Reads an internal Logo object parameter.
 
         Args:

@@ -287,7 +287,7 @@ class S7CpuInfo(Structure):
         ("ModuleName", c_char * 25),
     ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"<S7CpuInfo ModuleTypeName: {self.ModuleTypeName} SerialNumber: {self.SerialNumber} "
             f"ASName: {self.ASName} Copyright: {self.Copyright} ModuleName: {self.ModuleName}>"

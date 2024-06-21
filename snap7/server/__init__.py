@@ -4,22 +4,39 @@ Snap7 server used for mimicking a siemens 7 server.
 
 import re
 import time
-from ctypes import c_char, byref, sizeof, c_int, c_int32, c_uint32, c_void_p, CFUNCTYPE, POINTER, Array, c_int8
+from ctypes import (
+    c_char,
+    byref,
+    sizeof,
+    c_int,
+    c_int32,
+    c_uint32,
+    c_void_p,
+    CFUNCTYPE,
+    POINTER,
+    Array,
+    _SimpleCData,
+    c_byte,
+    c_int16,
+)
+from _ctypes import CFuncPtr
 import struct
 import logging
-from typing import Any, Tuple, Callable, Optional
+from typing import Any, Callable, Hashable, Optional, Tuple, cast, Type, Union
+from types import TracebackType
 
 from ..common import ipv4, check_error, load_library
+from ..protocol import Snap7CliProtocol
 from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object
 
 logger = logging.getLogger(__name__)
 
 
-def error_wrap(func):
+def error_wrap(func: Callable[..., Any]) -> Callable[..., Any]:
     """Parses a s7 error code returned the decorated function."""
 
-    def f(*args, **kw):
-        code = func(*args, **kw)
+    def f(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
+        code = func(*args, **kwargs)
         check_error(code, context="server")
 
     return f
@@ -30,8 +47,8 @@ class Server:
     A fake S7 server.
     """
 
-    _lib: Any  # since this is dynamically loaded from a DLL we don't have the type signature.
-    _s7_server: Optional[S7Object] = None
+    _lib: Snap7CliProtocol
+    _s7_server: S7Object
     _read_callback = None
     _callback: Optional[Callable[..., Any]] = None
 
@@ -42,18 +59,20 @@ class Server:
         Args:
             log: `True` for enabling the event logging. Optinoal.
         """
-        self._lib = load_library()
+        self._lib: Snap7CliProtocol = load_library()
         self.create()
         if log:
             self._set_log_callback()
 
-    def __enter__(self):
+    def __enter__(self) -> "Server":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         self.destroy()
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.destroy()
 
     def event_text(self, event: SrvEvent) -> str:
@@ -73,14 +92,14 @@ class Server:
         check_error(error)
         return text.value.decode("ascii")
 
-    def create(self):
+    def create(self) -> None:
         """Create the server."""
         logger.info("creating server")
-        self._lib.Srv_Create.restype = S7Object
+        self._lib.Srv_Create.restype = S7Object  # type: ignore[attr-defined]
         self._s7_server = S7Object(self._lib.Srv_Create())
 
     @error_wrap
-    def register_area(self, area: SrvArea, index: int, userdata: Array[c_int8]):
+    def register_area(self, area: SrvArea, index: int, userdata: "Array[_SimpleCData[int]]") -> int:
         """Shares a memory area with the server. That memory block will be
             visible by the clients.
 
@@ -119,12 +138,12 @@ class Server:
             call_back(pevent.contents)
             return 0
 
-        self._callback = callback_wrap(wrapper)
+        self._callback = cast(type[CFuncPtr], callback_wrap(wrapper))
         usrPtr = c_void_p()
         return self._lib.Srv_SetEventsCallback(self._s7_server, self._callback, usrPtr)
 
     @error_wrap
-    def set_read_events_callback(self, call_back: Callable[..., Any]):
+    def set_read_events_callback(self, call_back: Callable[..., Any]) -> int:
         """Sets the user callback that the Server object has to call when a Read
             event is created.
 
@@ -152,17 +171,17 @@ class Server:
         self._read_callback = callback_wrapper(wrapper)
         return self._lib.Srv_SetReadEventsCallback(self._s7_server, self._read_callback)
 
-    def _set_log_callback(self):
+    def _set_log_callback(self) -> None:
         """Sets a callback that logs the events"""
         logger.debug("setting up event logger")
 
-        def log_callback(event):
+        def log_callback(event: SrvEvent) -> None:
             logger.info(f"callback event: {self.event_text(event)}")
 
         self.set_events_callback(log_callback)
 
     @error_wrap
-    def start(self, tcpport: int = 102):
+    def start(self, tcpport: int = 102) -> int:
         """Starts the server.
 
         Args:
@@ -175,17 +194,17 @@ class Server:
         return self._lib.Srv_Start(self._s7_server)
 
     @error_wrap
-    def stop(self):
+    def stop(self) -> int:
         """Stop the server."""
         logger.info("stopping server")
         return self._lib.Srv_Stop(self._s7_server)
 
-    def destroy(self) -> Optional[int]:
+    def destroy(self) -> None:
         """Destroy the server."""
         logger.info("destroying server")
         if self._lib and self._s7_server is not None:
             return self._lib.Srv_Destroy(byref(self._s7_server))
-        self._s7_server = None
+        self._s7_server = None  # type: ignore[assignment]
         return None
 
     def get_status(self) -> Tuple[str, str, int]:
@@ -205,7 +224,7 @@ class Server:
         return (server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value)
 
     @error_wrap
-    def unregister_area(self, area: SrvArea, index: int):
+    def unregister_area(self, area: SrvArea, index: int) -> int:
         """'Unshares' a memory area previously shared with Srv_RegisterArea().
 
         Notes:
@@ -221,7 +240,7 @@ class Server:
         return self._lib.Srv_UnregisterArea(self._s7_server, area.value, index)
 
     @error_wrap
-    def unlock_area(self, area: SrvArea, index: int):
+    def unlock_area(self, area: SrvArea, index: int) -> int:
         """Unlocks a previously locked shared memory area.
 
         Args:
@@ -235,7 +254,7 @@ class Server:
         return self._lib.Srv_UnlockArea(self._s7_server, area.value, index)
 
     @error_wrap
-    def lock_area(self, area: SrvArea, index: int):
+    def lock_area(self, area: SrvArea, index: int) -> int:
         """Locks a shared memory area.
 
         Args:
@@ -249,7 +268,7 @@ class Server:
         return self._lib.Srv_LockArea(self._s7_server, area.value, index)
 
     @error_wrap
-    def start_to(self, ip: str, tcp_port: int = 102):
+    def start_to(self, ip: str, tcp_port: int = 102) -> int:
         """Start server on a specific interface.
 
         Args:
@@ -268,7 +287,7 @@ class Server:
         return self._lib.Srv_StartTo(self._s7_server, ip.encode())
 
     @error_wrap
-    def set_param(self, number: int, value: int):
+    def set_param(self, number: int, value: int) -> int:
         """Sets an internal Server object parameter.
 
         Args:
@@ -282,7 +301,7 @@ class Server:
         return self._lib.Srv_SetParam(self._s7_server, number, byref(c_int(value)))
 
     @error_wrap
-    def set_mask(self, kind: int, mask: int):
+    def set_mask(self, kind: int, mask: int) -> int:
         """Writes the specified filter mask.
 
         Args:
@@ -296,7 +315,7 @@ class Server:
         return self._lib.Srv_SetMask(self._s7_server, kind, mask)
 
     @error_wrap
-    def set_cpu_status(self, status: int):
+    def set_cpu_status(self, status: int) -> int:
         """Sets the Virtual CPU status.
 
         Args:
@@ -330,7 +349,7 @@ class Server:
         logger.debug("no events ready")
         return None
 
-    def get_param(self, number) -> int:
+    def get_param(self, number: int) -> int:
         """Reads an internal Server object parameter.
 
         Args:
@@ -371,7 +390,7 @@ class Server:
         return self._lib.Srv_ClearEvents(self._s7_server)
 
 
-def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
+def mainloop(tcpport: int = 1102, init_standard_values: bool = False) -> None:
     """Init a fake Snap7 server with some default values.
 
     Args:
@@ -381,10 +400,10 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False):
 
     server = Server()
     size = 100
-    DBdata = (WordLen.Byte.ctype * size)()
-    PAdata = (WordLen.Byte.ctype * size)()
-    TMdata = (WordLen.Byte.ctype * size)()
-    CTdata = (WordLen.Byte.ctype * size)()
+    DBdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
+    PAdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
+    TMdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
+    CTdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
     server.register_area(SrvArea.DB, 1, DBdata)
     server.register_area(SrvArea.PA, 1, PAdata)
     server.register_area(SrvArea.TM, 1, TMdata)

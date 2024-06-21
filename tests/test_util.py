@@ -2,6 +2,7 @@ import datetime
 import pytest
 import unittest
 import struct
+from typing import cast
 
 from snap7.util.db import DB_Row, DB
 from snap7.util.getters import get_byte, get_time, get_fstring, get_int
@@ -196,41 +197,40 @@ _new_bytearray[42 : 42 + 1] = struct.pack("B", 255)  # byte_index=41, value=255,
 _new_bytearray[43 : 43 + 4] = struct.pack("I", 286331153)  # byte_index=43, value=286331153(T#3D_7H_32M_11S_153MS), bytes=4
 
 
-# noinspection PyTypeChecker
 @pytest.mark.util
 class TestS7util(unittest.TestCase):
-    def test_get_byte_new(self):
+    def test_get_byte_new(self) -> None:
         test_array = bytearray(_new_bytearray)
         byte_ = get_byte(test_array, 41)
         self.assertEqual(byte_, 128)
         byte_ = get_byte(test_array, 42)
         self.assertEqual(byte_, 255)
 
-    def test_set_byte_new(self):
+    def test_set_byte_new(self) -> None:
         test_array = bytearray(_new_bytearray)
         set_byte(test_array, 41, 127)
         byte_ = get_byte(test_array, 41)
         self.assertEqual(byte_, 127)
 
-    def test_get_byte(self):
+    def test_get_byte(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(50, "BYTE")  # get value
         self.assertEqual(value, 254)
 
-    def test_set_byte(self):
+    def test_set_byte(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testByte"] = 255
         self.assertEqual(row["testByte"], 255)
 
-    def test_set_lreal(self):
+    def test_set_lreal(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testLreal"] = 123.123
         self.assertEqual(row["testLreal"], 123.123)
 
-    def test_get_s5time(self):
+    def test_get_s5time(self) -> None:
         """
         S5TIME extraction from bytearray
         """
@@ -240,7 +240,7 @@ class TestS7util(unittest.TestCase):
 
         self.assertEqual(row["testS5time"], "0:00:00.100000")
 
-    def test_get_dt(self):
+    def test_get_dt(self) -> None:
         """
         DATE_AND_TIME extraction from bytearray
         """
@@ -250,7 +250,7 @@ class TestS7util(unittest.TestCase):
 
         self.assertEqual(row["testdateandtime"], "2020-07-12T17:32:02.854000")
 
-    def test_get_time(self):
+    def test_get_time(self) -> None:
         test_values = [
             (0, "0:0:0:0.0"),
             (1, "0:0:0:0.1"),  # T#1MS
@@ -273,7 +273,7 @@ class TestS7util(unittest.TestCase):
             data[:] = struct.pack(">i", value_to_test)
             self.assertEqual(get_time(data, 0), expected_value)
 
-    def test_set_time(self):
+    def test_set_time(self) -> None:
         test_array = bytearray(_new_bytearray)
 
         with self.assertRaises(ValueError):
@@ -297,7 +297,7 @@ class TestS7util(unittest.TestCase):
         byte_ = get_time(test_array, 43)
         self.assertEqual(byte_, "3:7:32:11.153")
 
-    def test_get_string(self):
+    def test_get_string(self) -> None:
         """
         Text extraction from string from bytearray
         """
@@ -306,7 +306,7 @@ class TestS7util(unittest.TestCase):
         row = DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row["NAME"], "test")
 
-    def test_write_string(self):
+    def test_write_string(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["NAME"] = "abc"
@@ -324,41 +324,41 @@ class TestS7util(unittest.TestCase):
         except ValueError:
             pass
 
-    def test_get_fstring(self):
-        data = [ord(letter) for letter in "hello world    "]
+    def test_get_fstring(self) -> None:
+        data = bytearray(ord(letter) for letter in "hello world    ")
         self.assertEqual(get_fstring(data, 0, 15), "hello world")
         self.assertEqual(get_fstring(data, 0, 15, remove_padding=False), "hello world    ")
 
-    def test_get_fstring_name(self):
+    def test_get_fstring_name(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row["testFstring"]
         self.assertEqual(value, "test")
 
-    def test_get_fstring_index(self):
+    def test_get_fstring_index(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(98, "FSTRING[8]")  # get value
         self.assertEqual(value, "test")
 
-    def test_set_fstring(self):
+    def test_set_fstring(self) -> None:
         data = bytearray(20)
         set_fstring(data, 0, "hello world", 15)
         self.assertEqual(data, bytearray(b"hello world    \x00\x00\x00\x00\x00"))
 
-    def test_set_fstring_name(self):
+    def test_set_fstring_name(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testFstring"] = "TSET"
         self.assertEqual(row["testFstring"], "TSET")
 
-    def test_set_fstring_index(self):
+    def test_set_fstring_index(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row.set_value(98, "FSTRING[8]", "TSET")
         self.assertEqual(row["testFstring"], "TSET")
 
-    def test_get_int(self):
+    def test_get_int(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         x = row["ID"]
@@ -366,58 +366,58 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(x, 0)
         self.assertEqual(y, 0)
 
-    def test_set_int(self):
+    def test_set_int(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["ID"] = 259
         self.assertEqual(row["ID"], 259)
 
-    def test_get_usint(self):
+    def test_get_usint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(43, "USINT")  # get value
         self.assertEqual(value, 254)
 
-    def test_set_usint(self):
+    def test_set_usint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testusint0"] = 255
         self.assertEqual(row["testusint0"], 255)
 
-    def test_get_sint(self):
+    def test_get_sint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(44, "SINT")  # get value
         self.assertEqual(value, 127)
 
-    def test_set_sint(self):
+    def test_set_sint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testsint0"] = 127
         self.assertEqual(row["testsint0"], 127)
 
-    def test_set_int_roundtrip(self):
-        DB1 = (WordLen.Byte.ctype * 4)()
+    def test_set_int_roundtrip(self) -> None:
+        DB1 = cast(bytearray, (WordLen.Byte.ctype * 4)())
 
         for i in range(-(2**15) + 1, (2**15) - 1):
             set_int(DB1, 0, i)
             result = get_int(DB1, 0)
             self.assertEqual(i, result)
 
-    def test_get_int_values(self):
+    def test_get_int_values(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         for value in (-32768, -16385, -256, -128, -127, 0, 127, 128, 255, 256, 16384, 32767):
             row["ID"] = value
             self.assertEqual(row["ID"], value)
 
-    def test_get_bool(self):
+    def test_get_bool(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row["testbool1"], 1)
         self.assertEqual(row["testbool8"], 0)
 
-    def test_set_bool(self):
+    def test_set_bool(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testbool8"] = True
@@ -426,7 +426,7 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row["testbool8"], True)
         self.assertEqual(row["testbool1"], False)
 
-    def test_db_creation(self):
+    def test_db_creation(self) -> None:
         test_array = bytearray(_bytearray * 10)
 
         test_db = DB(1, test_array, test_spec, row_size=len(_bytearray), size=10, layout_offset=4, db_offset=0)
@@ -446,7 +446,7 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row["testbool8"], 0)
             self.assertEqual(row["NAME"], "test")
 
-    def test_db_export(self):
+    def test_db_export(self) -> None:
         test_array = bytearray(_bytearray * 10)
         test_db = DB(1, test_array, test_spec, row_size=len(_bytearray), size=10, layout_offset=4, db_offset=0)
 
@@ -463,56 +463,56 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(db_export[i]["testbool8"], 0)
             self.assertEqual(db_export[i]["NAME"], "test")
 
-    def test_get_real(self):
+    def test_get_real(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         self.assertTrue(0.01 > (row["testReal"] - 827.3) > -0.1)
 
-    def test_set_real(self):
+    def test_set_real(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         row["testReal"] = 1337.1337
         self.assertTrue(0.01 > (row["testReal"] - 1337.1337) > -0.01)
 
-    def test_set_dword(self):
+    def test_set_dword(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 4294967295.
         row["testDword"] = 9999999
         self.assertEqual(row["testDword"], 9999999)
 
-    def test_get_dword(self):
+    def test_get_dword(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         self.assertEqual(row["testDword"], 4294967295)
 
-    def test_set_dint(self):
+    def test_set_dint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is -2147483648 to 2147483647 +
         row.set_value(23, "DINT", 2147483647)  # set value
         self.assertEqual(row["testDint"], 2147483647)
 
-    def test_get_dint(self):
+    def test_get_dint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(23, "DINT")  # get value
         self.assertEqual(value, -2147483648)
 
-    def test_set_word(self):
+    def test_set_word(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         # The range of numbers is 0 to 65535
         row.set_value(27, "WORD", 0)  # set value
         self.assertEqual(row["testWord"], 0)
 
-    def test_get_word(self):
+    def test_get_word(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         value = row.get_value(27, "WORD")  # get value
         self.assertEqual(value, 65535)
 
-    def test_export(self):
+    def test_export(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec, layout_offset=4)
         data = row.export()
@@ -520,7 +520,7 @@ class TestS7util(unittest.TestCase):
         self.assertIn("testbool1", data)
         self.assertEqual(data["testbool5"], 0)
 
-    def test_indented_layout(self):
+    def test_indented_layout(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         x = row["ID"]
@@ -544,61 +544,61 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(y_single_indent, 0)
         self.assertEqual(y_multi_indent, 0)
 
-    def test_get_uint(self):
+    def test_get_uint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testUint"]
         self.assertEqual(val, 12345)
 
-    def test_get_udint(self):
+    def test_get_udint(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testUdint"]
         self.assertEqual(val, 123456789)
 
-    def test_get_lreal(self):
+    def test_get_lreal(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testLreal"]
         self.assertEqual(val, 123456789.123456789)
 
-    def test_get_char(self):
+    def test_get_char(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testChar"]
         self.assertEqual(val, "A")
 
-    def test_get_wchar(self):
+    def test_get_wchar(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testWchar"]
         self.assertEqual(val, "Ω")
 
-    def test_get_wstring(self):
+    def test_get_wstring(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testWstring"]
         self.assertEqual(val, "ΩstÄ")
 
-    def test_get_date(self):
+    def test_get_date(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testDate"]
         self.assertEqual(val, datetime.date(day=9, month=3, year=2022))
 
-    def test_get_tod(self):
+    def test_get_tod(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testTod"]
         self.assertEqual(val, datetime.timedelta(hours=12, minutes=34, seconds=56))
 
-    def test_get_dtl(self):
+    def test_get_dtl(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         val = row["testDtl"]
         self.assertEqual(val, datetime.datetime(year=2022, month=3, day=9, hour=12, minute=34, second=45))
 
-    def test_set_date(self):
+    def test_set_date(self) -> None:
         test_array = bytearray(_bytearray)
         row = DB_Row(test_array, test_spec_indented, layout_offset=4)
         row["testDate"] = datetime.date(day=28, month=3, year=2024)
