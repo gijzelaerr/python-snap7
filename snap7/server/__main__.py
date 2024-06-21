@@ -6,6 +6,7 @@ Its :code:`main()` function is also exported as an consol-entrypoint.
 """
 
 import logging
+from ctypes import CDLL
 
 try:
     import click
@@ -31,7 +32,7 @@ logger = logging.getLogger("Snap7.Server")
 @click.option("-v", "--verbose", is_flag=True, help="Also print debug-output.")
 @click.version_option(__version__)
 @click.help_option("-h", "--help")
-def main(port, dll, verbose):
+def main(port: int, dll: CDLL, verbose: bool) -> None:
     """Start a S7 dummy server with some default values."""
 
     # setup logging

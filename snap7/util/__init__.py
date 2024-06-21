@@ -85,7 +85,7 @@ example::
 
 import re
 import time
-from typing import Union
+from typing import Any, Union
 from datetime import date, datetime
 from collections import OrderedDict
 
@@ -147,7 +147,7 @@ def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:
     return utc + offset
 
 
-def parse_specification(db_specification: str) -> OrderedDict:
+def parse_specification(db_specification: str) -> OrderedDict[str, Any]:
     """Create a db specification derived from a
         dataview of a db in which the byte layout
         is specified
@@ -168,7 +168,7 @@ def parse_specification(db_specification: str) -> OrderedDict:
     return parsed_db_specification
 
 
-def print_row(data):
+def print_row(data: bytearray) -> None:
     """print a single db row in chr and str"""
     index_line = ""
     pri_line1 = ""
@@ -179,9 +179,8 @@ def print_row(data):
         # index
         if not i % 5:
             diff = len(pri_line1) - len(index_line)
-            i = str(i)
             index_line += diff * " "
-            index_line += i
+            index_line += str(i)
             # i = i + (ws - len(i)) * ' ' + ','
 
         # byte array line
