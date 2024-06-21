@@ -14,26 +14,26 @@ file_name_test = "test.dll"
 @pytest.mark.common
 class TestCommon(unittest.TestCase):
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         pass
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         pass
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.BASE_DIR = pathlib.Path.cwd()
         self.file = self.BASE_DIR / file_name_test
         self.file.touch()
 
-    def tearDown(self):
+    def tearDown(self) -> None:
         self.file.unlink()
 
-    def test_find_locally(self):
+    def test_find_locally(self) -> None:
         file = _find_locally(file_name_test.replace(".dll", ""))
         self.assertEqual(file, str(self.BASE_DIR / file_name_test))
 
-    def test_raise_error_if_no_library(self):
+    def test_raise_error_if_no_library(self) -> None:
         with self.assertRaises(OSError):
             load_library("wronglocation")
 

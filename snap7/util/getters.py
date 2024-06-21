@@ -1,6 +1,6 @@
 import struct
 from datetime import timedelta, datetime, date
-from typing import Union, List
+from typing import NoReturn
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -44,7 +44,7 @@ def get_byte(bytearray_: bytearray, byte_index: int) -> bytes:
     data = bytearray_[byte_index : byte_index + 1]
     data[0] = data[0] & 0xFF
     packed = struct.pack("B", *data)
-    value = struct.unpack("B", packed)[0]
+    value: bytes = struct.unpack("B", packed)[0]
     return value
 
 
@@ -70,7 +70,7 @@ def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
     data[1] = data[1] & 0xFF
     data[0] = data[0] & 0xFF
     packed = struct.pack("2B", *data)
-    value = struct.unpack(">H", packed)[0]
+    value: bytearray = struct.unpack(">H", packed)[0]
     return value
 
 
@@ -96,7 +96,7 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
     data[1] = data[1] & 0xFF
     data[0] = data[0] & 0xFF
     packed = struct.pack("2B", *data)
-    value = struct.unpack(">h", packed)[0]
+    value: int = struct.unpack(">h", packed)[0]
     return value
 
 
@@ -124,7 +124,7 @@ def get_uint(bytearray_: bytearray, byte_index: int) -> int:
     data[1] = data[1] & 0xFF
     data[0] = data[0] & 0xFF
     packed = struct.pack("2B", *data)
-    value = struct.unpack(">H", packed)[0]
+    value: int = struct.unpack(">H", packed)[0]
     return value
 
 
@@ -148,7 +148,7 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
             123.32099914550781
     """
     x = bytearray_[byte_index : byte_index + 4]
-    real = struct.unpack(">f", struct.pack("4B", *x))[0]
+    real: float = struct.unpack(">f", struct.pack("4B", *x))[0]
     return real
 
 
@@ -238,7 +238,7 @@ def get_dword(bytearray_: bytearray, byte_index: int) -> int:
             4294967295
     """
     data = bytearray_[byte_index : byte_index + 4]
-    dword = struct.unpack(">I", struct.pack("4B", *data))[0]
+    dword: int = struct.unpack(">I", struct.pack("4B", *data))[0]
     return dword
 
 
@@ -265,7 +265,7 @@ def get_dint(bytearray_: bytearray, byte_index: int) -> int:
             2147483647
     """
     data = bytearray_[byte_index : byte_index + 4]
-    dint = struct.unpack(">i", struct.pack("4B", *data))[0]
+    dint: int = struct.unpack(">i", struct.pack("4B", *data))[0]
     return dint
 
 
@@ -292,7 +292,7 @@ def get_udint(bytearray_: bytearray, byte_index: int) -> int:
             4294967295
     """
     data = bytearray_[byte_index : byte_index + 4]
-    dint = struct.unpack(">I", struct.pack("4B", *data))[0]
+    dint: int = struct.unpack(">I", struct.pack("4B", *data))[0]
     return dint
 
 
@@ -437,7 +437,7 @@ def get_usint(bytearray_: bytearray, byte_index: int) -> int:
     """
     data = bytearray_[byte_index] & 0xFF
     packed = struct.pack("B", data)
-    value = struct.unpack(">B", packed)[0]
+    value: int = struct.unpack(">B", packed)[0]
     return value
 
 
@@ -463,11 +463,11 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     """
     data = bytearray_[byte_index]
     packed = struct.pack("B", data)
-    value = struct.unpack(">b", packed)[0]
+    value: int = struct.unpack(">b", packed)[0]
     return value
 
 
-def get_lint(bytearray_: bytearray, byte_index: int):
+def get_lint(bytearray_: bytearray, byte_index: int) -> NoReturn:
     """Get the long int
 
     THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
@@ -494,7 +494,7 @@ def get_lint(bytearray_: bytearray, byte_index: int):
     # raw_lint = bytearray_[byte_index:byte_index + 8]
     # lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
     # return lint
-    return NotImplementedError
+    raise NotImplementedError
 
 
 def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
@@ -519,7 +519,7 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
         >>> snap7.util.get_lreal(data, 0)
             12345.12345
     """
-    return struct.unpack_from(">d", bytearray_, offset=byte_index)[0]
+    return float(struct.unpack_from(">d", bytearray_, offset=byte_index)[0])
 
 
 def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
@@ -571,7 +571,7 @@ def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
             12345
     """
     raw_ulint = bytearray_[byte_index : byte_index + 8]
-    lint = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
+    lint: int = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
     return lint
 
 
@@ -647,7 +647,7 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
     return char
 
 
-def get_wchar(bytearray_: bytearray, byte_index: int) -> Union[ValueError, str]:
+def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
     """Get wchar value from bytearray.
 
     Notes:
@@ -715,5 +715,5 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
     return bytearray_[wstring_start : wstring_start + wstr_symbols_amount].decode("utf-16-be")
 
 
-def get_array(bytearray_: bytearray, byte_index: int) -> List:
+def get_array(bytearray_: bytearray, byte_index: int) -> NoReturn:
     raise NotImplementedError

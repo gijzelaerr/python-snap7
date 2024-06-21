@@ -3,10 +3,12 @@ import logging
 import pathlib
 import platform
 from pathlib import Path
-from ctypes import c_char
-from typing import Any, Literal, Optional
+from ctypes import Array, c_char, c_int, c_int32
+from typing import Callable, Literal, NoReturn, Optional, cast
 from ctypes.util import find_library
 from functools import cache
+from .protocol import Snap7CliProtocol
+
 
 if platform.system() == "Windows":
     from ctypes import windll as cdll  # type: ignore
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 ipv4 = r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$"
 
 
-def _raise_error():
+def _raise_error() -> NoReturn:
     error = f"""can't find snap7 shared library.
 
 This probably means you are installing python-snap7 from source. When no binary wheel is found for you architecture, pip
@@ -72,7 +74,7 @@ def _find_in_package() -> Optional[str]:
 
 
 @cache
-def load_library(lib_location: Optional[str] = None) -> Any:
+def load_library(lib_location: Optional[str] = None) -> Snap7CliProtocol:
     """Loads the `snap7.dll` library.
     Returns:
         cdll: a ctypes cdll object with the snap7 shared library loaded.
@@ -83,7 +85,7 @@ def load_library(lib_location: Optional[str] = None) -> Any:
     if not lib_location:
         _raise_error()
 
-    return cdll.LoadLibrary(lib_location)
+    return cast(Snap7CliProtocol, cdll.LoadLibrary(lib_location))
 
 
 Context = Literal["client", "server", "partner"]
@@ -107,7 +109,7 @@ def check_error(code: int, context: Context = "client") -> None:
         raise RuntimeError(error)
 
 
-def error_text(error, context: Context = "client") -> bytes:
+def error_text(error: int, context: Context = "client") -> bytes:
     """Returns a textual explanation of a given error number
 
     Args:
@@ -127,6 +129,10 @@ def error_text(error, context: Context = "client") -> bytes:
     text_type = c_char * len_
     text = text_type()
     library = load_library()
-    map_ = {"client": library.Cli_ErrorText, "server": library.Srv_ErrorText, "partner": library.Par_ErrorText}
-    map_[context](error, text, len_)
+    error_text_func: Callable[[c_int32, Array[c_char], c_int], int] = {
+        "client": library.Cli_ErrorText,
+        "server": library.Srv_ErrorText,
+        "partner": library.Par_ErrorText,
+    }[context]
+    error_text_func(c_int32(error), text, c_int(len_))
     return text.value

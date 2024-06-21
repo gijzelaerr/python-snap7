@@ -28,7 +28,7 @@ class TestServer(unittest.TestCase):
     client: Client
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         cls.process = Process(target=snap7.server.mainloop, args=[tcpport, True])
         cls.process.start()
         time.sleep(2)  # wait for server to start
@@ -82,12 +82,12 @@ class TestServer(unittest.TestCase):
         self.assertEqual(value_3, 100)
         self.assertEqual(value_4, 127)
 
-    def test_read_unsigned_small_int(self):
+    def test_read_unsigned_small_int(self) -> None:
         data = self.client.db_read(0, 20, 2)
         self.assertEqual(get_usint(data, 0), 0)
         self.assertEqual(get_usint(data, 1), 255)
 
-    def test_read_int(self):
+    def test_read_int(self) -> None:
         data = self.client.db_read(0, 30, 10)
         self.assertEqual(get_int(data, 0), -32768)
         self.assertEqual(get_int(data, 2), -1234)
@@ -95,7 +95,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_int(data, 6), 1234)
         self.assertEqual(get_int(data, 8), 32767)
 
-    def test_read_double_int(self):
+    def test_read_double_int(self) -> None:
         data = self.client.db_read(0, 40, 4 * 5)
         self.assertEqual(get_dint(data, 0), -2147483648)
         self.assertEqual(get_dint(data, 4), -32768)
@@ -103,7 +103,7 @@ class TestServer(unittest.TestCase):
         self.assertEqual(get_dint(data, 12), 32767)
         self.assertEqual(get_dint(data, 16), 2147483647)
 
-    def test_read_real(self):
+    def test_read_real(self) -> None:
         data = self.client.db_read(0, 60, 4 * 9)
         self.assertAlmostEqual(get_real(data, 0), -3.402823e38, delta=-3.402823e38 * -0.0000001)
         self.assertAlmostEqual(get_real(data, 4), -3.402823e12, delta=-3.402823e12 * -0.0000001)
@@ -115,18 +115,18 @@ class TestServer(unittest.TestCase):
         self.assertAlmostEqual(get_real(data, 28), 3.402823466e12, delta=3.402823466e12 * 0.0000001)
         self.assertAlmostEqual(get_real(data, 32), 3.402823466e38, delta=3.402823466e38 * 0.0000001)
 
-    def test_read_string(self):
+    def test_read_string(self) -> None:
         data = self.client.db_read(0, 100, 254)
         self.assertEqual(get_string(data, 0), "the brown fox jumps over the lazy dog")
 
-    def test_read_word(self):
+    def test_read_word(self) -> None:
         data = self.client.db_read(0, 400, 4 * 4)
         self.assertEqual(get_word(data, 0), 0x0000)
         self.assertEqual(get_word(data, 4), 0x1234)
         self.assertEqual(get_word(data, 8), 0xABCD)
         self.assertEqual(get_word(data, 12), 0xFFFF)
 
-    def test_read_double_word(self):
+    def test_read_double_word(self) -> None:
         data = self.client.db_read(0, 500, 8 * 4)
         self.assertEqual(get_dword(data, 0), 0x00000000)
         self.assertEqual(get_dword(data, 8), 0x12345678)

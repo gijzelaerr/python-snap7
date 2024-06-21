@@ -11,19 +11,20 @@ is requesting the connection.
 import re
 import logging
 from ctypes import byref, c_int, c_int32, c_uint32, c_void_p
-from typing import Tuple, Optional
+from typing import Any, Callable, Hashable, Optional, Tuple
 
 from .common import ipv4, check_error, load_library
+from .protocol import Snap7CliProtocol
 from .types import S7Object, param_types, word
 
 logger = logging.getLogger(__name__)
 
 
-def error_wrap(func):
+def error_wrap(func: Callable[..., Any]) -> Callable[..., Any]:
     """Parses a s7 error code returned the decorated function."""
 
-    def f(*args, **kw):
-        code = func(*args, **kw)
+    def f(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
+        code = func(*args, **kwargs)
         check_error(code, context="partner")
 
     return f
@@ -34,14 +35,13 @@ class Partner:
     A snap7 partner.
     """
 
-    _pointer: Optional[c_void_p]
+    _pointer: c_void_p
 
     def __init__(self, active: bool = False):
-        self._library = load_library()
-        self._pointer = None
+        self._library: Snap7CliProtocol = load_library()
         self.create(active)
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.destroy()
 
     def as_b_send(self) -> int:
@@ -91,7 +91,7 @@ class Partner:
 
         return return_values[result], op_result
 
-    def create(self, active: bool = False):
+    def create(self, active: bool = False) -> None:
         """
         Creates a Partner and returns its handle, which is the reference that
         you have to use every time you refer to that Partner.
@@ -99,10 +99,10 @@ class Partner:
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self._library.Par_Create.restype = S7Object
+        self._library.Par_Create.restype = S7Object  # type: ignore[attr-defined]
         self._pointer = S7Object(self._library.Par_Create(int(active)))
 
-    def destroy(self):
+    def destroy(self) -> Optional[int]:
         """
         Destroy a Partner of given handle.
         Before destruction the Partner is stopped, all clients disconnected and
@@ -121,7 +121,7 @@ class Partner:
         check_error(result, "partner")
         return error
 
-    def get_param(self, number) -> int:
+    def get_param(self, number: int) -> int:
         """
         Reads an internal Partner object parameter.
         """
@@ -166,10 +166,10 @@ class Partner:
         return send_time, recv_time
 
     @error_wrap
-    def set_param(self, number: int, value) -> int:
+    def set_param(self, number: int, value: int) -> int:
         """Sets an internal Partner object parameter."""
         logger.debug(f"setting param number {number} to {value}")
-        return self._library.Par_SetParam(self._pointer, number, byref(c_int(value)))
+        return self._library.Par_SetParam(self._pointer, c_int(number), byref(c_int(value)))
 
     def set_recv_callback(self) -> int:
         """

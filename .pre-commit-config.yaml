@@ -20,7 +20,7 @@ repos:
     rev: 'v1.10.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-setuptools]
+        additional_dependencies: [types-setuptools, types-click]
         files: ^snap7
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -28,3 +28,4 @@ repos:
     hooks:
       - id: ruff
       - id: ruff-format
+exclude: "snap7/protocol.py"
