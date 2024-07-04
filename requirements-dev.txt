@@ -4,6 +4,7 @@
 #
 #    'tox -e requirements-dev'
 #
+--index-url https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/
 
 alabaster==0.7.16
     # via sphinx
@@ -11,7 +12,7 @@ babel==2.15.0
     # via sphinx
 cachetools==5.3.3
     # via tox
-certifi==2024.2.2
+certifi==2024.7.4
     # via requests
 chardet==5.2.0
     # via tox
@@ -29,7 +30,7 @@ docutils==0.20.1
     #   sphinx-rtd-theme
 exceptiongroup==1.2.1
     # via pytest
-filelock==3.14.0
+filelock==3.15.4
     # via
     #   tox
     #   virtualenv
@@ -37,7 +38,7 @@ idna==3.7
     # via requests
 imagesize==1.4.1
     # via sphinx
-importlib-metadata==7.1.0
+importlib-metadata==8.0.0
     # via sphinx
 iniconfig==2.0.0
     # via pytest
@@ -49,17 +50,17 @@ markupsafe==2.1.5
     # via jinja2
 mdurl==0.1.2
     # via markdown-it-py
-mypy==1.10.0
+mypy==1.10.1
     # via python-snap7 (pyproject.toml)
 mypy-extensions==1.0.0
     # via mypy
-packaging==24.0
+packaging==24.1
     # via
     #   pyproject-api
     #   pytest
     #   sphinx
     #   tox
-platformdirs==4.2.1
+platformdirs==4.2.2
     # via
     #   tox
     #   virtualenv
@@ -71,15 +72,15 @@ pygments==2.18.0
     # via
     #   rich
     #   sphinx
-pyproject-api==1.6.1
+pyproject-api==1.7.1
     # via tox
-pytest==8.2.0
+pytest==8.2.2
     # via python-snap7 (pyproject.toml)
-requests==2.31.0
+requests==2.32.3
     # via sphinx
 rich==13.7.1
     # via python-snap7 (pyproject.toml)
-ruff==0.4.4
+ruff==0.5.0
     # via python-snap7 (pyproject.toml)
 snowballstemmer==2.2.0
     # via sphinx
@@ -111,15 +112,17 @@ tomli==2.0.1
     #   pytest
     #   sphinx
     #   tox
-tox==4.15.0
+tox==4.16.0
     # via python-snap7 (pyproject.toml)
-types-setuptools==69.5.0.20240423
+types-click==7.1.8
     # via python-snap7 (pyproject.toml)
-typing-extensions==4.11.0
+types-setuptools==70.2.0.20240704
+    # via python-snap7 (pyproject.toml)
+typing-extensions==4.12.2
     # via mypy
-urllib3==2.2.1
+urllib3==2.2.2
     # via requests
-virtualenv==20.26.1
+virtualenv==20.26.3
     # via tox
-zipp==3.18.1
+zipp==3.19.2
     # via importlib-metadata
