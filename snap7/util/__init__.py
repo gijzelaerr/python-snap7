@@ -84,9 +84,7 @@ example::
 """
 
 import re
-import time
-from typing import Any, Union
-from datetime import date, datetime
+from typing import Any
 from collections import OrderedDict
 
 from .setters import (
@@ -172,20 +170,6 @@ __all__ = [
     "set_fstring",
     "set_string",
 ]
-
-
-def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:
-    """Returns the local datetime
-
-    Args:
-        utc: UTC type date or datetime.
-
-    Returns:
-        Local datetime.
-    """
-    epoch = time.mktime(utc.timetuple())
-    offset = datetime.fromtimestamp(epoch) - datetime.utcfromtimestamp(epoch)
-    return utc + offset
 
 
 def parse_specification(db_specification: str) -> OrderedDict[str, Any]:

@@ -2,7 +2,6 @@ import gc
 import logging
 import struct
 import time
-from _ctypes import _SimpleCData
 from typing import Tuple, Union
 
 import pytest
@@ -28,7 +27,6 @@ from typing import cast as typing_cast
 
 from snap7.util.getters import get_real, get_int
 from snap7.util.setters import set_int
-from snap7.util import utc2local
 from snap7.common import check_error
 from snap7.server import mainloop
 from snap7.client import Client
@@ -67,7 +65,7 @@ rack = 1
 slot = 1
 
 
-def _prepare_as_read_area(area: Area, size: int) -> Tuple[WordLen, "Array[_SimpleCData[int]]"]:
+def _prepare_as_read_area(area: Area, size: int) -> Tuple[WordLen, Union[Array[c_byte], Array[c_int16], Array[c_int32]]]:
     wordlen = area.wordlen()
     usrdata = (wordlen.ctype * size)()
     return wordlen, usrdata
@@ -222,8 +220,8 @@ class TestClient(unittest.TestCase):
         self.assertRaises(RuntimeError, self.client.upload, db_number)
 
     def test_as_upload(self) -> None:
-        _buffer = typing_cast("Array[_SimpleCData[int]]", buffer_type())
-        size = c_int(sizeof(_buffer))
+        _buffer = typing_cast(Array[c_int32], buffer_type())
+        size = sizeof(_buffer)
         self.client.as_upload(1, _buffer, size)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
@@ -436,12 +434,11 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
     def test_as_db_get(self) -> None:
-        _buffer = typing_cast("Array[_SimpleCData[int]]", buffer_type())
-        size = c_int(buffer_size)
-        self.client.as_db_get(db_number, _buffer, size)
+        _buffer = typing_cast(Array[c_int], buffer_type())
+        self.client.as_db_get(db_number, _buffer, buffer_size)
         self.client.wait_as_completion(500)
-        result = bytearray(_buffer)[: size.value]
-        self.assertEqual(100, len(result))
+        result = bytearray(_buffer)[:buffer_size]
+        self.assertEqual(buffer_size, len(result))
 
     def test_as_db_read(self) -> None:
         size = 40
@@ -776,9 +773,8 @@ class TestClient(unittest.TestCase):
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_list_blocks_of_type(self) -> None:
-        data = typing_cast("Array[_SimpleCData[int]]", (c_uint16 * 10)())
-        count = c_int()
-        self.client.as_list_blocks_of_type(Block.DB, data, count)
+        data = typing_cast(Array[c_int], (c_uint16 * 10)())
+        self.client.as_list_blocks_of_type(Block.DB, data, 0)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_mb_read(self) -> None:
@@ -801,24 +797,21 @@ class TestClient(unittest.TestCase):
         ssl_id = 0x011C
         index = 0x0005
         s7_szl = S7SZL()
-        size = c_int(sizeof(s7_szl))
-        self.client.as_read_szl(ssl_id, index, s7_szl, size)
+        self.client.as_read_szl(ssl_id, index, s7_szl, sizeof(s7_szl))
         self.client.wait_as_completion(100)
         result = bytes(s7_szl.Data)[2:26]
         self.assertEqual(expected, result)
 
     def test_as_read_szl_list(self) -> None:
-        # Cli_AsReadSZLList
         expected = b"\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01"
         szl_list = S7SZLList()
-        items_count = c_int(sizeof(szl_list))
+        items_count = sizeof(szl_list)
         self.client.as_read_szl_list(szl_list, items_count)
         self.client.wait_as_completion(500)
         result = bytearray(szl_list.List)[:16]
         self.assertEqual(expected, result)
 
     def test_as_tm_read(self) -> None:
-        # Cli_AsMBRead
         expected = b"\x10\x01"
         self.client.tm_write(0, 1, bytearray(expected))
         type_ = WordLen.Timer.ctype
@@ -828,7 +821,6 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, bytearray(buffer))
 
     def test_as_tm_write(self) -> None:
-        # Cli_AsMBWrite
         data = b"\x10\x01"
         response = self.client.as_tm_write(0, 1, bytearray(data))
         result = self.client.wait_as_completion(500)
@@ -927,8 +919,8 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(bytes((utc2local(date(2019, 6, 27)).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
-        self.assertEqual(bytes((utc2local(date(2019, 6, 27)).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
+        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
+        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
 
     def test_iso_exchange_buffer(self) -> None:
         # Cli_IsoExchangeBuffer

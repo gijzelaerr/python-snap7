@@ -4,8 +4,8 @@ Snap7 client used for connection to a siemens 7 server.
 
 import re
 import logging
-from ctypes import CFUNCTYPE, byref, create_string_buffer, sizeof
-from ctypes import Array, _SimpleCData, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c_void_p
+from ctypes import CFUNCTYPE, byref, create_string_buffer, sizeof, c_int16
+from ctypes import Array, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c_void_p
 from datetime import datetime
 from typing import Any, Callable, Hashable, List, Optional, Tuple, Union, Type
 from types import TracebackType
@@ -15,7 +15,7 @@ from ..protocol import Snap7CliProtocol
 from ..types import S7SZL, Area, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem, Block
 from ..types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
 from ..types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
-from ..types import RemotePort
+from ..types import RemotePort, CDataArrayType
 
 logger = logging.getLogger(__name__)
 
@@ -651,7 +651,7 @@ class Client:
         logger.debug(f"ab write: start: {start}: size: {size}: ")
         return self._lib.Cli_ABWrite(self._s7_client, start, size, byref(cdata))
 
-    def as_ab_read(self, start: int, size: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_ab_read(self, start: int, size: int, data: Union[Array[c_byte], Array[c_int16], Array[c_int32]]) -> int:
         """Reads a part of IPU area from a PLC asynchronously.
 
         Args:
@@ -712,7 +712,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_ct_read(self, start: int, amount: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_ct_read(self, start: int, amount: int, data: CDataArrayType) -> int:
         """Reads counters from a PLC asynchronously.
 
         Args:
@@ -758,7 +758,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_db_get(self, db_number: int, _buffer: "Array[_SimpleCData[Any]]", size: "_SimpleCData[Any]") -> int:
+    def as_db_get(self, db_number: int, _buffer: CDataArrayType, size: int) -> int:
         """Uploads a DB from AG using DBRead.
 
         Note:
@@ -772,11 +772,11 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsDBGet(self._s7_client, db_number, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsDBGet(self._s7_client, db_number, byref(_buffer), byref(c_int(size)))
         check_error(result, context="client")
         return result
 
-    def as_db_read(self, db_number: int, start: int, size: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_db_read(self, db_number: int, start: int, size: int, data: CDataArrayType) -> int:
         """Reads a part of a DB from a PLC.
 
         Args:
@@ -799,7 +799,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_db_write(self, db_number: int, start: int, size: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_db_write(self, db_number: int, start: int, size: int, data: CDataArrayType) -> int:
         """Writes a part of a DB into a PLC.
 
         Args:
@@ -992,9 +992,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_read_area(
-        self, area: Area, db_number: int, start: int, size: int, word_len: WordLen, data: "Array[_SimpleCData[Any]]"
-    ) -> int:
+    def as_read_area(self, area: Area, db_number: int, start: int, size: int, word_len: WordLen, data: CDataArrayType) -> int:
         """Reads a data area from a PLC asynchronously.
         With this you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
@@ -1017,9 +1015,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_write_area(
-        self, area: Area, db_number: int, start: int, size: int, word_len: WordLen, data: "Array[_SimpleCData[Any]]"
-    ) -> int:
+    def as_write_area(self, area: Area, db_number: int, start: int, size: int, word_len: WordLen, data: CDataArrayType) -> int:
         """Writes a data area into a PLC asynchronously.
 
         Args:
@@ -1042,7 +1038,7 @@ class Client:
         check_error(res, context="client")
         return res
 
-    def as_eb_read(self, start: int, size: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_eb_read(self, start: int, size: int, data: CDataArrayType) -> int:
         """Reads a part of IPI area from a PLC asynchronously.
 
         Args:
@@ -1093,7 +1089,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_list_blocks_of_type(self, block_type: Block, data: "Array[_SimpleCData[Any]]", count: "_SimpleCData[Any]") -> int:
+    def as_list_blocks_of_type(self, block_type: Block, data: CDataArrayType, count: int) -> int:
         """Returns the AG blocks list of a given type.
 
         Args:
@@ -1104,11 +1100,11 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsListBlocksOfType(self._s7_client, block_type.ctype, byref(data), byref(count))
+        result = self._lib.Cli_AsListBlocksOfType(self._s7_client, block_type.ctype, byref(data), byref(c_int(count)))
         check_error(result, context="client")
         return result
 
-    def as_mb_read(self, start: int, size: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_mb_read(self, start: int, size: int, data: CDataArrayType) -> int:
         """Reads a part of Merkers area from a PLC.
 
         Args:
@@ -1140,7 +1136,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_read_szl(self, ssl_id: int, index: int, s7_szl: S7SZL, size: "_SimpleCData[Any]") -> int:
+    def as_read_szl(self, ssl_id: int, index: int, s7_szl: S7SZL, size: int) -> int:
         """Reads a partial list of given ID and Index.
 
         Args:
@@ -1152,11 +1148,11 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsReadSZL(self._s7_client, ssl_id, index, byref(s7_szl), byref(size))
+        result = self._lib.Cli_AsReadSZL(self._s7_client, ssl_id, index, byref(s7_szl), byref(c_int(size)))
         check_error(result, context="client")
         return result
 
-    def as_read_szl_list(self, szl_list: S7SZLList, items_count: "_SimpleCData[Any]") -> int:
+    def as_read_szl_list(self, szl_list: S7SZLList, items_count: int) -> int:
         """Reads the list of partial lists available in the CPU.
 
         Args:
@@ -1166,11 +1162,11 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsReadSZLList(self._s7_client, byref(szl_list), byref(items_count))
+        result = self._lib.Cli_AsReadSZLList(self._s7_client, byref(szl_list), byref(c_int(items_count)))
         check_error(result, context="client")
         return result
 
-    def as_tm_read(self, start: int, amount: int, data: "Array[_SimpleCData[Any]]") -> int:
+    def as_tm_read(self, start: int, amount: int, data: CDataArrayType) -> int:
         """Reads timers from a PLC.
 
         Args:
@@ -1202,7 +1198,7 @@ class Client:
         check_error(result)
         return result
 
-    def as_upload(self, block_num: int, _buffer: "Array[_SimpleCData[Any]]", size: "_SimpleCData[Any]") -> int:
+    def as_upload(self, block_num: int, _buffer: CDataArrayType, size: int) -> int:
         """Uploads a block from AG.
 
         Note:
@@ -1216,7 +1212,7 @@ class Client:
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsUpload(self._s7_client, Block.DB.ctype, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_AsUpload(self._s7_client, Block.DB.ctype, block_num, byref(_buffer), byref(c_int(size)))
         check_error(result, context="client")
         return result
 

@@ -2,6 +2,7 @@
 Python equivalent for snap7 specific types.
 """
 
+from _ctypes import Array
 from ctypes import (
     c_int16,
     c_int8,
@@ -19,7 +20,10 @@ from ctypes import (
     c_uint8,
 )
 from enum import Enum
-from typing import Type, Dict
+from typing import Dict, Union
+
+CDataArrayType = Union[Array[c_byte], Array[c_int], Array[c_int16], Array[c_int32]]
+CDataType = Union[type[c_int8], type[c_int16], type[c_int32]]
 
 S7Object = c_void_p
 buffer_size = 65536
@@ -84,8 +88,8 @@ class WordLen(Enum):
     Timer = 0x1D
 
     @property
-    def ctype(self) -> Type[c_int8 | c_int16 | c_int32]:
-        map_: Dict[WordLen, Type[c_int8 | c_int16 | c_int32]] = {
+    def ctype(self) -> CDataType:
+        map_: Dict[WordLen, CDataType] = {
             WordLen.Bit: c_int16,
             WordLen.Byte: c_int8,
             WordLen.Word: c_int16,

@@ -14,20 +14,16 @@ from ctypes import (
     c_void_p,
     CFUNCTYPE,
     POINTER,
-    Array,
-    _SimpleCData,
-    c_byte,
-    c_int16,
 )
 from _ctypes import CFuncPtr
 import struct
 import logging
-from typing import Any, Callable, Hashable, Optional, Tuple, cast, Type, Union
+from typing import Any, Callable, Hashable, Optional, Tuple, cast, Type
 from types import TracebackType
 
 from ..common import ipv4, check_error, load_library
 from ..protocol import Snap7CliProtocol
-from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object
+from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object, CDataArrayType
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +95,7 @@ class Server:
         self._s7_server = S7Object(self._lib.Srv_Create())
 
     @error_wrap
-    def register_area(self, area: SrvArea, index: int, userdata: "Array[_SimpleCData[int]]") -> int:
+    def register_area(self, area: SrvArea, index: int, userdata: CDataArrayType) -> int:
         """Shares a memory area with the server. That memory block will be
             visible by the clients.
 
@@ -400,10 +396,10 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False) -> None:
 
     server = Server()
     size = 100
-    DBdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
-    PAdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
-    TMdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
-    CTdata: Union[Array[c_byte], Array[c_int16], Array[c_int32]] = (WordLen.Byte.ctype * size)()
+    DBdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    PAdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    TMdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    CTdata: CDataArrayType = (WordLen.Byte.ctype * size)()
     server.register_area(SrvArea.DB, 1, DBdata)
     server.register_area(SrvArea.PA, 1, PAdata)
     server.register_area(SrvArea.TM, 1, TMdata)
