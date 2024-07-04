@@ -18,7 +18,6 @@ the minimun amount of data being read or written to a plc is 1 byte.
 """
 
 import snap7
-import snap7.util.setters
 
 plc = snap7.client.Client()
 plc.connect("192.168.200.24", 0, 3)
@@ -37,7 +36,7 @@ from snap7.types import Area  # noqa: E402
 
 
 # play with these functions.
-plc.read_area(area=Area.MK, dbnumber=0, start=20, size=2)
+plc.read_area(area=Area.MK, db_number=0, start=20, size=2)
 
 data = bytearray()
 snap7.util.setters.set_int(data, 0, 127)

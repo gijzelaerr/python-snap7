@@ -7,9 +7,8 @@ from typing import Optional
 
 import snap7.error
 import snap7.server
-import snap7.util
-import snap7.util.getters
-from snap7.util import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
+import snap7.db
+from snap7.db import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
 from snap7.client import Client
 import snap7.types
 
@@ -50,15 +49,14 @@ class TestServer(unittest.TestCase):
             self.client.disconnect()
             self.client.destroy()
 
-    @unittest.skip("TODO: only first test used")
     def test_read_prefill_db(self) -> None:
+        buffer = bytearray([0b11111111])
+        self.client.db_write(0, 0, buffer)
         data = self.client.db_read(0, 0, 7)
-        boolean = snap7.util.getters.get_bool(data, 0, 0)
+        boolean = get_bool(data, 0, 0)
         self.assertEqual(boolean, True)
-        integer = snap7.util.getters.get_int(data, 1)
-        self.assertEqual(integer, 128)
-        real = snap7.util.getters.get_real(data, 3)
-        self.assertEqual(real, -128)
+        integer = get_int(data, 0)
+        self.assertEqual(integer, -256)
 
     def test_read_booleans(self) -> None:
         data = self.client.db_read(0, 0, 1)

@@ -19,11 +19,17 @@ from ctypes import (
     c_int,
     c_uint8,
 )
+from datetime import datetime, date, timedelta
 from enum import IntEnum
-from typing import Dict, Union
+from typing import Dict, Union, Literal
 
-CDataArrayType = Union[Array[c_byte], Array[c_int], Array[c_int16], Array[c_int32]]
-CDataType = Union[type[c_int8], type[c_int16], type[c_int32]]
+CDataArrayType = Union[
+    Array[c_byte], Array[c_int], Array[c_int16], Array[c_int32], Array[c_uint8], Array[c_uint16], Array[c_uint32]
+]
+CDataType = Union[type[c_int8], type[c_int16], type[c_int32], type[c_uint8], type[c_uint16], type[c_uint32]]
+ValueType = Union[int, float, str, datetime, bytearray, bytes, date, timedelta]
+
+Context = Literal["client", "server", "partner"]
 
 S7Object = c_void_p
 buffer_size = 65536
@@ -33,44 +39,49 @@ time_t = c_uint64
 word = c_uint16
 longword = c_uint32
 
-# // PARAMS LIST
-LocalPort = 1
-RemotePort = 2
-PingTimeout = 3
-SendTimeout = 4
-RecvTimeout = 5
-WorkInterval = 6
-SrcRef = 7
-DstRef = 8
-SrcTSap = 9
-PDURequest = 10
-MaxClients = 11
-BSendTimeout = 12
-BRecvTimeout = 13
-RecoveryTime = 14
-KeepAliveTime = 15
-
-param_types = {
-    LocalPort: c_uint16,
-    RemotePort: c_uint16,
-    PingTimeout: c_int32,
-    SendTimeout: c_int32,
-    RecvTimeout: c_int32,
-    WorkInterval: c_int32,
-    SrcRef: c_uint16,
-    DstRef: c_uint16,
-    SrcTSap: c_uint16,
-    PDURequest: c_int32,
-    MaxClients: c_int32,
-    BSendTimeout: c_int32,
-    BRecvTimeout: c_int32,
-    RecoveryTime: c_uint32,
-    KeepAliveTime: c_uint32,
-}
-
 # mask types
 mkEvent = 0
 mkLog = 1
+
+
+class Parameter(IntEnum):
+    # // PARAMS LIST
+    LocalPort = 1
+    RemotePort = 2
+    PingTimeout = 3
+    SendTimeout = 4
+    RecvTimeout = 5
+    WorkInterval = 6
+    SrcRef = 7
+    DstRef = 8
+    SrcTSap = 9
+    PDURequest = 10
+    MaxClients = 11
+    BSendTimeout = 12
+    BRecvTimeout = 13
+    RecoveryTime = 14
+    KeepAliveTime = 15
+
+    @property
+    def ctype(self) -> CDataType:
+        map_: Dict[int, CDataType] = {
+            self.LocalPort: c_uint16,
+            self.RemotePort: c_uint16,
+            self.PingTimeout: c_int32,
+            self.SendTimeout: c_int32,
+            self.RecvTimeout: c_int32,
+            self.WorkInterval: c_int32,
+            self.SrcRef: c_uint16,
+            self.DstRef: c_uint16,
+            self.SrcTSap: c_uint16,
+            self.PDURequest: c_int32,
+            self.MaxClients: c_int32,
+            self.BSendTimeout: c_int32,
+            self.BRecvTimeout: c_int32,
+            self.RecoveryTime: c_uint32,
+            self.KeepAliveTime: c_uint32,
+        }
+        return map_[self]
 
 
 # Area ID

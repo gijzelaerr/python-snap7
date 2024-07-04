@@ -1,7 +1,7 @@
 import ctypes
 import snap7
 from snap7.types import Area, S7DataItem, WordLen
-from snap7.util import set_int, set_real, get_int, get_real, get_s5time
+from snap7.db import set_int, set_real, get_int, get_real, get_s5time
 
 
 client = snap7.client.Client()

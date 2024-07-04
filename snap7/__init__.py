@@ -4,15 +4,14 @@ The Snap7 Python library.
 
 from importlib.metadata import version, PackageNotFoundError
 
-from . import client
-from . import common
-from . import error
-from . import logo
-from . import server
-from . import types
-from . import util
+from .client import Client
+from .server import Server
+from .logo import Logo
+from .partner import Partner
+from .db import Row, DB
+from .types import Area, Block, WordLen, SrvEvent, SrvArea
 
-__all__ = ["client", "common", "error", "logo", "server", "types", "util"]
+__all__ = ["Client", "Server", "Logo", "Partner", "Row", "DB", "Area", "Block", "WordLen", "SrvEvent", "SrvArea"]
 
 try:
     __version__ = version("python-snap7")

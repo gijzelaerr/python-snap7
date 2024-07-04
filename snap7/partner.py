@@ -11,23 +11,14 @@ is requesting the connection.
 import re
 import logging
 from ctypes import byref, c_int, c_int32, c_uint32, c_void_p
-from typing import Any, Callable, Hashable, Optional, Tuple
+from typing import Optional, Tuple
 
-from .common import ipv4, check_error, load_library
+from .common import ipv4, load_library
+from .error import check_error, error_wrap
 from .protocol import Snap7CliProtocol
-from .types import S7Object, param_types, word
+from .types import S7Object, word, Parameter
 
 logger = logging.getLogger(__name__)
-
-
-def error_wrap(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Parses a s7 error code returned the decorated function."""
-
-    def f(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
-        code = func(*args, **kwargs)
-        check_error(code, context="partner")
-
-    return f
 
 
 class Partner:
@@ -121,14 +112,13 @@ class Partner:
         check_error(result, "partner")
         return error
 
-    def get_param(self, number: int) -> int:
+    def get_param(self, parameter: Parameter) -> int:
         """
         Reads an internal Partner object parameter.
         """
-        logger.debug(f"retreiving param number {number}")
-        type_ = param_types[number]
-        value = type_()
-        code = self._library.Par_GetParam(self._pointer, c_int(number), byref(value))
+        logger.debug(f"retreiving param number {parameter}")
+        value = parameter.ctype()
+        code = self._library.Par_GetParam(self._pointer, c_int(parameter), byref(value))
         check_error(code)
         return value.value
 
@@ -165,11 +155,11 @@ class Partner:
         check_error(result, "partner")
         return send_time, recv_time
 
-    @error_wrap
-    def set_param(self, number: int, value: int) -> int:
+    @error_wrap(context="partner")
+    def set_param(self, parameter: Parameter, value: int) -> int:
         """Sets an internal Partner object parameter."""
-        logger.debug(f"setting param number {number} to {value}")
-        return self._library.Par_SetParam(self._pointer, c_int(number), byref(c_int(value)))
+        logger.debug(f"setting param number {parameter} to {value}")
+        return self._library.Par_SetParam(self._pointer, c_int(parameter), byref(c_int(value)))
 
     def set_recv_callback(self) -> int:
         """
@@ -185,7 +175,7 @@ class Partner:
         """
         return self._library.Par_SetSendCallback(self._pointer)
 
-    @error_wrap
+    @error_wrap(context="partner")
     def start(self) -> int:
         """
         Starts the Partner and binds it to the specified IP address and the
@@ -193,7 +183,7 @@ class Partner:
         """
         return self._library.Par_Start(self._pointer)
 
-    @error_wrap
+    @error_wrap(context="partner")
     def start_to(self, local_ip: str, remote_ip: str, local_tsap: int, remote_tsap: int) -> int:
         """
         Starts the Partner and binds it to the specified IP address and the
@@ -220,7 +210,7 @@ class Partner:
         """
         return self._library.Par_Stop(self._pointer)
 
-    @error_wrap
+    @error_wrap(context="partner")
     def wait_as_b_send_completion(self, timeout: int = 0) -> int:
         """
         Waits until the current asynchronous send job is done or the timeout

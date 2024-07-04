@@ -32,4 +32,4 @@ jobs:
         run: python3.exe -m pip install .[test]
 
       - name: Run tests
-        run: python3 -m pytest -m "server or util or client or mainloop or partner"
+        run: python3 -m pytest -m "server or db or client or mainloop or partner"

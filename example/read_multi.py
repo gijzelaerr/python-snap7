@@ -6,11 +6,12 @@ This was tested against a S7-319 CPU
 
 import ctypes
 
-import snap7.util.getters
-from snap7.common import check_error
+from snap7 import Client
+from error import check_error
 from snap7.types import S7DataItem, Area, WordLen
+from snap7.util import get_real, get_int
 
-client = snap7.client.Client()
+client = Client()
 client.connect("10.100.5.2", 0, 2)
 
 data_items = (S7DataItem * 3)()
@@ -53,7 +54,7 @@ for di in data_items:
 
 result_values = []
 # function to cast bytes to match data_types[] above
-byte_to_value = [snap7.util.getters.get_real, snap7.util.getters.get_real, snap7.util.getters.get_int]
+byte_to_value = [get_real, get_real, get_int]
 
 # unpack and test the result of each read
 for i in range(0, len(data_items)):
