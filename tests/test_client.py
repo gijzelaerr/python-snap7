@@ -27,7 +27,7 @@ from snap7.util import get_real, get_int, set_int
 from snap7.error import check_error
 from snap7.server import mainloop
 from snap7.client import Client
-from snap7.types import (
+from snap7.type import (
     S7DataItem,
     S7SZL,
     S7SZLList,
@@ -95,18 +95,6 @@ class TestClient(unittest.TestCase):
     def tearDown(self) -> None:
         self.client.disconnect()
         self.client.destroy()
-
-    def _as_check_loop(self, check_times: int = 20) -> int:
-        check_status = c_int(-1)
-        # preparing Server values
-        for i in range(check_times):
-            self.client.check_as_completion(check_status)
-            if check_status.value == 0:
-                break
-            time.sleep(0.5)
-        else:
-            raise TimeoutError(f"Async Request not finished after {check_times} times - Fail")
-        return check_status.value
 
     def test_db_read(self) -> None:
         size = 40

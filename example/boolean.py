@@ -33,7 +33,7 @@ plc.db_write(reading, 31, 120, 1)  # write back the bytearray and now the boolea
 # then you can specify an area to read from:
 # https://github.com/gijzelaerr/python-snap7/blob/master/snap7/types.py
 
-from snap7.types import Area  # noqa: E402
+from snap7.type import Area  # noqa: E402
 
 
 # play with these functions.

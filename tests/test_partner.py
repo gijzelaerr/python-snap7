@@ -6,7 +6,7 @@ from unittest import mock
 from snap7.error import error_text
 
 import snap7.partner
-from snap7.types import Parameter
+from snap7.type import Parameter
 
 logging.basicConfig(level=logging.WARNING)
 

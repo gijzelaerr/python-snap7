@@ -12,7 +12,7 @@ from functools import cache
 from typing import Callable, Any, Hashable
 
 from .common import logger, load_library
-from .types import Context
+from .type import Context
 
 s7_client_errors = {
     0x00100000: "errNegotiatingPDU",

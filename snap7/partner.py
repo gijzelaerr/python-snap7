@@ -16,7 +16,7 @@ from typing import Optional, Tuple
 from .common import ipv4, load_library
 from .error import check_error, error_wrap
 from .protocol import Snap7CliProtocol
-from .types import S7Object, word, Parameter
+from .type import S7Object, word, Parameter
 
 logger = logging.getLogger(__name__)
 

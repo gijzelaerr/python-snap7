@@ -90,7 +90,7 @@ from datetime import datetime, date
 from typing import Any, Optional, Union, Iterator, Tuple, Dict, Callable
 
 from snap7 import Client
-from snap7.types import Area, ValueType
+from snap7.type import Area, ValueType
 
 from snap7.util import (
     set_bool,

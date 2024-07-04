@@ -6,7 +6,7 @@ from multiprocessing import Process
 
 import snap7
 from snap7.server import mainloop
-from snap7.types import Parameter
+from snap7.type import Parameter
 
 logging.basicConfig(level=logging.WARNING)
 

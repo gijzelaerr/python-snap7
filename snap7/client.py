@@ -14,10 +14,10 @@ from types import TracebackType
 
 from snap7.common import ipv4, load_library
 from snap7.protocol import Snap7CliProtocol
-from snap7.types import S7SZL, Area, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem, Block
-from snap7.types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
-from snap7.types import S7Object, buffer_size, buffer_type, cpu_statuses
-from snap7.types import CDataArrayType, Parameter
+from snap7.type import S7SZL, Area, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem, Block
+from snap7.type import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
+from snap7.type import S7Object, buffer_size, buffer_type, cpu_statuses
+from snap7.type import CDataArrayType, Parameter
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class Client:
         Examples:
             >>> import snap7
             >>> client = snap7.client.Client()  # If the `snap7.dll` file is in the path location
-            >>> client2 = snap7.client.Client(lib_location="/path/to/snap7.dll")  # If the `snap7.dll` file is in another location
+            >>> client2 = snap7.client.Client(lib_location="/path/to/snap7.dll")  # If the dll is in another location
             <snap7.client.Client object at 0x0000028B257128E0>
         """
 
@@ -154,10 +154,10 @@ class Client:
         Examples:
             >>> cpu_info = Client().get_cpu_info()
             >>> print(cpu_info)
-            "<S7CpuInfo ModuleTypeName: b'CPU 315-2 PN/DP'
+            <S7CpuInfo ModuleTypeName: b'CPU 315-2 PN/DP'
                 SerialNumber: b'S C-C2UR28922012'
                 ASName: b'SNAP7-SERVER' Copyright: b'Original Siemens Equipment'
-                ModuleName: b'CPU 315-2 PN/DP'>
+                ModuleName: 'CPU 315-2 PN/DP' >
         """
         info = S7CpuInfo()
         result = self._lib.Cli_GetCpuInfo(self._s7_client, byref(info))
@@ -234,7 +234,7 @@ class Client:
         Args:
             db_number: number of the DB to be written.
             start: byte index to start writing to.
-            data: buffer to be writen.
+            data: buffer to be written.
 
         Returns:
             Buffer written.
@@ -398,10 +398,10 @@ class Client:
         """Writes a data area into a PLC.
 
         Args:
-            area: area to be writen.
-            db_number: number of the db to be writen to. In case of Inputs, Marks or Outputs, this should be equal to 0.
+            area: area to be written.
+            db_number: number of the db to be written to. In case of Inputs, Marks or Outputs, this should be equal to 0
             start: byte index to start writting.
-            data: buffer to be writen.
+            data: buffer to be written.
 
         Returns:
             Snap7 error code.
@@ -450,16 +450,15 @@ class Client:
             Block list structure object.
 
         Examples:
-            >>> block_list = Client().list_blocks()
-            >>> print(block_list)
+            >>> print(Client().list_blocks())
             <block list count OB: 0 FB: 0 FC: 0 SFB: 0 SFC: 0x0 DB: 1 SDB: 0>
         """
         logger.debug("listing blocks")
-        blocksList = BlocksList()
-        result = self._lib.Cli_ListBlocks(self._s7_client, byref(blocksList))
+        block_list = BlocksList()
+        result = self._lib.Cli_ListBlocks(self._s7_client, byref(block_list))
         check_error(result, context="client")
-        logger.debug(f"blocks: {blocksList}")
-        return blocksList
+        logger.debug(f"blocks: {block_list}")
+        return block_list
 
     def list_blocks_of_type(self, block_type: Block, size: int) -> Union[int, Array[c_uint16]]:
         """This function returns the AG list of a specified block type.
@@ -569,7 +568,7 @@ class Client:
         Raises:
             :obj:`ValueError`: if the `address` is not a valid IPV4.
             :obj:`ValueError`: if the result of setting the connection params is
-                different than 0.
+                different from 0.
         """
         if not re.match(ipv4, address):
             raise ValueError(f"{address} is invalid ipv4")
@@ -578,14 +577,14 @@ class Client:
             raise ValueError("The parameter was invalid")
 
     def set_connection_type(self, connection_type: int) -> None:
-        """Sets the connection resource type, i.e the way in which the Clients connects to a PLC.
+        """Sets the connection resource type, i.e. the way in which the Clients connect to a PLC.
 
         Args:
             connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
 
         Raises:
             :obj:`ValueError`: if the result of setting the connection type is
-                different than 0.
+                different from 0.
         """
         result = self._lib.Cli_SetConnectionType(self._s7_client, c_uint16(connection_type))
         if result != 0:
@@ -692,7 +691,7 @@ class Client:
         """Performs the Copy Ram to Rom action asynchronously.
 
         Args:
-            timeout: time to wait unly fail.
+            timeout: time to wait until fail.
 
         Returns:
             Snap7 code.
@@ -722,7 +721,7 @@ class Client:
         Args:
             start: byte index to start to write from.
             amount: amount of bytes to write.
-            data: buffer to be write.
+            data: buffer to write.
 
         Returns:
             Snap7 code.
@@ -779,9 +778,8 @@ class Client:
 
         Examples:
             >>> import ctypes
-            >>> data = (ctypes.c_uint8 * size)()  # In this ctypes array data will be stored.
-            >>> result = Client().as_db_read(1, 0, size, data)
-            >>> result  # 0 = success
+            >>> content = (ctypes.c_uint8 * size)()  # In this ctypes array data will be stored.
+            >>> Client().as_db_read(1, 0, size, content)
             0
         """
         result = self._lib.Cli_AsDBRead(self._s7_client, db_number, start, size, byref(data))
@@ -792,10 +790,10 @@ class Client:
         """Writes a part of a DB into a PLC.
 
         Args:
-            db_number: number of DB to be writen.
+            db_number: number of DB to be written.
             start: byte index from where start to write to.
             size: amount of bytes to write.
-            data: buffer to be writen.
+            data: buffer to be written.
 
         Returns:
             Snap7 code.
@@ -923,7 +921,9 @@ class Client:
         return self._lib.Cli_SetPlcDateTime(self._s7_client, byref(buffer))
 
     def check_as_completion(self, p_value: c_int) -> int:
-        """Method to check Status of an async request. Result contains if the check was successful, not the data value itself
+        """Method to check Status of an async request.
+
+        Result contains if the check was successful, not the data value itself
 
         Args:
             p_value: Pointer where result of this check shall be written.
@@ -937,17 +937,17 @@ class Client:
 
     def set_as_callback(self, call_back: Callable[..., Any]) -> int:
         """
-        Sets the user callback that is called when a asynchronous data sent is complete.
+        Sets the user callback that is called when an asynchronous data sent is complete.
 
         """
         logger.info("setting event callback")
         callback_wrap: Callable[..., Any] = CFUNCTYPE(None, c_void_p, c_int, c_int)
 
-        def wrapper(usrptr: Optional[c_void_p], op_code: int, op_result: int) -> int:
+        def wrapper(_: None, op_code: int, op_result: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
-                usrptr: not used
+                _: not used
                 op_code:
                 op_result:
 
@@ -959,9 +959,8 @@ class Client:
             return 0
 
         self._callback = callback_wrap(wrapper)
-        usrPtr = c_void_p()
-
-        result = self._lib.Cli_SetAsCallback(self._s7_client, self._callback, usrPtr)
+        data = c_void_p()
+        result = self._lib.Cli_SetAsCallback(self._s7_client, self._callback, data)
         check_error(result, context="client")
         return result
 
@@ -981,7 +980,7 @@ class Client:
 
     def as_read_area(self, area: Area, db_number: int, start: int, size: int, word_len: WordLen, data: CDataArrayType) -> int:
         """Reads a data area from a PLC asynchronously.
-        With this you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+        With this you can read DB, Inputs, Outputs, Markers, Timers and Counters.
 
         Args:
             area: memory area to be read from.
@@ -1018,7 +1017,9 @@ class Client:
         """
         type_ = WordLen.Byte.ctype
         logger.debug(
-            f"writing area: {area.name} db_number: {db_number} start: {start}: size {size}: " f"word_len {word_len} type: {type_}"
+            f"writing area: {area.name} db_number: {db_number} "
+            f"start: {start}: size {size}: "
+            f"word_len {word_len} type: {type_}"
         )
         cdata = (type_ * len(data)).from_buffer_copy(data)
         res = self._lib.Cli_AsWriteArea(self._s7_client, area, db_number, start, size, word_len.value, byref(cdata))
@@ -1092,7 +1093,7 @@ class Client:
         return result
 
     def as_mb_read(self, start: int, size: int, data: CDataArrayType) -> int:
-        """Reads a part of Merkers area from a PLC.
+        """Reads a part of Markers area from a PLC.
 
         Args:
             start: byte index from where to start to read from.
@@ -1107,7 +1108,7 @@ class Client:
         return result
 
     def as_mb_write(self, start: int, size: int, data: bytearray) -> int:
-        """Writes a part of Merkers area into a PLC.
+        """Writes a part of Markers area into a PLC.
 
         Args:
             start: byte index from where to start to write to.
@@ -1401,7 +1402,7 @@ class Client:
         return result
 
     def mb_read(self, start: int, size: int) -> bytearray:
-        """Reads a part of Merkers area from a PLC.
+        """Reads a part of Markers area from a PLC.
 
         Args:
             start: byte index to be read from.
@@ -1417,7 +1418,7 @@ class Client:
         return bytearray(data)
 
     def mb_write(self, start: int, size: int, data: bytearray) -> int:
-        """Writes a part of Merkers area into a PLC.
+        """Writes a part of Markers area into a PLC.
 
         Args:
             start: byte index to be written.
@@ -1494,7 +1495,7 @@ class Client:
         Args:
             start: byte index from where is start to write to.
             amount: amount of byte to be written.
-            data: data to be writen.
+            data: data to be written.
 
         Returns:
             Snap7 code.

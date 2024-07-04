@@ -9,7 +9,7 @@ from unittest import mock
 
 from snap7.error import server_errors, error_text
 from snap7.server import Server
-from snap7.types import SrvEvent, mkEvent, mkLog, SrvArea, Parameter
+from snap7.type import SrvEvent, mkEvent, mkLog, SrvArea, Parameter
 
 logging.basicConfig(level=logging.WARNING)
 

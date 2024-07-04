@@ -24,7 +24,7 @@ from types import TracebackType
 from ..common import ipv4, load_library
 from ..error import check_error, error_wrap
 from ..protocol import Snap7CliProtocol
-from ..types import SrvEvent, Parameter, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object, CDataArrayType
+from ..type import SrvEvent, Parameter, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object, CDataArrayType
 
 logger = logging.getLogger(__name__)
 
@@ -110,13 +110,13 @@ class Server:
         logger.info("setting event callback")
         callback_wrap: Callable[..., Any] = CFUNCTYPE(None, c_void_p, POINTER(SrvEvent), c_int)
 
-        def wrapper(usrptr: Optional[c_void_p], pevent: SrvEvent, size: int) -> int:
+        def wrapper(_: Optional[c_void_p], pevent: SrvEvent, __: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
-                usrptr: not used
+                _: not used
                 pevent: pointer to snap7 event struct
-                size:
+                __: not used
 
             Returns:
                 Should return an int

@@ -5,20 +5,21 @@ Snap7 client used for connection to a siemens LOGO 7/8 server.
 import re
 import struct
 import logging
-from ctypes import byref, c_int, c_int32, c_uint16
+from ctypes import byref
 
-from .types import WordLen, S7Object, Parameter, Area
-from .common import ipv4, load_library
-from .error import check_error
+from .type import WordLen, Area, Parameter
+
+from .error import check_error, error_wrap
+from snap7.client import Client
 
 logger = logging.getLogger(__name__)
 
 
-class Logo:
+class Logo(Client):
     """
     A snap7 Siemens Logo client:
     There are two main comfort functions available :func:`Logo.read` and :func:`Logo.write`.
-    This functions realize a high level access to the VM addresses of the Siemens Logo just use the form:
+    This function offers high-level access to the VM addresses of the Siemens Logo just use the form:
 
     Notes:
         V10.3 for bit values
@@ -27,42 +28,7 @@ class Logo:
         For more information see examples for Siemens Logo 7 and 8
     """
 
-    def __init__(self) -> None:
-        """Creates a new instance of :obj:`Logo`"""
-        self.pointer: S7Object
-        self.library = load_library()
-        self.create()
-
-    def __del__(self) -> None:
-        self.destroy()
-
-    def create(self) -> None:
-        """Create a SNAP7 client."""
-        logger.info("creating snap7 client")
-        self.library.Cli_Create.restype = S7Object  # type: ignore[attr-defined]
-        self.pointer = S7Object(self.library.Cli_Create())
-
-    def destroy(self) -> int:
-        """Destroy a client.
-
-        Returns:
-            Error code from snap7 library.
-
-        """
-        logger.info("destroying snap7 client")
-        return self.library.Cli_Destroy(byref(self.pointer))
-
-    def disconnect(self) -> int:
-        """Disconnect a client.
-
-        Returns:
-            Error code from snap7 library.
-        """
-        logger.info("disconnecting snap7 client")
-        result = self.library.Cli_Disconnect(self.pointer)
-        check_error(result, context="client")
-        return result
-
+    @error_wrap(context="client")
     def connect(self, ip_address: str, tsap_snap7: int, tsap_logo: int, tcpport: int = 102) -> int:
         """Connect to a Siemens LOGO server.
 
@@ -83,9 +49,7 @@ class Logo:
         # 2nd connect without any parameters
         self.set_param(Parameter.RemotePort, tcpport)
         self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
-        result = self.library.Cli_Connect(self.pointer)
-        check_error(result, context="client")
-        return result
+        return self._lib.Cli_Connect(self._s7_client)
 
     def read(self, vm_address: str) -> int:
         """Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")
@@ -99,7 +63,6 @@ class Logo:
         area = Area.DB
         db_number = 1
         size = 1
-        start = 0
         wordlen: WordLen
         logger.debug(f"read, vm_address:{vm_address}")
         if re.match(r"V[0-9]{1,4}\.[0-7]", vm_address):
@@ -135,7 +98,7 @@ class Logo:
 
         logger.debug(f"start:{start}, wordlen:{wordlen.name}={wordlen}, data-length:{len(data)}")
 
-        result = self.library.Cli_ReadArea(self.pointer, area, db_number, start, size, wordlen, byref(data))
+        result = self._lib.Cli_ReadArea(self._s7_client, area, db_number, start, size, wordlen, byref(data))
         check_error(result, context="client")
         # transform result to int value
         if wordlen == WordLen.Bit:
@@ -156,14 +119,12 @@ class Logo:
             value: integer
 
         Examples:
-            >>> write("VW10", 200) or write("V10.3", 1)
+            >>> Logo().write("VW10", 200) or Logo().write("V10.3", 1)
         """
         area = Area.DB
         db_number = 1
-        start = 0
         amount = 1
         wordlen: WordLen
-        data = bytearray(0)
         logger.debug(f"write, vm_address:{vm_address}, value:{value}")
         if re.match(r"^V[0-9]{1,4}\.[0-7]$", vm_address):
             # bit value
@@ -209,126 +170,6 @@ class Logo:
 
         logger.debug(f"write, vm_address:{vm_address} value:{value}")
 
-        result = self.library.Cli_WriteArea(self.pointer, area, db_number, start, amount, wordlen, byref(cdata))
+        result = self._lib.Cli_WriteArea(self._s7_client, area, db_number, start, amount, wordlen, byref(cdata))
         check_error(result, context="client")
         return result
-
-    def db_read(self, db_number: int, start: int, size: int) -> bytearray:
-        """This is a lean function of Cli_ReadArea() to read PLC DB.
-
-        Args:
-            db_number: for Logo only DB=1
-            start: start address for Logo7 0..951 / Logo8 0..1469
-            size: in bytes
-
-        Returns:
-            Array of bytes
-        """
-        logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
-
-        type_ = WordLen.Byte.ctype
-        data = (type_ * size)()
-        result = self.library.Cli_DBRead(self.pointer, db_number, start, size, byref(data))
-        check_error(result, context="client")
-        return bytearray(data)
-
-    def db_write(self, db_number: int, start: int, data: bytearray) -> int:
-        """Writes to a DB object.
-
-        Args:
-            db_number: for Logo only DB=1
-            start: start address for Logo7 0..951 / Logo8 0..1469
-            data: bytearray
-
-        Returns:
-            Error code from snap7 library.
-        """
-        type_ = WordLen.Byte.ctype
-        size = len(data)
-        cdata = (type_ * size).from_buffer_copy(data)
-        logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")
-        result = self.library.Cli_DBWrite(self.pointer, db_number, start, size, byref(cdata))
-        check_error(result, context="client")
-        return result
-
-    def set_connection_params(self, ip_address: str, tsap_snap7: int, tsap_logo: int) -> None:
-        """Sets internally (IP, LocalTSAP, RemoteTSAP) Coordinates.
-
-        Notes:
-            This function must be called just before Cli_Connect().
-
-        Args:
-            ip_address: IP ip_address of server
-            tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
-            tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
-
-        Raises:
-            :obj:`ValueError`: if the `ip_address` is not an IPV4.
-            :obj:`ValueError`: if the snap7 error code is diferent from 0.
-        """
-        if not re.match(ipv4, ip_address):
-            raise ValueError(f"{ip_address} is invalid ipv4")
-        result = self.library.Cli_SetConnectionParams(
-            self.pointer, ip_address.encode(), c_uint16(tsap_snap7), c_uint16(tsap_logo)
-        )
-        if result != 0:
-            raise ValueError("The parameter was invalid")
-
-    def set_connection_type(self, connection_type: int) -> None:
-        """Sets the connection resource type, i.e the way in which the Clients
-            connects to a PLC.
-
-        Args:
-            connection_type: 1 for PG, 2 for OP, 3 to 10 for S7 Basic
-
-        Raises:
-            :obj:`ValueError`: if the snap7 error code is diferent from 0.
-        """
-        result = self.library.Cli_SetConnectionType(self.pointer, c_uint16(connection_type))
-        if result != 0:
-            raise ValueError("The parameter was invalid")
-
-    def get_connected(self) -> bool:
-        """Returns the connection status
-
-        Notes:
-            This function has a bug, that returns `True` when the connection
-                is lost. This comes from the original `snap7 library`.
-
-        Returns:
-            True if connected.
-        """
-        connected = c_int32()
-        result = self.library.Cli_GetConnected(self.pointer, byref(connected))
-        check_error(result, context="client")
-        return bool(connected)
-
-    def set_param(self, parameter: Parameter, value: int) -> int:
-        """Sets an internal Server object parameter.
-
-        Args:
-            parameter: Parameter to be set
-            value: Parameter value
-
-        Returns:
-            Error code from snap7 library.
-        """
-        logger.debug(f"setting param number {parameter} to {value}")
-        result = self.library.Cli_SetParam(self.pointer, parameter, byref(parameter.ctype(value)))
-        check_error(result, context="client")
-        return result
-
-    def get_param(self, parameter: Parameter) -> int:
-        """Reads an internal Logo object parameter.
-
-        Args:
-            number: Parameter type number
-
-        Returns:
-            Parameter value
-        """
-        logger.debug(f"retreiving param number {parameter}")
-        value = parameter.ctype()
-        code = self.library.Cli_GetParam(self.pointer, c_int(parameter), byref(value))
-        check_error(code)
-        return value.value

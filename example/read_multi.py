@@ -8,7 +8,7 @@ import ctypes
 
 from snap7 import Client
 from error import check_error
-from snap7.types import S7DataItem, Area, WordLen
+from snap7.type import S7DataItem, Area, WordLen
 from snap7.util import get_real, get_int
 
 client = Client()

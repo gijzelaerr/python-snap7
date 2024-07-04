@@ -7,7 +7,7 @@ from typing import cast
 from snap7 import DB, Row
 from snap7.util import get_byte, get_time, get_fstring, get_int
 from snap7.util import set_byte, set_time, set_fstring, set_int
-from snap7.types import WordLen
+from snap7.type import WordLen
 
 test_spec = """
 
