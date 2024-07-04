@@ -9,7 +9,7 @@ jobs:
     strategy:
       matrix:
         python-version: [ "3.9", "3.10", "3.11", "3.12" ]
-        runs-on: [ "macos-14", "macos-11" ]
+        runs-on: [ "macos-14", "macos-12" ]
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout

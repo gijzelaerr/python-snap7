@@ -1,0 +1,62 @@
+name: Build and test wheels AMD64
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+jobs:
+  windows-build:
+    name: Build wheel for windows AMD64
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
+
+      - name: Build wheel
+        run: |
+          mkdir -p snap7/lib/
+          Copy-Item .\snap7-full-1.4.2\release\Windows\Win64\snap7.dll .\snap7\lib
+          python3 -m build . --wheel -C="--build-option=--plat-name=win_amd64"
+          mkdir -p wheelhouse/${{ runner.os }}/
+          cp dist/*.whl wheelhouse/${{ runner.os }}/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}
+          path: wheelhouse/${{ runner.os }}/*.whl
+
+  windows-test-amd64:
+    name: Testing wheels for AMD64 windows
+    needs: [windows-build]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-2022, windows-2019]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}
+          path: wheelhouse
+
+      - name: Install python-snap7
+        run: |
+          python3 -m pip install --upgrade pip pytest
+          python3 -m pip install $(ls wheelhouse/*.whl)
+
+      - name: Run pytest
+        run: |
+            pytest -m "server or util or client or mainloop or partner"

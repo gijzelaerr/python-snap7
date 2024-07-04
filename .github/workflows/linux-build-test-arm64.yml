@@ -34,7 +34,7 @@ jobs:
           name: wheels
           path: wheelhouse/*.whl
 
-  test-wheels-arm64:
+  linux-test-arm64:
     name: Testing wheel for arm64
     needs: linux-build-arm64
     runs-on: ubuntu-20.04

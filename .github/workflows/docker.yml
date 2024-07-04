@@ -9,7 +9,7 @@ env:
   IMAGE_NAME: python-snap7
 jobs:
   build-and-push-container-image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     permissions:
       packages: write
       contents: read
