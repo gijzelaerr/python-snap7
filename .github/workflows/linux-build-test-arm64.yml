@@ -1,4 +1,4 @@
-name: Build and test wheels ARM64
+name: Build and test wheels linux/arm64
 on:
   push:
     branches: [master]
