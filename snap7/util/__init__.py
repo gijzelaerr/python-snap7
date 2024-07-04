@@ -84,67 +84,92 @@ example::
 """
 
 import re
-import time
-from typing import Any, Union
-from datetime import date, datetime
+from typing import Any
 from collections import OrderedDict
 
 from .setters import (
-    set_bool,  # noqa: F401
-    set_fstring,  # noqa: F401
-    set_string,  # noqa: F401
-    set_real,  # noqa: F401
-    set_dword,  # noqa: F401
-    set_udint,  # noqa: F401
-    set_dint,  # noqa: F401
-    set_uint,  # noqa: F401
-    set_int,  # noqa: F401
-    set_word,  # noqa: F401
-    set_byte,  # noqa: F401
-    set_usint,  # noqa: F401
-    set_sint,  # noqa: F401
-    set_time,  # noqa: F401
+    set_bool,
+    set_fstring,
+    set_string,
+    set_real,
+    set_dword,
+    set_udint,
+    set_dint,
+    set_uint,
+    set_int,
+    set_word,
+    set_byte,
+    set_usint,
+    set_sint,
+    set_time,
 )
 
 from .getters import (
-    get_bool,  # noqa: F401
-    get_fstring,  # noqa: F401
-    get_string,  # noqa: F401
-    get_wstring,  # noqa: F401
-    get_real,  # noqa: F401
-    get_dword,  # noqa: F401
-    get_udint,  # noqa: F401
-    get_dint,  # noqa: F401
-    get_uint,  # noqa: F401
-    get_int,  # noqa: F401
-    get_word,  # noqa: F401
-    get_byte,  # noqa: F401
-    get_s5time,  # noqa: F401
-    get_dt,  # noqa: F401
-    get_usint,  # noqa: F401
-    get_sint,  # noqa: F401
-    get_time,  # noqa: F401
-    get_date,  # noqa: F401
-    get_tod,  # noqa: F401
-    get_lreal,  # noqa: F401
-    get_char,  # noqa: F401
-    get_wchar,  # noqa: F401
-    get_dtl,  # noqa: F401
+    get_bool,
+    get_fstring,
+    get_string,
+    get_wstring,
+    get_real,
+    get_dword,
+    get_udint,
+    get_dint,
+    get_uint,
+    get_int,
+    get_word,
+    get_byte,
+    get_s5time,
+    get_dt,
+    get_usint,
+    get_sint,
+    get_time,
+    get_date,
+    get_tod,
+    get_lreal,
+    get_char,
+    get_wchar,
+    get_dtl,
 )
 
 
-def utc2local(utc: Union[date, datetime]) -> Union[datetime, date]:
-    """Returns the local datetime
-
-    Args:
-        utc: UTC type date or datetime.
-
-    Returns:
-        Local datetime.
-    """
-    epoch = time.mktime(utc.timetuple())
-    offset = datetime.fromtimestamp(epoch) - datetime.utcfromtimestamp(epoch)
-    return utc + offset
+__all__ = [
+    "get_bool",
+    "get_real",
+    "get_dword",
+    "get_udint",
+    "get_dint",
+    "get_uint",
+    "get_int",
+    "get_word",
+    "get_byte",
+    "get_usint",
+    "get_sint",
+    "get_time",
+    "get_date",
+    "get_tod",
+    "get_lreal",
+    "get_char",
+    "get_wchar",
+    "get_dtl",
+    "get_s5time",
+    "get_dt",
+    "get_fstring",
+    "get_string",
+    "get_wstring",
+    "set_real",
+    "set_dword",
+    "set_udint",
+    "set_dint",
+    "set_uint",
+    "set_int",
+    "set_word",
+    "set_byte",
+    "set_usint",
+    "set_sint",
+    "set_time",
+    "set_bool",
+    "set_fstring",
+    "set_string",
+]
 
 
 def parse_specification(db_specification: str) -> OrderedDict[str, Any]:

@@ -7,7 +7,7 @@ from typing import cast
 from snap7.util.db import DB_Row, DB
 from snap7.util.getters import get_byte, get_time, get_fstring, get_int
 from snap7.util.setters import set_byte, set_time, set_fstring, set_int
-from snap7 import types
+from snap7.types import WordLen
 
 test_spec = """
 
@@ -397,7 +397,7 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row["testsint0"], 127)
 
     def test_set_int_roundtrip(self) -> None:
-        DB1 = cast(bytearray, (types.wordlen_to_ctypes[types.S7WLByte] * 4)())
+        DB1 = cast(bytearray, (WordLen.Byte.ctype * 4)())
 
         for i in range(-(2**15) + 1, (2**15) - 1):
             set_int(DB1, 0, i)

@@ -14,8 +14,6 @@ from ctypes import (
     c_void_p,
     CFUNCTYPE,
     POINTER,
-    Array,
-    _SimpleCData,
 )
 from _ctypes import CFuncPtr
 import struct
@@ -25,9 +23,7 @@ from types import TracebackType
 
 from ..common import ipv4, check_error, load_library
 from ..protocol import Snap7CliProtocol
-from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses
-from ..types import longword, wordlen_to_ctypes, WordLen, S7Object
-from ..types import srvAreaDB, srvAreaPA, srvAreaTM, srvAreaCT
+from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object, CDataArrayType
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +95,12 @@ class Server:
         self._s7_server = S7Object(self._lib.Srv_Create())
 
     @error_wrap
-    def register_area(self, area_code: int, index: int, userdata: "Array[_SimpleCData[int]]") -> int:
+    def register_area(self, area: SrvArea, index: int, userdata: CDataArrayType) -> int:
         """Shares a memory area with the server. That memory block will be
             visible by the clients.
 
         Args:
-            area_code: memory area to register.
+            area: memory area to register.
             index: number of area to write.
             userdata: buffer with the data to write.
 
@@ -112,8 +108,8 @@ class Server:
             Error code from snap7 library.
         """
         size = sizeof(userdata)
-        logger.info(f"registering area {area_code}, index {index}, size {size}")
-        return self._lib.Srv_RegisterArea(self._s7_server, area_code, index, byref(userdata), size)
+        logger.info(f"registering area {area}, index {index}, size {size}")
+        return self._lib.Srv_RegisterArea(self._s7_server, area.value, index, byref(userdata), size)
 
     @error_wrap
     def set_events_callback(self, call_back: Callable[..., Any]) -> int:
@@ -224,63 +220,63 @@ class Server:
         return (server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value)
 
     @error_wrap
-    def unregister_area(self, area_code: int, index: int) -> int:
+    def unregister_area(self, area: SrvArea, index: int) -> int:
         """'Unshares' a memory area previously shared with Srv_RegisterArea().
 
         Notes:
             That memory block will be no longer visible by the clients.
 
         Args:
-            area_code: memory area.
+            area: memory area.
             index: number of the memory area.
 
         Returns:
             Error code from snap7 library.
         """
-        return self._lib.Srv_UnregisterArea(self._s7_server, area_code, index)
+        return self._lib.Srv_UnregisterArea(self._s7_server, area.value, index)
 
     @error_wrap
-    def unlock_area(self, code: int, index: int) -> int:
+    def unlock_area(self, area: SrvArea, index: int) -> int:
         """Unlocks a previously locked shared memory area.
 
         Args:
-            code: memory area.
+            area: memory area.
             index: number of the memory area.
 
         Returns:
             Error code from snap7 library.
         """
-        logger.debug(f"unlocking area code {code} index {index}")
-        return self._lib.Srv_UnlockArea(self._s7_server, code, index)
+        logger.debug(f"unlocking area code {area} index {index}")
+        return self._lib.Srv_UnlockArea(self._s7_server, area.value, index)
 
     @error_wrap
-    def lock_area(self, code: int, index: int) -> int:
+    def lock_area(self, area: SrvArea, index: int) -> int:
         """Locks a shared memory area.
 
         Args:
-            code: memory area.
+            area: memory area.
             index: number of the memory area.
 
         Returns:
             Error code from snap7 library.
         """
-        logger.debug(f"locking area code {code} index {index}")
-        return self._lib.Srv_LockArea(self._s7_server, code, index)
+        logger.debug(f"locking area code {area} index {index}")
+        return self._lib.Srv_LockArea(self._s7_server, area.value, index)
 
     @error_wrap
-    def start_to(self, ip: str, tcpport: int = 102) -> int:
+    def start_to(self, ip: str, tcp_port: int = 102) -> int:
         """Start server on a specific interface.
 
         Args:
             ip: IPV4 address where the server is located.
-            tcpport: port that the server will listening.
+            tcp_port: port that the server will listen on.
 
         Raises:
             :obj:`ValueError`: if the `ivp4` is not a valid IPV4
         """
-        if tcpport != 102:
-            logger.info(f"setting server TCP port to {tcpport}")
-            self.set_param(LocalPort, tcpport)
+        if tcp_port != 102:
+            logger.info(f"setting server TCP port to {tcp_port}")
+            self.set_param(LocalPort, tcp_port)
         if not re.match(ipv4, ip):
             raise ValueError(f"{ip} is invalid ipv4")
         logger.info(f"starting server to {ip}:102")
@@ -400,19 +396,19 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False) -> None:
 
     server = Server()
     size = 100
-    DBdata: "Array[_SimpleCData[int]]" = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
-    PAdata: "Array[_SimpleCData[int]]" = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
-    TMdata: "Array[_SimpleCData[int]]" = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
-    CTdata: "Array[_SimpleCData[int]]" = (wordlen_to_ctypes[WordLen.Byte.value] * size)()
-    server.register_area(srvAreaDB, 1, DBdata)
-    server.register_area(srvAreaPA, 1, PAdata)
-    server.register_area(srvAreaTM, 1, TMdata)
-    server.register_area(srvAreaCT, 1, CTdata)
+    DBdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    PAdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    TMdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    CTdata: CDataArrayType = (WordLen.Byte.ctype * size)()
+    server.register_area(SrvArea.DB, 1, DBdata)
+    server.register_area(SrvArea.PA, 1, PAdata)
+    server.register_area(SrvArea.TM, 1, TMdata)
+    server.register_area(SrvArea.CT, 1, CTdata)
 
     if init_standard_values:
         ba = _init_standard_values()
-        userdata = wordlen_to_ctypes[WordLen.Byte.value] * len(ba)
-        server.register_area(srvAreaDB, 0, userdata.from_buffer(ba))
+        userdata = WordLen.Byte.ctype * len(ba)
+        server.register_area(SrvArea.DB, 0, userdata.from_buffer(ba))
 
     server.start(tcpport=tcpport)
     while True:

@@ -1,14 +1,16 @@
-import ctypes
+from ctypes import c_char
 import gc
 import logging
+
 import pytest
 import unittest
+from threading import Thread
 from unittest import mock
 
 from snap7.common import error_text
 from snap7.error import server_errors
 from snap7.server import Server
-from snap7.types import SrvEvent, mkEvent, mkLog, srvAreaDB, LocalPort, WorkInterval, MaxClients, RemotePort
+from snap7.types import SrvEvent, mkEvent, mkLog, LocalPort, WorkInterval, MaxClients, RemotePort, SrvArea
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -24,8 +26,8 @@ class TestServer(unittest.TestCase):
         self.server.destroy()
 
     def test_register_area(self) -> None:
-        db1_type = ctypes.c_char * 1024
-        self.server.register_area(srvAreaDB, 3, db1_type())
+        db1_type = c_char * 1024
+        self.server.register_area(SrvArea.DB, 3, db1_type())
 
     def test_error(self) -> None:
         for error in server_errors:
@@ -45,25 +47,23 @@ class TestServer(unittest.TestCase):
         self.assertRaises(Exception, self.server.get_mask, 3)
 
     def test_lock_area(self) -> None:
-        from threading import Thread
-
-        area_code = srvAreaDB
+        area = SrvArea.DB
         index = 1
-        db1_type = ctypes.c_char * 1024
+        db1_type = c_char * 1024
         # we need to register first
-        self.server.register_area(area_code, index, db1_type())
-        self.server.lock_area(code=area_code, index=index)
+        self.server.register_area(area, index, db1_type())
+        self.server.lock_area(area=area, index=index)
 
         def second_locker() -> None:
-            self.server.lock_area(code=area_code, index=index)
-            self.server.unlock_area(code=area_code, index=index)
+            self.server.lock_area(area=area, index=index)
+            self.server.unlock_area(area=area, index=index)
 
         thread = Thread(target=second_locker)
         thread.daemon = True
         thread.start()
         thread.join(timeout=1)
         self.assertTrue(thread.is_alive())
-        self.server.unlock_area(code=area_code, index=index)
+        self.server.unlock_area(area=area, index=index)
         thread.join(timeout=1)
         self.assertFalse(thread.is_alive())
 
@@ -77,9 +77,9 @@ class TestServer(unittest.TestCase):
         self.server.set_mask(kind=mkEvent, mask=10)
 
     def test_unlock_area(self) -> None:
-        area_code = srvAreaDB
+        area_code = SrvArea.DB
         index = 1
-        db1_type = ctypes.c_char * 1024
+        db1_type = c_char * 1024
 
         # we need to register first
         self.assertRaises(Exception, self.server.lock_area, area_code, index)
@@ -89,9 +89,9 @@ class TestServer(unittest.TestCase):
         self.server.unlock_area(area_code, index)
 
     def test_unregister_area(self) -> None:
-        area_code = srvAreaDB
+        area_code = SrvArea.DB
         index = 1
-        db1_type = ctypes.c_char * 1024
+        db1_type = c_char * 1024
         self.server.register_area(area_code, index, db1_type())
         self.server.unregister_area(area_code, index)
 

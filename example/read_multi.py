@@ -8,29 +8,29 @@ import ctypes
 
 import snap7.util.getters
 from snap7.common import check_error
-from snap7.types import S7DataItem, S7AreaDB, S7WLByte
+from snap7.types import S7DataItem, Area, WordLen
 
 client = snap7.client.Client()
 client.connect("10.100.5.2", 0, 2)
 
 data_items = (S7DataItem * 3)()
 
-data_items[0].Area = ctypes.c_int32(S7AreaDB)
-data_items[0].WordLen = ctypes.c_int32(S7WLByte)
+data_items[0].Area = ctypes.c_int32(Area.DB.value)
+data_items[0].WordLen = ctypes.c_int32(WordLen.Byte.value)
 data_items[0].Result = ctypes.c_int32(0)
 data_items[0].DBNumber = ctypes.c_int32(200)
 data_items[0].Start = ctypes.c_int32(16)
 data_items[0].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
 
-data_items[1].Area = ctypes.c_int32(S7AreaDB)
-data_items[1].WordLen = ctypes.c_int32(S7WLByte)
+data_items[1].Area = ctypes.c_int32(Area.DB.value)
+data_items[1].WordLen = ctypes.c_int32(WordLen.Byte.value)
 data_items[1].Result = ctypes.c_int32(0)
 data_items[1].DBNumber = ctypes.c_int32(200)
 data_items[1].Start = ctypes.c_int32(12)
 data_items[1].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
 
-data_items[2].Area = ctypes.c_int32(S7AreaDB)
-data_items[2].WordLen = ctypes.c_int32(S7WLByte)
+data_items[2].Area = ctypes.c_int32(Area.DB.value)
+data_items[2].WordLen = ctypes.c_int32(WordLen.Byte.value)
 data_items[2].Result = ctypes.c_int32(0)
 data_items[2].DBNumber = ctypes.c_int32(200)
 data_items[2].Start = ctypes.c_int32(2)

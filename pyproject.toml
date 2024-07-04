@@ -32,7 +32,7 @@ Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "mypy", "types-setuptools", "ruff", "types-click"]
+test = ["pytest", "mypy", "types-setuptools", "ruff", "tox", "types-click"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 

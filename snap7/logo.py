@@ -8,7 +8,7 @@ import logging
 from ctypes import byref, c_int, c_int32, c_uint16
 
 from .types import WordLen, S7Object, param_types
-from .types import RemotePort, Areas, wordlen_to_ctypes
+from .types import RemotePort, Area
 from .common import ipv4, check_error, load_library
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ class Logo:
         Returns:
             integer
         """
-        area = Areas.DB
+        area = Area.DB
         db_number = 1
         size = 1
         start = 0
@@ -130,12 +130,12 @@ class Logo:
             logger.info("Unknown address format")
             return 0
 
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = wordlen.ctype
         data = (type_ * size)()
 
-        logger.debug(f"start:{start}, wordlen:{wordlen.name}={wordlen.value}, data-length:{len(data)}")
+        logger.debug(f"start:{start}, wordlen:{wordlen.name}={wordlen}, data-length:{len(data)}")
 
-        result = self.library.Cli_ReadArea(self.pointer, area.value, db_number, start, size, wordlen.value, byref(data))
+        result = self.library.Cli_ReadArea(self.pointer, area, db_number, start, size, wordlen, byref(data))
         check_error(result, context="client")
         # transform result to int value
         if wordlen == WordLen.Bit:
@@ -158,7 +158,7 @@ class Logo:
         Examples:
             >>> write("VW10", 200) or write("V10.3", 1)
         """
-        area = Areas.DB
+        area = Area.DB
         db_number = 1
         start = 0
         amount = 1
@@ -201,15 +201,15 @@ class Logo:
             return 1
 
         if wordlen == WordLen.Bit:
-            type_ = wordlen_to_ctypes[WordLen.Byte.value]
+            type_ = WordLen.Byte.ctype
         else:
-            type_ = wordlen_to_ctypes[wordlen.value]
+            type_ = wordlen.ctype
 
         cdata = (type_ * amount).from_buffer_copy(data)
 
         logger.debug(f"write, vm_address:{vm_address} value:{value}")
 
-        result = self.library.Cli_WriteArea(self.pointer, area.value, db_number, start, amount, wordlen.value, byref(cdata))
+        result = self.library.Cli_WriteArea(self.pointer, area, db_number, start, amount, wordlen, byref(cdata))
         check_error(result, context="client")
         return result
 
@@ -226,7 +226,7 @@ class Logo:
         """
         logger.debug(f"db_read, db_number:{db_number}, start:{start}, size:{size}")
 
-        type_ = wordlen_to_ctypes[WordLen.Byte.value]
+        type_ = WordLen.Byte.ctype
         data = (type_ * size)()
         result = self.library.Cli_DBRead(self.pointer, db_number, start, size, byref(data))
         check_error(result, context="client")
@@ -243,8 +243,7 @@ class Logo:
         Returns:
             Error code from snap7 library.
         """
-        wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Byte.ctype
         size = len(data)
         cdata = (type_ * size).from_buffer_copy(data)
         logger.debug(f"db_write db_number:{db_number} start:{start} size:{size} data:{data}")

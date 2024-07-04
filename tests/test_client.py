@@ -1,31 +1,43 @@
-import ctypes
 import gc
 import logging
 import struct
 import time
+from typing import Tuple, Union
+
 import pytest
 import unittest
+from ctypes import (
+    c_uint8,
+    c_uint16,
+    c_int32,
+    c_int,
+    POINTER,
+    sizeof,
+    create_string_buffer,
+    cast,
+    pointer,
+    Array,
+    c_byte,
+    c_int16,
+)
 from datetime import datetime, timedelta, date
 from multiprocessing import Process
 from unittest import mock
-from typing import cast
+from typing import cast as typing_cast
 
 from snap7.util.getters import get_real, get_int
 from snap7.util.setters import set_int
-from snap7 import util
 from snap7.common import check_error
 from snap7.server import mainloop
 from snap7.client import Client
 from snap7.types import (
-    S7AreaDB,
     S7DataItem,
     S7SZL,
     S7SZLList,
     buffer_type,
     buffer_size,
-    Areas,
+    Area,
     WordLen,
-    wordlen_to_ctypes,
     RemotePort,
     LocalPort,
     WorkInterval,
@@ -41,6 +53,7 @@ from snap7.types import (
     PDURequest,
     RecoveryTime,
     KeepAliveTime,
+    Block,
 )
 
 logging.basicConfig(level=logging.WARNING)
@@ -52,6 +65,27 @@ rack = 1
 slot = 1
 
 
+def _prepare_as_read_area(area: Area, size: int) -> Tuple[WordLen, Union[Array[c_byte], Array[c_int16], Array[c_int32]]]:
+    wordlen = area.wordlen()
+    usrdata = (wordlen.ctype * size)()
+    return wordlen, usrdata
+
+
+def _prepare_as_write_area(area: Area, data: bytearray) -> Tuple[WordLen, Union[Array[c_byte], Array[c_int16], Array[c_int32]]]:
+    if area not in Area:
+        raise ValueError(f"{area} is not implemented in types")
+    elif area == Area.TM:
+        word_len = WordLen.Timer
+    elif area == Area.CT:
+        word_len = WordLen.Counter
+    else:
+        word_len = WordLen.Byte
+    type_ = WordLen.Byte.ctype
+    cdata = (type_ * len(data)).from_buffer_copy(data)
+    return word_len, cdata
+
+
+# noinspection PyTypeChecker,PyCallingNonCallable
 @pytest.mark.client
 class TestClient(unittest.TestCase):
     process = None
@@ -64,12 +98,11 @@ class TestClient(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        if cls.process is None:
-            return
-        cls.process.terminate()
-        cls.process.join(1)
-        if cls.process.is_alive():
-            cls.process.kill()
+        if cls.process:
+            cls.process.terminate()
+            cls.process.join(1)
+            if cls.process.is_alive():
+                cls.process.kill()
 
     def setUp(self) -> None:
         self.client = Client()
@@ -80,7 +113,7 @@ class TestClient(unittest.TestCase):
         self.client.destroy()
 
     def _as_check_loop(self, check_times: int = 20) -> int:
-        check_status = ctypes.c_int(-1)
+        check_status = c_int(-1)
         # preparing Server values
         for i in range(check_times):
             self.client.check_as_completion(check_status)
@@ -130,34 +163,37 @@ class TestClient(unittest.TestCase):
         # build up our requests
         data_items = (S7DataItem * 3)()
 
-        data_items[0].Area = ctypes.c_int32(S7AreaDB)
-        data_items[0].WordLen = ctypes.c_int32(WordLen.Byte.value)
-        data_items[0].Result = ctypes.c_int32(0)
-        data_items[0].DBNumber = ctypes.c_int32(db)
-        data_items[0].Start = ctypes.c_int32(0)
-        data_items[0].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
+        # build up our requests
+        data_items = (S7DataItem * 3)()
 
-        data_items[1].Area = ctypes.c_int32(S7AreaDB)
-        data_items[1].WordLen = ctypes.c_int32(WordLen.Byte.value)
-        data_items[1].Result = ctypes.c_int32(0)
-        data_items[1].DBNumber = ctypes.c_int32(db)
-        data_items[1].Start = ctypes.c_int32(4)
-        data_items[1].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
+        data_items[0].Area = c_int32(Area.DB.value)
+        data_items[0].WordLen = c_int32(WordLen.Byte.value)
+        data_items[0].Result = c_int32(0)
+        data_items[0].DBNumber = c_int32(db)
+        data_items[0].Start = c_int32(0)
+        data_items[0].Amount = c_int32(4)  # reading a REAL, 4 bytes
 
-        data_items[2].Area = ctypes.c_int32(S7AreaDB)
-        data_items[2].WordLen = ctypes.c_int32(WordLen.Byte.value)
-        data_items[2].Result = ctypes.c_int32(0)
-        data_items[2].DBNumber = ctypes.c_int32(db)
-        data_items[2].Start = ctypes.c_int32(8)
-        data_items[2].Amount = ctypes.c_int32(2)  # reading an INT, 2 bytes
+        data_items[1].Area = c_int32(Area.DB.value)
+        data_items[1].WordLen = c_int32(WordLen.Byte.value)
+        data_items[1].Result = c_int32(0)
+        data_items[1].DBNumber = c_int32(db)
+        data_items[1].Start = c_int32(4)
+        data_items[1].Amount = c_int32(4)  # reading a REAL, 4 bytes
+
+        data_items[2].Area = c_int32(Area.DB.value)
+        data_items[2].WordLen = c_int32(WordLen.Byte.value)
+        data_items[2].Result = c_int32(0)
+        data_items[2].DBNumber = c_int32(db)
+        data_items[2].Start = c_int32(8)
+        data_items[2].Amount = c_int32(2)  # reading an INT, 2 bytes
 
         # create buffers to receive the data
         # use the Amount attribute on each item to size the buffer
         for di in data_items:
             # create the buffer
-            dataBuffer = ctypes.create_string_buffer(di.Amount)
+            dataBuffer = create_string_buffer(di.Amount)
             # get a pointer to the buffer
-            pBuffer = ctypes.cast(ctypes.pointer(dataBuffer), ctypes.POINTER(ctypes.c_uint8))
+            pBuffer = cast(pointer(dataBuffer), POINTER(c_uint8))
             di.pData = pBuffer
 
         result, data_items = self.client.read_multi_vars(data_items)
@@ -184,8 +220,8 @@ class TestClient(unittest.TestCase):
         self.assertRaises(RuntimeError, self.client.upload, db_number)
 
     def test_as_upload(self) -> None:
-        _buffer = cast("ctypes.Array[ctypes._SimpleCData[int]]", buffer_type())
-        size = ctypes.c_int(ctypes.sizeof(_buffer))
+        _buffer = typing_cast(Array[c_int32], buffer_type())
+        size = sizeof(_buffer)
         self.client.as_upload(1, _buffer, size)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
@@ -199,7 +235,7 @@ class TestClient(unittest.TestCase):
         start = 1
 
         # Test read_area with a DB
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         data = bytearray(b"\x11")
         self.client.write_area(area, dbnumber, start, data)
@@ -207,7 +243,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test read_area with a TM
-        area = Areas.TM
+        area = Area.TM
         dbnumber = 0
         data = bytearray(b"\x12\x34")
         self.client.write_area(area, dbnumber, start, data)
@@ -215,7 +251,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test read_area with a CT
-        area = Areas.CT
+        area = Area.CT
         dbnumber = 0
         data = bytearray(b"\x13\x35")
         self.client.write_area(area, dbnumber, start, data)
@@ -224,7 +260,7 @@ class TestClient(unittest.TestCase):
 
     def test_write_area(self) -> None:
         # Test write area with a DB
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         start = 1
         data = bytearray(b"\x11")
@@ -233,7 +269,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(data, bytearray(res))
 
         # Test write area with a TM
-        area = Areas.TM
+        area = Area.TM
         dbnumber = 0
         timer = bytearray(b"\x12\x00")
         res = self.client.write_area(area, dbnumber, start, timer)
@@ -241,7 +277,7 @@ class TestClient(unittest.TestCase):
         self.assertEqual(timer, bytearray(res))
 
         # Test write area with a CT
-        area = Areas.CT
+        area = Area.CT
         dbnumber = 0
         timer = bytearray(b"\x13\x00")
         res = self.client.write_area(area, dbnumber, start, timer)
@@ -252,19 +288,12 @@ class TestClient(unittest.TestCase):
         self.client.list_blocks()
 
     def test_list_blocks_of_type(self) -> None:
-        self.client.list_blocks_of_type("DB", 10)
-
-        self.assertRaises(ValueError, self.client.list_blocks_of_type, "NOblocktype", 10)
+        self.client.list_blocks_of_type(Block.DB, 10)
 
     def test_get_block_info(self) -> None:
-        """test Cli_GetAgBlockInfo"""
-        self.client.get_block_info("DB", 1)
-
-        self.assertRaises(Exception, self.client.get_block_info, "NOblocktype", 10)
-        self.assertRaises(Exception, self.client.get_block_info, "DB", 10)
+        self.client.get_block_info(Block.DB, 1)
 
     def test_get_cpu_state(self) -> None:
-        """this tests the get_cpu_state function"""
         self.client.get_cpu_state()
 
     def test_set_session_password(self) -> None:
@@ -304,8 +333,7 @@ class TestClient(unittest.TestCase):
         expected = b"\x10\x01"
         self.client.ab_write(0, bytearray(expected))
 
-        wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Byte.ctype
         buffer = (type_ * 2)()
         self.client.as_ab_read(0, 2, buffer)
         result = self.client.wait_as_completion(500)
@@ -383,7 +411,7 @@ class TestClient(unittest.TestCase):
         # Cli_AsCTRead
         expected = b"\x10\x01"
         self.client.ct_write(0, 1, bytearray(expected))
-        type_ = wordlen_to_ctypes[WordLen.Counter.value]
+        type_ = WordLen.Counter.ctype
         buffer = (type_ * 1)()
         self.client.as_ct_read(0, 1, buffer)
         self.client.wait_as_completion(500)
@@ -406,12 +434,11 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
     def test_as_db_get(self) -> None:
-        _buffer = cast("ctypes.Array[ctypes._SimpleCData[int]]", buffer_type())
-        size = ctypes.c_int(buffer_size)
-        self.client.as_db_get(db_number, _buffer, size)
+        _buffer = typing_cast(Array[c_int], buffer_type())
+        self.client.as_db_get(db_number, _buffer, buffer_size)
         self.client.wait_as_completion(500)
-        result = bytearray(_buffer)[: size.value]
-        self.assertEqual(100, len(result))
+        result = bytearray(_buffer)[:buffer_size]
+        self.assertEqual(buffer_size, len(result))
 
     def test_as_db_read(self) -> None:
         size = 40
@@ -420,8 +447,7 @@ class TestClient(unittest.TestCase):
         expected = bytearray(40)
         self.client.db_write(db_number=db, start=start, data=expected)
 
-        wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Byte.ctype
         data = (type_ * size)()
         self.client.as_db_read(db, start, size, data)
         self.client.wait_as_completion(500)
@@ -430,8 +456,7 @@ class TestClient(unittest.TestCase):
     def test_as_db_write(self) -> None:
         size = 40
         data = bytearray(size)
-        wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Byte.ctype
         size = len(data)
         result = (type_ * size).from_buffer_copy(data)
         self.client.as_db_write(db_number=1, start=0, size=size, data=result)
@@ -503,7 +528,7 @@ class TestClient(unittest.TestCase):
         original = self.client._lib.Cli_WriteArea
         self.client._lib.Cli_WriteArea = mock_writearea
 
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         start = 1
         data = b"\xde\xad\xbe\xef"
@@ -590,26 +615,26 @@ class TestClient(unittest.TestCase):
     def test_wait_as_completion_pass(self, timeout: int = 1000) -> None:
         # Cli_WaitAsCompletion
         # prepare Server with values
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         size = 1
         start = 1
         data = bytearray(size)
         self.client.write_area(area, dbnumber, start, data)
         # start as_request and test
-        wordlen, usrdata = self.client._prepare_as_read_area(area, size)
+        wordlen, usrdata = _prepare_as_read_area(area, size)
         self.client.as_read_area(area, dbnumber, start, size, wordlen, usrdata)
         self.client.wait_as_completion(timeout)
         self.assertEqual(bytearray(usrdata), data)
 
-    def test_wait_as_completion_timeouted(self, timeout: int = 0, tries: int = 500) -> None:
+    def test_wait_as_completion_timeout(self, timeout: int = 0, tries: int = 500) -> None:
         # Cli_WaitAsCompletion
         # prepare Server
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         size = 1
         start = 1
-        wordlen, data = self.client._prepare_as_read_area(area, size)
+        wordlen, data = _prepare_as_read_area(area, size)
         self.client.write_area(area, dbnumber, start, bytearray(data))
         # start as_request and wait for zero seconds to try trigger timeout
         for i in range(tries):
@@ -634,20 +659,19 @@ class TestClient(unittest.TestCase):
 
     def test_check_as_completion(self, timeout: int = 5) -> None:
         # Cli_CheckAsCompletion
-        check_status = ctypes.c_int(-1)
+        check_status = c_int(-1)
         pending_checked = False
         # preparing Server values
         data = bytearray(b"\x01\xff")
         size = len(data)
-        area = Areas.DB
+        area = Area.DB
         db = 1
         start = 1
         self.client.write_area(area, db, start, data)
 
         # start as_request and test
-        wordlen, cdata = self.client._prepare_as_read_area(area, size)
-        pcdata = cdata
-        self.client.as_read_area(area, db, start, size, wordlen, pcdata)
+        wordlen, cdata = _prepare_as_read_area(area, size)
+        self.client.as_read_area(area, db, start, size, wordlen, cdata)
         for _ in range(10):
             self.client.check_as_completion(check_status)
             if check_status.value == 0:
@@ -665,75 +689,73 @@ class TestClient(unittest.TestCase):
         start = 1
 
         # Test read_area with a DB
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         data = bytearray(b"\x11")
         self.client.write_area(area, dbnumber, start, data)
-        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
+        wordlen, usrdata = _prepare_as_read_area(area, amount)
         self.client.as_read_area(area, dbnumber, start, amount, wordlen, usrdata)
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
         # Test read_area with a TM
-        area = Areas.TM
+        area = Area.TM
         dbnumber = 0
         data = bytearray(b"\x12\x34")
         self.client.write_area(area, dbnumber, start, data)
-        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
+        wordlen, usrdata = _prepare_as_read_area(area, amount)
         self.client.as_read_area(area, dbnumber, start, amount, wordlen, usrdata)
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
         # Test read_area with a CT
-        area = Areas.CT
+        area = Area.CT
         dbnumber = 0
         data = bytearray(b"\x13\x35")
         self.client.write_area(area, dbnumber, start, data)
-        wordlen, usrdata = self.client._prepare_as_read_area(area, amount)
-        pusrdata = usrdata
-        self.client.as_read_area(area, dbnumber, start, amount, wordlen, pusrdata)
+        wordlen, usrdata = _prepare_as_read_area(area, amount)
+        self.client.as_read_area(area, dbnumber, start, amount, wordlen, usrdata)
         self.client.wait_as_completion(1000)
         self.assertEqual(bytearray(usrdata), data)
 
     def test_as_write_area(self) -> None:
         # Test write area with a DB
-        area = Areas.DB
+        area = Area.DB
         dbnumber = 1
         size = 1
         start = 1
         data = bytearray(b"\x11")
-        wordlen, cdata = self.client._prepare_as_write_area(area, data)
+        wordlen, cdata = _prepare_as_write_area(area, data)
         self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
         self.client.wait_as_completion(1000)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(data, bytearray(res))
 
         # Test write area with a TM
-        area = Areas.TM
+        area = Area.TM
         dbnumber = 0
         size = 2
         timer = bytearray(b"\x12\x00")
-        wordlen, cdata = self.client._prepare_as_write_area(area, timer)
+        wordlen, cdata = _prepare_as_write_area(area, timer)
         self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
         self.client.wait_as_completion(1000)
-        res = self.client.read_area(area, dbnumber, start, 1)
-        self.assertEqual(timer, bytearray(res))
+        res2 = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(timer, bytearray(res2))
 
         # Test write area with a CT
-        area = Areas.CT
+        area = Area.CT
         dbnumber = 0
         size = 2
         timer = bytearray(b"\x13\x00")
-        wordlen, cdata = self.client._prepare_as_write_area(area, timer)
+        wordlen, cdata = _prepare_as_write_area(area, timer)
         self.client.as_write_area(area, dbnumber, start, size, wordlen, cdata)
         self.client.wait_as_completion(1000)
-        res = self.client.read_area(area, dbnumber, start, 1)
-        self.assertEqual(timer, bytearray(res))
+        res3 = self.client.read_area(area, dbnumber, start, 1)
+        self.assertEqual(timer, bytearray(res3))
 
     def test_as_eb_read(self) -> None:
         # Cli_AsEBRead
-        wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Byte.ctype
         buffer = (type_ * 1)()
         response = self.client.as_eb_read(0, 1, buffer)
         self.assertEqual(0, response)
@@ -747,19 +769,17 @@ class TestClient(unittest.TestCase):
 
     def test_as_full_upload(self) -> None:
         # Cli_AsFullUpload
-        self.client.as_full_upload("DB", 1)
+        self.client.as_full_upload(Block.DB, 1)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_list_blocks_of_type(self) -> None:
-        data = cast("ctypes.Array[ctypes._SimpleCData[int]]", (ctypes.c_uint16 * 10)())
-        count = ctypes.c_int()
-        self.client.as_list_blocks_of_type("DB", data, count)
+        data = typing_cast(Array[c_int], (c_uint16 * 10)())
+        self.client.as_list_blocks_of_type(Block.DB, data, 0)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
     def test_as_mb_read(self) -> None:
         # Cli_AsMBRead
-        wordlen = WordLen.Byte
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Byte.ctype
         data = (type_ * 1)()
         self.client.as_mb_read(0, 1, data)
         bytearray(data)
@@ -777,35 +797,30 @@ class TestClient(unittest.TestCase):
         ssl_id = 0x011C
         index = 0x0005
         s7_szl = S7SZL()
-        size = ctypes.c_int(ctypes.sizeof(s7_szl))
-        self.client.as_read_szl(ssl_id, index, s7_szl, size)
+        self.client.as_read_szl(ssl_id, index, s7_szl, sizeof(s7_szl))
         self.client.wait_as_completion(100)
         result = bytes(s7_szl.Data)[2:26]
         self.assertEqual(expected, result)
 
     def test_as_read_szl_list(self) -> None:
-        # Cli_AsReadSZLList
         expected = b"\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01"
         szl_list = S7SZLList()
-        items_count = ctypes.c_int(ctypes.sizeof(szl_list))
+        items_count = sizeof(szl_list)
         self.client.as_read_szl_list(szl_list, items_count)
         self.client.wait_as_completion(500)
         result = bytearray(szl_list.List)[:16]
         self.assertEqual(expected, result)
 
     def test_as_tm_read(self) -> None:
-        # Cli_AsMBRead
         expected = b"\x10\x01"
-        wordlen = WordLen.Timer
         self.client.tm_write(0, 1, bytearray(expected))
-        type_ = wordlen_to_ctypes[wordlen.value]
+        type_ = WordLen.Timer.ctype
         buffer = (type_ * 1)()
         self.client.as_tm_read(0, 1, buffer)
         self.client.wait_as_completion(500)
         self.assertEqual(expected, bytearray(buffer))
 
     def test_as_tm_write(self) -> None:
-        # Cli_AsMBWrite
         data = b"\x10\x01"
         response = self.client.as_tm_write(0, 1, bytearray(data))
         result = self.client.wait_as_completion(500)
@@ -904,8 +919,8 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(bytes((util.utc2local(date(2019, 6, 27)).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
-        self.assertEqual(bytes((util.utc2local(date(2019, 6, 27)).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
+        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
+        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
 
     def test_iso_exchange_buffer(self) -> None:
         # Cli_IsoExchangeBuffer
@@ -986,20 +1001,20 @@ class TestClient(unittest.TestCase):
         # Cli_WriteMultiVars
         items_count = 3
         items = []
-        areas = [Areas.DB, Areas.CT, Areas.TM]
+        areas = [Area.DB, Area.CT, Area.TM]
         expected_list = []
         for i in range(items_count):
             item = S7DataItem()
-            item.Area = ctypes.c_int32(areas[i].value)
+            item.Area = c_int32(areas[i].value)
             wordlen = WordLen.Byte
-            item.WordLen = ctypes.c_int32(wordlen.value)
-            item.DBNumber = ctypes.c_int32(1)
-            item.Start = ctypes.c_int32(0)
-            item.Amount = ctypes.c_int32(4)
+            item.WordLen = c_int32(wordlen.value)
+            item.DBNumber = c_int32(1)
+            item.Start = c_int32(0)
+            item.Amount = c_int32(4)
             data = (i + 1).to_bytes(1, byteorder="big") * 4
-            array_class = ctypes.c_uint8 * len(data)
+            array_class = c_uint8 * len(data)
             cdata = array_class.from_buffer_copy(data)
-            item.pData = ctypes.cast(cdata, ctypes.POINTER(array_class)).contents
+            item.pData = cast(cdata, POINTER(array_class)).contents
             items.append(item)
             expected_list.append(data)
         result = self.client.write_multi_vars(items)

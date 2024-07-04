@@ -1,0 +1,68 @@
+name: Build and test wheels linux/amd64
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+jobs:
+  linux-build-amd64:
+    name: Build wheel for linux AMD64
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare snap7 archive
+        uses: ./.github/actions/prepare_snap7
+
+      - name: Build wheel
+        uses: ./.github/actions/manylinux_2_28_x86_64
+        with:
+          script: ./.github/build_scripts/build_package.sh
+          platform: manylinux_2_28_x86_64
+          makefile: x86_64_linux.mk
+          python: /opt/python/cp38-cp38/bin/python
+          wheeldir: wheelhouse/${{ runner.os }}/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}
+          path: wheelhouse/${{ runner.os }}/*.whl
+
+
+
+  linux-test-amd64:
+    name: Testing wheels for linux/amd64
+    needs: linux-build-amd64
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ubuntu-24.04", "ubuntu-22.04", "ubuntu-20.04"]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}
+          path: wheelhouse
+
+      - name: Install python-snap7
+        run: |
+            python3 -m venv venv
+            venv/bin/pip install --upgrade pip
+            venv/bin/pip install pytest
+            venv/bin/pip install wheelhouse/*.whl
+
+      - name: Run tests
+        run: |
+            venv/bin/pytest -m "server or util or client or mainloop"
+            sudo venv/bin/pytest -m partner

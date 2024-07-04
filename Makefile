@@ -12,30 +12,52 @@ venv/installed: venv/
 	venv/bin/pip install -e .
 	touch venv/installed
 
-setup: venv/installed
-
 venv/bin/pytest: venv/
 	venv/bin/pip install -e ".[test]"
 
 venv/bin/sphinx-build:  venv/
 	venv/bin/pip install -e ".[doc]"
 
+venv/bin/tox: venv/
+	venv/bin/pip install tox
+
+requirements-dev.txt: venv/bin/tox pyproject.toml
+	venv/bin/tox -e requirements-dev
+
+.PHONY: setup
+setup: venv/installed
+
+.PHONY: doc
 doc: venv/bin/sphinx-build
 	cd doc && make html
 
+.PHONY: check
 check: venv/bin/pytest
 	venv/bin/ruff check snap7 tests example
 	 venv/bin/ruff format --diff snap7 tests example
 
-format: venv/bin/pytest
-	venv/bin/ruff format snap7 tests example
+.PHONY: ruff
+ruff: venv/bin/tox
+	venv/bin/tox -e ruff
 
-mypy: venv/bin/pytest
-	venv/bin/mypy snap7 tests
+.PHONY: format
+format: ruff
 
+.PHONY: mypy
+mypy: venv/bin/tox
+	venv/bin/tox -e mypy
+
+.PHONY: test
 test: venv/bin/pytest
-	venv/bin/pytest tests/test_server.py tests/test_client.py tests/test_util.py tests/test_mainloop.py
-	sudo venv/bin/pytest tests/test_partner.py  # run this as last to prevent pytest cache dir creates as root
+	venv/bin/pytest
 
+.PHONY: clean
 clean:
 	rm -rf venv python_snap7.egg-info .pytest_cache .tox dist .eggs
+
+.PHONY: tox
+tox: venv/bin/tox
+	venv/bin/tox
+
+.PHONY: requirements
+requirements: requirements-dev.txt

@@ -5,7 +5,7 @@ from typing import Any, Iterator, Optional, Tuple, Union, Dict, Callable
 from logging import getLogger
 
 from snap7.client import Client
-from snap7.types import Areas
+from snap7.types import Area
 
 from snap7.util import parse_specification
 from snap7.util.getters import (
@@ -81,8 +81,9 @@ class DB:
         db_offset: at which byte in the db starts reading.
 
     Examples:
-        >>> db1[0]['testbool1'] = test
-        >>> db1.write(client)   # puts data in plc
+        >>> db = DB()
+        >>> db[0]['testbool1'] = "test"
+        >>> db.write(Client())   # puts data in plc
     """
 
     bytearray_: Optional[bytearray] = None  # data from plc
@@ -108,7 +109,7 @@ class DB:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: int = 0,
-        area: Areas = Areas.DB,
+        area: Area = Area.DB,
     ):
         """Creates a new instance of the `Row` class.
 
@@ -117,10 +118,10 @@ class DB:
             bytearray_: initial buffer read from the PLC.
             specification: layout of the PLC memory.
             row_size: bytes size of a db row.
-            size: lenght of the memory area.
+            size: length of the memory area.
             id_field: name to reference the row. Optional.
             db_offset: at which byte in the db starts reading.
-            layout_offset: at which byte in the row specificaion we
+            layout_offset: at which byte in the row specification we
                 start reading the data.
             row_offset: offset between rows.
             area: which memory area this row is representing.
@@ -258,7 +259,7 @@ class DB:
             raise ValueError("row_size must be greater equal zero.")
 
         total_size = self.size * (self.row_size + self.row_offset)
-        if self.area == Areas.DB:  # note: is it worth using the upload method?
+        if self.area == Area.DB:  # note: is it worth using the upload method?
             bytearray_ = client.db_read(self.db_number, self.db_offset, total_size)
         else:
             bytearray_ = client.read_area(self.area, 0, self.db_offset, total_size)
@@ -297,7 +298,7 @@ class DB:
         total_size = self.size * (self.row_size + self.row_offset)
         data = self._bytearray[self.db_offset : self.db_offset + total_size]
 
-        if self.area == Areas.DB:
+        if self.area == Area.DB:
             client.db_write(self.db_number, self.db_offset, data)
         else:
             client.write_area(self.area, 0, self.db_offset, data)
@@ -323,7 +324,7 @@ class DB_Row:
         db_offset: int = 0,
         layout_offset: int = 0,
         row_offset: Optional[int] = 0,
-        area: Areas = Areas.DB,
+        area: Area = Area.DB,
     ):
         """Creates a new instance of the `DB_Row` class.
 
@@ -481,7 +482,7 @@ class DB_Row:
                 return type_to_func[type_](bytearray_, byte_index)
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Union[bytearray, None]:
+    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Optional[bytearray]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
@@ -577,7 +578,7 @@ class DB_Row:
             data = data[self.row_offset :]
             db_offset += self.row_offset
 
-        if self.area == Areas.DB:
+        if self.area == Area.DB:
             client.db_write(db_nr, db_offset, data)
         else:
             client.write_area(self.area, 0, db_offset, data)
@@ -597,7 +598,7 @@ class DB_Row:
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
-        if self.area == Areas.DB:
+        if self.area == Area.DB:
             bytearray_ = client.db_read(db_nr, self.db_offset, self.row_size)
         else:
             bytearray_ = client.read_area(self.area, 0, self.db_offset, self.row_size)
