@@ -19,7 +19,7 @@ from ctypes import (
     c_int,
     c_uint8,
 )
-from enum import Enum
+from enum import IntEnum
 from typing import Dict, Union
 
 CDataArrayType = Union[Array[c_byte], Array[c_int], Array[c_int16], Array[c_int32]]
@@ -75,7 +75,7 @@ mkLog = 1
 
 # Area ID
 # Word Length
-class WordLen(Enum):
+class WordLen(IntEnum):
     Bit = 0x01
     Byte = 0x02
     Char = 0x03
@@ -101,7 +101,7 @@ class WordLen(Enum):
         return map_[self]
 
 
-class Area(Enum):
+class Area(IntEnum):
     PE = 0x81
     PA = 0x82
     MK = 0x83
@@ -117,7 +117,11 @@ class Area(Enum):
         return WordLen.Byte
 
 
-class SrvArea(Enum):
+# backwards compatible alias
+Areas = Area
+
+
+class SrvArea(IntEnum):
     """
     NOTE: these values are DIFFERENT from the normal area IDs.
     """
@@ -130,7 +134,7 @@ class SrvArea(Enum):
     DB = 5
 
 
-class Block(Enum):
+class Block(IntEnum):
     OB = 0x38
     DB = 0x41
     SDB = 0x42
@@ -141,26 +145,8 @@ class Block(Enum):
 
     @property
     def ctype(self) -> c_int:
-        return {
-            Block.OB: c_int(0x38),
-            Block.DB: c_int(0x41),
-            Block.SDB: c_int(0x42),
-            Block.FC: c_int(0x43),
-            Block.SFC: c_int(0x44),
-            Block.FB: c_int(0x45),
-            Block.SFB: c_int(0x46),
-        }[self]
+        return c_int(self)
 
-
-block_types = {
-    "OB": c_int(0x38),
-    "DB": c_int(0x41),
-    "SDB": c_int(0x42),
-    "FC": c_int(0x43),
-    "SFC": c_int(0x44),
-    "FB": c_int(0x45),
-    "SFB": c_int(0x46),
-}
 
 server_statuses = {
     0: "SrvStopped",
@@ -190,7 +176,7 @@ class SrvEvent(Structure):
     def __str__(self) -> str:
         return (
             f"<event time: {self.EvtTime} sender: {self.EvtSender} code: {self.EvtCode} "
-            f"retcode: {self.EvtRetCode} param1: {self.EvtParam1} param2:{self.EvtParam2} "
+            f"return code: {self.EvtRetCode} param1: {self.EvtParam1} param2:{self.EvtParam2} "
             f"param3: {self.EvtParam3} param4: {self.EvtParam4}>"
         )
 

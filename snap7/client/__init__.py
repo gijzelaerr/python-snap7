@@ -397,10 +397,10 @@ class Client:
         type_ = word_len.ctype
         logger.debug(
             f"reading area: {area.name} db_number: {db_number} start: {start} amount: {size} "
-            f"word_len: {word_len.name}={word_len.value}"
+            f"word_len: {word_len.name}={word_len}"
         )
         data = (type_ * size)()
-        result = self._lib.Cli_ReadArea(self._s7_client, area.value, db_number, start, size, word_len.value, byref(data))
+        result = self._lib.Cli_ReadArea(self._s7_client, area, db_number, start, size, word_len, byref(data))
         check_error(result, context="client")
         return bytearray(data)
 
@@ -436,10 +436,10 @@ class Client:
         size = len(data)
         logger.debug(
             f"writing area: {area.name} db_number: {db_number} start: {start}: size {size}: "
-            f"word_len {word_len.name}={word_len.value} type: {type_}"
+            f"word_len {word_len.name}={word_len} type: {type_}"
         )
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        return self._lib.Cli_WriteArea(self._s7_client, area.value, db_number, start, size, word_len.value, byref(cdata))
+        return self._lib.Cli_WriteArea(self._s7_client, area, db_number, start, size, word_len, byref(cdata))
 
     def read_multi_vars(self, items: Array[S7DataItem]) -> Tuple[int, Array[S7DataItem]]:
         """Reads different kind of variables from a PLC simultaneously.
@@ -1011,7 +1011,7 @@ class Client:
             f"reading area: {area.name} db_number: {db_number} start: {start} amount: {size} "
             f"word_len: {word_len.name}={word_len.value}"
         )
-        result = self._lib.Cli_AsReadArea(self._s7_client, area.value, db_number, start, size, word_len.value, byref(data))
+        result = self._lib.Cli_AsReadArea(self._s7_client, area, db_number, start, size, word_len, byref(data))
         check_error(result, context="client")
         return result
 
@@ -1034,7 +1034,7 @@ class Client:
             f"writing area: {area.name} db_number: {db_number} start: {start}: size {size}: " f"word_len {word_len} type: {type_}"
         )
         cdata = (type_ * len(data)).from_buffer_copy(data)
-        res = self._lib.Cli_AsWriteArea(self._s7_client, area.value, db_number, start, size, word_len.value, byref(cdata))
+        res = self._lib.Cli_AsWriteArea(self._s7_client, area, db_number, start, size, word_len.value, byref(cdata))
         check_error(res, context="client")
         return res
 

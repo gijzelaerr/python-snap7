@@ -44,7 +44,7 @@ ruff: venv/bin/tox
 format: ruff
 
 .PHONY: mypy
-mypy: venv/
+mypy: venv/bin/tox
 	venv/bin/tox -e mypy
 
 .PHONY: test
@@ -56,7 +56,7 @@ clean:
 	rm -rf venv python_snap7.egg-info .pytest_cache .tox dist .eggs
 
 .PHONY: tox
-tox: venv/
+tox: venv/bin/tox
 	venv/bin/tox
 
 .PHONY: requirements
