@@ -18,24 +18,15 @@ from ctypes import (
 from _ctypes import CFuncPtr
 import struct
 import logging
-from typing import Any, Callable, Hashable, Optional, Tuple, cast, Type
+from typing import Any, Callable, Optional, Tuple, cast, Type
 from types import TracebackType
 
-from ..common import ipv4, check_error, load_library
+from ..common import ipv4, load_library
+from ..error import check_error, error_wrap
 from ..protocol import Snap7CliProtocol
-from ..types import SrvEvent, LocalPort, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object, CDataArrayType
+from ..types import SrvEvent, Parameter, cpu_statuses, server_statuses, SrvArea, longword, WordLen, S7Object, CDataArrayType
 
 logger = logging.getLogger(__name__)
-
-
-def error_wrap(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Parses a s7 error code returned the decorated function."""
-
-    def f(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
-        code = func(*args, **kwargs)
-        check_error(code, context="server")
-
-    return f
 
 
 class Server:
@@ -94,7 +85,7 @@ class Server:
         self._lib.Srv_Create.restype = S7Object  # type: ignore[attr-defined]
         self._s7_server = S7Object(self._lib.Srv_Create())
 
-    @error_wrap
+    @error_wrap(context="server")
     def register_area(self, area: SrvArea, index: int, userdata: CDataArrayType) -> int:
         """Shares a memory area with the server. That memory block will be
             visible by the clients.
@@ -111,7 +102,7 @@ class Server:
         logger.info(f"registering area {area}, index {index}, size {size}")
         return self._lib.Srv_RegisterArea(self._s7_server, area.value, index, byref(userdata), size)
 
-    @error_wrap
+    @error_wrap(context="server")
     def set_events_callback(self, call_back: Callable[..., Any]) -> int:
         """Sets the user callback that the Server object has to call when an
         event is created.
@@ -138,7 +129,7 @@ class Server:
         usrPtr = c_void_p()
         return self._lib.Srv_SetEventsCallback(self._s7_server, self._callback, usrPtr)
 
-    @error_wrap
+    @error_wrap(context="server")
     def set_read_events_callback(self, call_back: Callable[..., Any]) -> int:
         """Sets the user callback that the Server object has to call when a Read
             event is created.
@@ -176,7 +167,7 @@ class Server:
 
         self.set_events_callback(log_callback)
 
-    @error_wrap
+    @error_wrap(context="server")
     def start(self, tcpport: int = 102) -> int:
         """Starts the server.
 
@@ -185,11 +176,11 @@ class Server:
         """
         if tcpport != 102:
             logger.info(f"setting server TCP port to {tcpport}")
-            self.set_param(LocalPort, tcpport)
+            self.set_param(Parameter.LocalPort, tcpport)
         logger.info(f"starting server on 0.0.0.0:{tcpport}")
         return self._lib.Srv_Start(self._s7_server)
 
-    @error_wrap
+    @error_wrap(context="server")
     def stop(self) -> int:
         """Stop the server."""
         logger.info("stopping server")
@@ -219,7 +210,7 @@ class Server:
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
         return (server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value)
 
-    @error_wrap
+    @error_wrap(context="server")
     def unregister_area(self, area: SrvArea, index: int) -> int:
         """'Unshares' a memory area previously shared with Srv_RegisterArea().
 
@@ -235,7 +226,7 @@ class Server:
         """
         return self._lib.Srv_UnregisterArea(self._s7_server, area.value, index)
 
-    @error_wrap
+    @error_wrap(context="server")
     def unlock_area(self, area: SrvArea, index: int) -> int:
         """Unlocks a previously locked shared memory area.
 
@@ -249,7 +240,7 @@ class Server:
         logger.debug(f"unlocking area code {area} index {index}")
         return self._lib.Srv_UnlockArea(self._s7_server, area.value, index)
 
-    @error_wrap
+    @error_wrap(context="server")
     def lock_area(self, area: SrvArea, index: int) -> int:
         """Locks a shared memory area.
 
@@ -263,7 +254,7 @@ class Server:
         logger.debug(f"locking area code {area} index {index}")
         return self._lib.Srv_LockArea(self._s7_server, area.value, index)
 
-    @error_wrap
+    @error_wrap(context="server")
     def start_to(self, ip: str, tcp_port: int = 102) -> int:
         """Start server on a specific interface.
 
@@ -276,27 +267,27 @@ class Server:
         """
         if tcp_port != 102:
             logger.info(f"setting server TCP port to {tcp_port}")
-            self.set_param(LocalPort, tcp_port)
+            self.set_param(Parameter.LocalPort, tcp_port)
         if not re.match(ipv4, ip):
             raise ValueError(f"{ip} is invalid ipv4")
         logger.info(f"starting server to {ip}:102")
         return self._lib.Srv_StartTo(self._s7_server, ip.encode())
 
-    @error_wrap
-    def set_param(self, number: int, value: int) -> int:
+    @error_wrap(context="server")
+    def set_param(self, parameter: Parameter, value: int) -> int:
         """Sets an internal Server object parameter.
 
         Args:
-            number: number of the parameter.
+            parameter: the parameter to set
             value: value to be set.
 
         Returns:
             Error code from snap7 library.
         """
-        logger.debug(f"setting param number {number} to {value}")
-        return self._lib.Srv_SetParam(self._s7_server, number, byref(c_int(value)))
+        logger.debug(f"setting param number {parameter} to {value}")
+        return self._lib.Srv_SetParam(self._s7_server, parameter, byref(c_int(value)))
 
-    @error_wrap
+    @error_wrap(context="server")
     def set_mask(self, kind: int, mask: int) -> int:
         """Writes the specified filter mask.
 
@@ -310,7 +301,7 @@ class Server:
         logger.debug(f"setting mask kind {kind} to {mask}")
         return self._lib.Srv_SetMask(self._s7_server, kind, mask)
 
-    @error_wrap
+    @error_wrap(context="server")
     def set_cpu_status(self, status: int) -> int:
         """Sets the Virtual CPU status.
 
@@ -375,7 +366,7 @@ class Server:
         check_error(code)
         return mask
 
-    @error_wrap
+    @error_wrap(context="server")
     def clear_events(self) -> int:
         """Empties the Event queue.
 

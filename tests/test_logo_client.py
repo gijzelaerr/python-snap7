@@ -6,6 +6,7 @@ from multiprocessing import Process
 
 import snap7
 from snap7.server import mainloop
+from snap7.types import Parameter
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -60,41 +61,41 @@ class TestLogoClient(unittest.TestCase):
 
     def test_set_param(self) -> None:
         values = (
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
+            (Parameter.PingTimeout, 800),
+            (Parameter.SendTimeout, 15),
+            (Parameter.RecvTimeout, 3500),
+            (Parameter.SrcRef, 128),
+            (Parameter.DstRef, 128),
+            (Parameter.SrcTSap, 128),
+            (Parameter.PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)
 
-        self.assertRaises(Exception, self.client.set_param, snap7.types.RemotePort, 1)
+        self.assertRaises(Exception, self.client.set_param, Parameter.RemotePort, 1)
 
     def test_get_param(self) -> None:
         expected = (
-            (snap7.types.RemotePort, tcpport),
-            (snap7.types.PingTimeout, 750),
-            (snap7.types.SendTimeout, 10),
-            (snap7.types.RecvTimeout, 3000),
-            (snap7.types.SrcRef, 256),
-            (snap7.types.DstRef, 0),
-            (snap7.types.SrcTSap, 4096),
-            (snap7.types.PDURequest, 480),
+            (Parameter.RemotePort, tcpport),
+            (Parameter.PingTimeout, 750),
+            (Parameter.SendTimeout, 10),
+            (Parameter.RecvTimeout, 3000),
+            (Parameter.SrcRef, 256),
+            (Parameter.DstRef, 0),
+            (Parameter.SrcTSap, 4096),
+            (Parameter.PDURequest, 480),
         )
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
         non_client = (
-            snap7.types.LocalPort,
-            snap7.types.WorkInterval,
-            snap7.types.MaxClients,
-            snap7.types.BSendTimeout,
-            snap7.types.BRecvTimeout,
-            snap7.types.RecoveryTime,
-            snap7.types.KeepAliveTime,
+            Parameter.LocalPort,
+            Parameter.WorkInterval,
+            Parameter.MaxClients,
+            Parameter.BSendTimeout,
+            Parameter.BRecvTimeout,
+            Parameter.RecoveryTime,
+            Parameter.KeepAliveTime,
         )
 
         # invalid param for client
@@ -113,14 +114,14 @@ class TestClientBeforeConnect(unittest.TestCase):
 
     def test_set_param(self) -> None:
         values = (
-            (snap7.types.RemotePort, 1102),
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
+            (Parameter.RemotePort, 1102),
+            (Parameter.PingTimeout, 800),
+            (Parameter.SendTimeout, 15),
+            (Parameter.RecvTimeout, 3500),
+            (Parameter.SrcRef, 128),
+            (Parameter.DstRef, 128),
+            (Parameter.SrcTSap, 128),
+            (Parameter.PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)

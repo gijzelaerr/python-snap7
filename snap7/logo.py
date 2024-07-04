@@ -7,9 +7,9 @@ import struct
 import logging
 from ctypes import byref, c_int, c_int32, c_uint16
 
-from .types import WordLen, S7Object, param_types
-from .types import RemotePort, Area
-from .common import ipv4, check_error, load_library
+from .types import WordLen, S7Object, Parameter, Area
+from .common import ipv4, load_library
+from .error import check_error
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class Logo:
         # special handling for Siemens Logo
         # 1st set connection params
         # 2nd connect without any parameters
-        self.set_param(RemotePort, tcpport)
+        self.set_param(Parameter.RemotePort, tcpport)
         self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
         result = self.library.Cli_Connect(self.pointer)
         check_error(result, context="client")
@@ -303,23 +303,22 @@ class Logo:
         check_error(result, context="client")
         return bool(connected)
 
-    def set_param(self, number: int, value: int) -> int:
+    def set_param(self, parameter: Parameter, value: int) -> int:
         """Sets an internal Server object parameter.
 
         Args:
-            number: Parameter type number
+            parameter: Parameter to be set
             value: Parameter value
 
         Returns:
             Error code from snap7 library.
         """
-        logger.debug(f"setting param number {number} to {value}")
-        type_ = param_types[number]
-        result = self.library.Cli_SetParam(self.pointer, number, byref(type_(value)))
+        logger.debug(f"setting param number {parameter} to {value}")
+        result = self.library.Cli_SetParam(self.pointer, parameter, byref(parameter.ctype(value)))
         check_error(result, context="client")
         return result
 
-    def get_param(self, number: int) -> int:
+    def get_param(self, parameter: Parameter) -> int:
         """Reads an internal Logo object parameter.
 
         Args:
@@ -328,9 +327,8 @@ class Logo:
         Returns:
             Parameter value
         """
-        logger.debug(f"retreiving param number {number}")
-        type_ = param_types[number]
-        value = type_()
-        code = self.library.Cli_GetParam(self.pointer, c_int(number), byref(value))
+        logger.debug(f"retreiving param number {parameter}")
+        value = parameter.ctype()
+        code = self.library.Cli_GetParam(self.pointer, c_int(parameter), byref(value))
         check_error(code)
         return value.value

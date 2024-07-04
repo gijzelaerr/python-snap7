@@ -1,6 +1,6 @@
 import logging
 
-import snap7
+from snap7.logo import Logo
 
 # for setup the Logo connection please follow this link
 # https://snap7.sourceforge.net/logo.html
@@ -13,7 +13,7 @@ Logo_7 = True
 
 logger = logging.getLogger(__name__)
 
-plc = snap7.logo.Logo()
+plc = Logo()
 plc.connect("192.168.0.41", 0x1000, 0x2000)
 
 if plc.get_connected():

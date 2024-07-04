@@ -4,30 +4,22 @@ Snap7 client used for connection to a siemens 7 server.
 
 import re
 import logging
-from ctypes import CFUNCTYPE, byref, create_string_buffer, sizeof, c_int16
+from ctypes import CFUNCTYPE, byref, create_string_buffer, sizeof
 from ctypes import Array, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c_void_p
 from datetime import datetime
-from typing import Any, Callable, Hashable, List, Optional, Tuple, Union, Type
+from typing import Any, Callable, List, Optional, Tuple, Union, Type
+
+from .error import error_wrap, check_error
 from types import TracebackType
 
-from ..common import check_error, ipv4, load_library
-from ..protocol import Snap7CliProtocol
-from ..types import S7SZL, Area, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem, Block
-from ..types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
-from ..types import S7Object, buffer_size, buffer_type, cpu_statuses, param_types
-from ..types import RemotePort, CDataArrayType
+from snap7.common import ipv4, load_library
+from snap7.protocol import Snap7CliProtocol
+from snap7.types import S7SZL, Area, BlocksList, S7CpInfo, S7CpuInfo, S7DataItem, Block
+from snap7.types import S7OrderCode, S7Protection, S7SZLList, TS7BlockInfo, WordLen
+from snap7.types import S7Object, buffer_size, buffer_type, cpu_statuses
+from snap7.types import CDataArrayType, Parameter
 
 logger = logging.getLogger(__name__)
-
-
-def error_wrap(func: Callable[..., Any]) -> Callable[..., Any]:
-    """Parses a s7 error code returned the decorated function."""
-
-    def f(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
-        code = func(*args, **kwargs)
-        check_error(code, context="client")
-
-    return f
 
 
 class Client:
@@ -84,7 +76,7 @@ class Client:
     def create(self) -> None:
         """Creates a SNAP7 client."""
         logger.info("creating snap7 client")
-        self._lib.Cli_Create.restype = S7Object  # type: ignore[attr-defined]
+        self._lib.Cli_Create.restype = S7Object
         self._s7_client = S7Object(self._lib.Cli_Create())
 
     def destroy(self) -> Optional[int]:
@@ -172,7 +164,7 @@ class Client:
         check_error(result, context="client")
         return info
 
-    @error_wrap
+    @error_wrap(context="client")
     def disconnect(self) -> int:
         """Disconnect a client.
 
@@ -182,15 +174,15 @@ class Client:
         logger.info("disconnecting snap7 client")
         return self._lib.Cli_Disconnect(self._s7_client)
 
-    @error_wrap
-    def connect(self, address: str, rack: int, slot: int, tcpport: int = 102) -> int:
+    @error_wrap(context="client")
+    def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> int:
         """Connects a Client Object to a PLC.
 
         Args:
             address: IP address of the PLC.
             rack: rack number where the PLC is located.
             slot: slot number where the CPU is located.
-            tcpport: port of the PLC.
+            tcp_port: port of the PLC.
 
         Returns:
             Error code from snap7 library.
@@ -200,9 +192,9 @@ class Client:
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)  # port is implicit = 102.
         """
-        logger.info(f"connecting to {address}:{tcpport} rack {rack} slot {slot}")
+        logger.info(f"connecting to {address}:{tcp_port} rack {rack} slot {slot}")
 
-        self.set_param(number=RemotePort, value=tcpport)
+        self.set_param(parameter=Parameter.RemotePort, value=tcp_port)
         return self._lib.Cli_ConnectTo(self._s7_client, c_char_p(address.encode()), c_int(rack), c_int(slot))
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
@@ -235,14 +227,14 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    @error_wrap
+    @error_wrap(context="client")
     def db_write(self, db_number: int, start: int, data: bytearray) -> int:
         """Writes a part of a DB into a PLC.
 
         Args:
-            db_number: number of the DB to be read.
+            db_number: number of the DB to be written.
             start: byte index to start writing to.
-            data: buffer to be write.
+            data: buffer to be writen.
 
         Returns:
             Buffer written.
@@ -315,7 +307,7 @@ class Client:
         logger.info(f"received {size} bytes")
         return bytearray(_buffer)
 
-    @error_wrap
+    @error_wrap(context="client")
     def download(self, data: bytearray, block_num: int = -1) -> int:
         """Download a block into AG.
         A whole block (including header and footer) must be available into the
@@ -340,7 +332,7 @@ class Client:
         """Uploads a DB from AG using DBRead.
 
         Note:
-            This method can't be use for 1200/1500 PLCs.
+            This method can't be used for 1200/1500 PLCs.
 
         Args:
             db_number: db number to be read from.
@@ -363,26 +355,23 @@ class Client:
         return bytearray(_buffer)
 
     def read_area(self, area: Area, db_number: int, start: int, size: int) -> bytearray:
-        """Reads a data area from a PLC
-        With it you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
+        """Read a data area from a PLC
+
+        With this you can read DB, Inputs, Outputs, Merkers, Timers and Counters.
 
         Args:
             area: area to be read from.
-            db_number: number of the db to be read from. In case of Inputs, Marks or Outputs, this should be equal to 0.
+            db_number: The DB number, only used when area=Areas.DB
             start: byte index to start reading.
             size: number of bytes to read.
 
         Returns:
             Buffer with the data read.
 
-        Raises:
-            :obj:`ValueError`: if the area is not defined in the `Areas`
-
         Example:
-            >>> import snap7.util.db
-            >>> import snap7
+            >>> from snap7 import Client, Area
             >>> Client().connect("192.168.0.1", 0, 0)
-            >>> buffer = Client().read_area(snap7.util.db.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
+            >>> buffer = Client().read_area(Area.DB, 1, 10, 4)  # Reads the DB number 1 from the byte 10 to the byte 14.
             >>> buffer
             bytearray(b'\\x00\\x00')
         """
@@ -404,7 +393,7 @@ class Client:
         check_error(result, context="client")
         return bytearray(data)
 
-    @error_wrap
+    @error_wrap(context="client")
     def write_area(self, area: Area, db_number: int, start: int, data: bytearray) -> int:
         """Writes a data area into a PLC.
 
@@ -418,7 +407,7 @@ class Client:
             Snap7 error code.
 
         Exmaple:
-            >>> from snap7.util.db import DB
+            >>> from util.db import DB
             >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)
@@ -540,7 +529,7 @@ class Client:
         check_error(result, context="client")
         return data
 
-    @error_wrap
+    @error_wrap(context="client")
     def set_session_password(self, password: str) -> int:
         """Send the password to the PLC to meet its security level.
 
@@ -557,7 +546,7 @@ class Client:
             raise ValueError("Maximum password length is 8")
         return self._lib.Cli_SetSessionPassword(self._s7_client, c_char_p(password.encode()))
 
-    @error_wrap
+    @error_wrap(context="client")
     def clear_session_password(self) -> int:
         """Clears the password set for the current session (logout).
 
@@ -651,7 +640,7 @@ class Client:
         logger.debug(f"ab write: start: {start}: size: {size}: ")
         return self._lib.Cli_ABWrite(self._s7_client, start, size, byref(cdata))
 
-    def as_ab_read(self, start: int, size: int, data: Union[Array[c_byte], Array[c_int16], Array[c_int32]]) -> int:
+    def as_ab_read(self, start: int, size: int, data: Union[Array[c_byte], CDataArrayType]) -> int:
         """Reads a part of IPU area from a PLC asynchronously.
 
         Args:
@@ -758,7 +747,7 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_db_get(self, db_number: int, _buffer: CDataArrayType, size: int) -> int:
+    def as_db_get(self, db_number: int, data: CDataArrayType, size: int) -> int:
         """Uploads a DB from AG using DBRead.
 
         Note:
@@ -766,13 +755,13 @@ class Client:
 
         Args:
             db_number: number of DB to get.
-            _buffer: buffer where the data read will be place.
+            data: buffer where the data read will be place.
             size: amount of bytes to be read.
 
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsDBGet(self._s7_client, db_number, byref(_buffer), byref(c_int(size)))
+        result = self._lib.Cli_AsDBGet(self._s7_client, db_number, byref(data), byref(c_int(size)))
         check_error(result, context="client")
         return result
 
@@ -803,10 +792,10 @@ class Client:
         """Writes a part of a DB into a PLC.
 
         Args:
-            db_number: number of DB to be write.
+            db_number: number of DB to be writen.
             start: byte index from where start to write to.
             size: amount of bytes to write.
-            data: buffer to be write.
+            data: buffer to be writen.
 
         Returns:
             Snap7 code.
@@ -835,7 +824,7 @@ class Client:
         check_error(result)
         return result
 
-    @error_wrap
+    @error_wrap(context="client")
     def compress(self, time: int) -> int:
         """Performs the Compress action.
 
@@ -847,34 +836,32 @@ class Client:
         """
         return self._lib.Cli_Compress(self._s7_client, time)
 
-    @error_wrap
-    def set_param(self, number: int, value: int) -> int:
+    @error_wrap(context="client")
+    def set_param(self, parameter: Parameter, value: int) -> int:
         """Writes an internal Server Parameter.
 
         Args:
-            number: number of argument to be written.
+            parameter: the parameter to be written.
             value: value to be written.
 
         Returns:
             Snap7 code.
         """
-        logger.debug(f"setting param number {number} to {value}")
-        type_ = param_types[number]
-        return self._lib.Cli_SetParam(self._s7_client, number, byref(type_(value)))
+        logger.debug(f"setting param number {parameter} to {value}")
+        return self._lib.Cli_SetParam(self._s7_client, parameter, byref(parameter.ctype(value)))
 
-    def get_param(self, number: int) -> int:
+    def get_param(self, parameter: Parameter) -> int:
         """Reads an internal Server parameter.
 
         Args:
-            number: number of argument to be read.
+            parameter: number of argument to be read.
 
         Return:
             Value of the param read.
         """
-        logger.debug(f"retrieving param number {number}")
-        type_ = param_types[number]
-        value = type_()
-        code = self._lib.Cli_GetParam(self._s7_client, c_int(number), byref(value))
+        logger.debug(f"retrieving param number {parameter}")
+        value = parameter.ctype()
+        code = self._lib.Cli_GetParam(self._s7_client, c_int(parameter), byref(value))
         check_error(code)
         return value.value
 
@@ -914,7 +901,7 @@ class Client:
             year=buffer[5] + 1900, month=buffer[4] + 1, day=buffer[3], hour=buffer[2], minute=buffer[1], second=buffer[0]
         )
 
-    @error_wrap
+    @error_wrap(context="client")
     def set_plc_datetime(self, dt: datetime) -> int:
         """Sets the PLC date/time with a given value.
 
@@ -1136,33 +1123,33 @@ class Client:
         check_error(result, context="client")
         return result
 
-    def as_read_szl(self, ssl_id: int, index: int, s7_szl: S7SZL, size: int) -> int:
+    def as_read_szl(self, id_: int, index: int, data: S7SZL, size: int) -> int:
         """Reads a partial list of given ID and Index.
 
         Args:
-            ssl_id: TODO
-            index: TODO
-            s7_szl: TODO
-            size: TODO
+            id_: The list ID
+            index: The list index
+            data: the user buffer
+            size: buffer size available
 
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsReadSZL(self._s7_client, ssl_id, index, byref(s7_szl), byref(c_int(size)))
+        result = self._lib.Cli_AsReadSZL(self._s7_client, id_, index, byref(data), byref(c_int(size)))
         check_error(result, context="client")
         return result
 
-    def as_read_szl_list(self, szl_list: S7SZLList, items_count: int) -> int:
+    def as_read_szl_list(self, data: S7SZLList, items_count: int) -> int:
         """Reads the list of partial lists available in the CPU.
 
         Args:
-            szl_list: TODO
-            items_count: TODO
+            data: the user buffer list
+            items_count: buffer capacity
 
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsReadSZLList(self._s7_client, byref(szl_list), byref(c_int(items_count)))
+        result = self._lib.Cli_AsReadSZLList(self._s7_client, byref(data), byref(c_int(items_count)))
         check_error(result, context="client")
         return result
 
@@ -1198,7 +1185,7 @@ class Client:
         check_error(result)
         return result
 
-    def as_upload(self, block_num: int, _buffer: CDataArrayType, size: int) -> int:
+    def as_upload(self, block_num: int, data: CDataArrayType, size: int) -> int:
         """Uploads a block from AG.
 
         Note:
@@ -1206,13 +1193,13 @@ class Client:
 
         Args:
             block_num: block number to upload.
-            _buffer: buffer where the data will be place.
-            size: amount of bytes to uplaod.
+            data: buffer where the data will be place.
+            size: amount of bytes to upload.
 
         Returns:
             Snap7 code.
         """
-        result = self._lib.Cli_AsUpload(self._s7_client, Block.DB.ctype, block_num, byref(_buffer), byref(c_int(size)))
+        result = self._lib.Cli_AsUpload(self._s7_client, Block.DB.ctype, block_num, byref(data), byref(c_int(size)))
         check_error(result, context="client")
         return result
 
@@ -1446,11 +1433,11 @@ class Client:
         check_error(result)
         return result
 
-    def read_szl(self, ssl_id: int, index: int = 0x0000) -> S7SZL:
+    def read_szl(self, id_: int, index: int = 0) -> S7SZL:
         """Reads a partial list of given ID and Index.
 
         Args:
-            ssl_id: ssl id to be read.
+            id_: ssl id to be read.
             index: index to be read.
 
         Returns:
@@ -1458,7 +1445,7 @@ class Client:
         """
         s7_szl = S7SZL()
         size = c_int(sizeof(s7_szl))
-        result = self._lib.Cli_ReadSZL(self._s7_client, ssl_id, index, byref(s7_szl), byref(size))
+        result = self._lib.Cli_ReadSZL(self._s7_client, id_, index, byref(s7_szl), byref(size))
         check_error(result, context="client")
         return s7_szl
 

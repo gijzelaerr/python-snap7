@@ -63,7 +63,7 @@ def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
 
     Examples:
         >>> data = bytearray([0, 100])  # two bytes for a word
-        >>> snap7.util.get_word(data, 0)
+        >>> get_word(data, 0)
             100
     """
     data = bytearray_[byte_index : byte_index + 2]
@@ -89,7 +89,7 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
 
     Examples:
         >>> data = bytearray([0, 255])
-        >>> snap7.util.get_int(data, 0)
+        >>> get_int(data, 0)
             255
     """
     data = bytearray_[byte_index : byte_index + 2]
@@ -117,7 +117,7 @@ def get_uint(bytearray_: bytearray, byte_index: int) -> int:
 
     Examples:
         >>> data = bytearray([255, 255])
-        >>> snap7.util.get_uint(data, 0)
+        >>> get_uint(data, 0)
             65535
     """
     data = bytearray_[byte_index : byte_index + 2]
@@ -144,7 +144,7 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
 
     Examples:
         >>> data = bytearray(b'B\\xf6\\xa4Z')
-        >>> snap7.util.get_real(data, 0)
+        >>> get_real(data, 0)
             123.32099914550781
     """
     x = bytearray_[byte_index : byte_index + 4]
@@ -169,9 +169,9 @@ def get_fstring(bytearray_: bytearray, byte_index: int, max_length: int, remove_
 
     Examples:
         >>> data = [ord(letter) for letter in "hello world    "]
-        >>> snap7.util.get_fstring(data, 0, 15)
+        >>> get_fstring(data, 0, 15)
         'hello world'
-        >>> snap7.util.get_fstring(data, 0, 15, remove_padding=false)
+        >>> get_fstring(data, 0, 15, remove_padding=False)
         'hello world    '
     """
     data = map(chr, bytearray_[byte_index : byte_index + max_length])
@@ -198,8 +198,8 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
         String value.
 
     Examples:
-        >>> data = bytearray([254, len("hello world")] + [ord(letter) for letter in "hello world"])
-        >>> snap7.util.get_string(data, 0)
+        >>> data = bytearray([254, len("hello world")] + [ord(l) for letter in "hello world"])
+        >>> get_string(data, 0)
         'hello world'
     """
 
@@ -234,7 +234,7 @@ def get_dword(bytearray_: bytearray, byte_index: int) -> int:
     Examples:
         >>> data = bytearray(8)
         >>> data[:] = b"\\x12\\x34\\xAB\\xCD"
-        >>> snap7.util.get_dword(data, 0)
+        >>> get_dword(data, 0)
             4294967295
     """
     data = bytearray_[byte_index : byte_index + 4]
@@ -261,7 +261,7 @@ def get_dint(bytearray_: bytearray, byte_index: int) -> int:
         >>> import struct
         >>> data = bytearray(4)
         >>> data[:] = struct.pack(">i", 2147483647)
-        >>> snap7.util.get_dint(data, 0)
+        >>> get_dint(data, 0)
             2147483647
     """
     data = bytearray_[byte_index : byte_index + 4]
@@ -288,7 +288,7 @@ def get_udint(bytearray_: bytearray, byte_index: int) -> int:
         >>> import struct
         >>> data = bytearray(4)
         >>> data[:] = struct.pack(">I", 4294967295)
-        >>> snap7.util.get_udint(data, 0)
+        >>> get_udint(data, 0)
             4294967295
     """
     data = bytearray_[byte_index : byte_index + 4]
@@ -390,7 +390,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
         >>> import struct
         >>> data = bytearray(4)
         >>> data[:] = struct.pack(">i", 2147483647)
-        >>> snap7.util.get_time(data, 0)
+        >>> get_time(data, 0)
             '24:20:31:23:647'
     """
     data_bytearray = bytearray_[byte_index : byte_index + 4]
@@ -432,7 +432,7 @@ def get_usint(bytearray_: bytearray, byte_index: int) -> int:
 
     Examples:
         >>> data = bytearray([255])
-        >>> snap7.util.get_usint(data, 0)
+        >>> get_usint(data, 0)
             255
     """
     data = bytearray_[byte_index] & 0xFF
@@ -458,7 +458,7 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
 
     Examples:
         >>> data = bytearray([127])
-        >>> snap7.util.get_sint(data, 0)
+        >>> get_sint(data, 0)
             127
     """
     data = bytearray_[byte_index]
@@ -486,8 +486,9 @@ def get_lint(bytearray_: bytearray, byte_index: int) -> NoReturn:
 
     Examples:
         read lint value (here as example 12345) from DB1.10 of a PLC
-        >>> data = client.db_read(db_number=1, start=10, size=8)
-        >>> snap7.util.get_lint(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=8)
+        >>> get_lint(data, 0)
             12345
     """
 
@@ -515,8 +516,9 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
 
     Examples:
         read lreal value (here as example 12345.12345) from DB1.10 of a PLC
-        >>> data = client.db_read(db_number=1, start=10, size=8)
-        >>> snap7.util.get_lreal(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=8)
+        >>> get_lreal(data, 0)
             12345.12345
     """
     return float(struct.unpack_from(">d", bytearray_, offset=byte_index)[0])
@@ -541,8 +543,9 @@ def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
 
     Examples:
         read lword value (here as example 0xAB\0xCD) from DB1.10 of a PLC
-        >>> data = client.db_read(db_number=1, start=10, size=8)
-        >>> snap7.util.get_lword(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=8)
+        >>> get_lword(data, 0)
             bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
     """
     #  data = bytearray_[byte_index:byte_index + 4]
@@ -566,8 +569,9 @@ def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
 
     Examples:
         Read 8 Bytes raw from DB1.10, where an ulint value is stored. Return Python compatible value.
-        >>> data = client.db_read(db_number=1, start=10, size=8)
-        >>> snap7.util.get_ulint(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=8)
+        >>> get_ulint(data, 0)
             12345
     """
     raw_ulint = bytearray_[byte_index : byte_index + 8]
@@ -639,8 +643,9 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
 
     Examples:
         Read 1 Byte raw from DB1.10, where a char value is stored. Return Python compatible value.
-        >>> data = client.db_read(db_number=1, start=10, size=1)
-        >>> snap7.util.get_char(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=1)
+        >>> get_char(data, 0)
             'C'
     """
     char = chr(bytearray_[byte_index])
@@ -663,8 +668,9 @@ def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
 
     Examples:
         Read 2 Bytes raw from DB1.10, where a wchar value is stored. Return Python compatible value.
-        >>> data = client.db_read(db_number=1, start=10, size=2)
-        >>> snap7.util.get_wchar(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=2)
+        >>> get_wchar(data, 0)
             'C'
     """
     if bytearray_[byte_index] == 0:
@@ -689,8 +695,9 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
 
     Examples:
         Read from DB1.10 22, where the WSTRING is stored, the raw 22 Bytes and convert them to a python string
-        >>> data = client.db_read(db_number=1, start=10, size=22)
-        >>> snap7.util.get_wstring(data, 0)
+        >>> from snap7 import Client
+        >>> data = Client().db_read(db_number=1, start=10, size=22)
+        >>> get_wstring(data, 0)
         'hello world'
     """
     # Byte 0 + 1 --> total length of wstring, should be bytearray_ - 4

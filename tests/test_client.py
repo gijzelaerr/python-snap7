@@ -2,7 +2,7 @@ import gc
 import logging
 import struct
 import time
-from typing import Tuple, Union
+from typing import Tuple
 
 import pytest
 import unittest
@@ -17,17 +17,14 @@ from ctypes import (
     cast,
     pointer,
     Array,
-    c_byte,
-    c_int16,
 )
 from datetime import datetime, timedelta, date
 from multiprocessing import Process
 from unittest import mock
 from typing import cast as typing_cast
 
-from snap7.util.getters import get_real, get_int
-from snap7.util.setters import set_int
-from snap7.common import check_error
+from snap7.util import get_real, get_int, set_int
+from snap7.error import check_error
 from snap7.server import mainloop
 from snap7.client import Client
 from snap7.types import (
@@ -38,22 +35,9 @@ from snap7.types import (
     buffer_size,
     Area,
     WordLen,
-    RemotePort,
-    LocalPort,
-    WorkInterval,
-    MaxClients,
-    BSendTimeout,
-    BRecvTimeout,
-    PingTimeout,
-    SendTimeout,
-    RecvTimeout,
-    SrcRef,
-    DstRef,
-    SrcTSap,
-    PDURequest,
-    RecoveryTime,
-    KeepAliveTime,
     Block,
+    Parameter,
+    CDataArrayType,
 )
 
 logging.basicConfig(level=logging.WARNING)
@@ -65,13 +49,13 @@ rack = 1
 slot = 1
 
 
-def _prepare_as_read_area(area: Area, size: int) -> Tuple[WordLen, Union[Array[c_byte], Array[c_int16], Array[c_int32]]]:
+def _prepare_as_read_area(area: Area, size: int) -> Tuple[WordLen, CDataArrayType]:
     wordlen = area.wordlen()
     usrdata = (wordlen.ctype * size)()
     return wordlen, usrdata
 
 
-def _prepare_as_write_area(area: Area, data: bytearray) -> Tuple[WordLen, Union[Array[c_byte], Array[c_int16], Array[c_int32]]]:
+def _prepare_as_write_area(area: Area, data: bytearray) -> Tuple[WordLen, CDataArrayType]:
     if area not in Area:
         raise ValueError(f"{area} is not implemented in types")
     elif area == Area.TM:
@@ -111,18 +95,6 @@ class TestClient(unittest.TestCase):
     def tearDown(self) -> None:
         self.client.disconnect()
         self.client.destroy()
-
-    def _as_check_loop(self, check_times: int = 20) -> int:
-        check_status = c_int(-1)
-        # preparing Server values
-        for i in range(check_times):
-            self.client.check_as_completion(check_status)
-            if check_status.value == 0:
-                break
-            time.sleep(0.5)
-        else:
-            raise TimeoutError(f"Async Request not finished after {check_times} times - Fail")
-        return check_status.value
 
     def test_db_read(self) -> None:
         size = 40
@@ -225,10 +197,10 @@ class TestClient(unittest.TestCase):
         self.client.as_upload(1, _buffer, size)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
-    @unittest.skip("TODO: invalid block size")
+    @unittest.skip("TODO: not yet implemented")
     def test_download(self) -> None:
-        data = bytearray(1024)
-        self.client.download(block_num=db_number, data=data)
+        data = bytearray([0b11111111])
+        self.client.download(block_num=0, data=data)
 
     def test_read_area(self) -> None:
         amount = 1
@@ -272,7 +244,7 @@ class TestClient(unittest.TestCase):
         area = Area.TM
         dbnumber = 0
         timer = bytearray(b"\x12\x00")
-        res = self.client.write_area(area, dbnumber, start, timer)
+        self.client.write_area(area, dbnumber, start, timer)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
@@ -280,7 +252,7 @@ class TestClient(unittest.TestCase):
         area = Area.CT
         dbnumber = 0
         timer = bytearray(b"\x13\x00")
-        res = self.client.write_area(area, dbnumber, start, timer)
+        self.client.write_area(area, dbnumber, start, timer)
         res = self.client.read_area(area, dbnumber, start, 1)
         self.assertEqual(timer, bytearray(res))
 
@@ -361,41 +333,41 @@ class TestClient(unittest.TestCase):
 
     def test_set_param(self) -> None:
         values = (
-            (PingTimeout, 800),
-            (SendTimeout, 15),
-            (RecvTimeout, 3500),
-            (SrcRef, 128),
-            (DstRef, 128),
-            (SrcTSap, 128),
-            (PDURequest, 470),
+            (Parameter.PingTimeout, 800),
+            (Parameter.SendTimeout, 15),
+            (Parameter.RecvTimeout, 3500),
+            (Parameter.SrcRef, 128),
+            (Parameter.DstRef, 128),
+            (Parameter.SrcTSap, 128),
+            (Parameter.PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)
 
-        self.assertRaises(Exception, self.client.set_param, RemotePort, 1)
+        self.assertRaises(Exception, self.client.set_param, Parameter.RemotePort, 1)
 
     def test_get_param(self) -> None:
         expected = (
-            (RemotePort, tcpport),
-            (PingTimeout, 750),
-            (SendTimeout, 10),
-            (RecvTimeout, 3000),
-            (SrcRef, 256),
-            (DstRef, 0),
-            (SrcTSap, 256),
-            (PDURequest, 480),
+            (Parameter.RemotePort, tcpport),
+            (Parameter.PingTimeout, 750),
+            (Parameter.SendTimeout, 10),
+            (Parameter.RecvTimeout, 3000),
+            (Parameter.SrcRef, 256),
+            (Parameter.DstRef, 0),
+            (Parameter.SrcTSap, 256),
+            (Parameter.PDURequest, 480),
         )
         for param, value in expected:
             self.assertEqual(self.client.get_param(param), value)
 
         non_client = (
-            LocalPort,
-            WorkInterval,
-            MaxClients,
-            BSendTimeout,
-            BRecvTimeout,
-            RecoveryTime,
-            KeepAliveTime,
+            Parameter.LocalPort,
+            Parameter.WorkInterval,
+            Parameter.MaxClients,
+            Parameter.BSendTimeout,
+            Parameter.BRecvTimeout,
+            Parameter.RecoveryTime,
+            Parameter.KeepAliveTime,
         )
 
         # invalid param for client
@@ -463,7 +435,6 @@ class TestClient(unittest.TestCase):
         self.client.wait_as_completion(500)
         self.assertEqual(data, result)
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_download(self) -> None:
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
@@ -478,7 +449,7 @@ class TestClient(unittest.TestCase):
         self.client.plc_cold_start()
 
     def test_get_pdu_length(self) -> None:
-        pduRequested = self.client.get_param(10)
+        pduRequested = self.client.get_param(Parameter.PDURequest)
         pduSize = self.client.get_pdu_length()
         self.assertEqual(pduSize, pduRequested)
 
@@ -556,7 +527,6 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._lib.Cli_ABWrite = original
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_ab_write_with_byte_literal_does_not_throw(self) -> None:
         mock_write = mock.MagicMock()
         mock_write.return_value = None
@@ -573,7 +543,6 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._lib.Cli_AsABWrite = original
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_db_write_with_byte_literal_does_not_throw(self) -> None:
         mock_write = mock.MagicMock()
         mock_write.return_value = None
@@ -588,7 +557,6 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._lib.Cli_AsDBWrite = original
 
-    @unittest.skip("TODO: not yet fully implemented")
     def test_as_download_with_byte_literal_does_not_throw(self) -> None:
         mock_download = mock.MagicMock()
         mock_download.return_value = None
@@ -1041,14 +1009,14 @@ class TestClientBeforeConnect(unittest.TestCase):
 
     def test_set_param(self) -> None:
         values = (
-            (RemotePort, 1102),
-            (PingTimeout, 800),
-            (SendTimeout, 15),
-            (RecvTimeout, 3500),
-            (SrcRef, 128),
-            (DstRef, 128),
-            (SrcTSap, 128),
-            (PDURequest, 470),
+            (Parameter.RemotePort, 1102),
+            (Parameter.PingTimeout, 800),
+            (Parameter.SendTimeout, 15),
+            (Parameter.RecvTimeout, 3500),
+            (Parameter.SrcRef, 128),
+            (Parameter.DstRef, 128),
+            (Parameter.SrcTSap, 128),
+            (Parameter.PDURequest, 470),
         )
         for param, value in values:
             self.client.set_param(param, value)
