@@ -96,18 +96,6 @@ class TestClient(unittest.TestCase):
         self.client.disconnect()
         self.client.destroy()
 
-    def _as_check_loop(self, check_times: int = 20) -> int:
-        check_status = c_int(-1)
-        # preparing Server values
-        for i in range(check_times):
-            self.client.check_as_completion(check_status)
-            if check_status.value == 0:
-                break
-            time.sleep(0.5)
-        else:
-            raise TimeoutError(f"Async Request not finished after {check_times} times - Fail")
-        return check_status.value
-
     def test_db_read(self) -> None:
         size = 40
         start = 0
