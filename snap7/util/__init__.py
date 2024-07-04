@@ -87,6 +87,11 @@ import re
 from typing import Any
 from collections import OrderedDict
 
+from .db import (
+    DB,
+    DB_Row,
+)
+
 from .setters import (
     set_bool,
     set_fstring,
@@ -187,7 +192,7 @@ def parse_specification(db_specification: str) -> OrderedDict[str, Any]:
 
     for line in db_specification.split("\n"):
         if line and not line.lstrip().startswith("#"):
-            index, var_name, _type = line.split("#")[0].split()
+            index, var_name, _type = line.lstrip().split("#")[0].split()
             parsed_db_specification[var_name] = (index, _type)
 
     return parsed_db_specification
