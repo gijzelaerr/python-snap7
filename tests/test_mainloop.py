@@ -7,10 +7,8 @@ from typing import Optional
 
 import snap7.error
 import snap7.server
-import snap7.db
-from snap7.db import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
+from snap7.util import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
 from snap7.client import Client
-import snap7.types
 
 logging.basicConfig(level=logging.WARNING)
 

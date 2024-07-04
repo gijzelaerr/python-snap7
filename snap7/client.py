@@ -407,7 +407,7 @@ class Client:
             Snap7 error code.
 
         Exmaple:
-            >>> from db import DB
+            >>> from util.db import DB
             >>> import snap7
             >>> client = snap7.client.Client()
             >>> client.connect("192.168.0.1", 0, 0)

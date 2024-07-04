@@ -8,7 +8,7 @@ from .client import Client
 from .server import Server
 from .logo import Logo
 from .partner import Partner
-from .db import Row, DB
+from .util.db import Row, DB
 from .types import Area, Block, WordLen, SrvEvent, SrvArea
 
 __all__ = ["Client", "Server", "Logo", "Partner", "Row", "DB", "Area", "Block", "WordLen", "SrvEvent", "SrvArea"]

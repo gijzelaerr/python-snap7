@@ -745,4 +745,4 @@ class Row:
 
 
 # backwards compatible alias
-DBRow = Row
+DB_Row = Row

@@ -9,7 +9,7 @@ from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
 from snap7 import Client, Row, DB
-from snap7.db import print_row
+from util.db import print_row
 
 client = Client()
 client.connect("192.168.200.24", 0, 3)
