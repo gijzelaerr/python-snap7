@@ -58,7 +58,7 @@ jobs:
       - name: Install python-snap7
         run: |
           python3 -m pip install --upgrade pip pytest
-          python3 -m pip install dist/*.whl
+          python3 -m pip install $(ls dist/*.whl)
 
       - name: Run pytest
         run: |
