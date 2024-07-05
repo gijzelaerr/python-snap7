@@ -20,14 +20,12 @@ jobs:
           mkdir -p snap7/lib/
           Copy-Item .\snap7-full-1.4.2\release\Windows\Win64\snap7.dll .\snap7\lib
           python3 -m build . --wheel -C="--build-option=--plat-name=win_amd64"
-          mkdir -p wheelhouse/${{ runner.os }}/
-          cp dist/*.whl wheelhouse/${{ runner.os }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ runner.os }}
-          path: wheelhouse/${{ runner.os }}/*.whl
+          name: dist
+          path: dist/*.whl
 
   windows-test-amd64:
     name: Testing wheels for AMD64 windows
@@ -49,13 +47,13 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ runner.os }}
-          path: wheelhouse
+          name: dist
+          path: dist
 
       - name: Install python-snap7
         run: |
           python3 -m pip install --upgrade pip pytest
-          python3 -m pip install $(ls wheelhouse/*.whl)
+          python3 -m pip install dist/*.whl
 
       - name: Run pytest
         run: |

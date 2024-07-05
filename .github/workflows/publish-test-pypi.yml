@@ -23,7 +23,7 @@ jobs:
     - name: "Download Linux/amd64 artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: osx-build-test-amd64.yml
+        workflow: linux-build-test-amd64.yml
         path: .
     - name: "Download Linux/arm64 artifacts"
       uses: dawidd6/action-download-artifact@v6
@@ -45,14 +45,12 @@ jobs:
       with:
         path: dist
     - name: show dist layout
-      run: |
-        ls -al
-        ls -al dist
-        find dist
+      run: find dist
     - name: Publish distribution 📦 to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
+        verbose: true
   test-pypi-packages:
     runs-on: ${{ matrix.os }}
     needs: publish-to-testpypi
