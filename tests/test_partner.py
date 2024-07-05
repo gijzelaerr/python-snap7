@@ -24,11 +24,9 @@ class TestPartner(unittest.TestCase):
     def test_as_b_send(self) -> None:
         self.partner.as_b_send()
 
-    def test_b_recv(self) -> None:
-        self.partner.b_recv()
-
-    def test_b_send(self) -> None:
+    def test_b_send_recv(self) -> None:
         self.partner.b_send()
+        self.partner.b_recv()
 
     def test_check_as_b_recv_completion(self) -> None:
         self.partner.check_as_b_recv_completion()

@@ -174,8 +174,7 @@ class Client:
         logger.info("disconnecting snap7 client")
         return self._lib.Cli_Disconnect(self._s7_client)
 
-    @error_wrap(context="client")
-    def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> int:
+    def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> "Client":
         """Connects a Client Object to a PLC.
 
         Args:
@@ -185,7 +184,7 @@ class Client:
             tcp_port: port of the PLC.
 
         Returns:
-            Error code from snap7 library.
+            The snap7 Logo instance
 
         Example:
             >>> import snap7
@@ -195,7 +194,8 @@ class Client:
         logger.info(f"connecting to {address}:{tcp_port} rack {rack} slot {slot}")
 
         self.set_param(parameter=Parameter.RemotePort, value=tcp_port)
-        return self._lib.Cli_ConnectTo(self._s7_client, c_char_p(address.encode()), c_int(rack), c_int(slot))
+        check_error(self._lib.Cli_ConnectTo(self._s7_client, c_char_p(address.encode()), c_int(rack), c_int(slot)))
+        return self
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """Reads a part of a DB from a PLC
@@ -279,11 +279,11 @@ class Client:
         Returns:
             Tuple of the buffer and size.
         """
-        _buffer = buffer_type()
-        size = c_int(sizeof(_buffer))
-        result = self._lib.Cli_FullUpload(self._s7_client, block_type.ctype, block_num, byref(_buffer), byref(size))
+        buffer = buffer_type()
+        size = c_int(sizeof(buffer))
+        result = self._lib.Cli_FullUpload(self._s7_client, block_type.ctype, block_num, byref(buffer), byref(size))
         check_error(result, context="client")
-        return bytearray(_buffer)[: size.value], size.value
+        return bytearray(buffer)[: size.value], size.value
 
     def upload(self, block_num: int) -> bytearray:
         """Uploads a block from AG.
@@ -298,14 +298,14 @@ class Client:
             Buffer with the uploaded block.
         """
         logger.debug(f"db_upload block_num: {block_num}")
-        _buffer = buffer_type()
-        size = c_int(sizeof(_buffer))
+        buffer = buffer_type()
+        size = c_int(sizeof(buffer))
 
-        result = self._lib.Cli_Upload(self._s7_client, Block.DB.ctype, block_num, byref(_buffer), byref(size))
+        result = self._lib.Cli_Upload(self._s7_client, Block.DB.ctype, block_num, byref(buffer), byref(size))
 
         check_error(result, context="client")
         logger.info(f"received {size} bytes")
-        return bytearray(_buffer)
+        return bytearray(buffer)
 
     @error_wrap(context="client")
     def download(self, data: bytearray, block_num: int = -1) -> int:

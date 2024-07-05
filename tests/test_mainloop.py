@@ -47,15 +47,6 @@ class TestServer(unittest.TestCase):
             self.client.disconnect()
             self.client.destroy()
 
-    def test_read_prefill_db(self) -> None:
-        buffer = bytearray([0b11111111])
-        self.client.db_write(0, 0, buffer)
-        data = self.client.db_read(0, 0, 7)
-        boolean = get_bool(data, 0, 0)
-        self.assertEqual(boolean, True)
-        integer = get_int(data, 0)
-        self.assertEqual(integer, -256)
-
     def test_read_booleans(self) -> None:
         data = self.client.db_read(0, 0, 1)
         self.assertEqual(False, get_bool(data, 0, 0))

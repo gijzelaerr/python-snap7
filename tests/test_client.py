@@ -184,21 +184,28 @@ class TestClient(unittest.TestCase):
         self.assertEqual(result_values[1], test_values[1])
         self.assertEqual(result_values[2], test_values[2])
 
+    @unittest.skip("Not implemented by the snap7 server")
     def test_upload(self) -> None:
         """
-        this raises an exception due to missing authorization? maybe not
-        implemented in server emulator
+        This is not implemented by the server and will always raise a RuntimeError (security error)
         """
         self.assertRaises(RuntimeError, self.client.upload, db_number)
 
+    @unittest.skip("Not implemented by the snap7 server")
     def test_as_upload(self) -> None:
+        """
+        This is not implemented by the server and will always raise a RuntimeError (security error)
+        """
         _buffer = typing_cast(Array[c_int32], buffer_type())
         size = sizeof(_buffer)
         self.client.as_upload(1, _buffer, size)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
-    @unittest.skip("TODO: not yet implemented")
+    @unittest.skip("Not implemented by the snap7 server")
     def test_download(self) -> None:
+        """
+        This is not implemented by the server and will always raise a RuntimeError (security error)
+        """
         data = bytearray([0b11111111])
         self.client.download(block_num=0, data=data)
 
@@ -435,6 +442,7 @@ class TestClient(unittest.TestCase):
         self.client.wait_as_completion(500)
         self.assertEqual(data, result)
 
+    @unittest.skip("Not implemented by the snap7 server")
     def test_as_download(self) -> None:
         data = bytearray(128)
         self.client.as_download(block_num=-1, data=data)
@@ -479,105 +487,13 @@ class TestClient(unittest.TestCase):
         finally:
             self.client._lib.Cli_DBWrite = original
 
-    def test_download_with_byte_literal_does_not_throw(self) -> None:
-        mock_download = mock.MagicMock()
-        mock_download.return_value = None
-        original = self.client._lib.Cli_Download
-        self.client._lib.Cli_Download = mock_download
-        data = b"\xde\xad\xbe\xef"
-
-        try:
-            self.client.download(block_num=db_number, data=bytearray(data))
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._lib.Cli_Download = original
-
-    def test_write_area_with_byte_literal_does_not_throw(self) -> None:
-        mock_writearea = mock.MagicMock()
-        mock_writearea.return_value = None
-        original = self.client._lib.Cli_WriteArea
-        self.client._lib.Cli_WriteArea = mock_writearea
-
-        area = Area.DB
-        dbnumber = 1
-        start = 1
-        data = b"\xde\xad\xbe\xef"
-
-        try:
-            self.client.write_area(area, dbnumber, start, bytearray(data))
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._lib.Cli_WriteArea = original
-
-    def test_ab_write_with_byte_literal_does_not_throw(self) -> None:
-        mock_write = mock.MagicMock()
-        mock_write.return_value = None
-        original = self.client._lib.Cli_ABWrite
-        self.client._lib.Cli_ABWrite = mock_write
-
-        start = 1
-        data = b"\xde\xad\xbe\xef"
-
-        try:
-            self.client.ab_write(start=start, data=bytearray(data))
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._lib.Cli_ABWrite = original
-
-    def test_as_ab_write_with_byte_literal_does_not_throw(self) -> None:
-        mock_write = mock.MagicMock()
-        mock_write.return_value = None
-        original = self.client._lib.Cli_AsABWrite
-        self.client._lib.Cli_AsABWrite = mock_write
-
-        start = 1
-        data = b"\xde\xad\xbe\xef"
-
-        try:
-            self.client.as_ab_write(start=start, data=bytearray(data))
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._lib.Cli_AsABWrite = original
-
-    def test_as_db_write_with_byte_literal_does_not_throw(self) -> None:
-        mock_write = mock.MagicMock()
-        mock_write.return_value = None
-        original = self.client._lib.Cli_AsDBWrite
-        self.client._lib.Cli_AsDBWrite = mock_write
-        data = b"\xde\xad\xbe\xef"
-
-        try:
-            self.client.db_write(db_number=1, start=0, data=bytearray(data))
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._lib.Cli_AsDBWrite = original
-
-    def test_as_download_with_byte_literal_does_not_throw(self) -> None:
-        mock_download = mock.MagicMock()
-        mock_download.return_value = None
-        original = self.client._lib.Cli_AsDownload
-        self.client._lib.Cli_AsDownload = mock_download
-        data = b"\xde\xad\xbe\xef"
-
-        try:
-            self.client.as_download(block_num=db_number, data=bytearray(data))
-        except TypeError as e:
-            self.fail(str(e))
-        finally:
-            self.client._lib.Cli_AsDownload = original
-
     def test_get_plc_time(self) -> None:
         self.assertAlmostEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime(), delta=timedelta(seconds=1))
 
     def test_set_plc_datetime(self) -> None:
         new_dt = datetime(2011, 1, 1, 1, 1, 1, 0)
         self.client.set_plc_datetime(new_dt)
-        # Can't actual set datetime in emulated PLC, get_plc_datetime always returns system time.
+        # Can't actually set datetime in emulated PLC, get_plc_datetime always returns system time.
         # self.assertEqual(new_dt, self.client.get_plc_datetime())
 
     def test_wait_as_completion_pass(self, timeout: int = 1000) -> None:

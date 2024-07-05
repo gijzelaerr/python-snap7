@@ -9,7 +9,7 @@ from ctypes import byref
 
 from .type import WordLen, Area, Parameter
 
-from .error import check_error, error_wrap
+from .error import check_error
 from snap7.client import Client
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,7 @@ class Logo(Client):
         For more information see examples for Siemens Logo 7 and 8
     """
 
-    @error_wrap(context="client")
-    def connect(self, ip_address: str, tsap_snap7: int, tsap_logo: int, tcpport: int = 102) -> int:
+    def connect(self, ip_address: str, tsap_snap7: int, tsap_logo: int, tcp_port: int = 102) -> "Logo":
         """Connect to a Siemens LOGO server.
 
         Notes:
@@ -39,17 +38,16 @@ class Logo(Client):
             ip_address: IP ip_address of server
             tsap_snap7: TSAP SNAP7 Client (e.g. 10.00 = 0x1000)
             tsap_logo: TSAP Logo Server (e.g. 20.00 = 0x2000)
+            tcp_port: TCP port of server
 
         Returns:
-            Error code from snap7 library.
+            The snap7 Logo instance
         """
-        logger.info(f"connecting to {ip_address}:{tcpport} tsap_snap7 {tsap_snap7} tsap_logo {tsap_logo}")
-        # special handling for Siemens Logo
-        # 1st set connection params
-        # 2nd connect without any parameters
-        self.set_param(Parameter.RemotePort, tcpport)
+        logger.info(f"connecting to {ip_address}:{tcp_port} tsap_snap7 {tsap_snap7} tsap_logo {tsap_logo}")
+        self.set_param(Parameter.RemotePort, tcp_port)
         self.set_connection_params(ip_address, tsap_snap7, tsap_logo)
-        return self._lib.Cli_Connect(self._s7_client)
+        check_error(self._lib.Cli_Connect(self._s7_client))
+        return self
 
     def read(self, vm_address: str) -> int:
         """Reads from VM addresses of Siemens Logo. Examples: read("V40") / read("VW64") / read("V10.2")

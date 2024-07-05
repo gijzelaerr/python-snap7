@@ -397,6 +397,7 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False) -> None:
     server.register_area(SrvArea.CT, 1, CTdata)
 
     if init_standard_values:
+        logger.info("initialising with standard values")
         ba = _init_standard_values()
         userdata = WordLen.Byte.ctype * len(ba)
         server.register_area(SrvArea.DB, 0, userdata.from_buffer(ba))
