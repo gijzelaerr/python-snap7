@@ -51,7 +51,9 @@ jobs:
           path: dist
 
       - name: List files
-        run: ls -la dist
+        run: |
+          dir
+          dir dist
 
       - name: Install python-snap7
         run: |
