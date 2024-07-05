@@ -26,25 +26,30 @@ jobs:
     name: Publish distribution 📦 to TestPyPI
     runs-on: ubuntu-latest
     steps:
-    - name: Download macOS artifacts
-      uses: actions/download-artifact@v4
+    - name: "Download macOS artifacts"
+      uses: dawidd6/action-download-artifact@v6
       with:
-        name: wheels-macOS
+        workflow: "Build and test wheels osx/amd64"
         path: dist
-    - name: Download Linux artifacts
-      uses: actions/download-artifact@v4
+    - name: "Download Linux/amd64 artifacts"
+      uses: dawidd6/action-download-artifact@v6
       with:
-        name: wheels-Linux
+        workflow: "Build and test wheels linux/amd64"
+        path: dist
+    - name: "Download Linux/arm64 artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: "Build and test wheels linux/arm64"
         path: dist
     - name: Download Windows artifacts
-      uses: actions/download-artifact@v4
+      uses: dawidd6/action-download-artifact@v6
       with:
-        name: wheels-Windows
+        workflow: "Build and test wheels windows/amd64"
         path: dist
     - name: Combine artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: all-wheels
+        workflow: all-wheels
         path: dist
     - name: Publish distribution 📦 to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
