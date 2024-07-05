@@ -1,4 +1,4 @@
-name: Linux Test all Pythons with Debian packages
+name: Test with Debian packages
 on:
   push:
     branches: [master]

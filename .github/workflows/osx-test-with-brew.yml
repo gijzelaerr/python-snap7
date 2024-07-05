@@ -1,4 +1,4 @@
-name: OS X Test
+name: Test on macOS with brew
 on:
   push:
     branches: [master]

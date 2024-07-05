@@ -1,9 +1,12 @@
 import logging
+
 import pytest
 import unittest as unittest
 from unittest import mock
+from snap7.error import error_text
 
 import snap7.partner
+from snap7.type import Parameter
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -21,12 +24,9 @@ class TestPartner(unittest.TestCase):
     def test_as_b_send(self) -> None:
         self.partner.as_b_send()
 
-    @unittest.skip("we don't recv something yet")
-    def test_b_recv(self) -> None:
-        self.partner.b_recv()
-
-    def test_b_send(self) -> None:
+    def test_b_send_recv(self) -> None:
         self.partner.b_send()
+        # self.partner.b_recv()
 
     def test_check_as_b_recv_completion(self) -> None:
         self.partner.check_as_b_recv_completion()
@@ -41,31 +41,31 @@ class TestPartner(unittest.TestCase):
         self.partner.destroy()
 
     def test_error_text(self) -> None:
-        snap7.common.error_text(0, context="partner")
+        error_text(0, context="partner")
 
     def test_get_last_error(self) -> None:
         self.partner.get_last_error()
 
     def test_get_param(self) -> None:
         expected = (
-            (snap7.types.LocalPort, 0),
-            (snap7.types.RemotePort, 102),
-            (snap7.types.PingTimeout, 750),
-            (snap7.types.SendTimeout, 10),
-            (snap7.types.RecvTimeout, 3000),
-            (snap7.types.SrcRef, 256),
-            (snap7.types.DstRef, 0),
-            (snap7.types.PDURequest, 480),
-            (snap7.types.WorkInterval, 100),
-            (snap7.types.BSendTimeout, 3000),
-            (snap7.types.BRecvTimeout, 3000),
-            (snap7.types.RecoveryTime, 500),
-            (snap7.types.KeepAliveTime, 5000),
+            (Parameter.LocalPort, 0),
+            (Parameter.RemotePort, 102),
+            (Parameter.PingTimeout, 750),
+            (Parameter.SendTimeout, 10),
+            (Parameter.RecvTimeout, 3000),
+            (Parameter.SrcRef, 256),
+            (Parameter.DstRef, 0),
+            (Parameter.PDURequest, 480),
+            (Parameter.WorkInterval, 100),
+            (Parameter.BSendTimeout, 3000),
+            (Parameter.BRecvTimeout, 3000),
+            (Parameter.RecoveryTime, 500),
+            (Parameter.KeepAliveTime, 5000),
         )
         for param, value in expected:
             self.assertEqual(self.partner.get_param(param), value)
 
-        self.assertRaises(Exception, self.partner.get_param, snap7.types.MaxClients)
+        self.assertRaises(Exception, self.partner.get_param, Parameter.MaxClients)
 
     def test_get_stats(self) -> None:
         self.partner.get_stats()
@@ -78,23 +78,23 @@ class TestPartner(unittest.TestCase):
 
     def test_set_param(self) -> None:
         values = (
-            (snap7.types.PingTimeout, 800),
-            (snap7.types.SendTimeout, 15),
-            (snap7.types.RecvTimeout, 3500),
-            (snap7.types.WorkInterval, 50),
-            (snap7.types.SrcRef, 128),
-            (snap7.types.DstRef, 128),
-            (snap7.types.SrcTSap, 128),
-            (snap7.types.PDURequest, 470),
-            (snap7.types.BSendTimeout, 2000),
-            (snap7.types.BRecvTimeout, 2000),
-            (snap7.types.RecoveryTime, 400),
-            (snap7.types.KeepAliveTime, 4000),
+            (Parameter.PingTimeout, 800),
+            (Parameter.SendTimeout, 15),
+            (Parameter.RecvTimeout, 3500),
+            (Parameter.WorkInterval, 50),
+            (Parameter.SrcRef, 128),
+            (Parameter.DstRef, 128),
+            (Parameter.SrcTSap, 128),
+            (Parameter.PDURequest, 470),
+            (Parameter.BSendTimeout, 2000),
+            (Parameter.BRecvTimeout, 2000),
+            (Parameter.RecoveryTime, 400),
+            (Parameter.KeepAliveTime, 4000),
         )
         for param, value in values:
             self.partner.set_param(param, value)
 
-        self.assertRaises(Exception, self.partner.set_param, snap7.types.RemotePort, 1)
+        self.assertRaises(Exception, self.partner.set_param, Parameter.RemotePort, 1)
 
     def test_set_recv_callback(self) -> None:
         self.partner.set_recv_callback()

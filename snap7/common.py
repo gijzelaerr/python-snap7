@@ -3,8 +3,7 @@ import logging
 import pathlib
 import platform
 from pathlib import Path
-from ctypes import Array, c_char, c_int, c_int32
-from typing import Callable, Literal, NoReturn, Optional, cast
+from typing import NoReturn, Optional, cast
 from ctypes.util import find_library
 from functools import cache
 from .protocol import Snap7CliProtocol
@@ -86,53 +85,3 @@ def load_library(lib_location: Optional[str] = None) -> Snap7CliProtocol:
         _raise_error()
 
     return cast(Snap7CliProtocol, cdll.LoadLibrary(lib_location))
-
-
-Context = Literal["client", "server", "partner"]
-
-
-@cache
-def check_error(code: int, context: Context = "client") -> None:
-    """Check if the error code is set. If so, a Python log message is generated
-        and an error is raised.
-
-    Args:
-        code: error code number.
-        context: context in which is called.
-
-    Raises:
-        RuntimeError: if the code exists and is different from 1.
-    """
-    if code and code != 1:
-        error = error_text(code, context)
-        logger.error(error)
-        raise RuntimeError(error)
-
-
-def error_text(error: int, context: Context = "client") -> bytes:
-    """Returns a textual explanation of a given error number
-
-    Args:
-        error: an error integer
-        context: context in which is called from, server, client or partner
-
-    Returns:
-        The error.
-
-    Raises:
-        TypeError: if the context is not in `["client", "server", "partner"]`
-    """
-    if context not in ("client", "server", "partner"):
-        raise TypeError(f"Unkown context {context} used, should be either client, server or partner")
-    logger.debug(f"error text for {hex(error)}")
-    len_ = 1024
-    text_type = c_char * len_
-    text = text_type()
-    library = load_library()
-    error_text_func: Callable[[c_int32, Array[c_char], c_int], int] = {
-        "client": library.Cli_ErrorText,
-        "server": library.Srv_ErrorText,
-        "partner": library.Par_ErrorText,
-    }[context]
-    error_text_func(c_int32(error), text, c_int(len_))
-    return text.value

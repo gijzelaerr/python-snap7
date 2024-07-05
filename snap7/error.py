@@ -6,6 +6,14 @@ The error code formatting of the snap7 library as already quite good,
 so we are using that now. But maybe we will use this in the future again.
 """
 
+from _ctypes import Array
+from ctypes import c_char, c_int32, c_int
+from functools import cache
+from typing import Callable, Any, Hashable
+
+from .common import logger, load_library
+from .type import Context
+
 s7_client_errors = {
     0x00100000: "errNegotiatingPDU",
     0x00200000: "errCliInvalidParams",
@@ -102,3 +110,61 @@ client_errors.update(tcp_errors)
 server_errors = s7_server_errors.copy()
 server_errors.update(isotcp_errors)
 server_errors.update(tcp_errors)
+
+
+def error_wrap(context: Context) -> Callable[..., Callable[..., None]]:
+    """Parses a s7 error code returned the decorated function."""
+
+    def middle(func: Callable[..., int]) -> Any:
+        def inner(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
+            code = func(*args, **kwargs)
+            check_error(code, context=context)
+
+        return inner
+
+    return middle
+
+
+@cache
+def check_error(code: int, context: Context = "client") -> None:
+    """Check if the error code is set. If so, a Python log message is generated
+        and an error is raised.
+
+    Args:
+        code: error code number.
+        context: context in which is called.
+
+    Raises:
+        RuntimeError: if the code exists and is different from 1.
+    """
+    if code and code != 1:
+        error = error_text(code, context)
+        logger.error(error)
+        raise RuntimeError(error)
+
+
+def error_text(error: int, context: Context = "client") -> bytes:
+    """Returns a textual explanation of a given error number
+
+    Args:
+        error: an error integer
+        context: context in which is called from, server, client or partner
+
+    Returns:
+        The error.
+
+    Raises:
+        TypeError: if the context is not in `["client", "server", "partner"]`
+    """
+    logger.debug(f"error text for {hex(error)}")
+    len_ = 1024
+    text_type = c_char * len_
+    text = text_type()
+    library = load_library()
+    error_text_func: Callable[[c_int32, Array[c_char], c_int], int] = {
+        "client": library.Cli_ErrorText,
+        "server": library.Srv_ErrorText,
+        "partner": library.Par_ErrorText,
+    }[context]
+    error_text_func(c_int32(error), text, c_int(len_))
+    return text.value

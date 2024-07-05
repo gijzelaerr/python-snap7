@@ -7,10 +7,9 @@ import unittest
 from threading import Thread
 from unittest import mock
 
-from snap7.common import error_text
-from snap7.error import server_errors
+from snap7.error import server_errors, error_text
 from snap7.server import Server
-from snap7.types import SrvEvent, mkEvent, mkLog, LocalPort, WorkInterval, MaxClients, RemotePort, SrvArea
+from snap7.type import SrvEvent, mkEvent, mkLog, SrvArea, Parameter
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -123,12 +122,12 @@ class TestServer(unittest.TestCase):
 
     def test_get_param(self) -> None:
         # check the defaults
-        self.assertEqual(self.server.get_param(LocalPort), 1102)
-        self.assertEqual(self.server.get_param(WorkInterval), 100)
-        self.assertEqual(self.server.get_param(MaxClients), 1024)
+        self.assertEqual(self.server.get_param(Parameter.LocalPort), 1102)
+        self.assertEqual(self.server.get_param(Parameter.WorkInterval), 100)
+        self.assertEqual(self.server.get_param(Parameter.MaxClients), 1024)
 
         # invalid param for server
-        self.assertRaises(Exception, self.server.get_param, RemotePort)
+        self.assertRaises(Exception, self.server.get_param, Parameter.RemotePort)
 
 
 @pytest.mark.server
@@ -141,7 +140,7 @@ class TestServerBeforeStart(unittest.TestCase):
         self.server = Server()
 
     def test_set_param(self) -> None:
-        self.server.set_param(LocalPort, 1102)
+        self.server.set_param(Parameter.LocalPort, 1102)
 
 
 @pytest.mark.server

@@ -1,0 +1,86 @@
+name: Publish distribution 📦 to PyPI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish-to-testpypi:
+    environment:
+      name: pypi
+      url: https://pypi.org/p/python-snap7
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    name: Publish distribution 📦 toPyPI
+    runs-on: ubuntu-latest
+    steps:
+    - name: "Download macOS artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: osx-build-test-amd64.yml
+        path: dist
+    - name: "Download Linux/amd64 artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: osx-build-test-amd64.yml
+        path: .
+    - name: "Download Linux/arm64 artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: linux-build-test-arm64.yml
+        path: .
+    - name: "Download Windows artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: windows-build-test-amd64.yml
+        path: .
+    - name: "Download source artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: source-build.yml
+        path: .
+    - name: Combine artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        path: dist
+    - name: show dist layout
+      run: |
+        ls -al
+        ls -al dist
+        find dist
+    - name: Publish distribution 📦 to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+  test-pypi-packages:
+    runs-on: ${{ matrix.os }}
+    needs: publish-to-testpypi
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04, ubuntu-20.04, macos-14, macos-12, windows-2022, windows-2019]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: install python-snap7
+        run: |
+          python3 -m venv venv
+          venv/bin/pip install --upgrade pip
+          venv/bin/pip install python-snap7[test]
+
+      - name: Run pytest
+        run: |
+          venv/bin/pytest -m "server or util or client or mainloop"
+
+      - name: Run tests required sudo on Linux and macOS
+        if: ${{ runner.os == 'Linux' || runner.os == 'macOS'}}
+        run: sudo venv/bin/pytest -m partner
+
+      - name: On windows we don't need sudo
+        if: ${{ runner.os == 'Windows'}}
+        run: venv/bin/pytest  -m partner

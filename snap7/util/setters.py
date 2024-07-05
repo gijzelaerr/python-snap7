@@ -98,7 +98,7 @@ def set_int(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
 
     Examples:
         >>> data = bytearray(2)
-        >>> snap7.util.set_int(data, 0, 255)
+        >>> set_int(data, 0, 255)
             bytearray(b'\\x00\\xff')
     """
     # make sure were dealing with an int
@@ -123,8 +123,9 @@ def set_uint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
         Buffer with the written value.
 
     Examples:
+        >>> from snap7.util import set_uint
         >>> data = bytearray(2)
-        >>> snap7.util.set_uint(data, 0, 65535)
+        >>> set_uint(data, 0, 65535)
             bytearray(b'\\xff\\xff')
     """
     # make sure were dealing with an int
@@ -151,7 +152,7 @@ def set_real(bytearray_: bytearray, byte_index: int, real: Union[bool, str, floa
 
     Examples:
         >>> data = bytearray(4)
-        >>> snap7.util.set_real(data, 0, 123.321)
+        >>> set_real(data, 0, 123.321)
             bytearray(b'B\\xf6\\xa4Z')
     """
     real_packed = struct.pack(">f", float(real))
@@ -177,7 +178,7 @@ def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: 
 
     Examples:
         >>> data = bytearray(20)
-        >>> snap7.util.set_fstring(data, 0, "hello world", 15)
+        >>> set_fstring(data, 0, "hello world", 15)
         >>> data
             bytearray(b'hello world    \x00\x00\x00\x00\x00')
     """
@@ -214,8 +215,9 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
         or 'max_size' is greater than 254 or 'value' contains non-ascii characters.
 
     Examples:
+        >>> from snap7.util import set_string
         >>> data = bytearray(20)
-        >>> snap7.util.set_string(data, 0, "hello world", 254)
+        >>> set_string(data, 0, "hello world", 254)
         >>> data
             bytearray(b'\\xff\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
     """
@@ -265,7 +267,7 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> None:
 
     Examples:
         >>> data = bytearray(4)
-        >>> snap7.util.set_dword(data,0, 4294967295)
+        >>> set_dword(data,0, 4294967295)
         >>> data
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
@@ -290,7 +292,7 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> None:
 
     Examples:
         >>> data = bytearray(4)
-        >>> snap7.util.set_dint(data, 0, 2147483647)
+        >>> set_dint(data, 0, 2147483647)
         >>> data
             bytearray(b'\\x7f\\xff\\xff\\xff')
     """
@@ -315,7 +317,7 @@ def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> None:
 
     Examples:
         >>> data = bytearray(4)
-        >>> snap7.util.set_udint(data, 0, 4294967295)
+        >>> set_udint(data, 0, 4294967295)
         >>> data
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
@@ -341,7 +343,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
     Examples:
         >>> data = bytearray(4)
 
-        >>> snap7.util.set_time(data, 0, '-22:3:57:28.192')
+        >>> set_time(data, 0, '-22:3:57:28.192')
 
         >>> data
             bytearray(b'\x8d\xda\xaf\x00')
@@ -390,7 +392,7 @@ def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
 
     Examples:
         >>> data = bytearray(1)
-        >>> snap7.util.set_usint(data, 0, 255)
+        >>> set_usint(data, 0, 255)
             bytearray(b'\\xff')
     """
     _int = int(_int)
@@ -417,7 +419,7 @@ def set_sint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
 
     Examples:
         >>> data = bytearray(1)
-        >>> snap7.util.set_sint(data, 0, 127)
+        >>> set_sint(data, 0, 127)
             bytearray(b'\\x7f')
     """
     _int = int(_int)
@@ -445,8 +447,9 @@ def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray
 
     Examples:
         write lreal value (here as example 12345.12345) to DB1.10 of a PLC
-        >>> data = snap7.util.set_lreal(data, 12345.12345)
-        >>> client.db_write(db_number=1, start=10, data=data)
+        >>> data = set_lreal(data, 12345.12345)
+        >>> from snap7 import Client
+        >>> Client().db_write(db_number=1, start=10, data=data)
 
     """
     lreal = float(lreal)
@@ -474,9 +477,10 @@ def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytea
 
     Examples:
         read lword value (here as example 0xAB\0xCD) from DB1.10 of a PLC
-        >>> data = snap7.util.set_lword(data, 0, bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD"))
+        >>> data = set_lword(data, 0, bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD"))
         bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
-        >>> client.db_write(db_number=1, start=10, data=data)
+        >>> from snap7 import Client
+        >>> Client().db_write(db_number=1, start=10, data=data)
     """
     #  data = bytearray_[byte_index:byte_index + 4]
     #  dword = struct.unpack('8B', struct.pack('>Q', *data))[0]
@@ -500,8 +504,9 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueEr
 
     Examples:
         Read 1 Byte raw from DB1.10, where a char value is stored. Return Python compatible value.
-        >>> data = snap7.util.set_char(data, 0, 'C')
-        >>> client.db_write(db_number=1, start=10, data=data)
+        >>> data = set_char(data, 0, 'C')
+        >>> from snap7 import Client
+        >>> Client().db_write(db_number=1, start=10, data=data)
             'bytearray('0x43')
     """
     if chr_.isascii():
@@ -518,10 +523,10 @@ def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
     Args:
         bytearray_: buffer to write.
         byte_index: byte index from where to start writing.
-        date: date object
+        date_: date object
     Examples:
         >>> data = bytearray(2)
-        >>> snap7.util.set_date(data, 0, date(2024, 3, 27))
+        >>> set_date(data, 0, date(2024, 3, 27))
         >>> data
             bytearray(b'\x30\xd8')
     """
