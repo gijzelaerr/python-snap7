@@ -22,13 +22,13 @@ jobs:
           platform: manylinux_2_28_x86_64
           makefile: x86_64_linux.mk
           python: /opt/python/cp38-cp38/bin/python
-          wheeldir: wheelhouse/${{ runner.os }}/
+          wheeldir: dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ runner.os }}
-          path: wheelhouse/${{ runner.os }}/*.whl
+          name: dist
+          path: dist/*.whl
 
 
 
@@ -52,15 +52,15 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ runner.os }}
-          path: wheelhouse
+          name: dist
+          path: dist
 
       - name: Install python-snap7
         run: |
             python3 -m venv venv
             venv/bin/pip install --upgrade pip
             venv/bin/pip install pytest
-            venv/bin/pip install wheelhouse/*.whl
+            venv/bin/pip install dist/*.whl
 
       - name: Run tests
         run: |

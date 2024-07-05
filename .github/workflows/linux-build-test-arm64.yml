@@ -27,12 +27,13 @@ jobs:
           platform: manylinux_2_28_aarch64
           makefile: aarch64-linux-gnu.mk
           python: /opt/python/cp38-cp38/bin/python
+          wheeldir: dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wheels
-          path: wheelhouse/*.whl
+          path: dist/*.whl
 
   linux-test-arm64:
     name: Testing wheel for arm64
@@ -48,8 +49,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wheels
-          path: wheelhouse
+          name: dist
+          path: dist
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -60,12 +61,12 @@ jobs:
         run: |
           docker run --rm --interactive -v $PWD/tests:/tests \
             -v $PWD/pyproject.toml:/pyproject.toml \
-            -v $PWD/wheelhouse:/wheelhouse \
+            -v $PWD/dist:/dist \
             --platform linux/arm64 \
             "arm64v8/python:${{ matrix.python-version }}-bookworm" /bin/bash -s <<EOF
           python3 -m venv venv
           venv/bin/pip install --upgrade pip
           venv/bin/pip install pytest
-          venv/bin/pip install $(ls wheelhouse/*.whl)
+          venv/bin/pip install dist/*.whl
           venv/bin/pytest -m "server or util or client or mainloop or partner"
           EOF

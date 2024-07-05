@@ -32,14 +32,12 @@ jobs:
       - name: Build wheel
         run: |
           python3 -m build . --wheel -C="--build-option=--plat-name=macosx_10_9_universal2"
-          mkdir -p wheelhouse/${{ runner.os }}/
-          cp dist/*.whl wheelhouse/${{ runner.os }}/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ runner.os }}
-          path: wheelhouse/${{ runner.os }}/*.whl
+          name: dist
+          path: dist/*.whl
 
 
   osx-test:
@@ -62,15 +60,15 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ runner.os }}
-          path: wheelhouse
+          name: dist
+          path: dist
 
       - name: Install python-snap7
         run: |
             python3 -m venv venv
             venv/bin/pip install --upgrade pip
             venv/bin/pip install pytest
-            venv/bin/pip install wheelhouse/*.whl
+            venv/bin/pip install dist/*.whl
 
       - name: Run tests
         run: |

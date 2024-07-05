@@ -46,6 +46,11 @@ jobs:
       with:
         workflow: windows-build-test-amd64.yml
         path: dist
+    - name: "Download source artifacts"
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        workflow: source-build.yml
+        path: dist
     - name: Combine artifacts
       uses: actions/upload-artifact@v4
       with:
