@@ -35,27 +35,31 @@ jobs:
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: osx-build-test-amd64.yml
-        path: dist
+        path: .
     - name: "Download Linux/arm64 artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: linux-build-test-arm64.yml
-        path: dist
+        path: .
     - name: "Download Windows artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: windows-build-test-amd64.yml
-        path: dist
+        path: .
     - name: "Download source artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: source-build.yml
-        path: dist
+        path: .
     - name: Combine artifacts
       uses: actions/upload-artifact@v4
       with:
-        workflow: all-wheels
         path: dist
+    - name: show dist layout
+      run: |
+        ls -al
+        ls -al list
+        find dist
     - name: Publish distribution 📦 to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
