@@ -1,10 +1,6 @@
 name: Publish distribution 📦 to Test PyPI
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
   workflow_run:
     workflows:
       - "Build and test wheels linux/amd64"
@@ -58,7 +54,7 @@ jobs:
     - name: show dist layout
       run: |
         ls -al
-        ls -al list
+        ls -al dist
         find dist
     - name: Publish distribution 📦 to TestPyPI
       uses: pypa/gh-action-pypi-publish@release/v1

@@ -32,7 +32,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: dist
           path: dist/*.whl
 
   linux-test-arm64:
