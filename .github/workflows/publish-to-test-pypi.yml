@@ -1,0 +1,45 @@
+name: Publish distribution 📦 to TestPyPI
+
+on: push
+
+jobs:
+  publish-to-testpypi:
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/python-snap7
+
+    permissions:
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
+
+    name: Publish distribution 📦 to TestPyPI
+    needs:
+    - linux-build-amd64
+    - linux-build-arm64
+    - osx-build
+    - windows-build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download macOS artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: wheels-macOS
+        path: dist
+    - name: Download Linux artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: wheels-Linux
+        path: dist
+    - name: Download Windows artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: wheels-Windows
+        path: dist
+    - name: Combine artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: all-wheels
+        path: dist
+    - name: Publish distribution 📦 to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
