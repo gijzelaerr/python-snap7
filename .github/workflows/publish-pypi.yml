@@ -1,25 +1,18 @@
-name: Publish distribution 📦 to Test PyPI
+name: Publish distribution 📦 to PyPI
 
 on:
-  workflow_run:
-    workflows:
-      - "Build and test wheels linux/amd64"
-      - "Build and test wheels linux/arm64"
-      - "Build and test wheels osx/amd64"
-      - "Build and test wheels windows/amd64"
-    types:
-      - completed
+  workflow_dispatch:
 
 jobs:
   publish-to-testpypi:
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/python-snap7
+      name: pypi
+      url: https://pypi.org/p/python-snap7
 
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
-    name: Publish distribution 📦 to TestPyPI
+    name: Publish distribution 📦 toPyPI
     runs-on: ubuntu-latest
     steps:
     - name: "Download macOS artifacts"
@@ -56,10 +49,8 @@ jobs:
         ls -al
         ls -al dist
         find dist
-    - name: Publish distribution 📦 to TestPyPI
+    - name: Publish distribution 📦 to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        repository-url: https://test.pypi.org/legacy/
   test-pypi-packages:
     runs-on: ${{ matrix.os }}
     needs: publish-to-testpypi
@@ -80,7 +71,7 @@ jobs:
         run: |
           python3 -m venv venv
           venv/bin/pip install --upgrade pip
-          venv/bin/pip install -i https://test.pypi.org/simple/ python-snap7[test]
+          venv/bin/pip install python-snap7[test]
 
       - name: Run pytest
         run: |
