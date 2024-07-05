@@ -29,22 +29,22 @@ jobs:
     - name: "Download macOS artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: "Build and test wheels osx/amd64"
+        workflow: osx-build-test-amd64.yml
         path: dist
     - name: "Download Linux/amd64 artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: "Build and test wheels linux/amd64"
+        workflow: osx-build-test-amd64.yml
         path: dist
     - name: "Download Linux/arm64 artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: "Build and test wheels linux/arm64"
+        workflow: linux-build-test-arm64.yml
         path: dist
-    - name: Download Windows artifacts
+    - name: "Download Windows artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
-        workflow: "Build and test wheels windows/amd64"
+        workflow: windows-build-test-amd64.yml
         path: dist
     - name: Combine artifacts
       uses: actions/upload-artifact@v4
