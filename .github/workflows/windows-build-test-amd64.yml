@@ -50,6 +50,9 @@ jobs:
           name: dist
           path: dist
 
+      - name: List files
+        run: ls -la dist
+
       - name: Install python-snap7
         run: |
           python3 -m pip install --upgrade pip pytest
