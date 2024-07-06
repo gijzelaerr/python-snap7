@@ -39,12 +39,20 @@ If the test complain about missing Python modules make sure the source directory
 is in your `PYTHONPATH` environment variable, or the python-snap7 module is
 installed.
 
+Tox
+---
+
+We also have a whole repertoire of linters and code quality checkers in place,
+which you can run with::
+
+    $ make tox
+
 Credits
 -------
 
 python-snap7 is created by:
 
-* Gijs Molenaar (gijs at pythonic dot nl)
+* `Gijs Molenaar <https://github.com/gijzelaerr>`_
 * Stephan Preeker (stephan at preeker dot net)
 
 
@@ -53,5 +61,6 @@ Special thanks to:
 * Davide Nardella for creating snap7
 * Thomas Hergenhahn for his libnodave
 * Thomas W for his S7comm wireshark plugin
-* `Fabian Beitler <https://github.com/swamper123>`_ and `Nikteliy <https://github.com/nikteliy>`_ for their contributions towards the 1.0 release
-* `Lautaro Nahuel Dapino <https://github.com/lautarodapin>`_ for his contributions.
+* `Fabian Beitler <https://github.com/swamper123>`_
+* `Nikteliy <https://github.com/nikteliy>`_
+* `Lautaro Nahuel Dapino <https://github.com/lautarodapin>`_
