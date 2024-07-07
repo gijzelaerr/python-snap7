@@ -62,8 +62,7 @@ def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
         Word value.
 
     Examples:
-        >>> data = bytearray([0, 100])  # two bytes for a word
-        >>> get_word(data, 0)
+        >>> get_word(bytearray([0, 100]), 0)
             100
     """
     data = bytearray_[byte_index : byte_index + 2]
@@ -88,8 +87,7 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
         Value read.
 
     Examples:
-        >>> data = bytearray([0, 255])
-        >>> get_int(data, 0)
+        >>> get_int(bytearray([0, 255]), 0)
             255
     """
     data = bytearray_[byte_index : byte_index + 2]
@@ -120,12 +118,7 @@ def get_uint(bytearray_: bytearray, byte_index: int) -> int:
         >>> get_uint(data, 0)
             65535
     """
-    data = bytearray_[byte_index : byte_index + 2]
-    data[1] = data[1] & 0xFF
-    data[0] = data[0] & 0xFF
-    packed = struct.pack("2B", *data)
-    value: int = struct.unpack(">H", packed)[0]
-    return value
+    return int(get_word(bytearray_, byte_index))
 
 
 def get_real(bytearray_: bytearray, byte_index: int) -> float:
@@ -467,7 +460,7 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
-def get_lint(bytearray_: bytearray, byte_index: int) -> NoReturn:
+def get_lint(bytearray_: bytearray, byte_index: int) -> int:
     """Get the long int
 
     THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
@@ -492,10 +485,9 @@ def get_lint(bytearray_: bytearray, byte_index: int) -> NoReturn:
             12345
     """
 
-    # raw_lint = bytearray_[byte_index:byte_index + 8]
-    # lint = struct.unpack('>q', struct.pack('8B', *raw_lint))[0]
-    # return lint
-    raise NotImplementedError
+    raw_lint = bytearray_[byte_index : byte_index + 8]
+    lint = struct.unpack(">q", struct.pack("8B", *raw_lint))[0]
+    return int(lint)
 
 
 def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
@@ -548,10 +540,9 @@ def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
         >>> get_lword(data, 0)
             bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
     """
-    #  data = bytearray_[byte_index:byte_index + 4]
-    #  dword = struct.unpack('>Q', struct.pack('8B', *data))[0]
-    #  return bytearray(dword)
-    raise NotImplementedError
+    data = bytearray_[byte_index : byte_index + 4]
+    dword = struct.unpack(">Q", struct.pack("8B", *data))[0]
+    return bytearray(dword)
 
 
 def get_ulint(bytearray_: bytearray, byte_index: int) -> int:

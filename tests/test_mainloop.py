@@ -13,7 +13,7 @@ from snap7.client import Client
 logging.basicConfig(level=logging.WARNING)
 
 ip = "127.0.0.1"
-tcpport = 1102
+tcp_port = 1102
 db_number = 1
 rack = 1
 slot = 1
@@ -26,7 +26,7 @@ class TestServer(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.process = Process(target=snap7.server.mainloop, args=[tcpport, True])
+        cls.process = Process(target=snap7.server.mainloop, args=[tcp_port, True])
         cls.process.start()
         time.sleep(2)  # wait for server to start
 
@@ -40,7 +40,7 @@ class TestServer(unittest.TestCase):
 
     def setUp(self) -> None:
         self.client: Client = snap7.client.Client()
-        self.client.connect(ip, rack, slot, tcpport)
+        self.client.connect(ip, rack, slot, tcp_port)
 
     def tearDown(self) -> None:
         if self.client:

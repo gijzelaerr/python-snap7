@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.WARNING)
 class TestServer(unittest.TestCase):
     def setUp(self) -> None:
         self.server = Server()
-        self.server.start(tcpport=1102)
+        self.server.start(tcp_port=1102)
 
     def tearDown(self) -> None:
         self.server.stop()

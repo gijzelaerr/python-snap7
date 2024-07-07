@@ -24,8 +24,8 @@ def _raise_error() -> NoReturn:
     error = f"""can't find snap7 shared library.
 
 This probably means you are installing python-snap7 from source. When no binary wheel is found for you architecture, pip
-install falls back on a source install. For this to work, you need to manually install the snap7 library, which python-snap7
-uses under the hood.
+install falls back on a source install. For this to work, you need to manually install the snap7 library, which
+python-snap7 uses under the hood.
 
 The shortest path to success is to try to get a binary wheel working. Probably you are running on an unsupported
 platform or python version. You are running:

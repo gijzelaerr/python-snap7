@@ -15,6 +15,35 @@ from snap7.client import Client
 logger = logging.getLogger(__name__)
 
 
+def parse_address(vm_address: str) -> tuple[int, WordLen]:
+    logger.debug(f"read, vm_address:{vm_address}")
+    if re.match(r"V[0-9]{1,4}\.[0-7]", vm_address):
+        logger.info(f"read, Bit address: {vm_address}")
+        address = vm_address[1:].split(".")
+        # transform string to int
+        address_byte = int(address[0])
+        address_bit = int(address[1])
+        start = (address_byte * 8) + address_bit
+        return start, WordLen.Bit
+    elif re.match("V[0-9]+", vm_address):
+        # byte value
+        logger.info(f"Byte address: {vm_address}")
+        start = int(vm_address[1:])
+        return start, WordLen.Byte
+    elif re.match("VW[0-9]+", vm_address):
+        # byte value
+        logger.info(f"Word address: {vm_address}")
+        start = int(vm_address[2:])
+        return start, WordLen.Word
+    elif re.match("VD[0-9]+", vm_address):
+        # byte value
+        logger.info(f"DWord address: {vm_address}")
+        start = int(vm_address[2:])
+        return start, WordLen.DWord
+    else:
+        raise ValueError("Unknown address format")
+
+
 class Logo(Client):
     """
     A snap7 Siemens Logo client:
@@ -61,35 +90,8 @@ class Logo(Client):
         area = Area.DB
         db_number = 1
         size = 1
-        wordlen: WordLen
         logger.debug(f"read, vm_address:{vm_address}")
-        if re.match(r"V[0-9]{1,4}\.[0-7]", vm_address):
-            # bit value
-            logger.info(f"read, Bit address: {vm_address}")
-            address = vm_address[1:].split(".")
-            # transform string to int
-            address_byte = int(address[0])
-            address_bit = int(address[1])
-            start = (address_byte * 8) + address_bit
-            wordlen = WordLen.Bit
-        elif re.match("V[0-9]+", vm_address):
-            # byte value
-            logger.info(f"Byte address: {vm_address}")
-            start = int(vm_address[1:])
-            wordlen = WordLen.Byte
-        elif re.match("VW[0-9]+", vm_address):
-            # byte value
-            logger.info(f"Word address: {vm_address}")
-            start = int(vm_address[2:])
-            wordlen = WordLen.Word
-        elif re.match("VD[0-9]+", vm_address):
-            # byte value
-            logger.info(f"DWord address: {vm_address}")
-            start = int(vm_address[2:])
-            wordlen = WordLen.DWord
-        else:
-            logger.info("Unknown address format")
-            return 0
+        start, wordlen = parse_address(vm_address)
 
         type_ = wordlen.ctype
         data = (type_ * size)()
@@ -121,53 +123,29 @@ class Logo(Client):
         """
         area = Area.DB
         db_number = 1
-        amount = 1
-        wordlen: WordLen
-        logger.debug(f"write, vm_address:{vm_address}, value:{value}")
-        if re.match(r"^V[0-9]{1,4}\.[0-7]$", vm_address):
-            # bit value
-            logger.info(f"read, Bit address: {vm_address}")
-            address = vm_address[1:].split(".")
-            # transform string to int
-            address_byte = int(address[0])
-            address_bit = int(address[1])
-            start = (address_byte * 8) + address_bit
-            wordlen = WordLen.Bit
+        size = 1
+        start, wordlen = parse_address(vm_address)
+        type_ = wordlen.ctype
+
+        if wordlen == WordLen.Bit:
+            type_ = WordLen.Byte.ctype
             if value > 0:
                 data = bytearray([1])
             else:
                 data = bytearray([0])
-        elif re.match("^V[0-9]+$", vm_address):
-            # byte value
-            logger.info(f"Byte address: {vm_address}")
-            start = int(vm_address[1:])
-            wordlen = WordLen.Byte
+        elif wordlen == WordLen.Byte:
             data = bytearray(struct.pack(">B", value))
-        elif re.match("^VW[0-9]+$", vm_address):
-            # byte value
-            logger.info(f"Word address: {vm_address}")
-            start = int(vm_address[2:])
-            wordlen = WordLen.Word
+        elif wordlen == WordLen.Word:
             data = bytearray(struct.pack(">h", value))
-        elif re.match("^VD[0-9]+$", vm_address):
-            # byte value
-            logger.info(f"DWord address: {vm_address}")
-            start = int(vm_address[2:])
-            wordlen = WordLen.DWord
+        elif wordlen == WordLen.DWord:
             data = bytearray(struct.pack(">l", value))
         else:
-            logger.info(f"write, Unknown address format: {vm_address}")
-            return 1
+            raise ValueError(f"Unknown wordlen {wordlen}")
 
-        if wordlen == WordLen.Bit:
-            type_ = WordLen.Byte.ctype
-        else:
-            type_ = wordlen.ctype
-
-        cdata = (type_ * amount).from_buffer_copy(data)
+        cdata = (type_ * size).from_buffer_copy(data)
 
         logger.debug(f"write, vm_address:{vm_address} value:{value}")
 
-        result = self._lib.Cli_WriteArea(self._s7_client, area, db_number, start, amount, wordlen, byref(cdata))
+        result = self._lib.Cli_WriteArea(self._s7_client, area, db_number, start, size, wordlen, byref(cdata))
         check_error(result, context="client")
         return result

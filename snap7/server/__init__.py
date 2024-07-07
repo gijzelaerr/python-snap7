@@ -44,7 +44,7 @@ class Server:
             event logging to python logging.
 
         Args:
-            log: `True` for enabling the event logging. Optinoal.
+            log: `True` for enabling the event logging.
         """
         self._lib: Snap7CliProtocol = load_library()
         self.create()
@@ -110,24 +110,24 @@ class Server:
         logger.info("setting event callback")
         callback_wrap: Callable[..., Any] = CFUNCTYPE(None, c_void_p, POINTER(SrvEvent), c_int)
 
-        def wrapper(_: Optional[c_void_p], pevent: SrvEvent, __: int) -> int:
+        def wrapper(_: Optional[c_void_p], event: SrvEvent, __: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
                 _: not used
-                pevent: pointer to snap7 event struct
+                event: pointer to snap7 event struct
                 __: not used
 
             Returns:
                 Should return an int
             """
-            logger.info(f"callback event: {self.event_text(pevent.contents)}")
-            call_back(pevent.contents)
+            logger.info(f"callback event: {self.event_text(event.contents)}")
+            call_back(event.contents)
             return 0
 
         self._callback = cast(type[CFuncPtr], callback_wrap(wrapper))
-        usrPtr = c_void_p()
-        return self._lib.Srv_SetEventsCallback(self._s7_server, self._callback, usrPtr)
+        data = c_void_p()
+        return self._lib.Srv_SetEventsCallback(self._s7_server, self._callback, data)
 
     @error_wrap(context="server")
     def set_read_events_callback(self, call_back: Callable[..., Any]) -> int:
@@ -135,24 +135,24 @@ class Server:
             event is created.
 
         Args:
-            call_back: a callback function that accepts a pevent argument.
+            call_back: a callback function that accepts an event argument.
         """
         logger.info("setting read event callback")
         callback_wrapper: Callable[..., Any] = CFUNCTYPE(None, c_void_p, POINTER(SrvEvent), c_int)
 
-        def wrapper(usrptr: Optional[c_void_p], pevent: SrvEvent, size: int) -> int:
+        def wrapper(_: Optional[c_void_p], event: SrvEvent, __: int) -> int:
             """Wraps python function into a ctypes function
 
             Args:
-                usrptr: not used
-                pevent: pointer to snap7 event struct
-                size:
+                _: data, not used
+                event: pointer to snap7 event struct
+                __: size, not used
 
             Returns:
                 Should return an int
             """
-            logger.info(f"callback event: {self.event_text(pevent.contents)}")
-            call_back(pevent.contents)
+            logger.info(f"callback event: {self.event_text(event.contents)}")
+            call_back(event.contents)
             return 0
 
         self._read_callback = callback_wrapper(wrapper)
@@ -168,16 +168,16 @@ class Server:
         self.set_events_callback(log_callback)
 
     @error_wrap(context="server")
-    def start(self, tcpport: int = 102) -> int:
+    def start(self, tcp_port: int = 102) -> int:
         """Starts the server.
 
         Args:
-            tcpport: port that the server will listen. Optional.
+            tcp_port: port that the server will listen. Optional.
         """
-        if tcpport != 102:
-            logger.info(f"setting server TCP port to {tcpport}")
-            self.set_param(Parameter.LocalPort, tcpport)
-        logger.info(f"starting server on 0.0.0.0:{tcpport}")
+        if tcp_port != 102:
+            logger.info(f"setting server TCP port to {tcp_port}")
+            self.set_param(Parameter.LocalPort, tcp_port)
+        logger.info(f"starting server on 0.0.0.0:{tcp_port}")
         return self._lib.Srv_Start(self._s7_server)
 
     @error_wrap(context="server")
@@ -208,11 +208,11 @@ class Server:
         error = self._lib.Srv_GetStatus(self._s7_server, byref(server_status), byref(cpu_status), byref(clients_count))
         check_error(error)
         logger.debug(f"status server {server_status.value} cpu {cpu_status.value} clients {clients_count.value}")
-        return (server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value)
+        return server_statuses[server_status.value], cpu_statuses[cpu_status.value], clients_count.value
 
     @error_wrap(context="server")
     def unregister_area(self, area: SrvArea, index: int) -> int:
-        """'Unshares' a memory area previously shared with Srv_RegisterArea().
+        """Unregisters a memory area previously registered with Srv_RegisterArea().
 
         Notes:
             That memory block will be no longer visible by the clients.
@@ -345,7 +345,7 @@ class Server:
         Returns:
             Value of the parameter.
         """
-        logger.debug(f"retreiving param number {number}")
+        logger.debug(f"retrieving param number {number}")
         value = c_int()
         code = self._lib.Srv_GetParam(self._s7_server, number, byref(value))
         check_error(code)
@@ -377,24 +377,24 @@ class Server:
         return self._lib.Srv_ClearEvents(self._s7_server)
 
 
-def mainloop(tcpport: int = 1102, init_standard_values: bool = False) -> None:
+def mainloop(tcp_port: int = 1102, init_standard_values: bool = False) -> None:
     """Init a fake Snap7 server with some default values.
 
     Args:
-        tcpport: port that the server will listen.
+        tcp_port: port that the server will listen.
         init_standard_values: if `True` will init some defaults values to be read on DB0.
     """
 
     server = Server()
     size = 100
-    DBdata: CDataArrayType = (WordLen.Byte.ctype * size)()
-    PAdata: CDataArrayType = (WordLen.Byte.ctype * size)()
-    TMdata: CDataArrayType = (WordLen.Byte.ctype * size)()
-    CTdata: CDataArrayType = (WordLen.Byte.ctype * size)()
-    server.register_area(SrvArea.DB, 1, DBdata)
-    server.register_area(SrvArea.PA, 1, PAdata)
-    server.register_area(SrvArea.TM, 1, TMdata)
-    server.register_area(SrvArea.CT, 1, CTdata)
+    db_data: CDataArrayType = (WordLen.Byte.ctype * size)()
+    pa_data: CDataArrayType = (WordLen.Byte.ctype * size)()
+    tm_data: CDataArrayType = (WordLen.Byte.ctype * size)()
+    ct_data: CDataArrayType = (WordLen.Byte.ctype * size)()
+    server.register_area(SrvArea.DB, 1, db_data)
+    server.register_area(SrvArea.PA, 1, pa_data)
+    server.register_area(SrvArea.TM, 1, tm_data)
+    server.register_area(SrvArea.CT, 1, ct_data)
 
     if init_standard_values:
         logger.info("initialising with standard values")
@@ -402,7 +402,7 @@ def mainloop(tcpport: int = 1102, init_standard_values: bool = False) -> None:
         userdata = WordLen.Byte.ctype * len(ba)
         server.register_area(SrvArea.DB, 0, userdata.from_buffer(ba))
 
-    server.start(tcpport=tcpport)
+    server.start(tcp_port=tcp_port)
     while True:
         while True:
             event = server.pick_event()

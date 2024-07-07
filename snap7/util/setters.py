@@ -71,7 +71,7 @@ def set_word(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     Args:
         bytearray_: buffer to be written.
         byte_index: byte index to start write from.
-        _int: value to be write.
+        _int: value to write.
 
     Return:
         buffer with the written value
@@ -262,7 +262,7 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> None:
 
     Args:
         bytearray_: buffer to write to.
-        byte_index: byte index from where to writing reading.
+        byte_index: byte index from where to write.
         dword: value to write.
 
     Examples:
