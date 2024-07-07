@@ -493,25 +493,24 @@ def get_lint(bytearray_: bytearray, byte_index: int) -> int:
 def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
     """Get the long real
 
-    Notes:
-        Datatype `lreal` (long real) consists in 8 bytes in the PLC.
-        Negative Range: -1.7976931348623158e+308 to -2.2250738585072014e-308
-        Positive Range: +2.2250738585072014e-308 to +1.7976931348623158e+308
-        Zero: ±0
+    Datatype `lreal` (long real) consists in 8 bytes in the PLC.
+    Negative Range: -1.7976931348623158e+308 to -2.2250738585072014e-308
+    Positive Range: +2.2250738585072014e-308 to +1.7976931348623158e+308
+    Zero: ±0
 
     Args:
         bytearray_: buffer to read from.
         byte_index: byte index from where to start reading.
 
     Returns:
-        Value read.
+        The real value.
 
     Examples:
         read lreal value (here as example 12345.12345) from DB1.10 of a PLC
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_lreal(data, 0)
-            12345.12345
+        12345.12345
     """
     return float(struct.unpack_from(">d", bytearray_, offset=byte_index)[0])
 
@@ -637,7 +636,7 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=1)
         >>> get_char(data, 0)
-            'C'
+        C
     """
     char = chr(bytearray_[byte_index])
     return char
@@ -646,9 +645,7 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
 def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
     """Get wchar value from bytearray.
 
-    Notes:
-        Datatype `wchar` in the PLC is represented in 2 bytes. It has to be in utf-16-be format.
-
+    Datatype `wchar` in the PLC is represented in 2 bytes. It has to be in utf-16-be format.
 
     Args:
         bytearray_: buffer to read from.
@@ -662,7 +659,7 @@ def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=2)
         >>> get_wchar(data, 0)
-            'C'
+        C
     """
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[1])

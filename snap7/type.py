@@ -45,7 +45,10 @@ mkLog = 1
 
 
 class Parameter(IntEnum):
-    # // PARAMS LIST
+    """
+    The snap7 parameter types
+    """
+
     LocalPort = 1
     RemotePort = 2
     PingTimeout = 3
@@ -87,6 +90,10 @@ class Parameter(IntEnum):
 # Area ID
 # Word Length
 class WordLen(IntEnum):
+    """
+    The snap7 word length types
+    """
+
     Bit = 0x01
     Byte = 0x02
     Char = 0x03
@@ -113,6 +120,10 @@ class WordLen(IntEnum):
 
 
 class Area(IntEnum):
+    """
+    The snap7 area types
+    """
+
     PE = 0x81
     PA = 0x82
     MK = 0x83
@@ -134,6 +145,8 @@ Areas = Area
 
 class SrvArea(IntEnum):
     """
+    The snap7 server area types
+
     NOTE: these values are DIFFERENT from the normal area IDs.
     """
 
@@ -146,6 +159,10 @@ class SrvArea(IntEnum):
 
 
 class Block(IntEnum):
+    """
+    The snap7 block type
+    """
+
     OB = 0x38
     DB = 0x41
     SDB = 0x42
@@ -173,6 +190,10 @@ cpu_statuses = {
 
 
 class SrvEvent(Structure):
+    """
+    The snap7 server event structure
+    """
+
     _fields_ = [
         ("EvtTime", time_t),
         ("EvtSender", c_int),
@@ -193,6 +214,10 @@ class SrvEvent(Structure):
 
 
 class BlocksList(Structure):
+    """
+    The snap7 block list structure
+    """
+
     _fields_ = [
         ("OBCount", c_int32),
         ("FBCount", c_int32),
@@ -250,6 +275,8 @@ class TS7BlockInfo(Structure):
 
 
 class S7DataItem(Structure):
+    """ """
+
     _pack_ = 1
     _fields_ = [
         ("Area", c_int32),

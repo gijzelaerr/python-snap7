@@ -19,6 +19,7 @@ Contents:
    API/server
    API/partner
    API/logo
+   API/type
    API/util
 
 
