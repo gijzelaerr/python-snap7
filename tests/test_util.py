@@ -456,11 +456,12 @@ class TestS7util(unittest.TestCase):
 
         test_db = DB(1, test_array, test_spec, row_size=len(_bytearray), size=1, layout_offset=0, db_offset=0)
 
-        exp = test_db.export()
+        db_export = test_db.export()
 
-        self.assertTrue("testZeroSpaces" in exp[0].keys())
-        self.assertTrue("testOne Space" in exp[0].keys())
-        self.assertTrue("testTWo  Spaces" in exp[0].keys())
+        for i in db_export:
+            self.assertTrue("testZeroSpaces" in db_export[i].keys())
+            self.assertTrue("testOne Space" in db_export[i].keys())
+            self.assertTrue("testTWo  Spaces" in db_export[i].keys())
 
 
     def test_db_export(self) -> None:
