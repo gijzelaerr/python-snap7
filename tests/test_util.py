@@ -53,7 +53,7 @@ test_spec_indented = """
  12.0	testbool1    BOOL
        12.1	testbool2    BOOL
  12.2	testbool3    BOOL
-#    12.3	testbool4    BOOL
+#    12.3	test bool4    BOOL
  #  12.4	testbool5    BOOL
       #    12.5	testbool6    BOOL
     #   12.6	testbool7    BOOL
@@ -445,6 +445,21 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row["testbool7"], 0)
             self.assertEqual(row["testbool8"], 0)
             self.assertEqual(row["NAME"], "test")
+        
+    def test_db_creation_vars_with_whitespace(self) -> None:
+        test_array = bytearray(_bytearray * 1)
+        test_spec = """
+52      test Byte    BYTE
+57      supportByte         BYTE
+"""
+
+        test_db = DB(1, test_array, test_spec, row_size=len(_bytearray), size=1, layout_offset=0, db_offset=0)
+
+        exp = test_db.export()
+        print(exp[0].keys())
+        
+        self.assertTrue("test Byte" in exp[0].keys())
+
 
     def test_db_export(self) -> None:
         test_array = bytearray(_bytearray * 10)
