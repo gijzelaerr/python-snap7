@@ -152,12 +152,7 @@ def parse_specification(db_specification: str) -> Dict[str, Any]:
 
     for line in db_specification.split("\n"):
         if line and not line.lstrip().startswith("#"):
-            parsed_text = line.lstrip().split("#")[0].split()
-
-            index = parsed_text[0]
-            _type = parsed_text[-1]
-            var_name_list = parsed_text[1:-1]
-            var_name = ''.join(var_name_list)
+            index, *var_name, _type = line.lstrip().split("#")[0].split()
 
             parsed_db_specification[var_name] = (index, _type)
 
