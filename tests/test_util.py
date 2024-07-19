@@ -438,8 +438,7 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row["testbool1"], 1)
             self.assertEqual(row["testbool2"], 1)
             self.assertEqual(row["testbool3"], 1)
-            self.assertEqual(row["testbool4"], 1)
-
+            self.assertEqual(row["testbool4"], 1)   
             self.assertEqual(row["testbool5"], 0)
             self.assertEqual(row["testbool6"], 0)
             self.assertEqual(row["testbool7"], 0)
@@ -452,12 +451,10 @@ class TestS7util(unittest.TestCase):
         50      testZeroSpaces    BYTE
         52      testOne Space    BYTE
         59      testTWo  Spaces   BYTE
-"""
+        """
 
         test_db = DB(1, test_array, test_spec, row_size=len(_bytearray), size=1, layout_offset=0, db_offset=0)
-
         db_export = test_db.export()
-
         for i in db_export:
             self.assertTrue("testZeroSpaces" in db_export[i].keys())
             self.assertTrue("testOne Space" in db_export[i].keys())
