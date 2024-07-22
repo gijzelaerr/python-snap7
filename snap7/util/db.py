@@ -152,7 +152,7 @@ def parse_specification(db_specification: str) -> Dict[str, Any]:
 
     for line in db_specification.split("\n"):
         if line and not line.lstrip().startswith("#"):
-            index, *notUsed, _type = line.lstrip().split("#")[0].split()
+            index, *_, _type = line.lstrip().split("#")[0].split()
 
             match = re.compile(r"(\s*)(\S+)(\s*)").findall(line)
             
