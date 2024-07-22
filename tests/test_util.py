@@ -451,7 +451,7 @@ class TestS7util(unittest.TestCase):
         50      testZeroSpaces    BYTE
         52      testOne Space    BYTE
         59      testTWo  Spaces   BYTE
-        """
+"""
 
         test_db = DB(1, test_array, test_spec, row_size=len(_bytearray), size=1, layout_offset=0, db_offset=0)
         db_export = test_db.export()
