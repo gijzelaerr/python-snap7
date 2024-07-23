@@ -438,7 +438,7 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row["testbool1"], 1)
             self.assertEqual(row["testbool2"], 1)
             self.assertEqual(row["testbool3"], 1)
-            self.assertEqual(row["testbool4"], 1)  
+            self.assertEqual(row["testbool4"], 1)
             self.assertEqual(row["testbool5"], 0)
             self.assertEqual(row["testbool6"], 0)
             self.assertEqual(row["testbool7"], 0)
