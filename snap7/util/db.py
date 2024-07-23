@@ -160,9 +160,9 @@ def parse_specification(db_specification: str) -> Dict[str, Any]:
         if line and not line.lstrip().startswith("#"):
             match = regex.match(line.strip())
             if match:
-                index = match.group('index')
-                var_name = match.group('var_name')
-                _type = match.group('_type')
+                index = match.group("index")
+                var_name = match.group("var_name")
+                _type = match.group("_type")
                 var_name = var_name.strip()
 
                 parsed_db_specification[var_name] = (index, _type)
