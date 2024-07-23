@@ -444,7 +444,7 @@ class TestS7util(unittest.TestCase):
             self.assertEqual(row["testbool7"], 0)
             self.assertEqual(row["testbool8"], 0)
             self.assertEqual(row["NAME"], "test")
-        
+
     def test_db_creation_vars_with_whitespace(self) -> None:
         test_array = bytearray(_bytearray * 1)
         test_spec = """
@@ -459,7 +459,6 @@ class TestS7util(unittest.TestCase):
             self.assertTrue("testZeroSpaces" in db_export[i].keys())
             self.assertTrue("testOne Space" in db_export[i].keys())
             self.assertTrue("testTWo  Spaces" in db_export[i].keys())
-
 
     def test_db_export(self) -> None:
         test_array = bytearray(_bytearray * 10)
