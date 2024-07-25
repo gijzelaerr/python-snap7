@@ -149,11 +149,23 @@ def parse_specification(db_specification: str) -> Dict[str, Any]:
         Parsed DB specification.
     """
     parsed_db_specification = {}
+    pattern = r"""
+        (?P<index>\d+(\.\d+)?)\s+    # Match integer or decimal index
+        (?P<var_name>.*?)\s+         # Non-greedy match for variable name
+        (?P<_type>\S+)$              # Match type at end of line
+    """
+    regex = re.compile(pattern, re.VERBOSE)
 
     for line in db_specification.split("\n"):
         if line and not line.lstrip().startswith("#"):
-            index, var_name, _type = line.lstrip().split("#")[0].split()
-            parsed_db_specification[var_name] = (index, _type)
+            match = regex.match(line.strip())
+            if match:
+                index = match.group("index")
+                var_name = match.group("var_name")
+                _type = match.group("_type")
+                var_name = var_name.strip()
+
+                parsed_db_specification[var_name] = (index, _type)
 
     return parsed_db_specification
 
