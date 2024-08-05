@@ -1,0 +1,4 @@
+	PieroAppoggiato	Bool	0.0	false	FALSE	False	True	True	True	False		
+	anotherTest	Byte	1.0	16#0	---	False	True	True	True	False		
+	test test	String	2.0	''	---	False	True	True	True	False		
+	lole	Byte	258.0	16#0	---	False	True	True	True	False		
