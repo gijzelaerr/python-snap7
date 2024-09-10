@@ -136,7 +136,7 @@ from snap7.util import (
 
 logger = getLogger(__name__)
 
-def prepare_tia_export_to_parse(txt_path: str):
+def prepare_tia_export_to_parse(txt_path: str) -> str:
     """Return a string that can be ingested by parse_specification 
     from a .txt file directly copied and pasted from TIA Portal.
     It also handles duplicate variable names by progressively appending “_X”.
