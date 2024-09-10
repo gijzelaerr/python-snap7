@@ -152,7 +152,7 @@ def prepare_tia_export_to_parse(txt_path: str):
         db_specification = str()
         validList = ["BOOL","DWORD","INT","DINT","CHAR","STRING","DATE_AND_TIME","TIME_OF_DAY","REAL","BYTE","STRING"]
 
-        names = list()
+        names : list[str]= list()
 
         for line in file:
             line = line.lstrip("\t")
@@ -800,9 +800,3 @@ class Row:
 
 # backwards compatible alias
 DB_Row = Row
-
-roba  = prepare_tia_export_to_parse(r"C:\Users\GABRIELE.LIUZZO\Desktop\gits\python-snap7_arraySupport\example\TiaExportExample.txt")
-print(roba)
-roba2 = parse_specification(roba)
-
-print(roba2)
