@@ -165,9 +165,9 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
             add = "_0"
             for nome in reversed(names):
                 nome = str(nome)
-                if nome.rsplit("_")[0]==nomeVar:
+                if nome.rsplit("_")[0] == nomeVar:
                     print(nome.rsplit("_")[-1])
-                    add = "_"+str(int(nome.rsplit("_")[-1])+1)
+                    add = "_" + str(int(nome.rsplit("_")[-1]) + 1)
                     break
 
             nomeVar = nomeVar+add
@@ -176,7 +176,7 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
             if tipoVar:
                 if tipoVar in validList:
                     newLine = offset + "\t" + nomeVar + "\t" + tipoVar
-                    db_specification = db_specification +"\n"+ newLine
+                    db_specification = db_specification + "\n" + newLine
     return db_specification
 
 def parse_specification(db_specification: str) -> Dict[str, Any]:
