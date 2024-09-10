@@ -136,6 +136,7 @@ from snap7.util import (
 
 logger = getLogger(__name__)
 
+
 def prepare_tia_export_to_parse(txt_path: str) -> str:
     """Return a string that can be ingested by parse_specification
     from a .txt file directly copied and pasted from TIA Portal.
@@ -147,7 +148,7 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
     Returns:
         string ready to be parsed
     """
-    
+
     with open(txt_path, "r") as file:
         db_specification = str()
         validList = ["BOOL", "DWORD", "INT", "DINT", "CHAR", "STRING", "DATE_AND_TIME", "TIME_OF_DAY", "REAL", "BYTE", "STRING"]
@@ -157,7 +158,7 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
         for line in file:
             line = line.lstrip("\t")
             parsed_line = line.split("\t")
-            
+
             nomeVar = parsed_line[0]
             tipoVar = parsed_line[1].upper()
             offset = parsed_line[2]
@@ -170,7 +171,7 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
                     add = "_" + str(int(nome.rsplit("_")[-1]) + 1)
                     break
 
-            nomeVar = nomeVar+add
+            nomeVar = nomeVar + add
             names.append(nomeVar)
 
             if tipoVar:
@@ -178,6 +179,7 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
                     newLine = offset + "\t" + nomeVar + "\t" + tipoVar
                     db_specification = db_specification + "\n" + newLine
     return db_specification
+
 
 def parse_specification(db_specification: str) -> Dict[str, Any]:
     """Create a db specification derived from a

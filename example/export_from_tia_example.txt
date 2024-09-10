@@ -1,0 +1,2089 @@
+static
+    C3_TRG3	READ_Result Data	0.0			False	True	True	True	False		
+    Result Data 0	DWord	0.0	16#0	---	False	True	True	True	False		
+    Result Data 1	DWord	4.0	16#0	---	False	True	True	True	False		
+    Result Data 2	DWord	8.0	16#0	---	False	True	True	True	False		
+    Result Data 3	DWord	12.0	16#0	---	False	True	True	True	False		
+    Result Data 4	DWord	16.0	16#0	---	False	True	True	True	False		
+    Result Data 5	DWord	20.0	16#0	---	False	True	True	True	False		
+    Result Data 6	DWord	24.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	28.0	16#0	---	False	True	True	True	False		
+    Result Data 8	DWord	32.0	16#0	---	False	True	True	True	False		
+    Result Data 9	DWord	36.0	16#0	---	False	True	True	True	False		
+    Result Data 10	DWord	40.0	16#0	---	False	True	True	True	False		
+    Result Data 11	DWord	44.0	16#0	---	False	True	True	True	False		
+    Result Data 12	DWord	48.0	16#0	---	False	True	True	True	False		
+    Result Data 13	DWord	52.0	16#0	---	False	True	True	True	False		
+    Result Data 14	DWord	56.0	16#0	---	False	True	True	True	False		
+    Result Data 15	DWord	60.0	16#0	---	False	True	True	True	False		
+    Result Data 16	DWord	64.0	16#0	---	False	True	True	True	False		
+    Result Data 17	DWord	68.0	16#0	---	False	True	True	True	False		
+    Result Data 18	DWord	72.0	16#0	---	False	True	True	True	False		
+    Result Data 19	DWord	76.0	16#0	---	False	True	True	True	False		
+    Result Data 20	DWord	80.0	16#0	---	False	True	True	True	False		
+    Result Data 21	DWord	84.0	16#0	---	False	True	True	True	False		
+    Result Data 22	DWord	88.0	16#0	---	False	True	True	True	False		
+    Result Data 23	DWord	92.0	16#0	---	False	True	True	True	False		
+    Result Data 24	DWord	96.0	16#0	---	False	True	True	True	False		
+    Result Data 25	DWord	100.0	16#0	---	False	True	True	True	False		
+    Result Data 26	DWord	104.0	16#0	---	False	True	True	True	False		
+    Result Data 27	DWord	108.0	16#0	---	False	True	True	True	False		
+    Result Data 28	DWord	112.0	16#0	---	False	True	True	True	False		
+    Result Data 29	DWord	116.0	16#0	---	False	True	True	True	False		
+    Result Data 30	DWord	120.0	16#0	---	False	True	True	True	False		
+    Result Data 31	DWord	124.0	16#0	---	False	True	True	True	False		
+    Result Data 32	DWord	128.0	16#0	---	False	True	True	True	False		
+    Result Data 33	DWord	132.0	16#0	---	False	True	True	True	False		
+    Result Data 34	DWord	136.0	16#0	---	False	True	True	True	False		
+    Result Data 35	DWord	140.0	16#0	---	False	True	True	True	False		
+    Result Data 36	DWord	144.0	16#0	---	False	True	True	True	False		
+    Result Data 37	DWord	148.0	16#0	---	False	True	True	True	False		
+    Result Data 38	DWord	152.0	16#0	---	False	True	True	True	False		
+    Result Data 39	DWord	156.0	16#0	---	False	True	True	True	False		
+    Result Data 40	DWord	160.0	16#0	---	False	True	True	True	False		
+    Result Data 41	DWord	164.0	16#0	---	False	True	True	True	False		
+    Result Data 42	DWord	168.0	16#0	---	False	True	True	True	False		
+    Result Data 43	DWord	172.0	16#0	---	False	True	True	True	False		
+    Result Data 44	DWord	176.0	16#0	---	False	True	True	True	False		
+    Result Data 45	DWord	180.0	16#0	---	False	True	True	True	False		
+    Result Data 46	DWord	184.0	16#0	---	False	True	True	True	False		
+    Result Data 47	DWord	188.0	16#0	---	False	True	True	True	False		
+    Result Data 48	DWord	192.0	16#0	---	False	True	True	True	False		
+    Result Data 49	DWord	196.0	16#0	---	False	True	True	True	False		
+    Result Data 50	DWord	200.0	16#0	---	False	True	True	True	False		
+    Result Data 51	DWord	204.0	16#0	---	False	True	True	True	False		
+    Result Data 52	DWord	208.0	16#0	---	False	True	True	True	False		
+    Result Data 53	DWord	212.0	16#0	---	False	True	True	True	False		
+    Result Data 54	DWord	216.0	16#0	---	False	True	True	True	False		
+    Result Data 55	DWord	220.0	16#0	---	False	True	True	True	False		
+    Result Data 56	DWord	224.0	16#0	---	False	True	True	True	False		
+    Result Data 57	DWord	228.0	16#0	---	False	True	True	True	False		
+    Result Data 58	DWord	232.0	16#0	---	False	True	True	True	False		
+    Result Data 59	DWord	236.0	16#0	---	False	True	True	True	False		
+    Result Data 60	DWord	240.0	16#0	---	False	True	True	True	False		
+    Result Data 61	DWord	244.0	16#0	---	False	True	True	True	False		
+    Result Data 62	DWord	248.0	16#0	---	False	True	True	True	False		
+    Result Data 63	DWord	252.0	16#0	---	False	True	True	True	False		
+    Result Data 64	DWord	256.0	16#0	---	False	True	True	True	False		
+    Result Data 65	DWord	260.0	16#0	---	False	True	True	True	False		
+    Result Data 66	DWord	264.0	16#0	---	False	True	True	True	False		
+    Result Data 67	DWord	268.0	16#0	---	False	True	True	True	False		
+    Result Data 68	DWord	272.0	16#0	---	False	True	True	True	False		
+    Result Data 69	DWord	276.0	16#0	---	False	True	True	True	False		
+    Result Data 70	DWord	280.0	16#0	---	False	True	True	True	False		
+    Result Data 71	DWord	284.0	16#0	---	False	True	True	True	False		
+    Result Data 72	DWord	288.0	16#0	---	False	True	True	True	False		
+    Result Data 73	DWord	292.0	16#0	---	False	True	True	True	False		
+    Result Data 74	DWord	296.0	16#0	---	False	True	True	True	False		
+    Result Data 75	DWord	300.0	16#0	---	False	True	True	True	False		
+    Result Data 76	DWord	304.0	16#0	---	False	True	True	True	False		
+    Result Data 77	DWord	308.0	16#0	---	False	True	True	True	False		
+    Result Data 78	DWord	312.0	16#0	---	False	True	True	True	False		
+    Result Data 79	DWord	316.0	16#0	---	False	True	True	True	False		
+    Result Data 80	DWord	320.0	16#0	---	False	True	True	True	False		
+    Result Data 81	DWord	324.0	16#0	---	False	True	True	True	False		
+    Result Data 82	DWord	328.0	16#0	---	False	True	True	True	False		
+    Result Data 83	DWord	332.0	16#0	---	False	True	True	True	False		
+    Result Data 84	DWord	336.0	16#0	---	False	True	True	True	False		
+    Result Data 85	DWord	340.0	16#0	---	False	True	True	True	False		
+    Result Data 86	DWord	344.0	16#0	---	False	True	True	True	False		
+    Result Data 87	DWord	348.0	16#0	---	False	True	True	True	False		
+    Result Data 88	DWord	352.0	16#0	---	False	True	True	True	False		
+    Result Data 89	DWord	356.0	16#0	---	False	True	True	True	False		
+    Result Data 90	DWord	360.0	16#0	---	False	True	True	True	False		
+    Result Data 91	DWord	364.0	16#0	---	False	True	True	True	False		
+    Result Data 92	DWord	368.0	16#0	---	False	True	True	True	False		
+    Result Data 93	DWord	372.0	16#0	---	False	True	True	True	False		
+    Result Data 94	DWord	376.0	16#0	---	False	True	True	True	False		
+    Result Data 95	DWord	380.0	16#0	---	False	True	True	True	False		
+    Result Data 96	DWord	384.0	16#0	---	False	True	True	True	False		
+    Result Data 97	DWord	388.0	16#0	---	False	True	True	True	False		
+    Result Data 98	DWord	392.0	16#0	---	False	True	True	True	False		
+    Result Data 99	DWord	396.0	16#0	---	False	True	True	True	False		
+    Result Data 100	DWord	400.0	16#0	---	False	True	True	True	False		
+    Result Data 101	DWord	404.0	16#0	---	False	True	True	True	False		
+    Result Data 102	DWord	408.0	16#0	---	False	True	True	True	False		
+    Result Data 103	DWord	412.0	16#0	---	False	True	True	True	False		
+    Result Data 104	DWord	416.0	16#0	---	False	True	True	True	False		
+    Result Data 105	DWord	420.0	16#0	---	False	True	True	True	False		
+    Result Data 106	DWord	424.0	16#0	---	False	True	True	True	False		
+    Result Data 107	DWord	428.0	16#0	---	False	True	True	True	False		
+    Result Data 108	DWord	432.0	16#0	---	False	True	True	True	False		
+    Result Data 109	DWord	436.0	16#0	---	False	True	True	True	False		
+    Result Data 110	DWord	440.0	16#0	---	False	True	True	True	False		
+    Result Data 111	DWord	444.0	16#0	---	False	True	True	True	False		
+    Result Data 112	DWord	448.0	16#0	---	False	True	True	True	False		
+    Result Data 113	DWord	452.0	16#0	---	False	True	True	True	False		
+    Result Data 114	DWord	456.0	16#0	---	False	True	True	True	False		
+    Result Data 115	DWord	460.0	16#0	---	False	True	True	True	False		
+    Result Data 116	DWord	464.0	16#0	---	False	True	True	True	False		
+    Result Data 117	DWord	468.0	16#0	---	False	True	True	True	False		
+    Result Data 118	DWord	472.0	16#0	---	False	True	True	True	False		
+    Result Data 119	DWord	476.0	16#0	---	False	True	True	True	False		
+    Result Data 120	DWord	480.0	16#0	---	False	True	True	True	False		
+    Result Data 121	DWord	484.0	16#0	---	False	True	True	True	False		
+    Result Data 122	DWord	488.0	16#0	---	False	True	True	True	False		
+    Result Data 123	DWord	492.0	16#0	---	False	True	True	True	False		
+    Result Data 124	DWord	496.0	16#0	---	False	True	True	True	False		
+    Result Data 125	DWord	500.0	16#0	---	False	True	True	True	False		
+    Result Data 126	DWord	504.0	16#0	---	False	True	True	True	False		
+    Result Data 127	DWord	508.0	16#0	---	False	True	True	True	False		
+    Result Data 128	DWord	512.0	16#0	---	False	True	True	True	False		
+    Result Data 129	DWord	516.0	16#0	---	False	True	True	True	False		
+    Result Data 130	DWord	520.0	16#0	---	False	True	True	True	False		
+    Result Data 131	DWord	524.0	16#0	---	False	True	True	True	False		
+    Result Data 132	DWord	528.0	16#0	---	False	True	True	True	False		
+    Result Data 133	DWord	532.0	16#0	---	False	True	True	True	False		
+    Result Data 134	DWord	536.0	16#0	---	False	True	True	True	False		
+    Result Data 135	DWord	540.0	16#0	---	False	True	True	True	False		
+    Result Data 136	DWord	544.0	16#0	---	False	True	True	True	False		
+    Result Data 137	DWord	548.0	16#0	---	False	True	True	True	False		
+    Result Data 138	DWord	552.0	16#0	---	False	True	True	True	False		
+    Result Data 139	DWord	556.0	16#0	---	False	True	True	True	False		
+    Result Data 140	DWord	560.0	16#0	---	False	True	True	True	False		
+    Result Data 141	DWord	564.0	16#0	---	False	True	True	True	False		
+    Result Data 142	DWord	568.0	16#0	---	False	True	True	True	False		
+    Result Data 143	DWord	572.0	16#0	---	False	True	True	True	False		
+    Result Data 144	DWord	576.0	16#0	---	False	True	True	True	False		
+    Result Data 145	DWord	580.0	16#0	---	False	True	True	True	False		
+    Result Data 146	DWord	584.0	16#0	---	False	True	True	True	False		
+    Result Data 147	DWord	588.0	16#0	---	False	True	True	True	False		
+    Result Data 148	DWord	592.0	16#0	---	False	True	True	True	False		
+    Result Data 149	DWord	596.0	16#0	---	False	True	True	True	False		
+    Result Data 150	DWord	600.0	16#0	---	False	True	True	True	False		
+    Result Data 151	DWord	604.0	16#0	---	False	True	True	True	False		
+    Result Data 152	DWord	608.0	16#0	---	False	True	True	True	False		
+    Result Data 153	DWord	612.0	16#0	---	False	True	True	True	False		
+    Result Data 154	DWord	616.0	16#0	---	False	True	True	True	False		
+    Result Data 155	DWord	620.0	16#0	---	False	True	True	True	False		
+    Result Data 156	DWord	624.0	16#0	---	False	True	True	True	False		
+    Result Data 157	DWord	628.0	16#0	---	False	True	True	True	False		
+    Result Data 158	DWord	632.0	16#0	---	False	True	True	True	False		
+    Result Data 159	DWord	636.0	16#0	---	False	True	True	True	False		
+    Result Data 160	DWord	640.0	16#0	---	False	True	True	True	False		
+    Result Data 161	DWord	644.0	16#0	---	False	True	True	True	False		
+    Result Data 162	DWord	648.0	16#0	---	False	True	True	True	False		
+    Result Data 163	DWord	652.0	16#0	---	False	True	True	True	False		
+    Result Data 164	DWord	656.0	16#0	---	False	True	True	True	False		
+    Result Data 165	DWord	660.0	16#0	---	False	True	True	True	False		
+    Result Data 166	DWord	664.0	16#0	---	False	True	True	True	False		
+    Result Data 167	DWord	668.0	16#0	---	False	True	True	True	False		
+    Result Data 168	DWord	672.0	16#0	---	False	True	True	True	False		
+    Result Data 169	DWord	676.0	16#0	---	False	True	True	True	False		
+    Result Data 170	DWord	680.0	16#0	---	False	True	True	True	False		
+    Result Data 171	DWord	684.0	16#0	---	False	True	True	True	False		
+    Result Data 172	DWord	688.0	16#0	---	False	True	True	True	False		
+    Result Data 173	DWord	692.0	16#0	---	False	True	True	True	False		
+    Result Data 174	DWord	696.0	16#0	---	False	True	True	True	False		
+    Result Data 175	DWord	700.0	16#0	---	False	True	True	True	False		
+    Result Data 176	DWord	704.0	16#0	---	False	True	True	True	False		
+    Result Data 177	DWord	708.0	16#0	---	False	True	True	True	False		
+    Result Data 178	DWord	712.0	16#0	---	False	True	True	True	False		
+    Result Data 179	DWord	716.0	16#0	---	False	True	True	True	False		
+    Result Data 180	DWord	720.0	16#0	---	False	True	True	True	False		
+    Result Data 181	DWord	724.0	16#0	---	False	True	True	True	False		
+    Result Data 182	DWord	728.0	16#0	---	False	True	True	True	False		
+    Result Data 183	DWord	732.0	16#0	---	False	True	True	True	False		
+    Result Data 184	DWord	736.0	16#0	---	False	True	True	True	False		
+    Result Data 185	DWord	740.0	16#0	---	False	True	True	True	False		
+    Result Data 186	DWord	744.0	16#0	---	False	True	True	True	False		
+    Result Data 187	DWord	748.0	16#0	---	False	True	True	True	False		
+    Result Data 188	DWord	752.0	16#0	---	False	True	True	True	False		
+    Result Data 189	DWord	756.0	16#0	---	False	True	True	True	False		
+    Result Data 190	DWord	760.0	16#0	---	False	True	True	True	False		
+    Result Data 191	DWord	764.0	16#0	---	False	True	True	True	False		
+    Result Data 192	DWord	768.0	16#0	---	False	True	True	True	False		
+    Result Data 193	DWord	772.0	16#0	---	False	True	True	True	False		
+    Result Data 194	DWord	776.0	16#0	---	False	True	True	True	False		
+    Result Data 195	DWord	780.0	16#0	---	False	True	True	True	False		
+    Result Data 196	DWord	784.0	16#0	---	False	True	True	True	False		
+    Result Data 197	DWord	788.0	16#0	---	False	True	True	True	False		
+    Result Data 198	DWord	792.0	16#0	---	False	True	True	True	False		
+    Result Data 199	DWord	796.0	16#0	---	False	True	True	True	False		
+    Result Data 200	DWord	800.0	16#0	---	False	True	True	True	False		
+    Result Data 201	DWord	804.0	16#0	---	False	True	True	True	False		
+    Result Data 202	DWord	808.0	16#0	---	False	True	True	True	False		
+    Result Data 203	DWord	812.0	16#0	---	False	True	True	True	False		
+    Result Data 204	DWord	816.0	16#0	---	False	True	True	True	False		
+    Result Data 205	DWord	820.0	16#0	---	False	True	True	True	False		
+    Result Data 206	DWord	824.0	16#0	---	False	True	True	True	False		
+    Result Data 207	DWord	828.0	16#0	---	False	True	True	True	False		
+    Result Data 208	DWord	832.0	16#0	---	False	True	True	True	False		
+    Result Data 209	DWord	836.0	16#0	---	False	True	True	True	False		
+    Result Data 210	DWord	840.0	16#0	---	False	True	True	True	False		
+    Result Data 211	DWord	844.0	16#0	---	False	True	True	True	False		
+    Result Data 212	DWord	848.0	16#0	---	False	True	True	True	False		
+    Result Data 213	DWord	852.0	16#0	---	False	True	True	True	False		
+    Result Data 214	DWord	856.0	16#0	---	False	True	True	True	False		
+    Result Data 215	DWord	860.0	16#0	---	False	True	True	True	False		
+    Result Data 216	DWord	864.0	16#0	---	False	True	True	True	False		
+    Result Data 217	DWord	868.0	16#0	---	False	True	True	True	False		
+    Result Data 218	DWord	872.0	16#0	---	False	True	True	True	False		
+    Result Data 219	DWord	876.0	16#0	---	False	True	True	True	False		
+    Result Data 220	DWord	880.0	16#0	---	False	True	True	True	False		
+    Result Data 221	DWord	884.0	16#0	---	False	True	True	True	False		
+    Result Data 222	DWord	888.0	16#0	---	False	True	True	True	False		
+    Result Data 223	DWord	892.0	16#0	---	False	True	True	True	False		
+    Result Data 224	DWord	896.0	16#0	---	False	True	True	True	False		
+    Result Data 225	DWord	900.0	16#0	---	False	True	True	True	False		
+    Result Data 226	DWord	904.0	16#0	---	False	True	True	True	False		
+    Result Data 227	DWord	908.0	16#0	---	False	True	True	True	False		
+    Result Data 228	DWord	912.0	16#0	---	False	True	True	True	False		
+    Result Data 229	DWord	916.0	16#0	---	False	True	True	True	False		
+    Result Data 230	DWord	920.0	16#0	---	False	True	True	True	False		
+    Result Data 231	DWord	924.0	16#0	---	False	True	True	True	False		
+    Result Data 232	DWord	928.0	16#0	---	False	True	True	True	False		
+    Result Data 233	DWord	932.0	16#0	---	False	True	True	True	False		
+    Result Data 234	DWord	936.0	16#0	---	False	True	True	True	False		
+    Result Data 235	DWord	940.0	16#0	---	False	True	True	True	False		
+    Result Data 236	DWord	944.0	16#0	---	False	True	True	True	False		
+    Result Data 237	DWord	948.0	16#0	---	False	True	True	True	False		
+    Result Data 238	DWord	952.0	16#0	---	False	True	True	True	False		
+    Result Data 239	DWord	956.0	16#0	---	False	True	True	True	False		
+    Result Data 240	DWord	960.0	16#0	---	False	True	True	True	False		
+    Result Data 241	DWord	964.0	16#0	---	False	True	True	True	False		
+    Result Data 242	DWord	968.0	16#0	---	False	True	True	True	False		
+    Result Data 243	DWord	972.0	16#0	---	False	True	True	True	False		
+    Result Data 244	DWord	976.0	16#0	---	False	True	True	True	False		
+    Result Data 245	DWord	980.0	16#0	---	False	True	True	True	False		
+    Result Data 246	DWord	984.0	16#0	---	False	True	True	True	False		
+    Result Data 247	DWord	988.0	16#0	---	False	True	True	True	False		
+    C1_TRG1	READ_Result Data	992.0			False	True	True	True	False		
+    Result Data 0	DWord	992.0	16#0	---	False	True	True	True	False		
+    Result Data 1	DWord	996.0	16#0	---	False	True	True	True	False		
+    Result Data 2	DWord	1000.0	16#0	---	False	True	True	True	False		
+    Result Data 3	DWord	1004.0	16#0	---	False	True	True	True	False		
+    Result Data 4	DWord	1008.0	16#0	---	False	True	True	True	False		
+    Result Data 5	DWord	1012.0	16#0	---	False	True	True	True	False		
+    Result Data 6	DWord	1016.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	1020.0	16#0	---	False	True	True	True	False		
+    Result Data 8	DWord	1024.0	16#0	---	False	True	True	True	False		
+    Result Data 9	DWord	1028.0	16#0	---	False	True	True	True	False		
+    Result Data 10	DWord	1032.0	16#0	---	False	True	True	True	False		
+    Result Data 11	DWord	1036.0	16#0	---	False	True	True	True	False		
+    Result Data 12	DWord	1040.0	16#0	---	False	True	True	True	False		
+    Result Data 13	DWord	1044.0	16#0	---	False	True	True	True	False		
+    Result Data 14	DWord	1048.0	16#0	---	False	True	True	True	False		
+    Result Data 15	DWord	1052.0	16#0	---	False	True	True	True	False		
+    Result Data 16	DWord	1056.0	16#0	---	False	True	True	True	False		
+    Result Data 17	DWord	1060.0	16#0	---	False	True	True	True	False		
+    Result Data 18	DWord	1064.0	16#0	---	False	True	True	True	False		
+    Result Data 19	DWord	1068.0	16#0	---	False	True	True	True	False		
+    Result Data 20	DWord	1072.0	16#0	---	False	True	True	True	False		
+    Result Data 21	DWord	1076.0	16#0	---	False	True	True	True	False		
+    Result Data 22	DWord	1080.0	16#0	---	False	True	True	True	False		
+    Result Data 23	DWord	1084.0	16#0	---	False	True	True	True	False		
+    Result Data 24	DWord	1088.0	16#0	---	False	True	True	True	False		
+    Result Data 25	DWord	1092.0	16#0	---	False	True	True	True	False		
+    Result Data 26	DWord	1096.0	16#0	---	False	True	True	True	False		
+    Result Data 27	DWord	1100.0	16#0	---	False	True	True	True	False		
+    Result Data 28	DWord	1104.0	16#0	---	False	True	True	True	False		
+    Result Data 29	DWord	1108.0	16#0	---	False	True	True	True	False		
+    Result Data 30	DWord	1112.0	16#0	---	False	True	True	True	False		
+    Result Data 31	DWord	1116.0	16#0	---	False	True	True	True	False		
+    Result Data 32	DWord	1120.0	16#0	---	False	True	True	True	False		
+    Result Data 33	DWord	1124.0	16#0	---	False	True	True	True	False		
+    Result Data 34	DWord	1128.0	16#0	---	False	True	True	True	False		
+    Result Data 35	DWord	1132.0	16#0	---	False	True	True	True	False		
+    Result Data 36	DWord	1136.0	16#0	---	False	True	True	True	False		
+    Result Data 37	DWord	1140.0	16#0	---	False	True	True	True	False		
+    Result Data 38	DWord	1144.0	16#0	---	False	True	True	True	False		
+    Result Data 39	DWord	1148.0	16#0	---	False	True	True	True	False		
+    Result Data 40	DWord	1152.0	16#0	---	False	True	True	True	False		
+    Result Data 41	DWord	1156.0	16#0	---	False	True	True	True	False		
+    Result Data 42	DWord	1160.0	16#0	---	False	True	True	True	False		
+    Result Data 43	DWord	1164.0	16#0	---	False	True	True	True	False		
+    Result Data 44	DWord	1168.0	16#0	---	False	True	True	True	False		
+    Result Data 45	DWord	1172.0	16#0	---	False	True	True	True	False		
+    Result Data 46	DWord	1176.0	16#0	---	False	True	True	True	False		
+    Result Data 47	DWord	1180.0	16#0	---	False	True	True	True	False		
+    Result Data 48	DWord	1184.0	16#0	---	False	True	True	True	False		
+    Result Data 49	DWord	1188.0	16#0	---	False	True	True	True	False		
+    Result Data 50	DWord	1192.0	16#0	---	False	True	True	True	False		
+    Result Data 51	DWord	1196.0	16#0	---	False	True	True	True	False		
+    Result Data 52	DWord	1200.0	16#0	---	False	True	True	True	False		
+    Result Data 53	DWord	1204.0	16#0	---	False	True	True	True	False		
+    Result Data 54	DWord	1208.0	16#0	---	False	True	True	True	False		
+    Result Data 55	DWord	1212.0	16#0	---	False	True	True	True	False		
+    Result Data 56	DWord	1216.0	16#0	---	False	True	True	True	False		
+    Result Data 57	DWord	1220.0	16#0	---	False	True	True	True	False		
+    Result Data 58	DWord	1224.0	16#0	---	False	True	True	True	False		
+    Result Data 59	DWord	1228.0	16#0	---	False	True	True	True	False		
+    Result Data 60	DWord	1232.0	16#0	---	False	True	True	True	False		
+    Result Data 61	DWord	1236.0	16#0	---	False	True	True	True	False		
+    Result Data 62	DWord	1240.0	16#0	---	False	True	True	True	False		
+    Result Data 63	DWord	1244.0	16#0	---	False	True	True	True	False		
+    Result Data 64	DWord	1248.0	16#0	---	False	True	True	True	False		
+    Result Data 65	DWord	1252.0	16#0	---	False	True	True	True	False		
+    Result Data 66	DWord	1256.0	16#0	---	False	True	True	True	False		
+    Result Data 67	DWord	1260.0	16#0	---	False	True	True	True	False		
+    Result Data 68	DWord	1264.0	16#0	---	False	True	True	True	False		
+    Result Data 69	DWord	1268.0	16#0	---	False	True	True	True	False		
+    Result Data 70	DWord	1272.0	16#0	---	False	True	True	True	False		
+    Result Data 71	DWord	1276.0	16#0	---	False	True	True	True	False		
+    Result Data 72	DWord	1280.0	16#0	---	False	True	True	True	False		
+    Result Data 73	DWord	1284.0	16#0	---	False	True	True	True	False		
+    Result Data 74	DWord	1288.0	16#0	---	False	True	True	True	False		
+    Result Data 75	DWord	1292.0	16#0	---	False	True	True	True	False		
+    Result Data 76	DWord	1296.0	16#0	---	False	True	True	True	False		
+    Result Data 77	DWord	1300.0	16#0	---	False	True	True	True	False		
+    Result Data 78	DWord	1304.0	16#0	---	False	True	True	True	False		
+    Result Data 79	DWord	1308.0	16#0	---	False	True	True	True	False		
+    Result Data 80	DWord	1312.0	16#0	---	False	True	True	True	False		
+    Result Data 81	DWord	1316.0	16#0	---	False	True	True	True	False		
+    Result Data 82	DWord	1320.0	16#0	---	False	True	True	True	False		
+    Result Data 83	DWord	1324.0	16#0	---	False	True	True	True	False		
+    Result Data 84	DWord	1328.0	16#0	---	False	True	True	True	False		
+    Result Data 85	DWord	1332.0	16#0	---	False	True	True	True	False		
+    Result Data 86	DWord	1336.0	16#0	---	False	True	True	True	False		
+    Result Data 87	DWord	1340.0	16#0	---	False	True	True	True	False		
+    Result Data 88	DWord	1344.0	16#0	---	False	True	True	True	False		
+    Result Data 89	DWord	1348.0	16#0	---	False	True	True	True	False		
+    Result Data 90	DWord	1352.0	16#0	---	False	True	True	True	False		
+    Result Data 91	DWord	1356.0	16#0	---	False	True	True	True	False		
+    Result Data 92	DWord	1360.0	16#0	---	False	True	True	True	False		
+    Result Data 93	DWord	1364.0	16#0	---	False	True	True	True	False		
+    Result Data 94	DWord	1368.0	16#0	---	False	True	True	True	False		
+    Result Data 95	DWord	1372.0	16#0	---	False	True	True	True	False		
+    Result Data 96	DWord	1376.0	16#0	---	False	True	True	True	False		
+    Result Data 97	DWord	1380.0	16#0	---	False	True	True	True	False		
+    Result Data 98	DWord	1384.0	16#0	---	False	True	True	True	False		
+    Result Data 99	DWord	1388.0	16#0	---	False	True	True	True	False		
+    Result Data 100	DWord	1392.0	16#0	---	False	True	True	True	False		
+    Result Data 101	DWord	1396.0	16#0	---	False	True	True	True	False		
+    Result Data 102	DWord	1400.0	16#0	---	False	True	True	True	False		
+    Result Data 103	DWord	1404.0	16#0	---	False	True	True	True	False		
+    Result Data 104	DWord	1408.0	16#0	---	False	True	True	True	False		
+    Result Data 105	DWord	1412.0	16#0	---	False	True	True	True	False		
+    Result Data 106	DWord	1416.0	16#0	---	False	True	True	True	False		
+    Result Data 107	DWord	1420.0	16#0	---	False	True	True	True	False		
+    Result Data 108	DWord	1424.0	16#0	---	False	True	True	True	False		
+    Result Data 109	DWord	1428.0	16#0	---	False	True	True	True	False		
+    Result Data 110	DWord	1432.0	16#0	---	False	True	True	True	False		
+    Result Data 111	DWord	1436.0	16#0	---	False	True	True	True	False		
+    Result Data 112	DWord	1440.0	16#0	---	False	True	True	True	False		
+    Result Data 113	DWord	1444.0	16#0	---	False	True	True	True	False		
+    Result Data 114	DWord	1448.0	16#0	---	False	True	True	True	False		
+    Result Data 115	DWord	1452.0	16#0	---	False	True	True	True	False		
+    Result Data 116	DWord	1456.0	16#0	---	False	True	True	True	False		
+    Result Data 117	DWord	1460.0	16#0	---	False	True	True	True	False		
+    Result Data 118	DWord	1464.0	16#0	---	False	True	True	True	False		
+    Result Data 119	DWord	1468.0	16#0	---	False	True	True	True	False		
+    Result Data 120	DWord	1472.0	16#0	---	False	True	True	True	False		
+    Result Data 121	DWord	1476.0	16#0	---	False	True	True	True	False		
+    Result Data 122	DWord	1480.0	16#0	---	False	True	True	True	False		
+    Result Data 123	DWord	1484.0	16#0	---	False	True	True	True	False		
+    Result Data 124	DWord	1488.0	16#0	---	False	True	True	True	False		
+    Result Data 125	DWord	1492.0	16#0	---	False	True	True	True	False		
+    Result Data 126	DWord	1496.0	16#0	---	False	True	True	True	False		
+    Result Data 127	DWord	1500.0	16#0	---	False	True	True	True	False		
+    Result Data 128	DWord	1504.0	16#0	---	False	True	True	True	False		
+    Result Data 129	DWord	1508.0	16#0	---	False	True	True	True	False		
+    Result Data 130	DWord	1512.0	16#0	---	False	True	True	True	False		
+    Result Data 131	DWord	1516.0	16#0	---	False	True	True	True	False		
+    Result Data 132	DWord	1520.0	16#0	---	False	True	True	True	False		
+    Result Data 133	DWord	1524.0	16#0	---	False	True	True	True	False		
+    Result Data 134	DWord	1528.0	16#0	---	False	True	True	True	False		
+    Result Data 135	DWord	1532.0	16#0	---	False	True	True	True	False		
+    Result Data 136	DWord	1536.0	16#0	---	False	True	True	True	False		
+    Result Data 137	DWord	1540.0	16#0	---	False	True	True	True	False		
+    Result Data 138	DWord	1544.0	16#0	---	False	True	True	True	False		
+    Result Data 139	DWord	1548.0	16#0	---	False	True	True	True	False		
+    Result Data 140	DWord	1552.0	16#0	---	False	True	True	True	False		
+    Result Data 141	DWord	1556.0	16#0	---	False	True	True	True	False		
+    Result Data 142	DWord	1560.0	16#0	---	False	True	True	True	False		
+    Result Data 143	DWord	1564.0	16#0	---	False	True	True	True	False		
+    Result Data 144	DWord	1568.0	16#0	---	False	True	True	True	False		
+    Result Data 145	DWord	1572.0	16#0	---	False	True	True	True	False		
+    Result Data 146	DWord	1576.0	16#0	---	False	True	True	True	False		
+    Result Data 147	DWord	1580.0	16#0	---	False	True	True	True	False		
+    Result Data 148	DWord	1584.0	16#0	---	False	True	True	True	False		
+    Result Data 149	DWord	1588.0	16#0	---	False	True	True	True	False		
+    Result Data 150	DWord	1592.0	16#0	---	False	True	True	True	False		
+    Result Data 151	DWord	1596.0	16#0	---	False	True	True	True	False		
+    Result Data 152	DWord	1600.0	16#0	---	False	True	True	True	False		
+    Result Data 153	DWord	1604.0	16#0	---	False	True	True	True	False		
+    Result Data 154	DWord	1608.0	16#0	---	False	True	True	True	False		
+    Result Data 155	DWord	1612.0	16#0	---	False	True	True	True	False		
+    Result Data 156	DWord	1616.0	16#0	---	False	True	True	True	False		
+    Result Data 157	DWord	1620.0	16#0	---	False	True	True	True	False		
+    Result Data 158	DWord	1624.0	16#0	---	False	True	True	True	False		
+    Result Data 159	DWord	1628.0	16#0	---	False	True	True	True	False		
+    Result Data 160	DWord	1632.0	16#0	---	False	True	True	True	False		
+    Result Data 161	DWord	1636.0	16#0	---	False	True	True	True	False		
+    Result Data 162	DWord	1640.0	16#0	---	False	True	True	True	False		
+    Result Data 163	DWord	1644.0	16#0	---	False	True	True	True	False		
+    Result Data 164	DWord	1648.0	16#0	---	False	True	True	True	False		
+    Result Data 165	DWord	1652.0	16#0	---	False	True	True	True	False		
+    Result Data 166	DWord	1656.0	16#0	---	False	True	True	True	False		
+    Result Data 167	DWord	1660.0	16#0	---	False	True	True	True	False		
+    Result Data 168	DWord	1664.0	16#0	---	False	True	True	True	False		
+    Result Data 169	DWord	1668.0	16#0	---	False	True	True	True	False		
+    Result Data 170	DWord	1672.0	16#0	---	False	True	True	True	False		
+    Result Data 171	DWord	1676.0	16#0	---	False	True	True	True	False		
+    Result Data 172	DWord	1680.0	16#0	---	False	True	True	True	False		
+    Result Data 173	DWord	1684.0	16#0	---	False	True	True	True	False		
+    Result Data 174	DWord	1688.0	16#0	---	False	True	True	True	False		
+    Result Data 175	DWord	1692.0	16#0	---	False	True	True	True	False		
+    Result Data 176	DWord	1696.0	16#0	---	False	True	True	True	False		
+    Result Data 177	DWord	1700.0	16#0	---	False	True	True	True	False		
+    Result Data 178	DWord	1704.0	16#0	---	False	True	True	True	False		
+    Result Data 179	DWord	1708.0	16#0	---	False	True	True	True	False		
+    Result Data 180	DWord	1712.0	16#0	---	False	True	True	True	False		
+    Result Data 181	DWord	1716.0	16#0	---	False	True	True	True	False		
+    Result Data 182	DWord	1720.0	16#0	---	False	True	True	True	False		
+    Result Data 183	DWord	1724.0	16#0	---	False	True	True	True	False		
+    Result Data 184	DWord	1728.0	16#0	---	False	True	True	True	False		
+    Result Data 185	DWord	1732.0	16#0	---	False	True	True	True	False		
+    Result Data 186	DWord	1736.0	16#0	---	False	True	True	True	False		
+    Result Data 187	DWord	1740.0	16#0	---	False	True	True	True	False		
+    Result Data 188	DWord	1744.0	16#0	---	False	True	True	True	False		
+    Result Data 189	DWord	1748.0	16#0	---	False	True	True	True	False		
+    Result Data 190	DWord	1752.0	16#0	---	False	True	True	True	False		
+    Result Data 191	DWord	1756.0	16#0	---	False	True	True	True	False		
+    Result Data 192	DWord	1760.0	16#0	---	False	True	True	True	False		
+    Result Data 193	DWord	1764.0	16#0	---	False	True	True	True	False		
+    Result Data 194	DWord	1768.0	16#0	---	False	True	True	True	False		
+    Result Data 195	DWord	1772.0	16#0	---	False	True	True	True	False		
+    Result Data 196	DWord	1776.0	16#0	---	False	True	True	True	False		
+    Result Data 197	DWord	1780.0	16#0	---	False	True	True	True	False		
+    Result Data 198	DWord	1784.0	16#0	---	False	True	True	True	False		
+    Result Data 199	DWord	1788.0	16#0	---	False	True	True	True	False		
+    Result Data 200	DWord	1792.0	16#0	---	False	True	True	True	False		
+    Result Data 201	DWord	1796.0	16#0	---	False	True	True	True	False		
+    Result Data 202	DWord	1800.0	16#0	---	False	True	True	True	False		
+    Result Data 203	DWord	1804.0	16#0	---	False	True	True	True	False		
+    Result Data 204	DWord	1808.0	16#0	---	False	True	True	True	False		
+    Result Data 205	DWord	1812.0	16#0	---	False	True	True	True	False		
+    Result Data 206	DWord	1816.0	16#0	---	False	True	True	True	False		
+    Result Data 207	DWord	1820.0	16#0	---	False	True	True	True	False		
+    Result Data 208	DWord	1824.0	16#0	---	False	True	True	True	False		
+    Result Data 209	DWord	1828.0	16#0	---	False	True	True	True	False		
+    Result Data 210	DWord	1832.0	16#0	---	False	True	True	True	False		
+    Result Data 211	DWord	1836.0	16#0	---	False	True	True	True	False		
+    Result Data 212	DWord	1840.0	16#0	---	False	True	True	True	False		
+    Result Data 213	DWord	1844.0	16#0	---	False	True	True	True	False		
+    Result Data 214	DWord	1848.0	16#0	---	False	True	True	True	False		
+    Result Data 215	DWord	1852.0	16#0	---	False	True	True	True	False		
+    Result Data 216	DWord	1856.0	16#0	---	False	True	True	True	False		
+    Result Data 217	DWord	1860.0	16#0	---	False	True	True	True	False		
+    Result Data 218	DWord	1864.0	16#0	---	False	True	True	True	False		
+    Result Data 219	DWord	1868.0	16#0	---	False	True	True	True	False		
+    Result Data 220	DWord	1872.0	16#0	---	False	True	True	True	False		
+    Result Data 221	DWord	1876.0	16#0	---	False	True	True	True	False		
+    Result Data 222	DWord	1880.0	16#0	---	False	True	True	True	False		
+    Result Data 223	DWord	1884.0	16#0	---	False	True	True	True	False		
+    Result Data 224	DWord	1888.0	16#0	---	False	True	True	True	False		
+    Result Data 225	DWord	1892.0	16#0	---	False	True	True	True	False		
+    Result Data 226	DWord	1896.0	16#0	---	False	True	True	True	False		
+    Result Data 227	DWord	1900.0	16#0	---	False	True	True	True	False		
+    Result Data 228	DWord	1904.0	16#0	---	False	True	True	True	False		
+    Result Data 229	DWord	1908.0	16#0	---	False	True	True	True	False		
+    Result Data 230	DWord	1912.0	16#0	---	False	True	True	True	False		
+    Result Data 231	DWord	1916.0	16#0	---	False	True	True	True	False		
+    Result Data 232	DWord	1920.0	16#0	---	False	True	True	True	False		
+    Result Data 233	DWord	1924.0	16#0	---	False	True	True	True	False		
+    Result Data 234	DWord	1928.0	16#0	---	False	True	True	True	False		
+    Result Data 235	DWord	1932.0	16#0	---	False	True	True	True	False		
+    Result Data 236	DWord	1936.0	16#0	---	False	True	True	True	False		
+    Result Data 237	DWord	1940.0	16#0	---	False	True	True	True	False		
+    Result Data 238	DWord	1944.0	16#0	---	False	True	True	True	False		
+    Result Data 239	DWord	1948.0	16#0	---	False	True	True	True	False		
+    Result Data 240	DWord	1952.0	16#0	---	False	True	True	True	False		
+    Result Data 241	DWord	1956.0	16#0	---	False	True	True	True	False		
+    Result Data 242	DWord	1960.0	16#0	---	False	True	True	True	False		
+    Result Data 243	DWord	1964.0	16#0	---	False	True	True	True	False		
+    Result Data 244	DWord	1968.0	16#0	---	False	True	True	True	False		
+    Result Data 245	DWord	1972.0	16#0	---	False	True	True	True	False		
+    Result Data 246	DWord	1976.0	16#0	---	False	True	True	True	False		
+    Result Data 247	DWord	1980.0	16#0	---	False	True	True	True	False		
+    C2_TRG1	READ_Result Data	1984.0			False	True	True	True	False		
+    Result Data 0	DWord	1984.0	16#0	---	False	True	True	True	False		
+    Result Data 1	DWord	1988.0	16#0	---	False	True	True	True	False		
+    Result Data 2	DWord	1992.0	16#0	---	False	True	True	True	False		
+    Result Data 3	DWord	1996.0	16#0	---	False	True	True	True	False		
+    Result Data 4	DWord	2000.0	16#0	---	False	True	True	True	False		
+    Result Data 5	DWord	2004.0	16#0	---	False	True	True	True	False		
+    Result Data 6	DWord	2008.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	2012.0	16#0	---	False	True	True	True	False		
+    Result Data 8	DWord	2016.0	16#0	---	False	True	True	True	False		
+    Result Data 9	DWord	2020.0	16#0	---	False	True	True	True	False		
+    Result Data 10	DWord	2024.0	16#0	---	False	True	True	True	False		
+    Result Data 11	DWord	2028.0	16#0	---	False	True	True	True	False		
+    Result Data 12	DWord	2032.0	16#0	---	False	True	True	True	False		
+    Result Data 13	DWord	2036.0	16#0	---	False	True	True	True	False		
+    Result Data 14	DWord	2040.0	16#0	---	False	True	True	True	False		
+    Result Data 15	DWord	2044.0	16#0	---	False	True	True	True	False		
+    Result Data 16	DWord	2048.0	16#0	---	False	True	True	True	False		
+    Result Data 17	DWord	2052.0	16#0	---	False	True	True	True	False		
+    Result Data 18	DWord	2056.0	16#0	---	False	True	True	True	False		
+    Result Data 19	DWord	2060.0	16#0	---	False	True	True	True	False		
+    Result Data 20	DWord	2064.0	16#0	---	False	True	True	True	False		
+    Result Data 21	DWord	2068.0	16#0	---	False	True	True	True	False		
+    Result Data 22	DWord	2072.0	16#0	---	False	True	True	True	False		
+    Result Data 23	DWord	2076.0	16#0	---	False	True	True	True	False		
+    Result Data 24	DWord	2080.0	16#0	---	False	True	True	True	False		
+    Result Data 25	DWord	2084.0	16#0	---	False	True	True	True	False		
+    Result Data 26	DWord	2088.0	16#0	---	False	True	True	True	False		
+    Result Data 27	DWord	2092.0	16#0	---	False	True	True	True	False		
+    Result Data 28	DWord	2096.0	16#0	---	False	True	True	True	False		
+    Result Data 29	DWord	2100.0	16#0	---	False	True	True	True	False		
+    Result Data 30	DWord	2104.0	16#0	---	False	True	True	True	False		
+    Result Data 31	DWord	2108.0	16#0	---	False	True	True	True	False		
+    Result Data 32	DWord	2112.0	16#0	---	False	True	True	True	False		
+    Result Data 33	DWord	2116.0	16#0	---	False	True	True	True	False		
+    Result Data 34	DWord	2120.0	16#0	---	False	True	True	True	False		
+    Result Data 35	DWord	2124.0	16#0	---	False	True	True	True	False		
+    Result Data 36	DWord	2128.0	16#0	---	False	True	True	True	False		
+    Result Data 37	DWord	2132.0	16#0	---	False	True	True	True	False		
+    Result Data 38	DWord	2136.0	16#0	---	False	True	True	True	False		
+    Result Data 39	DWord	2140.0	16#0	---	False	True	True	True	False		
+    Result Data 40	DWord	2144.0	16#0	---	False	True	True	True	False		
+    Result Data 41	DWord	2148.0	16#0	---	False	True	True	True	False		
+    Result Data 42	DWord	2152.0	16#0	---	False	True	True	True	False		
+    Result Data 43	DWord	2156.0	16#0	---	False	True	True	True	False		
+    Result Data 44	DWord	2160.0	16#0	---	False	True	True	True	False		
+    Result Data 45	DWord	2164.0	16#0	---	False	True	True	True	False		
+    Result Data 46	DWord	2168.0	16#0	---	False	True	True	True	False		
+    Result Data 47	DWord	2172.0	16#0	---	False	True	True	True	False		
+    Result Data 48	DWord	2176.0	16#0	---	False	True	True	True	False		
+    Result Data 49	DWord	2180.0	16#0	---	False	True	True	True	False		
+    Result Data 50	DWord	2184.0	16#0	---	False	True	True	True	False		
+    Result Data 51	DWord	2188.0	16#0	---	False	True	True	True	False		
+    Result Data 52	DWord	2192.0	16#0	---	False	True	True	True	False		
+    Result Data 53	DWord	2196.0	16#0	---	False	True	True	True	False		
+    Result Data 54	DWord	2200.0	16#0	---	False	True	True	True	False		
+    Result Data 55	DWord	2204.0	16#0	---	False	True	True	True	False		
+    Result Data 56	DWord	2208.0	16#0	---	False	True	True	True	False		
+    Result Data 57	DWord	2212.0	16#0	---	False	True	True	True	False		
+    Result Data 58	DWord	2216.0	16#0	---	False	True	True	True	False		
+    Result Data 59	DWord	2220.0	16#0	---	False	True	True	True	False		
+    Result Data 60	DWord	2224.0	16#0	---	False	True	True	True	False		
+    Result Data 61	DWord	2228.0	16#0	---	False	True	True	True	False		
+    Result Data 62	DWord	2232.0	16#0	---	False	True	True	True	False		
+    Result Data 63	DWord	2236.0	16#0	---	False	True	True	True	False		
+    Result Data 64	DWord	2240.0	16#0	---	False	True	True	True	False		
+    Result Data 65	DWord	2244.0	16#0	---	False	True	True	True	False		
+    Result Data 66	DWord	2248.0	16#0	---	False	True	True	True	False		
+    Result Data 67	DWord	2252.0	16#0	---	False	True	True	True	False		
+    Result Data 68	DWord	2256.0	16#0	---	False	True	True	True	False		
+    Result Data 69	DWord	2260.0	16#0	---	False	True	True	True	False		
+    Result Data 70	DWord	2264.0	16#0	---	False	True	True	True	False		
+    Result Data 71	DWord	2268.0	16#0	---	False	True	True	True	False		
+    Result Data 72	DWord	2272.0	16#0	---	False	True	True	True	False		
+    Result Data 73	DWord	2276.0	16#0	---	False	True	True	True	False		
+    Result Data 74	DWord	2280.0	16#0	---	False	True	True	True	False		
+    Result Data 75	DWord	2284.0	16#0	---	False	True	True	True	False		
+    Result Data 76	DWord	2288.0	16#0	---	False	True	True	True	False		
+    Result Data 77	DWord	2292.0	16#0	---	False	True	True	True	False		
+    Result Data 78	DWord	2296.0	16#0	---	False	True	True	True	False		
+    Result Data 79	DWord	2300.0	16#0	---	False	True	True	True	False		
+    Result Data 80	DWord	2304.0	16#0	---	False	True	True	True	False		
+    Result Data 81	DWord	2308.0	16#0	---	False	True	True	True	False		
+    Result Data 82	DWord	2312.0	16#0	---	False	True	True	True	False		
+    Result Data 83	DWord	2316.0	16#0	---	False	True	True	True	False		
+    Result Data 84	DWord	2320.0	16#0	---	False	True	True	True	False		
+    Result Data 85	DWord	2324.0	16#0	---	False	True	True	True	False		
+    Result Data 86	DWord	2328.0	16#0	---	False	True	True	True	False		
+    Result Data 87	DWord	2332.0	16#0	---	False	True	True	True	False		
+    Result Data 88	DWord	2336.0	16#0	---	False	True	True	True	False		
+    Result Data 89	DWord	2340.0	16#0	---	False	True	True	True	False		
+    Result Data 90	DWord	2344.0	16#0	---	False	True	True	True	False		
+    Result Data 91	DWord	2348.0	16#0	---	False	True	True	True	False		
+    Result Data 92	DWord	2352.0	16#0	---	False	True	True	True	False		
+    Result Data 93	DWord	2356.0	16#0	---	False	True	True	True	False		
+    Result Data 94	DWord	2360.0	16#0	---	False	True	True	True	False		
+    Result Data 95	DWord	2364.0	16#0	---	False	True	True	True	False		
+    Result Data 96	DWord	2368.0	16#0	---	False	True	True	True	False		
+    Result Data 97	DWord	2372.0	16#0	---	False	True	True	True	False		
+    Result Data 98	DWord	2376.0	16#0	---	False	True	True	True	False		
+    Result Data 99	DWord	2380.0	16#0	---	False	True	True	True	False		
+    Result Data 100	DWord	2384.0	16#0	---	False	True	True	True	False		
+    Result Data 101	DWord	2388.0	16#0	---	False	True	True	True	False		
+    Result Data 102	DWord	2392.0	16#0	---	False	True	True	True	False		
+    Result Data 103	DWord	2396.0	16#0	---	False	True	True	True	False		
+    Result Data 104	DWord	2400.0	16#0	---	False	True	True	True	False		
+    Result Data 105	DWord	2404.0	16#0	---	False	True	True	True	False		
+    Result Data 106	DWord	2408.0	16#0	---	False	True	True	True	False		
+    Result Data 107	DWord	2412.0	16#0	---	False	True	True	True	False		
+    Result Data 108	DWord	2416.0	16#0	---	False	True	True	True	False		
+    Result Data 109	DWord	2420.0	16#0	---	False	True	True	True	False		
+    Result Data 110	DWord	2424.0	16#0	---	False	True	True	True	False		
+    Result Data 111	DWord	2428.0	16#0	---	False	True	True	True	False		
+    Result Data 112	DWord	2432.0	16#0	---	False	True	True	True	False		
+    Result Data 113	DWord	2436.0	16#0	---	False	True	True	True	False		
+    Result Data 114	DWord	2440.0	16#0	---	False	True	True	True	False		
+    Result Data 115	DWord	2444.0	16#0	---	False	True	True	True	False		
+    Result Data 116	DWord	2448.0	16#0	---	False	True	True	True	False		
+    Result Data 117	DWord	2452.0	16#0	---	False	True	True	True	False		
+    Result Data 118	DWord	2456.0	16#0	---	False	True	True	True	False		
+    Result Data 119	DWord	2460.0	16#0	---	False	True	True	True	False		
+    Result Data 120	DWord	2464.0	16#0	---	False	True	True	True	False		
+    Result Data 121	DWord	2468.0	16#0	---	False	True	True	True	False		
+    Result Data 122	DWord	2472.0	16#0	---	False	True	True	True	False		
+    Result Data 123	DWord	2476.0	16#0	---	False	True	True	True	False		
+    Result Data 124	DWord	2480.0	16#0	---	False	True	True	True	False		
+    Result Data 125	DWord	2484.0	16#0	---	False	True	True	True	False		
+    Result Data 126	DWord	2488.0	16#0	---	False	True	True	True	False		
+    Result Data 127	DWord	2492.0	16#0	---	False	True	True	True	False		
+    Result Data 128	DWord	2496.0	16#0	---	False	True	True	True	False		
+    Result Data 129	DWord	2500.0	16#0	---	False	True	True	True	False		
+    Result Data 130	DWord	2504.0	16#0	---	False	True	True	True	False		
+    Result Data 131	DWord	2508.0	16#0	---	False	True	True	True	False		
+    Result Data 132	DWord	2512.0	16#0	---	False	True	True	True	False		
+    Result Data 133	DWord	2516.0	16#0	---	False	True	True	True	False		
+    Result Data 134	DWord	2520.0	16#0	---	False	True	True	True	False		
+    Result Data 135	DWord	2524.0	16#0	---	False	True	True	True	False		
+    Result Data 136	DWord	2528.0	16#0	---	False	True	True	True	False		
+    Result Data 137	DWord	2532.0	16#0	---	False	True	True	True	False		
+    Result Data 138	DWord	2536.0	16#0	---	False	True	True	True	False		
+    Result Data 139	DWord	2540.0	16#0	---	False	True	True	True	False		
+    Result Data 140	DWord	2544.0	16#0	---	False	True	True	True	False		
+    Result Data 141	DWord	2548.0	16#0	---	False	True	True	True	False		
+    Result Data 142	DWord	2552.0	16#0	---	False	True	True	True	False		
+    Result Data 143	DWord	2556.0	16#0	---	False	True	True	True	False		
+    Result Data 144	DWord	2560.0	16#0	---	False	True	True	True	False		
+    Result Data 145	DWord	2564.0	16#0	---	False	True	True	True	False		
+    Result Data 146	DWord	2568.0	16#0	---	False	True	True	True	False		
+    Result Data 147	DWord	2572.0	16#0	---	False	True	True	True	False		
+    Result Data 148	DWord	2576.0	16#0	---	False	True	True	True	False		
+    Result Data 149	DWord	2580.0	16#0	---	False	True	True	True	False		
+    Result Data 150	DWord	2584.0	16#0	---	False	True	True	True	False		
+    Result Data 151	DWord	2588.0	16#0	---	False	True	True	True	False		
+    Result Data 152	DWord	2592.0	16#0	---	False	True	True	True	False		
+    Result Data 153	DWord	2596.0	16#0	---	False	True	True	True	False		
+    Result Data 154	DWord	2600.0	16#0	---	False	True	True	True	False		
+    Result Data 155	DWord	2604.0	16#0	---	False	True	True	True	False		
+    Result Data 156	DWord	2608.0	16#0	---	False	True	True	True	False		
+    Result Data 157	DWord	2612.0	16#0	---	False	True	True	True	False		
+    Result Data 158	DWord	2616.0	16#0	---	False	True	True	True	False		
+    Result Data 159	DWord	2620.0	16#0	---	False	True	True	True	False		
+    Result Data 160	DWord	2624.0	16#0	---	False	True	True	True	False		
+    Result Data 161	DWord	2628.0	16#0	---	False	True	True	True	False		
+    Result Data 162	DWord	2632.0	16#0	---	False	True	True	True	False		
+    Result Data 163	DWord	2636.0	16#0	---	False	True	True	True	False		
+    Result Data 164	DWord	2640.0	16#0	---	False	True	True	True	False		
+    Result Data 165	DWord	2644.0	16#0	---	False	True	True	True	False		
+    Result Data 166	DWord	2648.0	16#0	---	False	True	True	True	False		
+    Result Data 167	DWord	2652.0	16#0	---	False	True	True	True	False		
+    Result Data 168	DWord	2656.0	16#0	---	False	True	True	True	False		
+    Result Data 169	DWord	2660.0	16#0	---	False	True	True	True	False		
+    Result Data 170	DWord	2664.0	16#0	---	False	True	True	True	False		
+    Result Data 171	DWord	2668.0	16#0	---	False	True	True	True	False		
+    Result Data 172	DWord	2672.0	16#0	---	False	True	True	True	False		
+    Result Data 173	DWord	2676.0	16#0	---	False	True	True	True	False		
+    Result Data 174	DWord	2680.0	16#0	---	False	True	True	True	False		
+    Result Data 175	DWord	2684.0	16#0	---	False	True	True	True	False		
+    Result Data 176	DWord	2688.0	16#0	---	False	True	True	True	False		
+    Result Data 177	DWord	2692.0	16#0	---	False	True	True	True	False		
+    Result Data 178	DWord	2696.0	16#0	---	False	True	True	True	False		
+    Result Data 179	DWord	2700.0	16#0	---	False	True	True	True	False		
+    Result Data 180	DWord	2704.0	16#0	---	False	True	True	True	False		
+    Result Data 181	DWord	2708.0	16#0	---	False	True	True	True	False		
+    Result Data 182	DWord	2712.0	16#0	---	False	True	True	True	False		
+    Result Data 183	DWord	2716.0	16#0	---	False	True	True	True	False		
+    Result Data 184	DWord	2720.0	16#0	---	False	True	True	True	False		
+    Result Data 185	DWord	2724.0	16#0	---	False	True	True	True	False		
+    Result Data 186	DWord	2728.0	16#0	---	False	True	True	True	False		
+    Result Data 187	DWord	2732.0	16#0	---	False	True	True	True	False		
+    Result Data 188	DWord	2736.0	16#0	---	False	True	True	True	False		
+    Result Data 189	DWord	2740.0	16#0	---	False	True	True	True	False		
+    Result Data 190	DWord	2744.0	16#0	---	False	True	True	True	False		
+    Result Data 191	DWord	2748.0	16#0	---	False	True	True	True	False		
+    Result Data 192	DWord	2752.0	16#0	---	False	True	True	True	False		
+    Result Data 193	DWord	2756.0	16#0	---	False	True	True	True	False		
+    Result Data 194	DWord	2760.0	16#0	---	False	True	True	True	False		
+    Result Data 195	DWord	2764.0	16#0	---	False	True	True	True	False		
+    Result Data 196	DWord	2768.0	16#0	---	False	True	True	True	False		
+    Result Data 197	DWord	2772.0	16#0	---	False	True	True	True	False		
+    Result Data 198	DWord	2776.0	16#0	---	False	True	True	True	False		
+    Result Data 199	DWord	2780.0	16#0	---	False	True	True	True	False		
+    Result Data 200	DWord	2784.0	16#0	---	False	True	True	True	False		
+    Result Data 201	DWord	2788.0	16#0	---	False	True	True	True	False		
+    Result Data 202	DWord	2792.0	16#0	---	False	True	True	True	False		
+    Result Data 203	DWord	2796.0	16#0	---	False	True	True	True	False		
+    Result Data 204	DWord	2800.0	16#0	---	False	True	True	True	False		
+    Result Data 205	DWord	2804.0	16#0	---	False	True	True	True	False		
+    Result Data 206	DWord	2808.0	16#0	---	False	True	True	True	False		
+    Result Data 207	DWord	2812.0	16#0	---	False	True	True	True	False		
+    Result Data 208	DWord	2816.0	16#0	---	False	True	True	True	False		
+    Result Data 209	DWord	2820.0	16#0	---	False	True	True	True	False		
+    Result Data 210	DWord	2824.0	16#0	---	False	True	True	True	False		
+    Result Data 211	DWord	2828.0	16#0	---	False	True	True	True	False		
+    Result Data 212	DWord	2832.0	16#0	---	False	True	True	True	False		
+    Result Data 213	DWord	2836.0	16#0	---	False	True	True	True	False		
+    Result Data 214	DWord	2840.0	16#0	---	False	True	True	True	False		
+    Result Data 215	DWord	2844.0	16#0	---	False	True	True	True	False		
+    Result Data 216	DWord	2848.0	16#0	---	False	True	True	True	False		
+    Result Data 217	DWord	2852.0	16#0	---	False	True	True	True	False		
+    Result Data 218	DWord	2856.0	16#0	---	False	True	True	True	False		
+    Result Data 219	DWord	2860.0	16#0	---	False	True	True	True	False		
+    Result Data 220	DWord	2864.0	16#0	---	False	True	True	True	False		
+    Result Data 221	DWord	2868.0	16#0	---	False	True	True	True	False		
+    Result Data 222	DWord	2872.0	16#0	---	False	True	True	True	False		
+    Result Data 223	DWord	2876.0	16#0	---	False	True	True	True	False		
+    Result Data 224	DWord	2880.0	16#0	---	False	True	True	True	False		
+    Result Data 225	DWord	2884.0	16#0	---	False	True	True	True	False		
+    Result Data 226	DWord	2888.0	16#0	---	False	True	True	True	False		
+    Result Data 227	DWord	2892.0	16#0	---	False	True	True	True	False		
+    Result Data 228	DWord	2896.0	16#0	---	False	True	True	True	False		
+    Result Data 229	DWord	2900.0	16#0	---	False	True	True	True	False		
+    Result Data 230	DWord	2904.0	16#0	---	False	True	True	True	False		
+    Result Data 231	DWord	2908.0	16#0	---	False	True	True	True	False		
+    Result Data 232	DWord	2912.0	16#0	---	False	True	True	True	False		
+    Result Data 233	DWord	2916.0	16#0	---	False	True	True	True	False		
+    Result Data 234	DWord	2920.0	16#0	---	False	True	True	True	False		
+    Result Data 235	DWord	2924.0	16#0	---	False	True	True	True	False		
+    Result Data 236	DWord	2928.0	16#0	---	False	True	True	True	False		
+    Result Data 237	DWord	2932.0	16#0	---	False	True	True	True	False		
+    Result Data 238	DWord	2936.0	16#0	---	False	True	True	True	False		
+    Result Data 239	DWord	2940.0	16#0	---	False	True	True	True	False		
+    Result Data 240	DWord	2944.0	16#0	---	False	True	True	True	False		
+    Result Data 241	DWord	2948.0	16#0	---	False	True	True	True	False		
+    Result Data 242	DWord	2952.0	16#0	---	False	True	True	True	False		
+    Result Data 243	DWord	2956.0	16#0	---	False	True	True	True	False		
+    Result Data 244	DWord	2960.0	16#0	---	False	True	True	True	False		
+    Result Data 245	DWord	2964.0	16#0	---	False	True	True	True	False		
+    Result Data 246	DWord	2968.0	16#0	---	False	True	True	True	False		
+    Result Data 247	DWord	2972.0	16#0	---	False	True	True	True	False		
+    C3_TRG1	READ_Result Data	2976.0			False	True	True	True	False		
+    Result Data 0	DWord	2976.0	16#0	---	False	True	True	True	False		
+    Result Data 1	DWord	2980.0	16#0	---	False	True	True	True	False		
+    Result Data 2	DWord	2984.0	16#0	---	False	True	True	True	False		
+    Result Data 3	DWord	2988.0	16#0	---	False	True	True	True	False		
+    Result Data 4	DWord	2992.0	16#0	---	False	True	True	True	False		
+    Result Data 5	DWord	2996.0	16#0	---	False	True	True	True	False		
+    Result Data 6	DWord	3000.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	3004.0	16#0	---	False	True	True	True	False		
+    Result Data 8	DWord	3008.0	16#0	---	False	True	True	True	False		
+    Result Data 9	DWord	3012.0	16#0	---	False	True	True	True	False		
+    Result Data 10	DWord	3016.0	16#0	---	False	True	True	True	False		
+    Result Data 11	DWord	3020.0	16#0	---	False	True	True	True	False		
+    Result Data 12	DWord	3024.0	16#0	---	False	True	True	True	False		
+    Result Data 13	DWord	3028.0	16#0	---	False	True	True	True	False		
+    Result Data 14	DWord	3032.0	16#0	---	False	True	True	True	False		
+    Result Data 15	DWord	3036.0	16#0	---	False	True	True	True	False		
+    Result Data 16	DWord	3040.0	16#0	---	False	True	True	True	False		
+    Result Data 17	DWord	3044.0	16#0	---	False	True	True	True	False		
+    Result Data 18	DWord	3048.0	16#0	---	False	True	True	True	False		
+    Result Data 19	DWord	3052.0	16#0	---	False	True	True	True	False		
+    Result Data 20	DWord	3056.0	16#0	---	False	True	True	True	False		
+    Result Data 21	DWord	3060.0	16#0	---	False	True	True	True	False		
+    Result Data 22	DWord	3064.0	16#0	---	False	True	True	True	False		
+    Result Data 23	DWord	3068.0	16#0	---	False	True	True	True	False		
+    Result Data 24	DWord	3072.0	16#0	---	False	True	True	True	False		
+    Result Data 25	DWord	3076.0	16#0	---	False	True	True	True	False		
+    Result Data 26	DWord	3080.0	16#0	---	False	True	True	True	False		
+    Result Data 27	DWord	3084.0	16#0	---	False	True	True	True	False		
+    Result Data 28	DWord	3088.0	16#0	---	False	True	True	True	False		
+    Result Data 29	DWord	3092.0	16#0	---	False	True	True	True	False		
+    Result Data 30	DWord	3096.0	16#0	---	False	True	True	True	False		
+    Result Data 31	DWord	3100.0	16#0	---	False	True	True	True	False		
+    Result Data 32	DWord	3104.0	16#0	---	False	True	True	True	False		
+    Result Data 33	DWord	3108.0	16#0	---	False	True	True	True	False		
+    Result Data 34	DWord	3112.0	16#0	---	False	True	True	True	False		
+    Result Data 35	DWord	3116.0	16#0	---	False	True	True	True	False		
+    Result Data 36	DWord	3120.0	16#0	---	False	True	True	True	False		
+    Result Data 37	DWord	3124.0	16#0	---	False	True	True	True	False		
+    Result Data 38	DWord	3128.0	16#0	---	False	True	True	True	False		
+    Result Data 39	DWord	3132.0	16#0	---	False	True	True	True	False		
+    Result Data 40	DWord	3136.0	16#0	---	False	True	True	True	False		
+    Result Data 41	DWord	3140.0	16#0	---	False	True	True	True	False		
+    Result Data 42	DWord	3144.0	16#0	---	False	True	True	True	False		
+    Result Data 43	DWord	3148.0	16#0	---	False	True	True	True	False		
+    Result Data 44	DWord	3152.0	16#0	---	False	True	True	True	False		
+    Result Data 45	DWord	3156.0	16#0	---	False	True	True	True	False		
+    Result Data 46	DWord	3160.0	16#0	---	False	True	True	True	False		
+    Result Data 47	DWord	3164.0	16#0	---	False	True	True	True	False		
+    Result Data 48	DWord	3168.0	16#0	---	False	True	True	True	False		
+    Result Data 49	DWord	3172.0	16#0	---	False	True	True	True	False		
+    Result Data 50	DWord	3176.0	16#0	---	False	True	True	True	False		
+    Result Data 51	DWord	3180.0	16#0	---	False	True	True	True	False		
+    Result Data 52	DWord	3184.0	16#0	---	False	True	True	True	False		
+    Result Data 53	DWord	3188.0	16#0	---	False	True	True	True	False		
+    Result Data 54	DWord	3192.0	16#0	---	False	True	True	True	False		
+    Result Data 55	DWord	3196.0	16#0	---	False	True	True	True	False		
+    Result Data 56	DWord	3200.0	16#0	---	False	True	True	True	False		
+    Result Data 57	DWord	3204.0	16#0	---	False	True	True	True	False		
+    Result Data 58	DWord	3208.0	16#0	---	False	True	True	True	False		
+    Result Data 59	DWord	3212.0	16#0	---	False	True	True	True	False		
+    Result Data 60	DWord	3216.0	16#0	---	False	True	True	True	False		
+    Result Data 61	DWord	3220.0	16#0	---	False	True	True	True	False		
+    Result Data 62	DWord	3224.0	16#0	---	False	True	True	True	False		
+    Result Data 63	DWord	3228.0	16#0	---	False	True	True	True	False		
+    Result Data 64	DWord	3232.0	16#0	---	False	True	True	True	False		
+    Result Data 65	DWord	3236.0	16#0	---	False	True	True	True	False		
+    Result Data 66	DWord	3240.0	16#0	---	False	True	True	True	False		
+    Result Data 67	DWord	3244.0	16#0	---	False	True	True	True	False		
+    Result Data 68	DWord	3248.0	16#0	---	False	True	True	True	False		
+    Result Data 69	DWord	3252.0	16#0	---	False	True	True	True	False		
+    Result Data 70	DWord	3256.0	16#0	---	False	True	True	True	False		
+    Result Data 71	DWord	3260.0	16#0	---	False	True	True	True	False		
+    Result Data 72	DWord	3264.0	16#0	---	False	True	True	True	False		
+    Result Data 73	DWord	3268.0	16#0	---	False	True	True	True	False		
+    Result Data 74	DWord	3272.0	16#0	---	False	True	True	True	False		
+    Result Data 75	DWord	3276.0	16#0	---	False	True	True	True	False		
+    Result Data 76	DWord	3280.0	16#0	---	False	True	True	True	False		
+    Result Data 77	DWord	3284.0	16#0	---	False	True	True	True	False		
+    Result Data 78	DWord	3288.0	16#0	---	False	True	True	True	False		
+    Result Data 79	DWord	3292.0	16#0	---	False	True	True	True	False		
+    Result Data 80	DWord	3296.0	16#0	---	False	True	True	True	False		
+    Result Data 81	DWord	3300.0	16#0	---	False	True	True	True	False		
+    Result Data 82	DWord	3304.0	16#0	---	False	True	True	True	False		
+    Result Data 83	DWord	3308.0	16#0	---	False	True	True	True	False		
+    Result Data 84	DWord	3312.0	16#0	---	False	True	True	True	False		
+    Result Data 85	DWord	3316.0	16#0	---	False	True	True	True	False		
+    Result Data 86	DWord	3320.0	16#0	---	False	True	True	True	False		
+    Result Data 87	DWord	3324.0	16#0	---	False	True	True	True	False		
+    Result Data 88	DWord	3328.0	16#0	---	False	True	True	True	False		
+    Result Data 89	DWord	3332.0	16#0	---	False	True	True	True	False		
+    Result Data 90	DWord	3336.0	16#0	---	False	True	True	True	False		
+    Result Data 91	DWord	3340.0	16#0	---	False	True	True	True	False		
+    Result Data 92	DWord	3344.0	16#0	---	False	True	True	True	False		
+    Result Data 93	DWord	3348.0	16#0	---	False	True	True	True	False		
+    Result Data 94	DWord	3352.0	16#0	---	False	True	True	True	False		
+    Result Data 95	DWord	3356.0	16#0	---	False	True	True	True	False		
+    Result Data 96	DWord	3360.0	16#0	---	False	True	True	True	False		
+    Result Data 97	DWord	3364.0	16#0	---	False	True	True	True	False		
+    Result Data 98	DWord	3368.0	16#0	---	False	True	True	True	False		
+    Result Data 99	DWord	3372.0	16#0	---	False	True	True	True	False		
+    Result Data 100	DWord	3376.0	16#0	---	False	True	True	True	False		
+    Result Data 101	DWord	3380.0	16#0	---	False	True	True	True	False		
+    Result Data 102	DWord	3384.0	16#0	---	False	True	True	True	False		
+    Result Data 103	DWord	3388.0	16#0	---	False	True	True	True	False		
+    Result Data 104	DWord	3392.0	16#0	---	False	True	True	True	False		
+    Result Data 105	DWord	3396.0	16#0	---	False	True	True	True	False		
+    Result Data 106	DWord	3400.0	16#0	---	False	True	True	True	False		
+    Result Data 107	DWord	3404.0	16#0	---	False	True	True	True	False		
+    Result Data 108	DWord	3408.0	16#0	---	False	True	True	True	False		
+    Result Data 109	DWord	3412.0	16#0	---	False	True	True	True	False		
+    Result Data 110	DWord	3416.0	16#0	---	False	True	True	True	False		
+    Result Data 111	DWord	3420.0	16#0	---	False	True	True	True	False		
+    Result Data 112	DWord	3424.0	16#0	---	False	True	True	True	False		
+    Result Data 113	DWord	3428.0	16#0	---	False	True	True	True	False		
+    Result Data 114	DWord	3432.0	16#0	---	False	True	True	True	False		
+    Result Data 115	DWord	3436.0	16#0	---	False	True	True	True	False		
+    Result Data 116	DWord	3440.0	16#0	---	False	True	True	True	False		
+    Result Data 117	DWord	3444.0	16#0	---	False	True	True	True	False		
+    Result Data 118	DWord	3448.0	16#0	---	False	True	True	True	False		
+    Result Data 119	DWord	3452.0	16#0	---	False	True	True	True	False		
+    Result Data 120	DWord	3456.0	16#0	---	False	True	True	True	False		
+    Result Data 121	DWord	3460.0	16#0	---	False	True	True	True	False		
+    Result Data 122	DWord	3464.0	16#0	---	False	True	True	True	False		
+    Result Data 123	DWord	3468.0	16#0	---	False	True	True	True	False		
+    Result Data 124	DWord	3472.0	16#0	---	False	True	True	True	False		
+    Result Data 125	DWord	3476.0	16#0	---	False	True	True	True	False		
+    Result Data 126	DWord	3480.0	16#0	---	False	True	True	True	False		
+    Result Data 127	DWord	3484.0	16#0	---	False	True	True	True	False		
+    Result Data 128	DWord	3488.0	16#0	---	False	True	True	True	False		
+    Result Data 129	DWord	3492.0	16#0	---	False	True	True	True	False		
+    Result Data 130	DWord	3496.0	16#0	---	False	True	True	True	False		
+    Result Data 131	DWord	3500.0	16#0	---	False	True	True	True	False		
+    Result Data 132	DWord	3504.0	16#0	---	False	True	True	True	False		
+    Result Data 133	DWord	3508.0	16#0	---	False	True	True	True	False		
+    Result Data 134	DWord	3512.0	16#0	---	False	True	True	True	False		
+    Result Data 135	DWord	3516.0	16#0	---	False	True	True	True	False		
+    Result Data 136	DWord	3520.0	16#0	---	False	True	True	True	False		
+    Result Data 137	DWord	3524.0	16#0	---	False	True	True	True	False		
+    Result Data 138	DWord	3528.0	16#0	---	False	True	True	True	False		
+    Result Data 139	DWord	3532.0	16#0	---	False	True	True	True	False		
+    Result Data 140	DWord	3536.0	16#0	---	False	True	True	True	False		
+    Result Data 141	DWord	3540.0	16#0	---	False	True	True	True	False		
+    Result Data 142	DWord	3544.0	16#0	---	False	True	True	True	False		
+    Result Data 143	DWord	3548.0	16#0	---	False	True	True	True	False		
+    Result Data 144	DWord	3552.0	16#0	---	False	True	True	True	False		
+    Result Data 145	DWord	3556.0	16#0	---	False	True	True	True	False		
+    Result Data 146	DWord	3560.0	16#0	---	False	True	True	True	False		
+    Result Data 147	DWord	3564.0	16#0	---	False	True	True	True	False		
+    Result Data 148	DWord	3568.0	16#0	---	False	True	True	True	False		
+    Result Data 149	DWord	3572.0	16#0	---	False	True	True	True	False		
+    Result Data 150	DWord	3576.0	16#0	---	False	True	True	True	False		
+    Result Data 151	DWord	3580.0	16#0	---	False	True	True	True	False		
+    Result Data 152	DWord	3584.0	16#0	---	False	True	True	True	False		
+    Result Data 153	DWord	3588.0	16#0	---	False	True	True	True	False		
+    Result Data 154	DWord	3592.0	16#0	---	False	True	True	True	False		
+    Result Data 155	DWord	3596.0	16#0	---	False	True	True	True	False		
+    Result Data 156	DWord	3600.0	16#0	---	False	True	True	True	False		
+    Result Data 157	DWord	3604.0	16#0	---	False	True	True	True	False		
+    Result Data 158	DWord	3608.0	16#0	---	False	True	True	True	False		
+    Result Data 159	DWord	3612.0	16#0	---	False	True	True	True	False		
+    Result Data 160	DWord	3616.0	16#0	---	False	True	True	True	False		
+    Result Data 161	DWord	3620.0	16#0	---	False	True	True	True	False		
+    Result Data 162	DWord	3624.0	16#0	---	False	True	True	True	False		
+    Result Data 163	DWord	3628.0	16#0	---	False	True	True	True	False		
+    Result Data 164	DWord	3632.0	16#0	---	False	True	True	True	False		
+    Result Data 165	DWord	3636.0	16#0	---	False	True	True	True	False		
+    Result Data 166	DWord	3640.0	16#0	---	False	True	True	True	False		
+    Result Data 167	DWord	3644.0	16#0	---	False	True	True	True	False		
+    Result Data 168	DWord	3648.0	16#0	---	False	True	True	True	False		
+    Result Data 169	DWord	3652.0	16#0	---	False	True	True	True	False		
+    Result Data 170	DWord	3656.0	16#0	---	False	True	True	True	False		
+    Result Data 171	DWord	3660.0	16#0	---	False	True	True	True	False		
+    Result Data 172	DWord	3664.0	16#0	---	False	True	True	True	False		
+    Result Data 173	DWord	3668.0	16#0	---	False	True	True	True	False		
+    Result Data 174	DWord	3672.0	16#0	---	False	True	True	True	False		
+    Result Data 175	DWord	3676.0	16#0	---	False	True	True	True	False		
+    Result Data 176	DWord	3680.0	16#0	---	False	True	True	True	False		
+    Result Data 177	DWord	3684.0	16#0	---	False	True	True	True	False		
+    Result Data 178	DWord	3688.0	16#0	---	False	True	True	True	False		
+    Result Data 179	DWord	3692.0	16#0	---	False	True	True	True	False		
+    Result Data 180	DWord	3696.0	16#0	---	False	True	True	True	False		
+    Result Data 181	DWord	3700.0	16#0	---	False	True	True	True	False		
+    Result Data 182	DWord	3704.0	16#0	---	False	True	True	True	False		
+    Result Data 183	DWord	3708.0	16#0	---	False	True	True	True	False		
+    Result Data 184	DWord	3712.0	16#0	---	False	True	True	True	False		
+    Result Data 185	DWord	3716.0	16#0	---	False	True	True	True	False		
+    Result Data 186	DWord	3720.0	16#0	---	False	True	True	True	False		
+    Result Data 187	DWord	3724.0	16#0	---	False	True	True	True	False		
+    Result Data 188	DWord	3728.0	16#0	---	False	True	True	True	False		
+    Result Data 189	DWord	3732.0	16#0	---	False	True	True	True	False		
+    Result Data 190	DWord	3736.0	16#0	---	False	True	True	True	False		
+    Result Data 191	DWord	3740.0	16#0	---	False	True	True	True	False		
+    Result Data 192	DWord	3744.0	16#0	---	False	True	True	True	False		
+    Result Data 193	DWord	3748.0	16#0	---	False	True	True	True	False		
+    Result Data 194	DWord	3752.0	16#0	---	False	True	True	True	False		
+    Result Data 195	DWord	3756.0	16#0	---	False	True	True	True	False		
+    Result Data 196	DWord	3760.0	16#0	---	False	True	True	True	False		
+    Result Data 197	DWord	3764.0	16#0	---	False	True	True	True	False		
+    Result Data 198	DWord	3768.0	16#0	---	False	True	True	True	False		
+    Result Data 199	DWord	3772.0	16#0	---	False	True	True	True	False		
+    Result Data 200	DWord	3776.0	16#0	---	False	True	True	True	False		
+    Result Data 201	DWord	3780.0	16#0	---	False	True	True	True	False		
+    Result Data 202	DWord	3784.0	16#0	---	False	True	True	True	False		
+    Result Data 203	DWord	3788.0	16#0	---	False	True	True	True	False		
+    Result Data 204	DWord	3792.0	16#0	---	False	True	True	True	False		
+    Result Data 205	DWord	3796.0	16#0	---	False	True	True	True	False		
+    Result Data 206	DWord	3800.0	16#0	---	False	True	True	True	False		
+    Result Data 207	DWord	3804.0	16#0	---	False	True	True	True	False		
+    Result Data 208	DWord	3808.0	16#0	---	False	True	True	True	False		
+    Result Data 209	DWord	3812.0	16#0	---	False	True	True	True	False		
+    Result Data 210	DWord	3816.0	16#0	---	False	True	True	True	False		
+    Result Data 211	DWord	3820.0	16#0	---	False	True	True	True	False		
+    Result Data 212	DWord	3824.0	16#0	---	False	True	True	True	False		
+    Result Data 213	DWord	3828.0	16#0	---	False	True	True	True	False		
+    Result Data 214	DWord	3832.0	16#0	---	False	True	True	True	False		
+    Result Data 215	DWord	3836.0	16#0	---	False	True	True	True	False		
+    Result Data 216	DWord	3840.0	16#0	---	False	True	True	True	False		
+    Result Data 217	DWord	3844.0	16#0	---	False	True	True	True	False		
+    Result Data 218	DWord	3848.0	16#0	---	False	True	True	True	False		
+    Result Data 219	DWord	3852.0	16#0	---	False	True	True	True	False		
+    Result Data 220	DWord	3856.0	16#0	---	False	True	True	True	False		
+    Result Data 221	DWord	3860.0	16#0	---	False	True	True	True	False		
+    Result Data 222	DWord	3864.0	16#0	---	False	True	True	True	False		
+    Result Data 223	DWord	3868.0	16#0	---	False	True	True	True	False		
+    Result Data 224	DWord	3872.0	16#0	---	False	True	True	True	False		
+    Result Data 225	DWord	3876.0	16#0	---	False	True	True	True	False		
+    Result Data 226	DWord	3880.0	16#0	---	False	True	True	True	False		
+    Result Data 227	DWord	3884.0	16#0	---	False	True	True	True	False		
+    Result Data 228	DWord	3888.0	16#0	---	False	True	True	True	False		
+    Result Data 229	DWord	3892.0	16#0	---	False	True	True	True	False		
+    Result Data 230	DWord	3896.0	16#0	---	False	True	True	True	False		
+    Result Data 231	DWord	3900.0	16#0	---	False	True	True	True	False		
+    Result Data 232	DWord	3904.0	16#0	---	False	True	True	True	False		
+    Result Data 233	DWord	3908.0	16#0	---	False	True	True	True	False		
+    Result Data 234	DWord	3912.0	16#0	---	False	True	True	True	False		
+    Result Data 235	DWord	3916.0	16#0	---	False	True	True	True	False		
+    Result Data 236	DWord	3920.0	16#0	---	False	True	True	True	False		
+    Result Data 237	DWord	3924.0	16#0	---	False	True	True	True	False		
+    Result Data 238	DWord	3928.0	16#0	---	False	True	True	True	False		
+    Result Data 239	DWord	3932.0	16#0	---	False	True	True	True	False		
+    Result Data 240	DWord	3936.0	16#0	---	False	True	True	True	False		
+    Result Data 241	DWord	3940.0	16#0	---	False	True	True	True	False		
+    Result Data 242	DWord	3944.0	16#0	---	False	True	True	True	False		
+    Result Data 243	DWord	3948.0	16#0	---	False	True	True	True	False		
+    Result Data 244	DWord	3952.0	16#0	---	False	True	True	True	False		
+    Result Data 245	DWord	3956.0	16#0	---	False	True	True	True	False		
+    Result Data 246	DWord	3960.0	16#0	---	False	True	True	True	False		
+    Result Data 247	DWord	3964.0	16#0	---	False	True	True	True	False		
+    Measure_To_Scada	@PIECE TRACE	3968.0			False	True	True	True	False		
+    PRESENT	Bool	3968.0	false	---	False	True	True	True	False		PIECE PRESENT
+    SCRAP	Bool	3968.1	false	---	False	True	True	True	False		PIECE SCRAP
+    READY	Bool	3968.2	false	---	False	True	True	True	False		PIECE READY
+    DRY_TEST	Bool	3968.3	false	---	False	True	True	True	False		DRY TEST
+    MOVING	Bool	3968.4	false	---	False	True	True	True	False		PIECE MOVING
+    SCANNED	Bool	3968.5	false	---	False	True	True	True	False		
+    QR_NOK	Bool	3968.6	false	---	False	True	True	True	False		QR CODE NOT OK
+    LONG_PROFILE	Bool	3968.7	false	---	False	True	True	True	False		
+    VB_ACK	Bool	3969.0	false	---	False	True	True	True	False		
+    AB_ACK	Bool	3969.1	false	---	False	True	True	True	False		
+    PASS_CNTR_1	Bool	3969.2	false	---	False	True	True	True	False		OUTCOME CONTROLLER 1
+    PASS_CNTR_2	Bool	3969.3	false	---	False	True	True	True	False		OUTCOME CONTROLLER 2
+    PASS_CNTR_3	Bool	3969.4	false	---	False	True	True	True	False		OUTCOME CONTROLLER 3
+    PASS_CNTR_4	Bool	3969.5	false	---	False	True	True	True	False		OUTCOME CONTROLLER 4
+    SPS_DATA_PRESENT	Bool	3969.6	false	---	False	True	True	True	False		DATA FROM SPSPRESENT
+    SPS_DATA	DATA_FROM_SPS	3970.0			False	True	True	True	False		DATA MANGAGE TO SPS
+    RFID Product Type	Int	3970.0	0	---	False	True	True	True	False		Product type of workpiece pre-announcement (Identification of workpiece type).
+    RFID Product Code	DInt	3972.0	0	---	False	True	True	True	False		Product identification of workpiece pre-announcement ("Serial number" of the workpiece, unique number).
+    RFID_VNR	Struct	3976.0			False	True	True	True	False		
+    RFID_VNR_1	Char	3976.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number prefix.
+    RFID_VNR_2	Char	3977.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number prefix.
+    RFID_VNR_3	Char	3978.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number prefix.
+    RFID_MGR	Struct	3980.0			False	True	True	True	False		
+    RFID_MGR_1	Char	3980.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number middle group.
+    RFID_MGR_2	Char	3981.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number middle group.
+    RFID_MGR_3	Char	3982.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number middle group.
+    RFID_ENR	Struct	3984.0			False	True	True	True	False		
+    RFID_ENR_1	Char	3984.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number end number.
+    RFID_ENR_2	Char	3985.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number end number.
+    RFID_ENR_3	Char	3986.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number end number.
+    RFID_IDX	Struct	3988.0			False	True	True	True	False		
+    RFID_IDX_1	Char	3988.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number index.
+    RFID_IDX_2	Char	3989.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number index.
+    RFID_FKZ	Struct	3990.0			False	True	True	True	False		
+    RFID_FKZ_1	Char	3990.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number color code.
+    RFID_FKZ_2	Char	3991.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number color code.
+    RFID_FKZ_3	Char	3992.0	' '	---	False	True	True	True	False		Workpiece pre-announcement part number color code.
+    RFID_BNR	Struct	3994.0			False	True	True	True	False		
+    RFID_BNR_1	Char	3994.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data assembly number.
+    RFID_BNR_2	Char	3995.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data assembly number.
+    RFID_BNR_3	Char	3996.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data assembly number.
+    RFID_HSC	Struct	3998.0			False	True	True	True	False		
+    RFID_HSC_1	Char	3998.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data manufacturer code.
+    RFID_HSC_2	Char	3999.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data manufacturer code.
+    RFID_HSC_3	Char	4000.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data manufacturer code.
+    RFID_HSC_4	Char	4001.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data manufacturer code.
+    RFID_SNR1	Char	4002.0	' '	---	False	True	True	True	False		
+    RFID_SNR2-7	Struct	4004.0			False	True	True	True	False		Workpiece pre-announcement assembly data serial number 1.
+    RFID_RSNR2	Char	4004.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data serial number 2.
+    RFID_RSNR3	Char	4005.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data serial number 3.
+    RFID_RSNR4	Char	4006.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data serial number 4.
+    RFID_RSNR5	Char	4007.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data serial number 5.
+    RFID_RSNR6	Char	4008.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data serial number 6.
+    RFID_RSNR7	Char	4009.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data serial number 7.
+    RFID_P	Char	4010.0	' '	---	False	True	True	True	False		Workpiece pre-announcement assembly data check digit.
+    RFID_Revision	Int	4012.0	0	---	False	True	True	True	False		Workpiece pre-announcement revision.
+    RFID_IO-Status	Int	4014.0	0	---	False	True	True	True	False		RFID IO Status of the workpiece on the packaging belt
+    RFID_QSA-Status	Int	4016.0	0	---	False	True	True	True	False		RFID QSA Status of the workpiece on the packaging belt
+    RFID Multiple	Bool	4018.0	false	---	False	True	True	True	False		
+    NEXT_Multiple	Bool	4020.0	false	---	False	True	True	True	False		
+    NEXT_Workpiece_Checked	Bool	4020.1	false	---	False	True	True	True	False		
+    NEXT_ProductType	Int	4022.0	0	---	False	True	True	True	False		
+    NEXT_ProductCode	DInt	4024.0	0	---	False	True	True	True	False		
+    NEXT_IO_Status	Int	4028.0	0	---	False	True	True	True	False		
+    NEXT_QSA_Status	Int	4030.0	0	---	False	True	True	True	False		
+    PROFILE_ID	Int	4032.0	0	---	False	True	True	True	False		
+    N	DInt	4034.0	0	---	False	True	True	True	False		PIECE ID NUMBER
+    AUX	DInt	4038.0	0	---	False	True	True	True	False		
+    PRESENCE_MANAGE	Struct	4042.0			False	True	True	True	False		
+    INTERLOCK_DOWNLOAD_ACKNOWLEDGE	Bool	4042.0	FALSE	---	False	True	True	True	False		INTERLOCK PIECE DOWNLOAD ACKNOWLEDGE
+    MANO_DOWNLOAD_ACKNOWLEDGE	Bool	4042.1	FALSE	---	False	True	True	True	False		OPERATOR COMMAND DOWNLOAD ACKNOWLEDGE
+    MANO_RESET_PRESENCE	Bool	4042.2	FALSE	---	False	True	True	True	False		OPERATOR COMMAND RESET PRESENCE
+    ALARM_PRESENCE	Bool	4042.3	FALSE	---	False	True	True	True	False		ALARM PRESENCE PIECE / PIECE LOST DETECTION
+    TRACE_DATA	TRACE_DATA	4044.0			False	True	True	True	False		
+    Id	Int	4044.0	0	---	False	True	True	True	False		
+    Code	String	4046.0	''	---	False	True	True	True	False		
+    Testing_Time	Date_And_Time	4302.0	DT#1990-01-01-00:00:00	---	False	True	True	True	False		
+    Cycle_Time	Time_Of_Day	4310.0	TOD#00:00:00	---	False	True	True	True	False		
+    Temperature_Ambient	Real	4314.0	0.0	---	False	True	True	True	False		
+    Temperature_Profile	Real	4318.0	0.0	---	False	True	True	True	False		
+    Piece_OK	Bool	4322.0	false	---	False	True	True	True	False		
+    Piece_NOK	Bool	4322.1	false	---	False	True	True	True	False		
+    PieceTested	Bool	4322.2	false	---	False	True	True	True	False		
+    MeasurmentsToScada	stInlineMeasurePartData	4324.0			False	True	True	True	False		
+    StepGPartId	DInt	4324.0	0	---	False	True	True	True	False		
+    MeasureDataId	DInt	4328.0	0	---	False	True	True	True	False		
+    TemperatureProfile	Real	4332.0	0.0	---	False	True	True	True	False		
+    TemperatureAmbient	Real	4336.0	0.0	---	False	True	True	True	False		
+    NOK	Int	4340.0	0	---	False	True	True	True	False		
+    MeasureActive	Bool	4342.0	false	---	False	True	True	True	False		
+    MeasureData	Array[1..200] of Struct	4344.0			False	True	True	True	False		
+    MeasureData[1]	Struct	4344.0			False	True	True	True	False		
+    Group	Byte	4344.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4345.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4346.0	false	---	False	True	True	True	False		
+    Value	Real	4348.0	0.0	---	False	True	True	True	False		
+    MeasureData[2]	Struct	4352.0			False	True	True	True	False		
+    Group	Byte	4352.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4353.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4354.0	false	---	False	True	True	True	False		
+    Value	Real	4356.0	0.0	---	False	True	True	True	False		
+    MeasureData[3]	Struct	4360.0			False	True	True	True	False		
+    Group	Byte	4360.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4361.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4362.0	false	---	False	True	True	True	False		
+    Value	Real	4364.0	0.0	---	False	True	True	True	False		
+    MeasureData[4]	Struct	4368.0			False	True	True	True	False		
+    Group	Byte	4368.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4369.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4370.0	false	---	False	True	True	True	False		
+    Value	Real	4372.0	0.0	---	False	True	True	True	False		
+    MeasureData[5]	Struct	4376.0			False	True	True	True	False		
+    Group	Byte	4376.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4377.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4378.0	false	---	False	True	True	True	False		
+    Value	Real	4380.0	0.0	---	False	True	True	True	False		
+    MeasureData[6]	Struct	4384.0			False	True	True	True	False		
+    Group	Byte	4384.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4385.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4386.0	false	---	False	True	True	True	False		
+    Value	Real	4388.0	0.0	---	False	True	True	True	False		
+    MeasureData[7]	Struct	4392.0			False	True	True	True	False		
+    Group	Byte	4392.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4393.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4394.0	false	---	False	True	True	True	False		
+    Value	Real	4396.0	0.0	---	False	True	True	True	False		
+    MeasureData[8]	Struct	4400.0			False	True	True	True	False		
+    Group	Byte	4400.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4401.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4402.0	false	---	False	True	True	True	False		
+    Value	Real	4404.0	0.0	---	False	True	True	True	False		
+    MeasureData[9]	Struct	4408.0			False	True	True	True	False		
+    Group	Byte	4408.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4409.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4410.0	false	---	False	True	True	True	False		
+    Value	Real	4412.0	0.0	---	False	True	True	True	False		
+    MeasureData[10]	Struct	4416.0			False	True	True	True	False		
+    Group	Byte	4416.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4417.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4418.0	false	---	False	True	True	True	False		
+    Value	Real	4420.0	0.0	---	False	True	True	True	False		
+    MeasureData[11]	Struct	4424.0			False	True	True	True	False		
+    Group	Byte	4424.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4425.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4426.0	false	---	False	True	True	True	False		
+    Value	Real	4428.0	0.0	---	False	True	True	True	False		
+    MeasureData[12]	Struct	4432.0			False	True	True	True	False		
+    Group	Byte	4432.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4433.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4434.0	false	---	False	True	True	True	False		
+    Value	Real	4436.0	0.0	---	False	True	True	True	False		
+    MeasureData[13]	Struct	4440.0			False	True	True	True	False		
+    Group	Byte	4440.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4441.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4442.0	false	---	False	True	True	True	False		
+    Value	Real	4444.0	0.0	---	False	True	True	True	False		
+    MeasureData[14]	Struct	4448.0			False	True	True	True	False		
+    Group	Byte	4448.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4449.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4450.0	false	---	False	True	True	True	False		
+    Value	Real	4452.0	0.0	---	False	True	True	True	False		
+    MeasureData[15]	Struct	4456.0			False	True	True	True	False		
+    Group	Byte	4456.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4457.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4458.0	false	---	False	True	True	True	False		
+    Value	Real	4460.0	0.0	---	False	True	True	True	False		
+    MeasureData[16]	Struct	4464.0			False	True	True	True	False		
+    Group	Byte	4464.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4465.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4466.0	false	---	False	True	True	True	False		
+    Value	Real	4468.0	0.0	---	False	True	True	True	False		
+    MeasureData[17]	Struct	4472.0			False	True	True	True	False		
+    Group	Byte	4472.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4473.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4474.0	false	---	False	True	True	True	False		
+    Value	Real	4476.0	0.0	---	False	True	True	True	False		
+    MeasureData[18]	Struct	4480.0			False	True	True	True	False		
+    Group	Byte	4480.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4481.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4482.0	false	---	False	True	True	True	False		
+    Value	Real	4484.0	0.0	---	False	True	True	True	False		
+    MeasureData[19]	Struct	4488.0			False	True	True	True	False		
+    Group	Byte	4488.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4489.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4490.0	false	---	False	True	True	True	False		
+    Value	Real	4492.0	0.0	---	False	True	True	True	False		
+    MeasureData[20]	Struct	4496.0			False	True	True	True	False		
+    Group	Byte	4496.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4497.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4498.0	false	---	False	True	True	True	False		
+    Value	Real	4500.0	0.0	---	False	True	True	True	False		
+    MeasureData[21]	Struct	4504.0			False	True	True	True	False		
+    Group	Byte	4504.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4505.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4506.0	false	---	False	True	True	True	False		
+    Value	Real	4508.0	0.0	---	False	True	True	True	False		
+    MeasureData[22]	Struct	4512.0			False	True	True	True	False		
+    Group	Byte	4512.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4513.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4514.0	false	---	False	True	True	True	False		
+    Value	Real	4516.0	0.0	---	False	True	True	True	False		
+    MeasureData[23]	Struct	4520.0			False	True	True	True	False		
+    Group	Byte	4520.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4521.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4522.0	false	---	False	True	True	True	False		
+    Value	Real	4524.0	0.0	---	False	True	True	True	False		
+    MeasureData[24]	Struct	4528.0			False	True	True	True	False		
+    Group	Byte	4528.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4529.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4530.0	false	---	False	True	True	True	False		
+    Value	Real	4532.0	0.0	---	False	True	True	True	False		
+    MeasureData[25]	Struct	4536.0			False	True	True	True	False		
+    Group	Byte	4536.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4537.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4538.0	false	---	False	True	True	True	False		
+    Value	Real	4540.0	0.0	---	False	True	True	True	False		
+    MeasureData[26]	Struct	4544.0			False	True	True	True	False		
+    Group	Byte	4544.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4545.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4546.0	false	---	False	True	True	True	False		
+    Value	Real	4548.0	0.0	---	False	True	True	True	False		
+    MeasureData[27]	Struct	4552.0			False	True	True	True	False		
+    Group	Byte	4552.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4553.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4554.0	false	---	False	True	True	True	False		
+    Value	Real	4556.0	0.0	---	False	True	True	True	False		
+    MeasureData[28]	Struct	4560.0			False	True	True	True	False		
+    Group	Byte	4560.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4561.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4562.0	false	---	False	True	True	True	False		
+    Value	Real	4564.0	0.0	---	False	True	True	True	False		
+    MeasureData[29]	Struct	4568.0			False	True	True	True	False		
+    Group	Byte	4568.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4569.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4570.0	false	---	False	True	True	True	False		
+    Value	Real	4572.0	0.0	---	False	True	True	True	False		
+    MeasureData[30]	Struct	4576.0			False	True	True	True	False		
+    Group	Byte	4576.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4577.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4578.0	false	---	False	True	True	True	False		
+    Value	Real	4580.0	0.0	---	False	True	True	True	False		
+    MeasureData[31]	Struct	4584.0			False	True	True	True	False		
+    Group	Byte	4584.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4585.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4586.0	false	---	False	True	True	True	False		
+    Value	Real	4588.0	0.0	---	False	True	True	True	False		
+    MeasureData[32]	Struct	4592.0			False	True	True	True	False		
+    Group	Byte	4592.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4593.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4594.0	false	---	False	True	True	True	False		
+    Value	Real	4596.0	0.0	---	False	True	True	True	False		
+    MeasureData[33]	Struct	4600.0			False	True	True	True	False		
+    Group	Byte	4600.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4601.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4602.0	false	---	False	True	True	True	False		
+    Value	Real	4604.0	0.0	---	False	True	True	True	False		
+    MeasureData[34]	Struct	4608.0			False	True	True	True	False		
+    Group	Byte	4608.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4609.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4610.0	false	---	False	True	True	True	False		
+    Value	Real	4612.0	0.0	---	False	True	True	True	False		
+    MeasureData[35]	Struct	4616.0			False	True	True	True	False		
+    Group	Byte	4616.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4617.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4618.0	false	---	False	True	True	True	False		
+    Value	Real	4620.0	0.0	---	False	True	True	True	False		
+    MeasureData[36]	Struct	4624.0			False	True	True	True	False		
+    Group	Byte	4624.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4625.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4626.0	false	---	False	True	True	True	False		
+    Value	Real	4628.0	0.0	---	False	True	True	True	False		
+    MeasureData[37]	Struct	4632.0			False	True	True	True	False		
+    Group	Byte	4632.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4633.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4634.0	false	---	False	True	True	True	False		
+    Value	Real	4636.0	0.0	---	False	True	True	True	False		
+    MeasureData[38]	Struct	4640.0			False	True	True	True	False		
+    Group	Byte	4640.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4641.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4642.0	false	---	False	True	True	True	False		
+    Value	Real	4644.0	0.0	---	False	True	True	True	False		
+    MeasureData[39]	Struct	4648.0			False	True	True	True	False		
+    Group	Byte	4648.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4649.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4650.0	false	---	False	True	True	True	False		
+    Value	Real	4652.0	0.0	---	False	True	True	True	False		
+    MeasureData[40]	Struct	4656.0			False	True	True	True	False		
+    Group	Byte	4656.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4657.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4658.0	false	---	False	True	True	True	False		
+    Value	Real	4660.0	0.0	---	False	True	True	True	False		
+    MeasureData[41]	Struct	4664.0			False	True	True	True	False		
+    Group	Byte	4664.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4665.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4666.0	false	---	False	True	True	True	False		
+    Value	Real	4668.0	0.0	---	False	True	True	True	False		
+    MeasureData[42]	Struct	4672.0			False	True	True	True	False		
+    Group	Byte	4672.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4673.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4674.0	false	---	False	True	True	True	False		
+    Value	Real	4676.0	0.0	---	False	True	True	True	False		
+    MeasureData[43]	Struct	4680.0			False	True	True	True	False		
+    Group	Byte	4680.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4681.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4682.0	false	---	False	True	True	True	False		
+    Value	Real	4684.0	0.0	---	False	True	True	True	False		
+    MeasureData[44]	Struct	4688.0			False	True	True	True	False		
+    Group	Byte	4688.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4689.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4690.0	false	---	False	True	True	True	False		
+    Value	Real	4692.0	0.0	---	False	True	True	True	False		
+    MeasureData[45]	Struct	4696.0			False	True	True	True	False		
+    Group	Byte	4696.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4697.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4698.0	false	---	False	True	True	True	False		
+    Value	Real	4700.0	0.0	---	False	True	True	True	False		
+    MeasureData[46]	Struct	4704.0			False	True	True	True	False		
+    Group	Byte	4704.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4705.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4706.0	false	---	False	True	True	True	False		
+    Value	Real	4708.0	0.0	---	False	True	True	True	False		
+    MeasureData[47]	Struct	4712.0			False	True	True	True	False		
+    Group	Byte	4712.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4713.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4714.0	false	---	False	True	True	True	False		
+    Value	Real	4716.0	0.0	---	False	True	True	True	False		
+    MeasureData[48]	Struct	4720.0			False	True	True	True	False		
+    Group	Byte	4720.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4721.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4722.0	false	---	False	True	True	True	False		
+    Value	Real	4724.0	0.0	---	False	True	True	True	False		
+    MeasureData[49]	Struct	4728.0			False	True	True	True	False		
+    Group	Byte	4728.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4729.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4730.0	false	---	False	True	True	True	False		
+    Value	Real	4732.0	0.0	---	False	True	True	True	False		
+    MeasureData[50]	Struct	4736.0			False	True	True	True	False		
+    Group	Byte	4736.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4737.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4738.0	false	---	False	True	True	True	False		
+    Value	Real	4740.0	0.0	---	False	True	True	True	False		
+    MeasureData[51]	Struct	4744.0			False	True	True	True	False		
+    Group	Byte	4744.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4745.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4746.0	false	---	False	True	True	True	False		
+    Value	Real	4748.0	0.0	---	False	True	True	True	False		
+    MeasureData[52]	Struct	4752.0			False	True	True	True	False		
+    Group	Byte	4752.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4753.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4754.0	false	---	False	True	True	True	False		
+    Value	Real	4756.0	0.0	---	False	True	True	True	False		
+    MeasureData[53]	Struct	4760.0			False	True	True	True	False		
+    Group	Byte	4760.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4761.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4762.0	false	---	False	True	True	True	False		
+    Value	Real	4764.0	0.0	---	False	True	True	True	False		
+    MeasureData[54]	Struct	4768.0			False	True	True	True	False		
+    Group	Byte	4768.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4769.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4770.0	false	---	False	True	True	True	False		
+    Value	Real	4772.0	0.0	---	False	True	True	True	False		
+    MeasureData[55]	Struct	4776.0			False	True	True	True	False		
+    Group	Byte	4776.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4777.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4778.0	false	---	False	True	True	True	False		
+    Value	Real	4780.0	0.0	---	False	True	True	True	False		
+    MeasureData[56]	Struct	4784.0			False	True	True	True	False		
+    Group	Byte	4784.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4785.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4786.0	false	---	False	True	True	True	False		
+    Value	Real	4788.0	0.0	---	False	True	True	True	False		
+    MeasureData[57]	Struct	4792.0			False	True	True	True	False		
+    Group	Byte	4792.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4793.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4794.0	false	---	False	True	True	True	False		
+    Value	Real	4796.0	0.0	---	False	True	True	True	False		
+    MeasureData[58]	Struct	4800.0			False	True	True	True	False		
+    Group	Byte	4800.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4801.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4802.0	false	---	False	True	True	True	False		
+    Value	Real	4804.0	0.0	---	False	True	True	True	False		
+    MeasureData[59]	Struct	4808.0			False	True	True	True	False		
+    Group	Byte	4808.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4809.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4810.0	false	---	False	True	True	True	False		
+    Value	Real	4812.0	0.0	---	False	True	True	True	False		
+    MeasureData[60]	Struct	4816.0			False	True	True	True	False		
+    Group	Byte	4816.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4817.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4818.0	false	---	False	True	True	True	False		
+    Value	Real	4820.0	0.0	---	False	True	True	True	False		
+    MeasureData[61]	Struct	4824.0			False	True	True	True	False		
+    Group	Byte	4824.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4825.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4826.0	false	---	False	True	True	True	False		
+    Value	Real	4828.0	0.0	---	False	True	True	True	False		
+    MeasureData[62]	Struct	4832.0			False	True	True	True	False		
+    Group	Byte	4832.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4833.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4834.0	false	---	False	True	True	True	False		
+    Value	Real	4836.0	0.0	---	False	True	True	True	False		
+    MeasureData[63]	Struct	4840.0			False	True	True	True	False		
+    Group	Byte	4840.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4841.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4842.0	false	---	False	True	True	True	False		
+    Value	Real	4844.0	0.0	---	False	True	True	True	False		
+    MeasureData[64]	Struct	4848.0			False	True	True	True	False		
+    Group	Byte	4848.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4849.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4850.0	false	---	False	True	True	True	False		
+    Value	Real	4852.0	0.0	---	False	True	True	True	False		
+    MeasureData[65]	Struct	4856.0			False	True	True	True	False		
+    Group	Byte	4856.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4857.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4858.0	false	---	False	True	True	True	False		
+    Value	Real	4860.0	0.0	---	False	True	True	True	False		
+    MeasureData[66]	Struct	4864.0			False	True	True	True	False		
+    Group	Byte	4864.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4865.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4866.0	false	---	False	True	True	True	False		
+    Value	Real	4868.0	0.0	---	False	True	True	True	False		
+    MeasureData[67]	Struct	4872.0			False	True	True	True	False		
+    Group	Byte	4872.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4873.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4874.0	false	---	False	True	True	True	False		
+    Value	Real	4876.0	0.0	---	False	True	True	True	False		
+    MeasureData[68]	Struct	4880.0			False	True	True	True	False		
+    Group	Byte	4880.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4881.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4882.0	false	---	False	True	True	True	False		
+    Value	Real	4884.0	0.0	---	False	True	True	True	False		
+    MeasureData[69]	Struct	4888.0			False	True	True	True	False		
+    Group	Byte	4888.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4889.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4890.0	false	---	False	True	True	True	False		
+    Value	Real	4892.0	0.0	---	False	True	True	True	False		
+    MeasureData[70]	Struct	4896.0			False	True	True	True	False		
+    Group	Byte	4896.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4897.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4898.0	false	---	False	True	True	True	False		
+    Value	Real	4900.0	0.0	---	False	True	True	True	False		
+    MeasureData[71]	Struct	4904.0			False	True	True	True	False		
+    Group	Byte	4904.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4905.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4906.0	false	---	False	True	True	True	False		
+    Value	Real	4908.0	0.0	---	False	True	True	True	False		
+    MeasureData[72]	Struct	4912.0			False	True	True	True	False		
+    Group	Byte	4912.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4913.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4914.0	false	---	False	True	True	True	False		
+    Value	Real	4916.0	0.0	---	False	True	True	True	False		
+    MeasureData[73]	Struct	4920.0			False	True	True	True	False		
+    Group	Byte	4920.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4921.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4922.0	false	---	False	True	True	True	False		
+    Value	Real	4924.0	0.0	---	False	True	True	True	False		
+    MeasureData[74]	Struct	4928.0			False	True	True	True	False		
+    Group	Byte	4928.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4929.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4930.0	false	---	False	True	True	True	False		
+    Value	Real	4932.0	0.0	---	False	True	True	True	False		
+    MeasureData[75]	Struct	4936.0			False	True	True	True	False		
+    Group	Byte	4936.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4937.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4938.0	false	---	False	True	True	True	False		
+    Value	Real	4940.0	0.0	---	False	True	True	True	False		
+    MeasureData[76]	Struct	4944.0			False	True	True	True	False		
+    Group	Byte	4944.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4945.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4946.0	false	---	False	True	True	True	False		
+    Value	Real	4948.0	0.0	---	False	True	True	True	False		
+    MeasureData[77]	Struct	4952.0			False	True	True	True	False		
+    Group	Byte	4952.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4953.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4954.0	false	---	False	True	True	True	False		
+    Value	Real	4956.0	0.0	---	False	True	True	True	False		
+    MeasureData[78]	Struct	4960.0			False	True	True	True	False		
+    Group	Byte	4960.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4961.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4962.0	false	---	False	True	True	True	False		
+    Value	Real	4964.0	0.0	---	False	True	True	True	False		
+    MeasureData[79]	Struct	4968.0			False	True	True	True	False		
+    Group	Byte	4968.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4969.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4970.0	false	---	False	True	True	True	False		
+    Value	Real	4972.0	0.0	---	False	True	True	True	False		
+    MeasureData[80]	Struct	4976.0			False	True	True	True	False		
+    Group	Byte	4976.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4977.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4978.0	false	---	False	True	True	True	False		
+    Value	Real	4980.0	0.0	---	False	True	True	True	False		
+    MeasureData[81]	Struct	4984.0			False	True	True	True	False		
+    Group	Byte	4984.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4985.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4986.0	false	---	False	True	True	True	False		
+    Value	Real	4988.0	0.0	---	False	True	True	True	False		
+    MeasureData[82]	Struct	4992.0			False	True	True	True	False		
+    Group	Byte	4992.0	16#0	---	False	True	True	True	False		
+    Number	Byte	4993.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	4994.0	false	---	False	True	True	True	False		
+    Value	Real	4996.0	0.0	---	False	True	True	True	False		
+    MeasureData[83]	Struct	5000.0			False	True	True	True	False		
+    Group	Byte	5000.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5001.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5002.0	false	---	False	True	True	True	False		
+    Value	Real	5004.0	0.0	---	False	True	True	True	False		
+    MeasureData[84]	Struct	5008.0			False	True	True	True	False		
+    Group	Byte	5008.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5009.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5010.0	false	---	False	True	True	True	False		
+    Value	Real	5012.0	0.0	---	False	True	True	True	False		
+    MeasureData[85]	Struct	5016.0			False	True	True	True	False		
+    Group	Byte	5016.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5017.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5018.0	false	---	False	True	True	True	False		
+    Value	Real	5020.0	0.0	---	False	True	True	True	False		
+    MeasureData[86]	Struct	5024.0			False	True	True	True	False		
+    Group	Byte	5024.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5025.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5026.0	false	---	False	True	True	True	False		
+    Value	Real	5028.0	0.0	---	False	True	True	True	False		
+    MeasureData[87]	Struct	5032.0			False	True	True	True	False		
+    Group	Byte	5032.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5033.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5034.0	false	---	False	True	True	True	False		
+    Value	Real	5036.0	0.0	---	False	True	True	True	False		
+    MeasureData[88]	Struct	5040.0			False	True	True	True	False		
+    Group	Byte	5040.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5041.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5042.0	false	---	False	True	True	True	False		
+    Value	Real	5044.0	0.0	---	False	True	True	True	False		
+    MeasureData[89]	Struct	5048.0			False	True	True	True	False		
+    Group	Byte	5048.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5049.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5050.0	false	---	False	True	True	True	False		
+    Value	Real	5052.0	0.0	---	False	True	True	True	False		
+    MeasureData[90]	Struct	5056.0			False	True	True	True	False		
+    Group	Byte	5056.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5057.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5058.0	false	---	False	True	True	True	False		
+    Value	Real	5060.0	0.0	---	False	True	True	True	False		
+    MeasureData[91]	Struct	5064.0			False	True	True	True	False		
+    Group	Byte	5064.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5065.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5066.0	false	---	False	True	True	True	False		
+    Value	Real	5068.0	0.0	---	False	True	True	True	False		
+    MeasureData[92]	Struct	5072.0			False	True	True	True	False		
+    Group	Byte	5072.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5073.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5074.0	false	---	False	True	True	True	False		
+    Value	Real	5076.0	0.0	---	False	True	True	True	False		
+    MeasureData[93]	Struct	5080.0			False	True	True	True	False		
+    Group	Byte	5080.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5081.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5082.0	false	---	False	True	True	True	False		
+    Value	Real	5084.0	0.0	---	False	True	True	True	False		
+    MeasureData[94]	Struct	5088.0			False	True	True	True	False		
+    Group	Byte	5088.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5089.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5090.0	false	---	False	True	True	True	False		
+    Value	Real	5092.0	0.0	---	False	True	True	True	False		
+    MeasureData[95]	Struct	5096.0			False	True	True	True	False		
+    Group	Byte	5096.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5097.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5098.0	false	---	False	True	True	True	False		
+    Value	Real	5100.0	0.0	---	False	True	True	True	False		
+    MeasureData[96]	Struct	5104.0			False	True	True	True	False		
+    Group	Byte	5104.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5105.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5106.0	false	---	False	True	True	True	False		
+    Value	Real	5108.0	0.0	---	False	True	True	True	False		
+    MeasureData[97]	Struct	5112.0			False	True	True	True	False		
+    Group	Byte	5112.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5113.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5114.0	false	---	False	True	True	True	False		
+    Value	Real	5116.0	0.0	---	False	True	True	True	False		
+    MeasureData[98]	Struct	5120.0			False	True	True	True	False		
+    Group	Byte	5120.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5121.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5122.0	false	---	False	True	True	True	False		
+    Value	Real	5124.0	0.0	---	False	True	True	True	False		
+    MeasureData[99]	Struct	5128.0			False	True	True	True	False		
+    Group	Byte	5128.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5129.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5130.0	false	---	False	True	True	True	False		
+    Value	Real	5132.0	0.0	---	False	True	True	True	False		
+    MeasureData[100]	Struct	5136.0			False	True	True	True	False		
+    Group	Byte	5136.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5137.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5138.0	false	---	False	True	True	True	False		
+    Value	Real	5140.0	0.0	---	False	True	True	True	False		
+    MeasureData[101]	Struct	5144.0			False	True	True	True	False		
+    Group	Byte	5144.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5145.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5146.0	false	---	False	True	True	True	False		
+    Value	Real	5148.0	0.0	---	False	True	True	True	False		
+    MeasureData[102]	Struct	5152.0			False	True	True	True	False		
+    Group	Byte	5152.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5153.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5154.0	false	---	False	True	True	True	False		
+    Value	Real	5156.0	0.0	---	False	True	True	True	False		
+    MeasureData[103]	Struct	5160.0			False	True	True	True	False		
+    Group	Byte	5160.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5161.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5162.0	false	---	False	True	True	True	False		
+    Value	Real	5164.0	0.0	---	False	True	True	True	False		
+    MeasureData[104]	Struct	5168.0			False	True	True	True	False		
+    Group	Byte	5168.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5169.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5170.0	false	---	False	True	True	True	False		
+    Value	Real	5172.0	0.0	---	False	True	True	True	False		
+    MeasureData[105]	Struct	5176.0			False	True	True	True	False		
+    Group	Byte	5176.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5177.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5178.0	false	---	False	True	True	True	False		
+    Value	Real	5180.0	0.0	---	False	True	True	True	False		
+    MeasureData[106]	Struct	5184.0			False	True	True	True	False		
+    Group	Byte	5184.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5185.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5186.0	false	---	False	True	True	True	False		
+    Value	Real	5188.0	0.0	---	False	True	True	True	False		
+    MeasureData[107]	Struct	5192.0			False	True	True	True	False		
+    Group	Byte	5192.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5193.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5194.0	false	---	False	True	True	True	False		
+    Value	Real	5196.0	0.0	---	False	True	True	True	False		
+    MeasureData[108]	Struct	5200.0			False	True	True	True	False		
+    Group	Byte	5200.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5201.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5202.0	false	---	False	True	True	True	False		
+    Value	Real	5204.0	0.0	---	False	True	True	True	False		
+    MeasureData[109]	Struct	5208.0			False	True	True	True	False		
+    Group	Byte	5208.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5209.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5210.0	false	---	False	True	True	True	False		
+    Value	Real	5212.0	0.0	---	False	True	True	True	False		
+    MeasureData[110]	Struct	5216.0			False	True	True	True	False		
+    Group	Byte	5216.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5217.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5218.0	false	---	False	True	True	True	False		
+    Value	Real	5220.0	0.0	---	False	True	True	True	False		
+    MeasureData[111]	Struct	5224.0			False	True	True	True	False		
+    Group	Byte	5224.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5225.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5226.0	false	---	False	True	True	True	False		
+    Value	Real	5228.0	0.0	---	False	True	True	True	False		
+    MeasureData[112]	Struct	5232.0			False	True	True	True	False		
+    Group	Byte	5232.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5233.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5234.0	false	---	False	True	True	True	False		
+    Value	Real	5236.0	0.0	---	False	True	True	True	False		
+    MeasureData[113]	Struct	5240.0			False	True	True	True	False		
+    Group	Byte	5240.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5241.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5242.0	false	---	False	True	True	True	False		
+    Value	Real	5244.0	0.0	---	False	True	True	True	False		
+    MeasureData[114]	Struct	5248.0			False	True	True	True	False		
+    Group	Byte	5248.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5249.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5250.0	false	---	False	True	True	True	False		
+    Value	Real	5252.0	0.0	---	False	True	True	True	False		
+    MeasureData[115]	Struct	5256.0			False	True	True	True	False		
+    Group	Byte	5256.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5257.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5258.0	false	---	False	True	True	True	False		
+    Value	Real	5260.0	0.0	---	False	True	True	True	False		
+    MeasureData[116]	Struct	5264.0			False	True	True	True	False		
+    Group	Byte	5264.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5265.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5266.0	false	---	False	True	True	True	False		
+    Value	Real	5268.0	0.0	---	False	True	True	True	False		
+    MeasureData[117]	Struct	5272.0			False	True	True	True	False		
+    Group	Byte	5272.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5273.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5274.0	false	---	False	True	True	True	False		
+    Value	Real	5276.0	0.0	---	False	True	True	True	False		
+    MeasureData[118]	Struct	5280.0			False	True	True	True	False		
+    Group	Byte	5280.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5281.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5282.0	false	---	False	True	True	True	False		
+    Value	Real	5284.0	0.0	---	False	True	True	True	False		
+    MeasureData[119]	Struct	5288.0			False	True	True	True	False		
+    Group	Byte	5288.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5289.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5290.0	false	---	False	True	True	True	False		
+    Value	Real	5292.0	0.0	---	False	True	True	True	False		
+    MeasureData[120]	Struct	5296.0			False	True	True	True	False		
+    Group	Byte	5296.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5297.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5298.0	false	---	False	True	True	True	False		
+    Value	Real	5300.0	0.0	---	False	True	True	True	False		
+    MeasureData[121]	Struct	5304.0			False	True	True	True	False		
+    Group	Byte	5304.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5305.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5306.0	false	---	False	True	True	True	False		
+    Value	Real	5308.0	0.0	---	False	True	True	True	False		
+    MeasureData[122]	Struct	5312.0			False	True	True	True	False		
+    Group	Byte	5312.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5313.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5314.0	false	---	False	True	True	True	False		
+    Value	Real	5316.0	0.0	---	False	True	True	True	False		
+    MeasureData[123]	Struct	5320.0			False	True	True	True	False		
+    Group	Byte	5320.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5321.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5322.0	false	---	False	True	True	True	False		
+    Value	Real	5324.0	0.0	---	False	True	True	True	False		
+    MeasureData[124]	Struct	5328.0			False	True	True	True	False		
+    Group	Byte	5328.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5329.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5330.0	false	---	False	True	True	True	False		
+    Value	Real	5332.0	0.0	---	False	True	True	True	False		
+    MeasureData[125]	Struct	5336.0			False	True	True	True	False		
+    Group	Byte	5336.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5337.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5338.0	false	---	False	True	True	True	False		
+    Value	Real	5340.0	0.0	---	False	True	True	True	False		
+    MeasureData[126]	Struct	5344.0			False	True	True	True	False		
+    Group	Byte	5344.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5345.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5346.0	false	---	False	True	True	True	False		
+    Value	Real	5348.0	0.0	---	False	True	True	True	False		
+    MeasureData[127]	Struct	5352.0			False	True	True	True	False		
+    Group	Byte	5352.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5353.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5354.0	false	---	False	True	True	True	False		
+    Value	Real	5356.0	0.0	---	False	True	True	True	False		
+    MeasureData[128]	Struct	5360.0			False	True	True	True	False		
+    Group	Byte	5360.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5361.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5362.0	false	---	False	True	True	True	False		
+    Value	Real	5364.0	0.0	---	False	True	True	True	False		
+    MeasureData[129]	Struct	5368.0			False	True	True	True	False		
+    Group	Byte	5368.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5369.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5370.0	false	---	False	True	True	True	False		
+    Value	Real	5372.0	0.0	---	False	True	True	True	False		
+    MeasureData[130]	Struct	5376.0			False	True	True	True	False		
+    Group	Byte	5376.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5377.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5378.0	false	---	False	True	True	True	False		
+    Value	Real	5380.0	0.0	---	False	True	True	True	False		
+    MeasureData[131]	Struct	5384.0			False	True	True	True	False		
+    Group	Byte	5384.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5385.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5386.0	false	---	False	True	True	True	False		
+    Value	Real	5388.0	0.0	---	False	True	True	True	False		
+    MeasureData[132]	Struct	5392.0			False	True	True	True	False		
+    Group	Byte	5392.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5393.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5394.0	false	---	False	True	True	True	False		
+    Value	Real	5396.0	0.0	---	False	True	True	True	False		
+    MeasureData[133]	Struct	5400.0			False	True	True	True	False		
+    Group	Byte	5400.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5401.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5402.0	false	---	False	True	True	True	False		
+    Value	Real	5404.0	0.0	---	False	True	True	True	False		
+    MeasureData[134]	Struct	5408.0			False	True	True	True	False		
+    Group	Byte	5408.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5409.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5410.0	false	---	False	True	True	True	False		
+    Value	Real	5412.0	0.0	---	False	True	True	True	False		
+    MeasureData[135]	Struct	5416.0			False	True	True	True	False		
+    Group	Byte	5416.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5417.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5418.0	false	---	False	True	True	True	False		
+    Value	Real	5420.0	0.0	---	False	True	True	True	False		
+    MeasureData[136]	Struct	5424.0			False	True	True	True	False		
+    Group	Byte	5424.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5425.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5426.0	false	---	False	True	True	True	False		
+    Value	Real	5428.0	0.0	---	False	True	True	True	False		
+    MeasureData[137]	Struct	5432.0			False	True	True	True	False		
+    Group	Byte	5432.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5433.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5434.0	false	---	False	True	True	True	False		
+    Value	Real	5436.0	0.0	---	False	True	True	True	False		
+    MeasureData[138]	Struct	5440.0			False	True	True	True	False		
+    Group	Byte	5440.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5441.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5442.0	false	---	False	True	True	True	False		
+    Value	Real	5444.0	0.0	---	False	True	True	True	False		
+    MeasureData[139]	Struct	5448.0			False	True	True	True	False		
+    Group	Byte	5448.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5449.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5450.0	false	---	False	True	True	True	False		
+    Value	Real	5452.0	0.0	---	False	True	True	True	False		
+    MeasureData[140]	Struct	5456.0			False	True	True	True	False		
+    Group	Byte	5456.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5457.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5458.0	false	---	False	True	True	True	False		
+    Value	Real	5460.0	0.0	---	False	True	True	True	False		
+    MeasureData[141]	Struct	5464.0			False	True	True	True	False		
+    Group	Byte	5464.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5465.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5466.0	false	---	False	True	True	True	False		
+    Value	Real	5468.0	0.0	---	False	True	True	True	False		
+    MeasureData[142]	Struct	5472.0			False	True	True	True	False		
+    Group	Byte	5472.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5473.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5474.0	false	---	False	True	True	True	False		
+    Value	Real	5476.0	0.0	---	False	True	True	True	False		
+    MeasureData[143]	Struct	5480.0			False	True	True	True	False		
+    Group	Byte	5480.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5481.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5482.0	false	---	False	True	True	True	False		
+    Value	Real	5484.0	0.0	---	False	True	True	True	False		
+    MeasureData[144]	Struct	5488.0			False	True	True	True	False		
+    Group	Byte	5488.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5489.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5490.0	false	---	False	True	True	True	False		
+    Value	Real	5492.0	0.0	---	False	True	True	True	False		
+    MeasureData[145]	Struct	5496.0			False	True	True	True	False		
+    Group	Byte	5496.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5497.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5498.0	false	---	False	True	True	True	False		
+    Value	Real	5500.0	0.0	---	False	True	True	True	False		
+    MeasureData[146]	Struct	5504.0			False	True	True	True	False		
+    Group	Byte	5504.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5505.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5506.0	false	---	False	True	True	True	False		
+    Value	Real	5508.0	0.0	---	False	True	True	True	False		
+    MeasureData[147]	Struct	5512.0			False	True	True	True	False		
+    Group	Byte	5512.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5513.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5514.0	false	---	False	True	True	True	False		
+    Value	Real	5516.0	0.0	---	False	True	True	True	False		
+    MeasureData[148]	Struct	5520.0			False	True	True	True	False		
+    Group	Byte	5520.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5521.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5522.0	false	---	False	True	True	True	False		
+    Value	Real	5524.0	0.0	---	False	True	True	True	False		
+    MeasureData[149]	Struct	5528.0			False	True	True	True	False		
+    Group	Byte	5528.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5529.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5530.0	false	---	False	True	True	True	False		
+    Value	Real	5532.0	0.0	---	False	True	True	True	False		
+    MeasureData[150]	Struct	5536.0			False	True	True	True	False		
+    Group	Byte	5536.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5537.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5538.0	false	---	False	True	True	True	False		
+    Value	Real	5540.0	0.0	---	False	True	True	True	False		
+    MeasureData[151]	Struct	5544.0			False	True	True	True	False		
+    Group	Byte	5544.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5545.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5546.0	false	---	False	True	True	True	False		
+    Value	Real	5548.0	0.0	---	False	True	True	True	False		
+    MeasureData[152]	Struct	5552.0			False	True	True	True	False		
+    Group	Byte	5552.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5553.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5554.0	false	---	False	True	True	True	False		
+    Value	Real	5556.0	0.0	---	False	True	True	True	False		
+    MeasureData[153]	Struct	5560.0			False	True	True	True	False		
+    Group	Byte	5560.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5561.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5562.0	false	---	False	True	True	True	False		
+    Value	Real	5564.0	0.0	---	False	True	True	True	False		
+    MeasureData[154]	Struct	5568.0			False	True	True	True	False		
+    Group	Byte	5568.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5569.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5570.0	false	---	False	True	True	True	False		
+    Value	Real	5572.0	0.0	---	False	True	True	True	False		
+    MeasureData[155]	Struct	5576.0			False	True	True	True	False		
+    Group	Byte	5576.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5577.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5578.0	false	---	False	True	True	True	False		
+    Value	Real	5580.0	0.0	---	False	True	True	True	False		
+    MeasureData[156]	Struct	5584.0			False	True	True	True	False		
+    Group	Byte	5584.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5585.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5586.0	false	---	False	True	True	True	False		
+    Value	Real	5588.0	0.0	---	False	True	True	True	False		
+    MeasureData[157]	Struct	5592.0			False	True	True	True	False		
+    Group	Byte	5592.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5593.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5594.0	false	---	False	True	True	True	False		
+    Value	Real	5596.0	0.0	---	False	True	True	True	False		
+    MeasureData[158]	Struct	5600.0			False	True	True	True	False		
+    Group	Byte	5600.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5601.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5602.0	false	---	False	True	True	True	False		
+    Value	Real	5604.0	0.0	---	False	True	True	True	False		
+    MeasureData[159]	Struct	5608.0			False	True	True	True	False		
+    Group	Byte	5608.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5609.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5610.0	false	---	False	True	True	True	False		
+    Value	Real	5612.0	0.0	---	False	True	True	True	False		
+    MeasureData[160]	Struct	5616.0			False	True	True	True	False		
+    Group	Byte	5616.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5617.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5618.0	false	---	False	True	True	True	False		
+    Value	Real	5620.0	0.0	---	False	True	True	True	False		
+    MeasureData[161]	Struct	5624.0			False	True	True	True	False		
+    Group	Byte	5624.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5625.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5626.0	false	---	False	True	True	True	False		
+    Value	Real	5628.0	0.0	---	False	True	True	True	False		
+    MeasureData[162]	Struct	5632.0			False	True	True	True	False		
+    Group	Byte	5632.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5633.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5634.0	false	---	False	True	True	True	False		
+    Value	Real	5636.0	0.0	---	False	True	True	True	False		
+    MeasureData[163]	Struct	5640.0			False	True	True	True	False		
+    Group	Byte	5640.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5641.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5642.0	false	---	False	True	True	True	False		
+    Value	Real	5644.0	0.0	---	False	True	True	True	False		
+    MeasureData[164]	Struct	5648.0			False	True	True	True	False		
+    Group	Byte	5648.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5649.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5650.0	false	---	False	True	True	True	False		
+    Value	Real	5652.0	0.0	---	False	True	True	True	False		
+    MeasureData[165]	Struct	5656.0			False	True	True	True	False		
+    Group	Byte	5656.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5657.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5658.0	false	---	False	True	True	True	False		
+    Value	Real	5660.0	0.0	---	False	True	True	True	False		
+    MeasureData[166]	Struct	5664.0			False	True	True	True	False		
+    Group	Byte	5664.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5665.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5666.0	false	---	False	True	True	True	False		
+    Value	Real	5668.0	0.0	---	False	True	True	True	False		
+    MeasureData[167]	Struct	5672.0			False	True	True	True	False		
+    Group	Byte	5672.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5673.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5674.0	false	---	False	True	True	True	False		
+    Value	Real	5676.0	0.0	---	False	True	True	True	False		
+    MeasureData[168]	Struct	5680.0			False	True	True	True	False		
+    Group	Byte	5680.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5681.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5682.0	false	---	False	True	True	True	False		
+    Value	Real	5684.0	0.0	---	False	True	True	True	False		
+    MeasureData[169]	Struct	5688.0			False	True	True	True	False		
+    Group	Byte	5688.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5689.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5690.0	false	---	False	True	True	True	False		
+    Value	Real	5692.0	0.0	---	False	True	True	True	False		
+    MeasureData[170]	Struct	5696.0			False	True	True	True	False		
+    Group	Byte	5696.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5697.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5698.0	false	---	False	True	True	True	False		
+    Value	Real	5700.0	0.0	---	False	True	True	True	False		
+    MeasureData[171]	Struct	5704.0			False	True	True	True	False		
+    Group	Byte	5704.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5705.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5706.0	false	---	False	True	True	True	False		
+    Value	Real	5708.0	0.0	---	False	True	True	True	False		
+    MeasureData[172]	Struct	5712.0			False	True	True	True	False		
+    Group	Byte	5712.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5713.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5714.0	false	---	False	True	True	True	False		
+    Value	Real	5716.0	0.0	---	False	True	True	True	False		
+    MeasureData[173]	Struct	5720.0			False	True	True	True	False		
+    Group	Byte	5720.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5721.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5722.0	false	---	False	True	True	True	False		
+    Value	Real	5724.0	0.0	---	False	True	True	True	False		
+    MeasureData[174]	Struct	5728.0			False	True	True	True	False		
+    Group	Byte	5728.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5729.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5730.0	false	---	False	True	True	True	False		
+    Value	Real	5732.0	0.0	---	False	True	True	True	False		
+    MeasureData[175]	Struct	5736.0			False	True	True	True	False		
+    Group	Byte	5736.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5737.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5738.0	false	---	False	True	True	True	False		
+    Value	Real	5740.0	0.0	---	False	True	True	True	False		
+    MeasureData[176]	Struct	5744.0			False	True	True	True	False		
+    Group	Byte	5744.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5745.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5746.0	false	---	False	True	True	True	False		
+    Value	Real	5748.0	0.0	---	False	True	True	True	False		
+    MeasureData[177]	Struct	5752.0			False	True	True	True	False		
+    Group	Byte	5752.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5753.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5754.0	false	---	False	True	True	True	False		
+    Value	Real	5756.0	0.0	---	False	True	True	True	False		
+    MeasureData[178]	Struct	5760.0			False	True	True	True	False		
+    Group	Byte	5760.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5761.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5762.0	false	---	False	True	True	True	False		
+    Value	Real	5764.0	0.0	---	False	True	True	True	False		
+    MeasureData[179]	Struct	5768.0			False	True	True	True	False		
+    Group	Byte	5768.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5769.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5770.0	false	---	False	True	True	True	False		
+    Value	Real	5772.0	0.0	---	False	True	True	True	False		
+    MeasureData[180]	Struct	5776.0			False	True	True	True	False		
+    Group	Byte	5776.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5777.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5778.0	false	---	False	True	True	True	False		
+    Value	Real	5780.0	0.0	---	False	True	True	True	False		
+    MeasureData[181]	Struct	5784.0			False	True	True	True	False		
+    Group	Byte	5784.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5785.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5786.0	false	---	False	True	True	True	False		
+    Value	Real	5788.0	0.0	---	False	True	True	True	False		
+    MeasureData[182]	Struct	5792.0			False	True	True	True	False		
+    Group	Byte	5792.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5793.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5794.0	false	---	False	True	True	True	False		
+    Value	Real	5796.0	0.0	---	False	True	True	True	False		
+    MeasureData[183]	Struct	5800.0			False	True	True	True	False		
+    Group	Byte	5800.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5801.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5802.0	false	---	False	True	True	True	False		
+    Value	Real	5804.0	0.0	---	False	True	True	True	False		
+    MeasureData[184]	Struct	5808.0			False	True	True	True	False		
+    Group	Byte	5808.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5809.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5810.0	false	---	False	True	True	True	False		
+    Value	Real	5812.0	0.0	---	False	True	True	True	False		
+    MeasureData[185]	Struct	5816.0			False	True	True	True	False		
+    Group	Byte	5816.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5817.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5818.0	false	---	False	True	True	True	False		
+    Value	Real	5820.0	0.0	---	False	True	True	True	False		
+    MeasureData[186]	Struct	5824.0			False	True	True	True	False		
+    Group	Byte	5824.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5825.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5826.0	false	---	False	True	True	True	False		
+    Value	Real	5828.0	0.0	---	False	True	True	True	False		
+    MeasureData[187]	Struct	5832.0			False	True	True	True	False		
+    Group	Byte	5832.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5833.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5834.0	false	---	False	True	True	True	False		
+    Value	Real	5836.0	0.0	---	False	True	True	True	False		
+    MeasureData[188]	Struct	5840.0			False	True	True	True	False		
+    Group	Byte	5840.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5841.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5842.0	false	---	False	True	True	True	False		
+    Value	Real	5844.0	0.0	---	False	True	True	True	False		
+    MeasureData[189]	Struct	5848.0			False	True	True	True	False		
+    Group	Byte	5848.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5849.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5850.0	false	---	False	True	True	True	False		
+    Value	Real	5852.0	0.0	---	False	True	True	True	False		
+    MeasureData[190]	Struct	5856.0			False	True	True	True	False		
+    Group	Byte	5856.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5857.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5858.0	false	---	False	True	True	True	False		
+    Value	Real	5860.0	0.0	---	False	True	True	True	False		
+    MeasureData[191]	Struct	5864.0			False	True	True	True	False		
+    Group	Byte	5864.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5865.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5866.0	false	---	False	True	True	True	False		
+    Value	Real	5868.0	0.0	---	False	True	True	True	False		
+    MeasureData[192]	Struct	5872.0			False	True	True	True	False		
+    Group	Byte	5872.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5873.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5874.0	false	---	False	True	True	True	False		
+    Value	Real	5876.0	0.0	---	False	True	True	True	False		
+    MeasureData[193]	Struct	5880.0			False	True	True	True	False		
+    Group	Byte	5880.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5881.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5882.0	false	---	False	True	True	True	False		
+    Value	Real	5884.0	0.0	---	False	True	True	True	False		
+    MeasureData[194]	Struct	5888.0			False	True	True	True	False		
+    Group	Byte	5888.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5889.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5890.0	false	---	False	True	True	True	False		
+    Value	Real	5892.0	0.0	---	False	True	True	True	False		
+    MeasureData[195]	Struct	5896.0			False	True	True	True	False		
+    Group	Byte	5896.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5897.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5898.0	false	---	False	True	True	True	False		
+    Value	Real	5900.0	0.0	---	False	True	True	True	False		
+    MeasureData[196]	Struct	5904.0			False	True	True	True	False		
+    Group	Byte	5904.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5905.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5906.0	false	---	False	True	True	True	False		
+    Value	Real	5908.0	0.0	---	False	True	True	True	False		
+    MeasureData[197]	Struct	5912.0			False	True	True	True	False		
+    Group	Byte	5912.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5913.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5914.0	false	---	False	True	True	True	False		
+    Value	Real	5916.0	0.0	---	False	True	True	True	False		
+    MeasureData[198]	Struct	5920.0			False	True	True	True	False		
+    Group	Byte	5920.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5921.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5922.0	false	---	False	True	True	True	False		
+    Value	Real	5924.0	0.0	---	False	True	True	True	False		
+    MeasureData[199]	Struct	5928.0			False	True	True	True	False		
+    Group	Byte	5928.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5929.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5930.0	false	---	False	True	True	True	False		
+    Value	Real	5932.0	0.0	---	False	True	True	True	False		
+    MeasureData[200]	Struct	5936.0			False	True	True	True	False		
+    Group	Byte	5936.0	16#0	---	False	True	True	True	False		
+    Number	Byte	5937.0	16#0	---	False	True	True	True	False		
+    NOK	Bool	5938.0	false	---	False	True	True	True	False		
+    Value	Real	5940.0	0.0	---	False	True	True	True	False		
