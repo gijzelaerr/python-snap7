@@ -151,7 +151,7 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
 
     with open(txt_path, "r") as file:
         db_specification = ""
-        
+
         valid_list = ["BOOL", "DWORD", "INT", "DINT", "CHAR", "STRING", "DATE_AND_TIME", "TIME_OF_DAY", "REAL", "BYTE"]
         var_names: list[str] = []
 
