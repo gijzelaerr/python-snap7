@@ -150,13 +150,13 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
     
     with open(txt_path, "r") as file:
         db_specification = str()
-        validList = ["BOOL","DWORD","INT","DINT","CHAR","STRING","DATE_AND_TIME","TIME_OF_DAY","REAL","BYTE","STRING"]
+        validList = ["BOOL", "DWORD", "INT", "DINT", "CHAR", "STRING", "DATE_AND_TIME", "TIME_OF_DAY", "REAL", "BYTE", "STRING"]
 
-        names : list[str]= list()
+        names: list[str] = list()
 
         for line in file:
             line = line.lstrip("\t")
-            parsed_line = line.split("\t")  
+            parsed_line = line.split("\t")
             
             nomeVar = parsed_line[0]
             tipoVar = parsed_line[1].upper()
