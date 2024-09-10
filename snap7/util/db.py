@@ -151,33 +151,33 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
 
     with open(txt_path, "r") as file:
         db_specification = str()
-        validList = ["BOOL", "DWORD", "INT", "DINT", "CHAR", "STRING", "DATE_AND_TIME", "TIME_OF_DAY", "REAL", "BYTE", "STRING"]
-
-        names: list[str] = list()
+        
+        valid_list = ["BOOL", "DWORD", "INT", "DINT", "CHAR", "STRING", "DATE_AND_TIME", "TIME_OF_DAY", "REAL", "BYTE"]
+        var_names: list[str] = list()
 
         for line in file:
             line = line.lstrip("\t")
             parsed_line = line.split("\t")
 
-            nomeVar = parsed_line[0]
-            tipoVar = parsed_line[1].upper()
-            offset = parsed_line[2]
+            var_name = parsed_line[0]
+            var_type = parsed_line[1].upper()
+            var_offset = parsed_line[2]
 
-            add = "_0"
-            for nome in reversed(names):
-                nome = str(nome)
-                if nome.rsplit("_")[0] == nomeVar:
-                    print(nome.rsplit("_")[-1])
-                    add = "_" + str(int(nome.rsplit("_")[-1]) + 1)
+            to_add = "_0"
+            for name in reversed(var_names):
+                name = str(name)
+                if name.rsplit("_")[0] == var_name:
+                    print(name.rsplit("_")[-1])
+                    to_add = "_" + str(int(name.rsplit("_")[-1]) + 1)
                     break
 
-            nomeVar = nomeVar + add
-            names.append(nomeVar)
+            var_name = var_name + to_add
+            var_names.append(var_name)
 
-            if tipoVar:
-                if tipoVar in validList:
-                    newLine = offset + "\t" + nomeVar + "\t" + tipoVar
-                    db_specification = db_specification + "\n" + newLine
+            if var_type:
+                if var_type in valid_list:
+                    new_line = var_offset + "\t" + var_name + "\t" + var_type
+                    db_specification = db_specification + "\n" + new_line
     return db_specification
 
 

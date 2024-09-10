@@ -1,0 +1,16 @@
+    Result Data 0	DWord	0.0	16#0	---	False	True	True	True	False		
+    Result Data 1	DWord	4.0	16#0	---	False	True	True	True	False		
+    Result Data 2	DWord	8.0	16#0	---	False	True	True	True	False		
+    Result Data 3	DWord	12.0	16#0	---	False	True	True	True	False		
+    Result Data 4	DWord	16.0	16#0	---	False	True	True	True	False		
+    Result Data 5	DWord	20.0	16#0	---	False	True	True	True	False		
+    Result Data 6	DWord	24.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	28.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	32.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	36.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	40.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	44.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	48.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	52.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	56.0	16#0	---	False	True	True	True	False		
+    Result Data 7	DWord	60.0	16#0	---	False	True	True	True	False	
