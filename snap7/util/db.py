@@ -152,7 +152,18 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
     with open(txt_path, "r") as file:
         db_specification = ""
 
-        valid_list = ["BOOL", "DWORD", "INT", "DINT", "CHAR", "STRING", "DATE_AND_TIME", "TIME_OF_DAY", "REAL", "BYTE"]
+        valid_list = {
+            "BOOL",
+            "DWORD",
+            "INT",
+            "DINT",
+            "CHAR",
+            "STRING",
+            "DATE_AND_TIME",
+            "TIME_OF_DAY",
+            "REAL",
+            "BYTE",
+        }
         var_names: list[str] = []
 
         for line in file:
@@ -361,7 +372,9 @@ class DB:
                 logger.error(msg)
             self.index[key] = row
 
-    def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, "Row"]:
+    def __getitem__(
+        self, key: str, default: Optional[None] = None
+    ) -> Union[None, "Row"]:
         """Access a row of the table through its index.
 
         Rows (values) are of type :class:`DB_Row`.
@@ -432,7 +445,9 @@ class DB:
             :obj:`TypeError`: if `bytearray_` is not an instance of :obj:`bytearray`
         """
         if not isinstance(bytearray_, bytearray):
-            raise TypeError(f"Value bytearray_: {bytearray_} is not from type bytearray")
+            raise TypeError(
+                f"Value bytearray_: {bytearray_} is not from type bytearray"
+            )
         self._bytearray = bytearray_
 
     def read(self, client: Client) -> None:
@@ -540,7 +555,9 @@ class Row:
         self.area = area
 
         if not isinstance(bytearray_, (bytearray, DB)):
-            raise TypeError(f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)")
+            raise TypeError(
+                f"Value bytearray_ {bytearray_} is not from type (bytearray, DB)"
+            )
         self._bytearray = bytearray_
         self._specification = parse_specification(_specification)
 
@@ -634,17 +651,23 @@ class Row:
         if type_.startswith("FSTRING"):
             max_size = re.search(r"\d+", type_)
             if max_size is None:
-                raise ValueError("Max size could not be determinate. re.search() returned None")
+                raise ValueError(
+                    "Max size could not be determinate. re.search() returned None"
+                )
             return get_fstring(bytearray_, byte_index, int(max_size[0]))
         elif type_.startswith("STRING"):
             max_size = re.search(r"\d+", type_)
             if max_size is None:
-                raise ValueError("Max size could not be determinate. re.search() returned None")
+                raise ValueError(
+                    "Max size could not be determinate. re.search() returned None"
+                )
             return get_string(bytearray_, byte_index)
         elif type_.startswith("WSTRING"):
             max_size = re.search(r"\d+", type_)
             if max_size is None:
-                raise ValueError("Max size could not be determinate. re.search() returned None")
+                raise ValueError(
+                    "Max size could not be determinate. re.search() returned None"
+                )
             return get_wstring(bytearray_, byte_index)
         else:
             type_to_func: Dict[str, Callable[[bytearray, int], ValueType]] = {
@@ -673,7 +696,9 @@ class Row:
                 return type_to_func[type_](bytearray_, byte_index)
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Optional[bytearray]:
+    def set_value(
+        self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]
+    ) -> Optional[bytearray]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
@@ -693,14 +718,18 @@ class Row:
 
         if type_ == "BOOL" and isinstance(value, bool):
             byte_index, bool_index = str(byte_index).split(".")
-            return set_bool(bytearray_, self.get_offset(byte_index), int(bool_index), value)
+            return set_bool(
+                bytearray_, self.get_offset(byte_index), int(bool_index), value
+            )
 
         byte_index = self.get_offset(byte_index)
 
         if type_.startswith("FSTRING") and isinstance(value, str):
             max_size = re.search(r"\d+", type_)
             if max_size is None:
-                raise ValueError("Max size could not be determinate. re.search() returned None")
+                raise ValueError(
+                    "Max size could not be determinate. re.search() returned None"
+                )
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             set_fstring(bytearray_, byte_index, value, max_size_int)
@@ -709,7 +738,9 @@ class Row:
         if type_.startswith("STRING") and isinstance(value, str):
             max_size = re.search(r"\d+", type_)
             if max_size is None:
-                raise ValueError("Max size could not be determinate. re.search() returned None")
+                raise ValueError(
+                    "Max size could not be determinate. re.search() returned None"
+                )
             max_size_grouped = max_size.group(0)
             max_size_int = int(max_size_grouped)
             set_string(bytearray_, byte_index, value, max_size_int)
@@ -755,7 +786,9 @@ class Row:
             :obj:`ValueError`: if the `row_size` is less than 0.
         """
         if not isinstance(self._bytearray, DB):
-            raise TypeError(f"Value self._bytearray: {self._bytearray} is not from type DB.")
+            raise TypeError(
+                f"Value self._bytearray: {self._bytearray} is not from type DB."
+            )
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
 
@@ -785,7 +818,9 @@ class Row:
             :obj:`ValueError`: if the `row_size` is less than 0.
         """
         if not isinstance(self._bytearray, DB):
-            raise TypeError(f"Value self._bytearray:{self._bytearray} is not from type DB.")
+            raise TypeError(
+                f"Value self._bytearray:{self._bytearray} is not from type DB."
+            )
         if self.row_size < 0:
             raise ValueError("row_size must be greater equal zero.")
         db_nr = self._bytearray.db_number
