@@ -185,10 +185,9 @@ def prepare_tia_export_to_parse(txt_path: str) -> str:
             var_name = var_name + to_add
             var_names.append(var_name)
 
-            if var_type:
-                if var_type in valid_list:
-                    new_line = var_offset + "\t" + var_name + "\t" + var_type
-                    db_specification = db_specification + "\n" + new_line
+            if var_type in valid_list:
+                new_line = var_offset + "\t" + var_name + "\t" + var_type
+                db_specification = db_specification + "\n" + new_line
     return db_specification
 
 
