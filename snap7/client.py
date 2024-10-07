@@ -469,9 +469,6 @@ class Client:
 
         Returns:
             If size is 0, it returns a 0, otherwise an `Array` of specified block type.
-
-        Raises:
-            :obj:`ValueError`: if the `block_type` is not valid.
         """
 
         logger.debug(f"listing blocks of type: {block_type} size: {size}")
@@ -498,11 +495,8 @@ class Client:
         Returns:
             Structure of information from block.
 
-        Raises:
-            :obj:`ValueError`: if the `blocktype` is not valid.
-
         Examples:
-            >>> block_info = Client().get_block_info("DB", 1)
+            >>> block_info = Client().get_block_info(block_type.DB, 1)
             >>> print(block_info)
             Block type: 10
             Block number: 1
