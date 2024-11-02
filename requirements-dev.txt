@@ -4,7 +4,6 @@
 #
 #    'tox -e requirements-dev'
 #
---index-url https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/
 
 alabaster==1.0.0
     # via sphinx
