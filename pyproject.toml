@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-snap7"
-version = "2.0.0"
+version = "2.0.1"
 description = "Python wrapper for the snap7 library"
 readme = "README.rst"
 authors = [
