@@ -636,7 +636,7 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=1)
         >>> get_char(data, 0)
-        C
+        'C'
     """
     char = chr(bytearray_[byte_index])
     return char
@@ -659,7 +659,7 @@ def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=2)
         >>> get_wchar(data, 0)
-        C
+        'C'
     """
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[1])
