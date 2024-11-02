@@ -20,7 +20,6 @@ repos:
       - id: detect-private-key
       - id: forbid-submodules
       - id: mixed-line-ending
-      - id: name-tests-test
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: 'v1.13.0'
