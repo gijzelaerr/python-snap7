@@ -4,28 +4,31 @@
 #
 #    'tox -e requirements-dev'
 #
+--index-url https://artifactory.spotify.net/artifactory/api/pypi/pypi/simple/
 
-alabaster==0.7.16
+alabaster==1.0.0
     # via sphinx
 apeye==1.4.1
     # via sphinx-toolbox
 apeye-core==1.1.5
     # via apeye
-autodocsumm==0.2.12
+autodocsumm==0.2.14
     # via sphinx-toolbox
-babel==2.15.0
+babel==2.16.0
     # via sphinx
 beautifulsoup4==4.12.3
     # via sphinx-toolbox
 cachecontrol[filecache]==0.14.0
     # via sphinx-toolbox
-cachetools==5.3.3
+cachetools==5.5.0
     # via tox
-certifi==2024.7.4
-    # via requests
+certifi==2024.8.30
+    # via
+    #   requests
+    #   sphinx-prompt
 chardet==5.2.0
     # via tox
-charset-normalizer==3.3.2
+charset-normalizer==3.4.0
     # via requests
 click==8.1.7
     # via python-snap7 (pyproject.toml)
@@ -35,9 +38,9 @@ cssutils==2.11.1
     # via dict2css
 dict2css==0.3.0.post1
     # via sphinx-toolbox
-distlib==0.3.8
+distlib==0.3.9
     # via virtualenv
-docutils==0.20.1
+docutils==0.21.2
     # via
     #   sphinx
     #   sphinx-prompt
@@ -52,9 +55,9 @@ domdf-python-tools==3.9.0
     #   sphinx-toolbox
 enum-tools[sphinx]==0.12.0
     # via python-snap7 (pyproject.toml)
-exceptiongroup==1.2.1
+exceptiongroup==1.2.2
     # via pytest
-filelock==3.15.4
+filelock==3.16.1
     # via
     #   cachecontrol
     #   sphinx-toolbox
@@ -62,10 +65,11 @@ filelock==3.15.4
     #   virtualenv
 html5lib==1.1
     # via sphinx-toolbox
-idna==3.7
+idna==3.10
     # via
     #   apeye-core
     #   requests
+    #   sphinx-prompt
 imagesize==1.4.1
     # via sphinx
 iniconfig==2.0.0
@@ -76,17 +80,17 @@ jinja2==3.1.4
     #   sphinx-jinja2-compat
 markdown-it-py==3.0.0
     # via rich
-markupsafe==2.1.5
+markupsafe==3.0.2
     # via
     #   jinja2
     #   sphinx-jinja2-compat
 mdurl==0.1.2
     # via markdown-it-py
-more-itertools==10.3.0
+more-itertools==10.5.0
     # via cssutils
-msgpack==1.0.8
+msgpack==1.1.0
     # via cachecontrol
-mypy==1.10.1
+mypy==1.13.0
     # via python-snap7 (pyproject.toml)
 mypy-extensions==1.0.0
     # via mypy
@@ -98,7 +102,7 @@ packaging==24.1
     #   pytest
     #   sphinx
     #   tox
-platformdirs==4.2.2
+platformdirs==4.3.6
     # via
     #   apeye
     #   tox
@@ -114,30 +118,30 @@ pygments==2.18.0
     #   sphinx
     #   sphinx-prompt
     #   sphinx-tabs
-pyproject-api==1.7.1
+pyproject-api==1.8.0
     # via tox
-pytest==8.2.2
+pytest==8.3.3
     # via python-snap7 (pyproject.toml)
 requests==2.32.3
     # via
     #   apeye
     #   cachecontrol
     #   sphinx
-rich==13.7.1
+rich==13.9.4
     # via python-snap7 (pyproject.toml)
 ruamel-yaml==0.18.6
     # via sphinx-toolbox
-ruamel-yaml-clib==0.2.8
+ruamel-yaml-clib==0.2.12
     # via ruamel-yaml
-ruff==0.5.1
+ruff==0.7.2
     # via python-snap7 (pyproject.toml)
 six==1.16.0
     # via html5lib
 snowballstemmer==2.2.0
     # via sphinx
-soupsieve==2.5
+soupsieve==2.6
     # via beautifulsoup4
-sphinx==7.3.7
+sphinx==8.1.3
     # via
     #   autodocsumm
     #   enum-tools
@@ -148,58 +152,62 @@ sphinx==7.3.7
     #   sphinx-tabs
     #   sphinx-toolbox
     #   sphinxcontrib-jquery
-sphinx-autodoc-typehints==2.2.2
+sphinx-autodoc-typehints==2.5.0
     # via sphinx-toolbox
 sphinx-jinja2-compat==0.3.0
     # via
     #   enum-tools
     #   sphinx-toolbox
-sphinx-prompt==1.8.0
+sphinx-prompt==1.9.0
     # via sphinx-toolbox
-sphinx-rtd-theme==2.0.0
+sphinx-rtd-theme==3.0.1
     # via python-snap7 (pyproject.toml)
 sphinx-tabs==3.4.5
     # via sphinx-toolbox
-sphinx-toolbox==3.7.0
+sphinx-toolbox==3.8.1
     # via enum-tools
-sphinxcontrib-applehelp==1.0.8
+sphinxcontrib-applehelp==2.0.0
     # via sphinx
-sphinxcontrib-devhelp==1.0.6
+sphinxcontrib-devhelp==2.0.0
     # via sphinx
-sphinxcontrib-htmlhelp==2.0.5
+sphinxcontrib-htmlhelp==2.1.0
     # via sphinx
 sphinxcontrib-jquery==4.1
     # via sphinx-rtd-theme
 sphinxcontrib-jsmath==1.0.1
     # via sphinx
-sphinxcontrib-qthelp==1.0.7
+sphinxcontrib-qthelp==2.0.0
     # via sphinx
-sphinxcontrib-serializinghtml==1.1.10
+sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 tabulate==0.9.0
     # via sphinx-toolbox
-tomli==2.0.1
+tomli==2.0.2
     # via
     #   mypy
     #   pyproject-api
     #   pytest
     #   sphinx
     #   tox
-tox==4.16.0
+tox==4.23.2
     # via python-snap7 (pyproject.toml)
 types-click==7.1.8
     # via python-snap7 (pyproject.toml)
-types-setuptools==70.2.0.20240704
+types-setuptools==75.2.0.20241025
     # via python-snap7 (pyproject.toml)
 typing-extensions==4.12.2
     # via
     #   domdf-python-tools
     #   enum-tools
     #   mypy
+    #   rich
     #   sphinx-toolbox
-urllib3==2.2.2
-    # via requests
-virtualenv==20.26.3
+    #   tox
+urllib3==2.2.3
+    # via
+    #   requests
+    #   sphinx-prompt
+virtualenv==20.27.1
     # via tox
 webencodings==0.5.1
     # via html5lib
