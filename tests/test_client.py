@@ -18,7 +18,7 @@ from ctypes import (
     pointer,
     Array,
 )
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, UTC
 from multiprocessing import Process
 from unittest import mock
 from typing import cast as typing_cast
@@ -803,8 +803,12 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
-        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
+        self.assertEqual(
+            bytes((datetime(2019, 6, 27, tzinfo=UTC).astimezone().strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate
+        )
+        self.assertEqual(
+            bytes((datetime(2019, 6, 27, tzinfo=UTC).astimezone().strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate
+        )
 
     def test_iso_exchange_buffer(self) -> None:
         # Cli_IsoExchangeBuffer
