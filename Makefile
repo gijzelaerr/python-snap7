@@ -16,7 +16,7 @@ venv/bin/pytest: venv/
 	venv/bin/pip install -e ".[test]"
 
 venv/bin/sphinx-build:  venv/
-	venv/bin/pip install -e ".[doc]"
+	venv/bin/pip install -e ".[doc,cli]"
 
 venv/bin/tox: venv/
 	venv/bin/pip install tox
@@ -29,7 +29,7 @@ setup: venv/installed
 
 .PHONY: doc
 doc: venv/bin/sphinx-build
-	cd doc && make html
+	venv/bin/sphinx-build -N -bhtml doc/ doc/_build
 
 .PHONY: check
 check: venv/bin/pytest

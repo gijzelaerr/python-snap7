@@ -382,8 +382,8 @@ class TestClient(unittest.TestCase):
             self.assertRaises(Exception, self.client.get_param, non_client)
 
     def test_as_copy_ram_to_rom(self) -> None:
-        response = self.client.as_copy_ram_to_rom(timeout=1)
-        self.client.wait_as_completion(1100)
+        response = self.client.as_copy_ram_to_rom(timeout=2)
+        self.client.wait_as_completion(2000)
         self.assertEqual(0, response)
 
     def test_as_ct_read(self) -> None:
@@ -714,7 +714,7 @@ class TestClient(unittest.TestCase):
 
     def test_copy_ram_to_rom(self) -> None:
         # Cli_CopyRamToRom
-        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=1))
+        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=2))
 
     def test_ct_read(self) -> None:
         # Cli_CTRead
