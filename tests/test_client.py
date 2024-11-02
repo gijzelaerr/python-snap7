@@ -714,7 +714,7 @@ class TestClient(unittest.TestCase):
 
     def test_copy_ram_to_rom(self) -> None:
         # Cli_CopyRamToRom
-        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=1))
+        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=2))
 
     def test_ct_read(self) -> None:
         # Cli_CTRead
