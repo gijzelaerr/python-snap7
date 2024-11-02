@@ -315,7 +315,7 @@ class DB:
             if key and key in self.index:
                 msg = f"{key} not unique!"
                 logger.error(msg)
-            self.index[key] = row
+            self.index[str(key)] = row
 
     def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, "Row"]:
         """Access a row of the table through its index.
