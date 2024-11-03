@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-snap7"
-version = "2.0.1"
+version = "2.0.2"
 description = "Python wrapper for the snap7 library"
 readme = "README.rst"
 authors = [
@@ -35,7 +35,7 @@ Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 [project.optional-dependencies]
 test = ["pytest", "mypy", "types-setuptools", "ruff", "tox", "types-click", "uv"]
 cli = ["rich", "click" ]
-doc = ["sphinx", "sphinx_rtd_theme", "enum-tools[sphinx]"]
+doc = ["sphinx", "sphinx_rtd_theme"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed", "lib/libsnap7.so", "lib/snap7.dll", "lib/libsnap7.dylib"]
