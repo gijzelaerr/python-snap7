@@ -125,7 +125,6 @@ def error_wrap(context: Context) -> Callable[..., Callable[..., None]]:
     return middle
 
 
-@cache
 def check_error(code: int, context: Context = "client") -> None:
     """Check if the error code is set. If so, a Python log message is generated
         and an error is raised.
@@ -143,6 +142,7 @@ def check_error(code: int, context: Context = "client") -> None:
         raise RuntimeError(error)
 
 
+@cache
 def error_text(error: int, context: Context = "client") -> bytes:
     """Returns a textual explanation of a given error number
 
