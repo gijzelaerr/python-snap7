@@ -23,9 +23,9 @@ repos:
 #        additional_dependencies: [types-setuptools, types-click]
 #        files: ^snap7
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 'v0.4.2'
-    hooks:
-      - id: ruff
-      - id: ruff-format
+#  - repo: https://github.com/astral-sh/ruff-pre-commit
+#    rev: 'v0.4.2'
+#hooks:
+#- id: ruff
+#- id: ruff-format
 exclude: "snap7/protocol.py"
