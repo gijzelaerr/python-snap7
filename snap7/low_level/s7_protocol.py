@@ -4,7 +4,7 @@ from .s7_consts import S7Consts
 from .s7_timer import S7Timer
 
 
-class S7:
+class S7Protocol:
     bias = 621355968000000000  # "decimicros" between 0001-01-01 00:00:00 and 1970-01-01 00:00:00
 
     @staticmethod

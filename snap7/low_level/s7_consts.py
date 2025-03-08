@@ -1,4 +1,13 @@
 class S7Consts:
+    # Iso over TCP constants
+    isoTcpVersion = 3  # RFC 1006
+    isoTcpPort = 102  # RFC 1006
+    isoInvalidHandle = 0
+    MaxTSAPLength = 16  # Max Length for Src and Dst TSAP
+    MaxIsoFragments = 64  # Max fragments
+    IsoPayload_Size = 4096  # Iso telegram Buffer size
+    noError = 0
+
     # Error codes
     errTCPSocketCreation = 0x00000001
     errTCPConnectionTimeout = 0x00000002
@@ -14,6 +23,23 @@ class S7Consts:
     errIsoConnect = 0x00010000
     errIsoInvalidPDU = 0x00030000
     errIsoInvalidDataSize = 0x00040000
+    errIsoMask = 0x000F0000
+    errIsoBase = 0x0000FFFF
+    errIsoDisconnect = 0x00020000  # Disconnect error
+    errIsoNullPointer = 0x00050000  # Null passed as pointer
+    errIsoShortPacket = 0x00060000  # A short packet received
+    errIsoTooManyFragments = 0x00070000  # Too many packets without EoT flag
+    errIsoPduOverflow = 0x00080000  # The sum of fragments data exceeded maximum packet size
+    errIsoSendPacket = 0x00090000  # An error occurred during send
+    errIsoRecvPacket = 0x000A0000  # An error occurred during recv
+    errIsoInvalidParams = 0x000B0000  # Invalid TSAP params
+    errIsoResvd_1 = 0x000C0000  # Unassigned
+    errIsoResvd_2 = 0x000D0000  # Unassigned
+    errIsoResvd_3 = 0x000E0000  # Unassigned
+    errIsoResvd_4 = 0x000F0000  # Unassigned
+
+    ISO_OPT_TCP_NODELAY = 0x00000001  # Disable Nagle algorithm
+    ISO_OPT_INSIDE_MTU = 0x00000002  # Max packet size < MTU ethernet card
 
     errCliNegotiatingPDU = 0x00100000
     errCliInvalidParams = 0x00200000
@@ -81,10 +107,3 @@ class S7Consts:
     S7CpuStatusStop = 0x04
 
 
-class S7Tag:
-    def __init__(self, area, db_number, start, elements, word_len):
-        self.area = area
-        self.db_number = db_number
-        self.start = start
-        self.elements = elements
-        self.word_len = word_len

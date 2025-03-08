@@ -1,6 +1,6 @@
-from .msg_socket import MsgSocket
+from .s7_socket import S7Socket
 from .s7_consts import S7Consts
-from .s7 import S7
+from .s7_protocol import S7Protocol as S7
 import time
 import struct
 
@@ -54,6 +54,8 @@ class S7Client:
         self._PDULength = 0
         self._PduSizeRequested = 480
         self._PLCPort = 102
+        self._rack = 0
+        self._slot = 0
         self._RecvTimeout = 2000
         self._SendTimeout = 2000
         self._ConnTimeout = 2000
@@ -100,18 +102,19 @@ class S7Client:
         self.create_socket()
 
     def create_socket(self):
-        self.Socket = MsgSocket()
+        self.Socket = S7Socket()
         self.Socket.connect_timeout = self._ConnTimeout
         self.Socket.read_timeout = self._RecvTimeout
         self.Socket.write_timeout = self._SendTimeout
 
-    def tcp_connect(self):
-        if self._LastError == 0:
-            try:
-                self._LastError = self.Socket.connect(self.IPAddress, self._PLCPort)
-            except:
-                self._LastError = "errTCPConnectionFailed"
-        return self._LastError
+    def connect(self, host, rack, slot, tcp_port=102):
+        try:
+            self._rack = rack
+            self._slot = slot
+            self.Socket.connect(host, tcp_port)
+            self.connected = True
+        except Exception as e:
+            self._LastError = "errTCPConnectionFailed"
 
     def recv_packet(self, buffer, start, size):
         if self.connected:
@@ -197,22 +200,6 @@ class S7Client:
 
     def __del__(self):
         self.disconnect()
-
-    def connect(self):
-        self._LastError = 0
-        self.Time_ms = 0
-        elapsed = time.time()
-        if not self.connected:
-            self.tcp_connect()
-            if self._LastError == 0:
-                self.iso_connect()
-                if self._LastError == 0:
-                    self._LastError = self.negotiate_pdu_length()
-        if self._LastError != 0:
-            self.disconnect()
-        else:
-            self.Time_ms = int((time.time() - elapsed) * 1000)
-        return self._LastError
 
     def connect_to(self, address, rack, slot, port=102):
         remote_tsap = (self.ConnType << 8) + (rack * 0x20) + slot

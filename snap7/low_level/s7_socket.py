@@ -2,7 +2,7 @@ import socket
 import time
 
 
-class MsgSocket:
+class S7Socket:
     def __init__(self):
         self.TCPSocket = None
         self._ReadTimeout = 2000
@@ -20,10 +20,19 @@ class MsgSocket:
 
     def create_socket(self):
         self.TCPSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Important to set TCP_NODELAY to avoid delays in the communication with the PLC
         self.TCPSocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.TCPSocket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+
+    def bind(self, ip, tcp_port):
+        self.TCPSocket.bind((ip, tcp_port))
 
     def tcp_ping(self, host, port):
-        self.LastError = 0
+        """
+        From Davide Nardella notes on Snap7 if you can ping the PLC you can connect to it
+        :param host: IP address of the Host
+        :param port: TCP port of the Port
+        """
         ping_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ping_socket.settimeout(self._ConnectTimeout / 1000.0)
         try:
