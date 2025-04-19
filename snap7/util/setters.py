@@ -212,7 +212,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
         :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
-        or 'max_size' is greater than 254 or 'value' contains non-ascii characters.
+        or 'max_size' is greater than 254 or 'value' contains ascii characters > 255.
 
     Examples:
         >>> from snap7.util import set_string
@@ -226,11 +226,11 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
 
     if max_size > 254:
         raise ValueError(f"max_size: {max_size} > max. allowed 254 chars")
-    if not value.isascii():
-        raise ValueError(
-            "Value contains non-ascii values, which is not compatible with PLC Type STRING."
-            "Check encoding of value or try set_wstring() (utf-16 encoding needed)."
-        )
+
+    if any(ord(char) < 0 or ord(char) > 255 for char in value):
+        raise ValueError("Value contains ascii values > 255, which is not compatible with PLC Type STRING."
+                         "Check encoding of value or try set_wstring() (utf-16 encoding needed).")
+
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:

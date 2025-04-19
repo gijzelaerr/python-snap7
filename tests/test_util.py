@@ -319,8 +319,10 @@ class TestS7util(unittest.TestCase):
             pass
         # value should still be empty
         self.assertEqual(row["NAME"], "")
+        row["NAME"] = "TrÖt"
+        self.assertEqual(row["NAME"], "TrÖt")
         try:
-            row["NAME"] = "TrÖt"
+            row["NAME"] = "TrĪt"
         except ValueError:
             pass
 
