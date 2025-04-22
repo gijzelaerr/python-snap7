@@ -224,6 +224,12 @@ class TestS7util(unittest.TestCase):
         row["testByte"] = 255
         self.assertEqual(row["testByte"], 255)
 
+    def test_set_char(self) -> None:
+        test_array = bytearray(_bytearray)
+        row = Row(test_array, test_spec, layout_offset=4)
+        row["testChar"] = chr(65)
+        self.assertEqual(row["testChar"], "A")
+
     def test_set_lreal(self) -> None:
         test_array = bytearray(_bytearray)
         row = Row(test_array, test_spec, layout_offset=4)

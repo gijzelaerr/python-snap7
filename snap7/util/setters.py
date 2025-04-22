@@ -509,10 +509,18 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueEr
         >>> Client().db_write(db_number=1, start=10, data=data)
             'bytearray('0x43')
     """
-    if chr_.isascii():
+    if not isinstance(chr_, str):
+        raise TypeError(f"Value value:{chr_} is not from Type string")
+
+    if len(chr_) > 1:
+        raise ValueError(f"size chr_ : {chr_} > 1")
+    elif len(chr_) < 1:
+        raise ValueError(f"size chr_ : {chr_} < 1")
+
+    if 0 <= ord(chr_) <= 255:
         bytearray_[byte_index] = ord(chr_)
         return bytearray_
-    raise ValueError(f"chr_ : {chr_} contains a None-Ascii value, but ASCII-only is allowed.")
+    raise ValueError(f"chr_ : {chr_} contains ascii value > 255, which is not compatible with PLC Type CHAR.")
 
 
 def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:

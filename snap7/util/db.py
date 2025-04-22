@@ -104,6 +104,7 @@ from snap7.util import (
     set_int,
     set_word,
     set_byte,
+    set_char,
     set_usint,
     set_sint,
     set_time,
@@ -676,6 +677,9 @@ class Row:
 
         if type_ == "LREAL" and isinstance(value, float):
             return set_lreal(bytearray_, byte_index, value)
+
+        if type_ == "CHAR" and isinstance(value, str):
+            return set_char(bytearray_, byte_index, value)
 
         if isinstance(value, int):
             type_to_func = {
