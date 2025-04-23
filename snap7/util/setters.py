@@ -229,7 +229,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
 
     if any(ord(char) < 0 or ord(char) > 255 for char in value):
         raise ValueError(
-            "Value contains ascii values > 255, which is not compatible with PLC Type STRING."
+            "Value contains ascii values > 255, which is not compatible with PLC Type STRING. "
             "Check encoding of value or try set_wstring()."
         )
 
