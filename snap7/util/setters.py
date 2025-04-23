@@ -488,26 +488,26 @@ def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytea
     raise NotImplementedError
 
 
-def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueError, bytearray]:
+def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
     """Set char value in a bytearray.
 
     Notes:
         Datatype `char` in the PLC is represented in 1 byte. It has to be in ASCII-format
 
     Args:
-        bytearray_: buffer to read from.
-        byte_index: byte index to start reading from.
-        chr_: Char to be set
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        chr_: `char` to write.
 
     Returns:
-        Value read.
+        Buffer with the written value.
 
     Examples:
-        Read 1 Byte raw from DB1.10, where a char value is stored. Return Python compatible value.
-        >>> data = set_char(data, 0, 'C')
-        >>> from snap7 import Client
-        >>> Client().db_write(db_number=1, start=10, data=data)
-            'bytearray('0x43')
+        write `char` (here as example 'C') to DB1.10 of a PLC
+        >>> data = bytearray(1)
+        >>> set_char(data, 0, 'C')
+        >>> data
+            bytearray('0x43')
     """
     if not isinstance(chr_, str):
         raise TypeError(f"Value value:{chr_} is not from Type string")
@@ -520,7 +520,8 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueEr
     if 0 <= ord(chr_) <= 255:
         bytearray_[byte_index] = ord(chr_)
         return bytearray_
-    raise ValueError(f"chr_ : {chr_} contains ascii value > 255, which is not compatible with PLC Type CHAR.")
+    else:
+        raise ValueError(f"chr_ : {chr_} contains ascii value > 255, which is not compatible with PLC Type CHAR.")
 
 
 def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
