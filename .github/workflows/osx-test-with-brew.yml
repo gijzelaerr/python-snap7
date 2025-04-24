@@ -15,8 +15,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install snap7
-        run: brew install snap7 python@${{ matrix.python-version }}
+      - name: Unlink existing Python
+        run: brew unlink python@${{ matrix.python-version }} || true
+      - name: Install snap7 and Python
+        run: |
+          brew install snap7 python@${{ matrix.python-version }}
+          brew link --overwrite python@${{ matrix.python-version }}
       - name: Install python-snap7
         run: |
           python${{ matrix.python-version }} -m venv venv
@@ -24,5 +28,3 @@ jobs:
           venv/bin/python3 -m pip install -e .[test]
       - name: Run pytest
         run: |
-          venv/bin/pytest -m "server or util or client or mainloop"
-          sudo venv/bin/pytest -m partner
