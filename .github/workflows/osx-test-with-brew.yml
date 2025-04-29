@@ -16,7 +16,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install snap7
-        run: brew install snap7 python@${{ matrix.python-version }}
+        run: brew install --overwrite snap7 python@${{ matrix.python-version }}
       - name: Install python-snap7
         run: |
           python${{ matrix.python-version }} -m venv venv
