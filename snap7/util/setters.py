@@ -212,7 +212,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
         :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
-        or 'max_size' is greater than 254 or 'value' contains non-ascii characters.
+        or 'max_size' is greater than 254 or 'value' contains ascii characters > 255.
 
     Examples:
         >>> from snap7.util import set_string
@@ -226,11 +226,13 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
 
     if max_size > 254:
         raise ValueError(f"max_size: {max_size} > max. allowed 254 chars")
-    if not value.isascii():
+
+    if any(ord(char) < 0 or ord(char) > 255 for char in value):
         raise ValueError(
-            "Value contains non-ascii values, which is not compatible with PLC Type STRING."
-            "Check encoding of value or try set_wstring() (utf-16 encoding needed)."
+            "Value contains ascii values > 255, which is not compatible with PLC Type STRING. "
+            "Check encoding of value or try set_wstring()."
         )
+
     size = len(value)
     # FAIL HARD WHEN trying to write too much data into PLC
     if size > max_size:
@@ -488,31 +490,40 @@ def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytea
     raise NotImplementedError
 
 
-def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> Union[ValueError, bytearray]:
+def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
     """Set char value in a bytearray.
 
     Notes:
         Datatype `char` in the PLC is represented in 1 byte. It has to be in ASCII-format
 
     Args:
-        bytearray_: buffer to read from.
-        byte_index: byte index to start reading from.
-        chr_: Char to be set
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        chr_: `char` to write.
 
     Returns:
-        Value read.
+        Buffer with the written value.
 
     Examples:
-        Read 1 Byte raw from DB1.10, where a char value is stored. Return Python compatible value.
-        >>> data = set_char(data, 0, 'C')
-        >>> from snap7 import Client
-        >>> Client().db_write(db_number=1, start=10, data=data)
-            'bytearray('0x43')
+        write `char` (here as example 'C') to DB1.10 of a PLC
+        >>> data = bytearray(1)
+        >>> set_char(data, 0, 'C')
+        >>> data
+            bytearray('0x43')
     """
-    if chr_.isascii():
+    if not isinstance(chr_, str):
+        raise TypeError(f"Value value:{chr_} is not from Type string")
+
+    if len(chr_) > 1:
+        raise ValueError(f"size chr_ : {chr_} > 1")
+    elif len(chr_) < 1:
+        raise ValueError(f"size chr_ : {chr_} < 1")
+
+    if 0 <= ord(chr_) <= 255:
         bytearray_[byte_index] = ord(chr_)
         return bytearray_
-    raise ValueError(f"chr_ : {chr_} contains a None-Ascii value, but ASCII-only is allowed.")
+    else:
+        raise ValueError(f"chr_ : {chr_} contains ascii value > 255, which is not compatible with PLC Type CHAR.")
 
 
 def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
