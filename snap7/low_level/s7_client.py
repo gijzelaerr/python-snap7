@@ -3,7 +3,7 @@ from .s7_protocol import S7Protocol as S7
 import time
 import struct
 
-from ..type import S7CpInfo, S7CpuInfo
+from ..type import S7CpInfo, S7CpuInfo, S7OrderCode
 
 
 class S7SZLHeader:
@@ -24,45 +24,50 @@ class S7Size:
 class S7Client:
     @property
     def connected(self):
-        return self.Socket is not None and self.Socket.connected
+        return self.socket is not None and self.socket.connected
 
     def __init__(self):
-        self._LastError = 0
-        self._PduLength = 0
-        self._PduSizeRequested = 480
-        self._PLCPort = 102
-        self._rack = 0
-        self._slot = 0
-        self._RecvTimeout = 2000
-        self._SendTimeout = 2000
-        self._ConnTimeout = 2000
-        self.IPAddress = ""
-        self.LocalTSAP_HI : int = 0
-        self.LocalTSAP_LO : int = 0
-        self.RemoteTSAP_HI : int = 0
-        self.RemoteTSAP_LO = 0
-        self.LastPDUType = 0
-        self.ConnType = S7.CONNTYPE_PG
-        self.PDU = bytearray(2048)
-        self.Socket = None
-        self.time_ms = 0
-        self.cntword = 0
+        self._last_error : int = 0
 
-        self.Socket = S7Socket()
-        self.Socket.connect_timeout = self._ConnTimeout
-        self.Socket.read_timeout = self._RecvTimeout
-        self.Socket.write_timeout = self._SendTimeout
+        self._address_PLC : str = ""
+        self._port_PLC : int = 102
+        self._rack : int = 0
+        self._slot : int = 0
+        self.conn_type : int = S7.CONNTYPE_PG
+
+        self._recv_timeout : int = 2000
+        self._send_timeout : int = 2000
+        self._conn_timeout : int = 2000
+
+
+
+        self.local_TSAP_high : int = 0
+        self.local_TSAP_low : int = 0
+        self.remote_TSAP_high : int = 0
+        self.remote_TSAP_low: int = 0
+
+        self._length_PDU : int = 0
+        self._size_requested_PDU : int = 480
+        self._last_PDU_type : int = 0
+        self.PDU : bytearray = bytearray(2048)
+
+        self._time_ms : int = 0
+
+        self.socket = S7Socket()
+        self.socket.connect_timeout = self._conn_timeout
+        self.socket.read_timeout = self._recv_timeout
+        self.socket.write_timeout = self._send_timeout
 
     def set_connection_params(self,address, local_tsap, remote_tsap):
-        self.IPAddress = address
+        self._address_PLC = address
 
         loc_tsap = local_tsap & 0x0000FFFF
         rem_tsap = remote_tsap & 0x0000FFFF
 
-        self.LocalTSAP_HI = (loc_tsap >> 8)
-        self.LocalTSAP_LO = loc_tsap & 0xFF
-        self.RemoteTSAP_HI = (rem_tsap >> 8)
-        self.RemoteTSAP_LO = rem_tsap & 0xFF
+        self.local_TSAP_high = (loc_tsap >> 8)
+        self.local_TSAP_low = loc_tsap & 0xFF
+        self.remote_TSAP_high = (rem_tsap >> 8)
+        self.remote_TSAP_low = rem_tsap & 0xFF
 
     def connect_to(self, host: str, rack: int = 0, slot: int = 3, tcp_port: int = 102) -> int:
 
@@ -79,23 +84,23 @@ class S7Client:
         return self.connect()
 
     def connect(self) -> int:
-        self._LastError = 0
-        self.time_ms = 0
+        self._last_error = 0
+        self._time_ms = 0
         elapsed = int(time.time() * 1000)  # Elapsed time in milliseconds
 
         if not self.connected:
             self.tcp_connect()  # First stage: TCP Connection
-            if self._LastError == 0:
+            if self._last_error == 0:
                 self.iso_connect()  # Second stage: ISOTCP (ISO 8073) Connection
-                if self._LastError == 0:
-                    self._LastError = self.negotiate_pdu_length()  # Third stage: S7 PDU negotiation
+                if self._last_error == 0:
+                    self._last_error = self.negotiate_pdu_length()  # Third stage: S7 PDU negotiation
 
-        if self._LastError != 0:
+        if self._last_error != 0:
             self.disconnect()
         else:
-            self.time_ms = int(time.time() * 1000) - elapsed
+            self._time_ms = int(time.time() * 1000) - elapsed
 
-        return self._LastError
+        return self._last_error
 
 
     def read_SZL(self, szl_id : int, szl_index : int, szl_buffer : S7SZL) -> int:
@@ -105,14 +110,14 @@ class S7Client:
         seq_in = 0x00
         seq_out = 0x0000
 
-        self._LastError = 0
-        self.time_ms = 0
+        self._last_error = 0
+        self._time_ms = 0
         elapsed = int(time.time() * 1000)
         szl_buffer.Header.LENTHDR = 0
 
         ## Send two requests to the PLC
         ## Continue reading until the last packet is received
-        while not done and self._LastError == 0:
+        while not done and self._last_error == 0:
             if first:
                 S7.set_word_at(S7.S7_SZL_FIRST, 11, seq_out + 1)
                 S7.set_word_at(S7.S7_SZL_FIRST, 29, szl_id)
@@ -123,11 +128,11 @@ class S7Client:
                 self.PDU[24] = seq_in
                 self.send_packet(S7.S7_SZL_NEXT)
 
-            if self._LastError != 0:
-                return self._LastError
+            if self._last_error != 0:
+                return self._last_error
 
             length = self.recv_iso_packet()
-            if self._LastError == 0:
+            if self._last_error == 0:
                 if first:
                     if length > 32:  # Minimum expected
                         if S7.get_word_at(self.PDU, 27) == 0 and self.PDU[29] == 0xFF:
@@ -140,9 +145,9 @@ class S7Client:
                             offset += data_szl
                             szl_buffer.Header.LENTHDR += szl_buffer.Header.LENTHDR
                         else:
-                            self._LastError = S7.errCliInvalidPlcAnswer
+                            self._last_error = S7.errCliInvalidPlcAnswer
                     else:
-                        self._LastError = S7.errIsoInvalidPDU
+                        self._last_error = S7.errIsoInvalidPDU
                 else:
                     if length > 32:  # Minimum expected
                         if S7.get_word_at(self.PDU, 27) == 0 and self.PDU[29] == 0xFF:
@@ -153,42 +158,40 @@ class S7Client:
                             offset += data_szl
                             szl_buffer.Header.LENTHDR += szl_buffer.Header.LENTHDR
                         else:
-                            self._LastError = S7.errCliInvalidPlcAnswer
+                            self._last_error = S7.errCliInvalidPlcAnswer
                     else:
-                        self._LastError = S7.errIsoInvalidPDU
+                        self._last_error = S7.errIsoInvalidPDU
             first = False
 
-        if self._LastError == 0:
-            self.time_ms = int(time.time() * 1000) - elapsed
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
 
-        return self._LastError
+        return self._last_error
 
     def get_cpu_info(self, info: S7CpuInfo) -> int:
         szl = S7SZL(1024)
 
         elapsed = int(time.time() * 1000)
 
-        self._LastError = self.read_SZL(0x001C, 0x000, szl)
+        self._last_error = self.read_SZL(0x001C, 0x000, szl)
 
-        if self._LastError == 0:
-            info.ModuleTypeName = S7.GetCharsAt(szl.Data, 172, 32)
-            info.SerialNumber = S7.GetCharsAt(szl.Data, 138, 24)
-            info.ASName = S7.GetCharsAt(szl.Data, 2, 24)
-            info.Copyright = S7.GetCharsAt(szl.Data, 104, 26)
-            info.ModuleName = S7.GetCharsAt(szl.Data, 36, 24)
+        if self._last_error == 0:
+            info.ModuleTypeName = S7.get_chars_at(szl.Data, 172, 32)
+            info.SerialNumber = S7.get_chars_at(szl.Data, 138, 24)
+            info.ASName = S7.get_chars_at(szl.Data, 2, 24)
+            info.Copyright = S7.get_chars_at(szl.Data, 104, 26)
+            info.ModuleName = S7.get_chars_at(szl.Data, 36, 24)
+            self._time_ms = int(time.time() * 1000) - elapsed
 
-        if self._LastError == 0:
-            self.time_ms = int(time.time() * 1000) - elapsed
-
-        return self._LastError
+        return self._last_error
 
     def get_cp_info(self, cp : S7CpInfo):
         szl = S7SZL(1024)
 
         elapsed = int(time.time() * 1000)
 
-        self._LastError = self.read_SZL(0x0131, 0x001, szl)
-        if  self._LastError == 0:
+        self._last_error = self.read_SZL(0x0131, 0x001, szl)
+        if  self._last_error == 0:
             cp.MaxPduLength = S7.get_int_at(szl.Data, 2)
             # cp.MaxConnections = S7.get_int_at(szl.Data, 4)
             # cp.MaxMpiRate = S7.get_int_at(szl.Data, 6)
@@ -196,120 +199,165 @@ class S7Client:
             cp.MaxConnections = S7.get_int_at(szl.Data, 6)
             cp.MaxMpiRate = S7.get_int_at(szl.Data, 4)
             cp.MaxBusRate = S7.get_int_at(szl.Data, 10)
+            self._time_ms = int(time.time() * 1000) - elapsed
 
-        if  self._LastError == 0:
-            self.time_ms = int(time.time() * 1000) - elapsed
+        return self._last_error
 
-        return  self._LastError
+    def get_order_code(self, order_code: S7OrderCode):
+        szl = S7SZL(1024)
 
+        elapsed = int(time.time() * 1000)
+
+        self._last_error = self.read_SZL(0x0001, 0x000, szl)
+
+        if self._last_error == 0:
+            order_code.OrderCode = S7.get_chars_at(szl.Data, 2, 20)
+            order_code.V1 = szl.Data[-3]
+            order_code.V2 = szl.Data[-2]
+            order_code.V3 = szl.Data[-1]
+            self._time_ms = int(time.time() * 1000) - elapsed
+
+        return self._last_error
+
+    def get_cpu_state(self,  status_ref: dict):
+        self._last_error = 0
+        elapsed = int(time.time() * 1000)
+
+        self.send_packet(S7.S7_GET_STAT)
+        if self._last_error != 0:
+            return self._last_error
+
+        length = self.recv_iso_packet()
+
+        if length <= 30:
+            self._last_error = S7.errIsoInvalidPDU
+            return self._last_error
+
+        result = S7.get_word_at(self.PDU, 27)
+        if result == 0:
+            state_value = self.PDU[44]
+            status_ref["cpu_state"] = state_value
+        else:
+            self._last_error = S7.errCliInvalidPlcAnswer
+
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+
+        return self._last_error
+
+    def get_exec_time(self):
+        return self._time_ms
+
+    def get_last_error(self):
+        return self._last_error
 
     def recv_packet(self, buffer, start, size):
         if self.connected:
-            self._LastError = self.Socket.receive(buffer, start, size)
+            self._last_error = self.socket.receive(buffer, start, size)
         else:
-            self._LastError = S7.errTCPNotConnected
+            self._last_error = S7.errTCPNotConnected
 
     def send_packet(self, buffer, length=None):
         if length is None:
             length = len(buffer)
-        self._LastError = self.Socket.send(buffer, length)
+        self._last_error = self.socket.send(buffer, length)
 
     def recv_iso_packet(self):
         done = False
         size = 0
-        while self._LastError == 0 and not done:
+        while self._last_error == 0 and not done:
             self.recv_packet(self.PDU, 0, 4)
-            if self._LastError == 0:
+            if self._last_error == 0:
                 size = struct.unpack(">H", self.PDU[2:4])[0]
                 if size == 7:
                     self.recv_packet(self.PDU, 4, 3)
                 else:
-                    if size > self._PduSizeRequested + 7 or size < 16:
-                        self._LastError = S7.errIsoInvalidPDU
+                    if size > self._size_requested_PDU + 7 or size < 16:
+                        self._last_error = S7.errIsoInvalidPDU
                     else:
                         done = True
 
-        if self._LastError == 0:
+        if self._last_error == 0:
             self.recv_packet(self.PDU, 4, 3)
-            self.LastPDUType = self.PDU[5]
+            self._last_PDU_type = self.PDU[5]
             self.recv_packet(self.PDU, 7, size - 7)
-        return size if self._LastError == 0 else 0
+        return size if self._last_error == 0 else 0
 
     def iso_connect(self):
         iso_cr = S7.ISO_CR # Copy bytearray ?
-        iso_cr[16] = self.LocalTSAP_HI
-        iso_cr[17] = self.LocalTSAP_LO
-        iso_cr[20] = self.RemoteTSAP_HI
-        iso_cr[21] = self.RemoteTSAP_LO
+        iso_cr[16] = self.local_TSAP_high
+        iso_cr[17] = self.local_TSAP_low
+        iso_cr[20] = self.remote_TSAP_high
+        iso_cr[21] = self.remote_TSAP_low
         self.send_packet(iso_cr)
-        if self._LastError == 0:
+        if self._last_error == 0:
             size = self.recv_iso_packet()
-            if self._LastError == 0:
+            if self._last_error == 0:
                 if size == 22:
-                    if self.LastPDUType != 0xD0:
-                        self._LastError = S7.errIsoConnect
+                    if self._last_PDU_type != 0xD0:
+                        self._last_error = S7.errIsoConnect
                 else:
-                    self._LastError = S7.errIsoInvalidPDU
-        return self._LastError
+                    self._last_error = S7.errIsoInvalidPDU
+        return self._last_error
 
     def negotiate_pdu_length(self):
         pn_message = S7.S7_PN
-        S7.set_word_at(pn_message, 23,  self._PduSizeRequested)
+        S7.set_word_at(pn_message, 23, self._size_requested_PDU)
         self.send_packet(pn_message)
-        if self._LastError == 0:
+        if self._last_error == 0:
             length = self.recv_iso_packet()
-            if self._LastError == 0:
+            if self._last_error == 0:
                 if length == 27 and self.PDU[17] == 0 and self.PDU[18] == 0:
-                    self._PduLength = S7.get_word_at(self.PDU, 25)
-                    if self._PduLength <= 0:
-                        self._LastError = S7.errCliNegotiatingPDU
+                    plength = S7.get_word_at(self.PDU, 25)
+                    if plength <= 0:
+                        self._last_error = S7.errCliNegotiatingPDU
                 else:
-                    self._LastError = S7.errCliNegotiatingPDU
-        return self._LastError
+                    self._last_error = S7.errCliNegotiatingPDU
+        return self._last_error
 
     def __del__(self):
         self.disconnect()
 
     def set_connection_type(self, connection_type):
-        self.ConnType = connection_type
+        self.conn_type = connection_type
         return 0
 
     def disconnect(self) -> bool:
-        self.Socket.close()
+        self.socket.close()
         return True
 
     def get_param(self, param_number):
         return {
-            S7.p_u16_RemotePort: self._PLCPort,
-            S7.p_i32_PingTimeout: self._ConnTimeout,
-            S7.p_i32_SendTimeout: self._SendTimeout,
-            S7.p_i32_RecvTimeout: self._RecvTimeout,
-            S7.p_i32_PDURequest: self._PduSizeRequested,
+            S7.p_u16_RemotePort: self._port_PLC,
+            S7.p_i32_PingTimeout: self._conn_timeout,
+            S7.p_i32_SendTimeout: self._send_timeout,
+            S7.p_i32_RecvTimeout: self._recv_timeout,
+            S7.p_i32_PDURequest: self._size_requested_PDU,
         }.get(param_number, S7.errCliInvalidParamNumber)
 
     def set_param(self, param_number, value):
         if param_number == S7.p_u16_RemotePort:
-            self._PLCPort = value
+            self._port_PLC = value
         elif param_number == S7.p_i32_PingTimeout:
-            self._ConnTimeout = value
+            self._conn_timeout = value
         elif param_number == S7.p_i32_SendTimeout:
-            self._SendTimeout = value
+            self._send_timeout = value
         elif param_number == S7.p_i32_RecvTimeout:
-            self._RecvTimeout = value
+            self._recv_timeout = value
         elif param_number == S7.p_i32_PDURequest:
-            self._PduSizeRequested = value
+            self._size_requested_PDU = value
         else:
             return S7.errCliInvalidParamNumber
         return 0
 
     def tcp_connect(self):
-        if self._LastError == 0:
+        if self._last_error == 0:
             try:
                 # Assuming `self.Socket` is a socket object
-                self.Socket.connect(self.IPAddress, self._PLCPort)
+                self.socket.connect(self._address_PLC, self._port_PLC)
             except Exception:
-                self._LastError = S7.errTCPConnectionFailed
-        return self._LastError
+                self._last_error = S7.errTCPConnectionFailed
+        return self._last_error
 
 
 #     def read_area(self, area, db_number, start, amount, word_len, buffer, bytes_read=0):

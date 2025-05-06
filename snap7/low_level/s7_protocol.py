@@ -129,6 +129,20 @@ class S7Protocol:
         ]
     )
 
+    S7_GET_STAT = bytearray(
+        [
+            0x03, 0x00, 0x00, 0x21,
+            0x02, 0xf0, 0x80, 0x32,
+            0x07, 0x00, 0x00, 0x2c,
+            0x00, 0x00, 0x08, 0x00,
+            0x08, 0x00, 0x01, 0x12,
+            0x04, 0x11, 0x44, 0x01,
+            0x00, 0xff, 0x09, 0x00,
+            0x04, 0x04, 0x24, 0x00,
+            0x00
+        ]
+    )
+
     # SZL First telegram request
     S7_SZL_FIRST = bytearray(
         [
@@ -534,7 +548,7 @@ class S7Protocol:
         Buffer[Pos + 4 : Pos + 4 + size * 2] = Value.encode("utf-16-be")
 
     @staticmethod
-    def GetCharsAt(Buffer, Pos, Size):
+    def get_chars_at(Buffer, Pos, Size):
         return Buffer[Pos : Pos + Size].decode("utf-8")
 
     @staticmethod
