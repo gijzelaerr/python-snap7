@@ -1,4 +1,4 @@
-from .s7_consts import S7Consts
+from .s7_protocol import S7Protocol
 from .s7_socket import S7Socket
 
 
@@ -9,7 +9,7 @@ class S7Server:
         self.db_count = 0
         self.db_limit = 0
         self.pdu = bytearray(2048)  # Assuming max PDU size
-        self.cpu_state : int = S7Consts.S7CpuStatusRun
+        self.cpu_state : int = S7Protocol.S7CpuStatusRun
 
     def __del__(self):
         self.socket.close()
@@ -24,7 +24,8 @@ class S7Server:
         self.socket.create_socket()
         self.socket.bind(ip, tcp_port)
 
-    def stop(self):
-        pass
+    def stop(self) -> bool:
+        self.socket.close()
+        return True
 
 
