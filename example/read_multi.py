@@ -7,7 +7,7 @@ This was tested against a S7-319 CPU
 import ctypes
 
 from snap7 import Client
-from error import check_error
+from snap7.error import check_error
 from snap7.type import S7DataItem, Area, WordLen
 from snap7.util import get_real, get_int
 
