@@ -7,7 +7,7 @@ on:
 jobs:
   linux-build-amd64:
     name: Build wheel for linux AMD64
-    runs-on: ubuntu-2.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
