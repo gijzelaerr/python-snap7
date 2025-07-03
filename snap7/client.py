@@ -385,8 +385,7 @@ class Client:
             word_len = WordLen.Byte
         type_ = word_len.ctype
         logger.debug(
-            f"reading area: {area.name} db_number: {db_number} start: {start} amount: {size} "
-            f"word_len: {word_len.name}={word_len}"
+            f"reading area: {area.name} db_number: {db_number} start: {start} amount: {size} word_len: {word_len.name}={word_len}"
         )
         data = (type_ * size)()
         result = self._lib.Cli_ReadArea(self._s7_client, area, db_number, start, size, word_len, byref(data))
@@ -1011,9 +1010,7 @@ class Client:
         """
         type_ = WordLen.Byte.ctype
         logger.debug(
-            f"writing area: {area.name} db_number: {db_number} "
-            f"start: {start}: size {size}: "
-            f"word_len {word_len} type: {type_}"
+            f"writing area: {area.name} db_number: {db_number} start: {start}: size {size}: word_len {word_len} type: {type_}"
         )
         cdata = (type_ * len(data)).from_buffer_copy(data)
         res = self._lib.Cli_AsWriteArea(self._s7_client, area, db_number, start, size, word_len.value, byref(cdata))

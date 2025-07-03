@@ -82,7 +82,7 @@ class Server:
     def create(self) -> None:
         """Create the server."""
         logger.info("creating server")
-        self._lib.Srv_Create.restype = S7Object  # type: ignore[attr-defined]
+        self._lib.Srv_Create.restype = S7Object
         self._s7_server = S7Object(self._lib.Srv_Create())
 
     @error_wrap(context="server")

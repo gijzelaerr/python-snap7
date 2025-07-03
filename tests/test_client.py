@@ -566,7 +566,7 @@ class TestClient(unittest.TestCase):
         else:
             self.fail(f"TimeoutError - Process pends for more than {timeout} seconds")
         if pending_checked is False:
-            logging.warning("Pending was never reached, because Server was to fast," " but request to server was successfull.")
+            logging.warning("Pending was never reached, because Server was to fast, but request to server was successfull.")
 
     def test_as_read_area(self) -> None:
         amount = 1

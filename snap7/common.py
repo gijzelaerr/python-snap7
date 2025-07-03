@@ -10,7 +10,7 @@ from .protocol import Snap7CliProtocol
 
 
 if platform.system() == "Windows":
-    from ctypes import windll as cdll  # type: ignore
+    from ctypes import windll as cdll
 else:
     from ctypes import cdll
 
