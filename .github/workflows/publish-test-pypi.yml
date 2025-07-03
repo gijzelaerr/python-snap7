@@ -78,7 +78,7 @@ jobs:
     needs: publish-to-testpypi
     strategy:
       matrix:
-        os: ["windows-2019", "windows-2022"]
+        os: ["windows-2025", "windows-2022"]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
