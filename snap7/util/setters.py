@@ -509,7 +509,7 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
         >>> data = bytearray(1)
         >>> set_char(data, 0, 'C')
         >>> data
-            bytearray('0x43')
+        bytearray('0x43')
     """
     if not isinstance(chr_, str):
         raise TypeError(f"Value value:{chr_} is not from Type string")
