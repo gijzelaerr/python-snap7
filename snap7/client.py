@@ -184,7 +184,7 @@ class Client:
             tcp_port: port of the PLC.
 
         Returns:
-            The snap7 Logo instance
+            self
 
         Example:
             >>> import snap7
