@@ -278,7 +278,7 @@ class S7Client:
             pwd[c] ^= 0x55 ^ pwd[c - 2]
 
         # Copy pwd to S7_SET_PWD at offset 29
-        s7_set_password = S7.S7_SET_PWD
+        s7_set_password = S7.S7_SET_PWD.copy()  # Copy to avoid modifying original
         for i in range(8):
             s7_set_password[29 + i] = pwd[i]
 
@@ -331,7 +331,10 @@ class S7Client:
     def send_packet(self, buffer, length=None):
         if length is None:
             length = len(buffer)
-        self._last_error = self.socket.send(buffer, length)
+        if not self.connected:
+            self._last_error = S7.errTCPNotConnected
+        else:
+            self._last_error = self.socket.send(buffer, length)
 
     def recv_iso_packet(self):
         done = False
@@ -355,7 +358,7 @@ class S7Client:
         return size if self._last_error == 0 else 0
 
     def iso_connect(self):
-        iso_cr = S7.ISO_CR # Copy bytearray ?
+        iso_cr = S7.ISO_CR.copy()  # Copy to avoid modifying the original
         iso_cr[16] = self.local_TSAP_high
         iso_cr[17] = self.local_TSAP_low
         iso_cr[20] = self.remote_TSAP_high
@@ -372,7 +375,7 @@ class S7Client:
         return self._last_error
 
     def negotiate_pdu_length(self):
-        pn_message = S7.S7_PN
+        pn_message = S7.S7_PN.copy()  # Create a copy to avoid modifying the original
         S7.set_word_at(pn_message, 23, self._size_requested_PDU)
         self.send_packet(pn_message)
         if self._last_error == 0:
@@ -380,7 +383,9 @@ class S7Client:
             if self._last_error == 0:
                 if length == 27 and self.PDU[17] == 0 and self.PDU[18] == 0:
                     plength = S7.get_word_at(self.PDU, 25)
-                    if plength <= 0:
+                    if plength > 0:
+                        self._length_PDU = plength  # Store the negotiated PDU length
+                    else:
                         self._last_error = S7.errCliNegotiatingPDU
                 else:
                     self._last_error = S7.errCliNegotiatingPDU
@@ -472,7 +477,7 @@ class S7Client:
                 word_size = 1
                 word_len = S7.S7WLByte
 
-        max_elements = (self._length_PDU - 18) # word_size
+        max_elements = (self._length_PDU - 18) if self._length_PDU > 18 else (self._size_requested_PDU - 18)
         tot_elements = amount
 
         while tot_elements > 0 and self._last_error == 0:
@@ -541,7 +546,6 @@ class S7Client:
                    amount : int,
                    word_len : int,
                    buffer : bytearray,
-                   bytes_written : int = 0,
                    db_number : int = 0):
         address = 0
         num_elements = 0
@@ -573,7 +577,7 @@ class S7Client:
                 word_size = 1
                 word_len = S7.S7WLByte
 
-        max_elements = (self._length_PDU - 35) // word_size
+        max_elements = (self._length_PDU - 35) // word_size if self._length_PDU > 35 else (self._size_requested_PDU - 35) // word_size
         tot_elements = amount
 
         while tot_elements > 0 and self._last_error == 0:
