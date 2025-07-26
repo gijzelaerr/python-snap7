@@ -3,7 +3,8 @@ from .s7_protocol import S7Protocol as S7
 import time
 import struct
 
-from ..type import S7CpInfo, S7CpuInfo, S7OrderCode
+from .. import WordLen
+from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection
 
 
 class S7SZLHeader:
@@ -38,8 +39,6 @@ class S7Client:
         self._recv_timeout : int = 2000
         self._send_timeout : int = 2000
         self._conn_timeout : int = 2000
-
-
 
         self.local_TSAP_high : int = 0
         self.local_TSAP_low : int = 0
@@ -190,7 +189,7 @@ class S7Client:
 
         elapsed = int(time.time() * 1000)
 
-        self._last_error = self.read_SZL(0x0131, 0x001, szl)
+        self._last_error = self.read_SZL(0x0131, 0x0001, szl)
         if  self._last_error == 0:
             cp.MaxPduLength = S7.get_int_at(szl.Data, 2)
             # cp.MaxConnections = S7.get_int_at(szl.Data, 4)
@@ -203,12 +202,29 @@ class S7Client:
 
         return self._last_error
 
+    def get_protection(self, protect : S7Protection):
+        szl = S7SZL(1024)
+
+        elapsed = int(time.time() * 1000)
+
+        self._last_error = self.read_SZL(0x0232, 0x0004, szl)
+
+        if self._last_error == 0:
+            protect.sch_schal = S7.get_word_at(szl.Data, 2)
+            protect.sch_par = S7.get_word_at(szl.Data, 4)
+            protect.sch_rel = S7.get_word_at(szl.Data, 6)
+            protect.bart_sch = S7.get_word_at(szl.Data, 8)
+            protect.anl_sch = S7.get_word_at(szl.Data, 10)
+            self._time_ms = int(time.time() * 1000) - elapsed
+
+        return self._last_error
+
     def get_order_code(self, order_code: S7OrderCode):
         szl = S7SZL(1024)
 
         elapsed = int(time.time() * 1000)
 
-        self._last_error = self.read_SZL(0x0001, 0x000, szl)
+        self._last_error = self.read_SZL(0x0131, 0x000, szl)
 
         if self._last_error == 0:
             order_code.OrderCode = S7.get_chars_at(szl.Data, 2, 20)
@@ -239,6 +255,61 @@ class S7Client:
             status_ref["cpu_state"] = state_value
         else:
             self._last_error = S7.errCliInvalidPlcAnswer
+
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+
+        return self._last_error
+
+    def set_session_password(self, password: str) -> int:
+        pwd = [0x20] * 8  # 8 spaces
+        self._last_error = 0
+
+        elapsed = int(time.time() * 1000)
+
+        # SetCharsAt equivalent: copy up to 8 chars into pwd
+        for i in range(min(len(password), 8)):
+            pwd[i] = ord(password[i])
+
+        pwd[0] = (pwd[0] ^ 0x55)
+        pwd[1] = (pwd[1] ^ 0x55)
+
+        for c in range(2, 8):
+            pwd[c] ^= 0x55 ^ pwd[c - 2]
+
+        # Copy pwd to S7_SET_PWD at offset 29
+        s7_set_password = S7.S7_SET_PWD
+        for i in range(8):
+            s7_set_password[29 + i] = pwd[i]
+
+        # Send the telegram
+        self.send_packet(s7_set_password)
+        if self._last_error == 0:
+            length = self.recv_iso_packet()
+            if length > 32:
+                result = S7.get_word_at(self.PDU,27)
+                if result != 0:
+                    self._last_error = S7.cpu_error(result)
+            else:
+                self._last_error = S7.errIsoInvalidPDU
+
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+        return self._last_error
+
+    def clear_session_password(self) -> int:
+        self._last_error = 0
+        elapsed = int(time.time() * 1000)
+
+        self.send_packet(S7.S7_CLR_PWD)
+        if self._last_error == 0:
+            length = self.recv_iso_packet()
+            if length > 30:
+                result = S7.get_word_at(self.PDU, 27)
+                if result != 0:
+                    self._last_error = S7.cpu_error(result)
+            else:
+                self._last_error = S7.errIsoInvalidPDU
 
         if self._last_error == 0:
             self._time_ms = int(time.time() * 1000) - elapsed
@@ -359,182 +430,213 @@ class S7Client:
                 self._last_error = S7.errTCPConnectionFailed
         return self._last_error
 
+    def ab_read(self, start: int, size: int, buffer: bytearray) -> int:
+        return self.read_area(S7.S7AreaPA, start, size, S7.S7WLByte, buffer)
 
-#     def read_area(self, area, db_number, start, amount, word_len, buffer, bytes_read=0):
-#         address = 0
-#         num_elements = 0
-#         max_elements = 0
-#         tot_elements = 0
-#         size_requested = 0
-#         length = 0
-#         offset = 0
-#         word_size = 1
-#         self._LastError = 0
-#         self.Time_ms = 0
-#         elapsed = time.time()
-#
-#         if area == S7.S7AreaCT:
-#             word_len = S7.S7WLCounter
-#         if area == S7.S7AreaTM:
-#             word_len = S7.S7WLTimer
-#
-#         word_size = S7.data_size_byte(word_len)
-#         if word_size == 0:
-#             return S7.errCliInvalidWordLen
-#
-#         if word_len == S7.S7WLBit:
-#             amount = 1
-#         else:
-#             if word_len not in (S7.S7WLCounter, S7.S7WLTimer):
-#                 amount *= word_size
-#                 word_size = 1
-#                 word_len = S7.S7WLByte
-#
-#         max_elements = (self._PduLength - 18) // word_size
-#         tot_elements = amount
-#
-#         while tot_elements > 0 and self._LastError == 0:
-#             num_elements = min(tot_elements, max_elements)
-#             size_requested = num_elements * word_size
-#             self.PDU[: self.Size_RD] = self.S7_RW[: self.Size_RD]
-#             self.PDU[27] = area
-#
-#             if area == S7.S7AreaDB:
-#                 S7.set_word_at(self.PDU, 25, db_number)
-#
-#             if word_len in (S7.S7WLBit, S7.S7WLCounter, S7.S7WLTimer):
-#                 address = start
-#                 self.PDU[22] = word_len
-#             else:
-#                 address = start << 3
-#
-#             S7.set_word_at(self.PDU, 23, num_elements)
-#             self.PDU[30] = address & 0xFF
-#             address >>= 8
-#             self.PDU[29] = address & 0xFF
-#             address >>= 8
-#             self.PDU[28] = address & 0xFF
-#
-#             self.send_packet(self.PDU, self.Size_RD)
-#
-#             if self._LastError == 0:
-#                 length = self.recv_iso_packet()
-#                 if self._LastError == 0:
-#                     if length < 25:
-#                         self._LastError = S7.errIsoInvalidDataSize
-#                     else:
-#                         if self.PDU[21] != 0xFF:
-#                             self._LastError = self.cpu_error(self.PDU[21])
-#                         else:
-#                             buffer[offset : offset + size_requested] = self.PDU[25 : 25 + size_requested]
-#                             offset += size_requested
-#
-#             tot_elements -= num_elements
-#             start += num_elements * word_size
-#
-#         if self._LastError == 0:
-#             bytes_read = offset
-#             self.Time_ms = int((time.time() - elapsed) * 1000)
-#         else:
-#             bytes_read = 0
-#
-#         return self._LastError
-#
-#     def write_area(self, area, db_number, start, amount, word_len, buffer, bytes_written=0):
-#         address = 0
-#         num_elements = 0
-#         max_elements = 0
-#         tot_elements = 0
-#         data_size = 0
-#         iso_size = 0
-#         length = 0
-#         offset = 0
-#         word_size = 1
-#         self._LastError = 0
-#         self.Time_ms = 0
-#         elapsed = time.time()
-#
-#         if area == S7.S7AreaCT:
-#             word_len = S7.S7WLCounter
-#         if area == S7.S7AreaTM:
-#             word_len = S7.S7WLTimer
-#
-#         word_size = S7.data_size_byte(word_len)
-#         if word_size == 0:
-#             return S7.errCliInvalidWordLen
-#
-#         if word_len == S7.S7WLBit:
-#             amount = 1
-#         else:
-#             if word_len not in (S7.S7WLCounter, S7.S7WLTimer):
-#                 amount *= word_size
-#                 word_size = 1
-#                 word_len = S7.S7WLByte
-#
-#         max_elements = (self._PduLength - 35) // word_size
-#         tot_elements = amount
-#
-#         while tot_elements > 0 and self._LastError == 0:
-#             num_elements = min(tot_elements, max_elements)
-#             data_size = num_elements * word_size
-#             iso_size = self.Size_WR + data_size
-#             self.PDU[: self.Size_WR] = self.S7_RW[: self.Size_WR]
-#             S7.set_word_at(self.PDU, 2, iso_size)
-#             length = data_size + 4
-#             S7.set_word_at(self.PDU, 15, length)
-#             self.PDU[17] = 0x05
-#             self.PDU[27] = area
-#
-#             if area == S7.S7AreaDB:
-#                 S7.set_word_at(self.PDU, 25, db_number)
-#
-#             if word_len in (S7.S7WLBit, S7.S7WLCounter, S7.S7WLTimer):
-#                 address = start
-#                 length = data_size
-#                 self.PDU[22] = word_len
-#             else:
-#                 address = start << 3
-#                 length = data_size << 3
-#
-#             S7.set_word_at(self.PDU, 23, num_elements)
-#             self.PDU[30] = address & 0xFF
-#             address >>= 8
-#             self.PDU[29] = address & 0xFF
-#             address >>= 8
-#             self.PDU[28] = address & 0xFF
-#
-#             if word_len == S7.S7WLBit:
-#                 self.PDU[32] = self.TS_ResBit
-#             elif word_len in (S7.S7WLCounter, S7.S7WLTimer):
-#                 self.PDU[32] = self.TS_ResOctet
-#             else:
-#                 self.PDU[32] = self.TS_ResByte
-#
-#             S7.set_word_at(self.PDU, 33, length)
-#             self.PDU[35 : 35 + data_size] = buffer[offset : offset + data_size]
-#             self.send_packet(self.PDU, iso_size)
-#
-#             if self._LastError == 0:
-#                 length = self.recv_iso_packet()
-#                 if self._LastError == 0:
-#                     if length == 22:
-#                         if self.PDU[21] != 0xFF:
-#                             self._LastError = self.cpu_error(self.PDU[21])
-#                     else:
-#                         self._LastError = S7.errIsoInvalidPDU
-#
-#             offset += data_size
-#             tot_elements -= num_elements
-#             start += num_elements * word_size
-#
-#         if self._LastError == 0:
-#             bytes_written = offset
-#             self.Time_ms = int((time.time() - elapsed) * 1000)
-#         else:
-#             bytes_written = 0
-#
-#         return self._LastError
-#
+    def db_read(self, db_number: int, start: int, size: int, buffer: bytearray) -> int:
+        return self.read_area(S7.S7AreaDB, start, size, S7.S7WLByte, buffer, db_number)
+
+    def mb_read(self, start: int, size: int, buffer: bytearray) -> int:
+        return self.read_area(S7.S7AreaMK, start, size, S7.S7WLByte, buffer)
+
+    def eb_read(self, start: int, size: int, buffer: bytearray) -> int:
+        return self.read_area(S7.S7AreaPE, start, size, S7.S7WLByte, buffer)
+
+    def read_area(self,
+                  area: int,
+                  start: int,
+                  amount: int,
+                  word_len: int,
+                  buffer : bytearray,
+                  db_number : int = 0):
+
+        offset = 0
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = time.time()
+
+        if area == S7.S7AreaCT:
+            word_len = S7.S7WLCounter
+        if area == S7.S7AreaTM:
+            word_len = S7.S7WLTimer
+
+        word_size = WordLen(word_len).data_size_bytes
+        if word_size == 0:
+            return S7.errCliInvalidWordLen
+
+        if word_len == S7.S7WLBit:
+            amount = 1
+        else:
+            if word_len not in (S7.S7WLCounter, S7.S7WLTimer):
+                amount *= word_size
+                word_size = 1
+                word_len = S7.S7WLByte
+
+        max_elements = (self._length_PDU - 18) # word_size
+        tot_elements = amount
+
+        while tot_elements > 0 and self._last_error == 0:
+            num_elements = min(tot_elements, max_elements)
+            size_requested = num_elements * word_size
+            self.PDU[: S7.size_RD] = S7.S7_RW[: S7.size_RD]
+            self.PDU[27] = area
+
+            if area == S7.S7AreaDB:
+                S7.set_word_at(self.PDU, 25, db_number)
+
+            if word_len in (S7.S7WLBit, S7.S7WLCounter, S7.S7WLTimer):
+                address = start
+                self.PDU[22] = word_len
+            else:
+                address = start << 3
+
+            S7.set_word_at(self.PDU, 23, num_elements)
+            self.PDU[30] = address & 0xFF
+            address >>= 8
+            self.PDU[29] = address & 0xFF
+            address >>= 8
+            self.PDU[28] = address & 0xFF
+
+            self.send_packet(self.PDU, S7.size_RD)
+
+            if self._last_error == 0:
+                length = self.recv_iso_packet()
+                if self._last_error == 0:
+                    if length < 25:
+                        self._last_error = S7.errIsoInvalidDataSize
+                    else:
+                        if self.PDU[21] != 0xFF:
+                            self._last_error = S7.cpu_error(self.PDU[21])
+                        else:
+                            buffer[offset : offset + size_requested] = self.PDU[25 : 25 + size_requested]
+                            offset += size_requested
+
+            tot_elements -= num_elements
+            start += num_elements * word_size
+
+        if self._last_error == 0:
+            bytes_read = offset
+            self._time_ms = int((time.time() - elapsed) * 1000)
+        else:
+            bytes_read = 0
+
+        return self._last_error
+
+
+    def ab_write(self, start: int, size: int, buffer: bytearray) -> int:
+        return self.write_area(S7.S7AreaPA, start, size, S7.S7WLByte, buffer)
+
+    def db_write(self, db_number: int, start: int, size: int, buffer: bytearray) -> int:
+        return self.write_area(S7.S7AreaDB, start, size, S7.S7WLByte, buffer, db_number)
+
+    def mb_write(self, start: int, size: int, buffer: bytearray) -> int:
+        return self.write_area(S7.S7AreaMK, start, size, S7.S7WLByte, buffer)
+
+    def eb_write(self, start: int, size: int, buffer: bytearray) -> int:
+        return self.write_area(S7.S7AreaPE, start, size, S7.S7WLByte, buffer)
+
+    def write_area(self,
+                   area : int,
+                   start : int,
+                   amount : int,
+                   word_len : int,
+                   buffer : bytearray,
+                   bytes_written : int = 0,
+                   db_number : int = 0):
+        address = 0
+        num_elements = 0
+        max_elements = 0
+        tot_elements = 0
+        data_size = 0
+        iso_size = 0
+        length = 0
+        offset = 0
+        word_size = 1
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = time.time()
+
+        if area == S7.S7AreaCT:
+            word_len = S7.S7WLCounter
+        if area == S7.S7AreaTM:
+            word_len = S7.S7WLTimer
+
+        word_size = WordLen(word_len).data_size_bytes
+        if word_size == 0:
+            return S7.errCliInvalidWordLen
+
+        if word_len == S7.S7WLBit:
+            amount = 1
+        else:
+            if word_len not in (S7.S7WLCounter, S7.S7WLTimer):
+                amount *= word_size
+                word_size = 1
+                word_len = S7.S7WLByte
+
+        max_elements = (self._length_PDU - 35) // word_size
+        tot_elements = amount
+
+        while tot_elements > 0 and self._last_error == 0:
+            num_elements = min(tot_elements, max_elements)
+            data_size = num_elements * word_size
+            iso_size = S7.size_WR + data_size
+            self.PDU[: S7.size_WR] = S7.S7_RW[: S7.size_WR]
+            S7.set_word_at(self.PDU, 2, iso_size)
+            length = data_size + 4
+            S7.set_word_at(self.PDU, 15, length)
+            self.PDU[17] = 0x05
+            self.PDU[27] = area
+
+            if area == S7.S7AreaDB:
+                S7.set_word_at(self.PDU, 25, db_number)
+
+            if word_len in (S7.S7WLBit, S7.S7WLCounter, S7.S7WLTimer):
+                address = start
+                length = data_size
+                self.PDU[22] = word_len
+            else:
+                address = start << 3
+                length = data_size << 3
+
+            S7.set_word_at(self.PDU, 23, num_elements)
+            self.PDU[30] = address & 0xFF
+            address >>= 8
+            self.PDU[29] = address & 0xFF
+            address >>= 8
+            self.PDU[28] = address & 0xFF
+
+            if word_len == S7.S7WLBit:
+                self.PDU[32] = S7.TS_ResBit
+            elif word_len in (S7.S7WLCounter, S7.S7WLTimer):
+                self.PDU[32] = S7.TS_ResOctet
+            else:
+                self.PDU[32] = S7.TS_ResByte
+
+            S7.set_word_at(self.PDU, 33, length)
+            self.PDU[35 : 35 + data_size] = buffer[offset : offset + data_size]
+            self.send_packet(self.PDU, iso_size)
+
+            if self._last_error == 0:
+                length = self.recv_iso_packet()
+                if self._last_error == 0:
+                    if length == 22:
+                        if self.PDU[21] != 0xFF:
+                            self._last_error = S7.cpu_error(self.PDU[21])
+                    else:
+                        self._last_error = S7.errIsoInvalidPDU
+
+            offset += data_size
+            tot_elements -= num_elements
+            start += num_elements * word_size
+
+        if self._last_error == 0:
+            bytes_written = offset
+            self._time_ms = int((time.time() - elapsed) * 1000)
+        else:
+            bytes_written = 0
+
+        return self._last_error
+
 #
 # def read_multi_vars(self, items, items_count):
 #     offset = 0
@@ -542,7 +644,7 @@ class S7Client:
 #     item_size = 0
 #     s7_item = bytearray(12)
 #     s7_item_read = bytearray(1024)
-#     self._LastError = 0
+#     self._last_error = 0
 #     self.Time_ms = 0
 #     elapsed = time.time()
 #
@@ -576,28 +678,28 @@ class S7Client:
 #     S7.set_word_at(self.PDU, 2, offset)
 #     self.send_packet(self.PDU, offset)
 #
-#     if self._LastError != 0:
-#         return self._LastError
+#     if self._last_error != 0:
+#         return self._last_error
 #
 #     length = self.recv_iso_packet()
 #
-#     if self._LastError != 0:
-#         return self._LastError
+#     if self._last_error != 0:
+#         return self._last_error
 #
 #     if length < 22:
-#         self._LastError = S7.errIsoInvalidPDU
-#         return self._LastError
+#         self._last_error = S7.errIsoInvalidPDU
+#         return self._last_error
 #
-#     self._LastError = self.cpu_error(S7.get_word_at(self.PDU, 17))
+#     self._last_error = self.cpu_error(S7.get_word_at(self.PDU, 17))
 #
-#     if self._LastError != 0:
-#         return self._LastError
+#     if self._last_error != 0:
+#         return self._last_error
 #
 #     items_read = S7.get_byte_at(self.PDU, 20)
 #
 #     if items_read != items_count or items_read > self.MaxVars:
-#         self._LastError = S7.errCliInvalidPlcAnswer
-#         return self._LastError
+#         self._last_error = S7.errCliInvalidPlcAnswer
+#         return self._last_error
 #
 #     offset = 21
 #
@@ -617,7 +719,7 @@ class S7Client:
 #             offset += 4
 #
 #     self.Time_ms = int((time.time() - elapsed) * 1000)
-#     return self._LastError
+#     return self._last_error
 #
 #
 # def write_multi_vars(self, items, items_count):
@@ -627,7 +729,7 @@ class S7Client:
 #     item_data_size = 0
 #     s7_par_item = bytearray(len(self.S7_MWR_PARAM))
 #     s7_data_item = bytearray(1024)
-#     self._LastError = 0
+#     self._last_error = 0
 #     self.Time_ms = 0
 #     elapsed = time.time()
 #
@@ -694,16 +796,16 @@ class S7Client:
 #     self.send_packet(self.PDU, offset)
 #     self.recv_iso_packet()
 #
-#     if self._LastError == 0:
-#         self._LastError = self.cpu_error(S7.get_word_at(self.PDU, 17))
-#         if self._LastError != 0:
-#             return self._LastError
+#     if self._last_error == 0:
+#         self._last_error = self.cpu_error(S7.get_word_at(self.PDU, 17))
+#         if self._last_error != 0:
+#             return self._last_error
 #
 #         items_written = S7.get_byte_at(self.PDU, 20)
 #
 #         if items_written != items_count or items_written > self.MaxVars:
-#             self._LastError = S7.errCliInvalidPlcAnswer
-#             return self._LastError
+#             self._last_error = S7.errCliInvalidPlcAnswer
+#             return self._last_error
 #
 #         for i, item in enumerate(items):
 #             if self.PDU[i + 21] == 0xFF:
@@ -713,4 +815,4 @@ class S7Client:
 #
 #         self.Time_ms = int((time.time() - elapsed) * 1000)
 #
-#     return self._LastError
+#     return self._last_error

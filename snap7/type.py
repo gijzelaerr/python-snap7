@@ -106,6 +106,22 @@ class WordLen(IntEnum):
     Timer = 0x1D
 
     @property
+    def data_size_bytes(self) -> int:
+        map_: Dict[WordLen, int] = {
+            WordLen.Bit: 1,  # 16 bits
+            WordLen.Byte: 1,
+            WordLen.Char: 1,
+            WordLen.Word: 2,
+            WordLen.Int: 2,
+            WordLen.DWord: 4,
+            WordLen.DInt: 4,
+            WordLen.Real: 4,
+            WordLen.Counter: 2,
+            WordLen.Timer: 2,
+        }
+        return map_[self]
+
+    @property
     def ctype(self) -> CDataType:
         map_: Dict[WordLen, CDataType] = {
             WordLen.Bit: c_int16,

@@ -4,6 +4,10 @@ from .s7_timer import S7Timer
 
 
 class S7Protocol:
+
+    size_RD : int = 31 # Header Size when Reading
+    size_WR : int = 35 # Header Size when Writing
+
     bias = 621355968000000000  # "decimicros" between 0001-01-01 00:00:00 and 1970-01-01 00:00:00
 
     # Iso over TCP constants
@@ -175,6 +179,35 @@ class S7Protocol:
         ]
     )
 
+    S7_RW = bytearray(
+        [
+        # 31 - 35 bytes
+        0x03, 0x00,
+        0x00, 0x1f, # Telegram Length(Data Size + 31 or 35)
+        0x02, 0xf0, 0x80, # COTP(see above for info)
+        0x32, # S7 Protocol ID
+        0x01, # Job Type
+        0x00, 0x00, # Redundancy identification
+        0x05, 0x00, # PDU Reference
+        0x00, 0x0e, # Parameters Length
+        0x00, 0x00, # Data Length = Size(bytes) + 4
+        0x04, # Function 4 Read Var, 5 Write Var
+        0x01, # Items count
+        0x12, # Var spec.
+        0x0a, # Length of remaining bytes
+        0x10, # Syntax ID
+        0x02, # Transport Size idx=22
+        0x00, 0x00, # Num Elements
+        0x00, 0x00, # DB Number ( if any, else 0)
+        0x84, # Area Type
+        0x00, 0x00, 0x00, # Area Offset
+        # WR area
+        0x00, # Reserved
+        0x04, # Transport size
+        0x00, 0x00, # Data Length * 8 ( if not bit or timer or counter)
+        ]
+    )
+
 
     ISO_CR = bytearray(
         [
@@ -205,6 +238,37 @@ class S7Protocol:
         ]
     )
 
+    # S7 Set Session Password
+    S7_SET_PWD = bytearray(
+        [
+            0x03, 0x00, 0x00, 0x25,
+            0x02, 0xf0, 0x80, 0x32,
+            0x07, 0x00, 0x00, 0x27,
+            0x00, 0x00, 0x08, 0x00,
+            0x0c, 0x00, 0x01, 0x12,
+            0x04, 0x11, 0x45, 0x01,
+            0x00, 0xff, 0x09, 0x00,
+            0x08, # 8 Char Encoded Password
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00
+        ]
+    )
+
+    # S7 Clear Session Password
+
+    S7_CLR_PWD = bytearray(
+        [
+            0x03, 0x00, 0x00, 0x1d,
+            0x02, 0xf0, 0x80, 0x32,
+            0x07, 0x00, 0x00, 0x29,
+            0x00, 0x00, 0x08, 0x00,
+            0x04, 0x00, 0x01, 0x12,
+            0x04, 0x11, 0x45, 0x02,
+            0x00, 0x0a, 0x00, 0x00,
+            0x00
+        ]
+    )
+
     # Block_OB = 0x38
     # Block_DB = 0x41
     # Block_SDB = 0x42
@@ -229,26 +293,26 @@ class S7Protocol:
     #
     # MaxVars = 20
     #
-    # TS_ResBit = 0x03
-    # TS_ResByte = 0x04
-    # TS_ResInt = 0x05
-    # TS_ResReal = 0x07
-    # TS_ResOctet = 0x09
+    TS_ResBit = 0x03
+    TS_ResByte = 0x04
+    TS_ResInt = 0x05
+    TS_ResReal = 0x07
+    TS_ResOctet = 0x09
     #
     # Code7Ok = 0x0000
-    # Code7AddressOutOfRange = 0x0005
-    # Code7InvalidTransportSize = 0x0006
-    # Code7WriteDataSizeMismatch = 0x0007
-    # Code7ResItemNotAvailable = 0x000A
-    # Code7ResItemNotAvailable1 = 0xD209
-    # Code7InvalidValue = 0xDC01
-    # Code7NeedPassword = 0xD241
-    # Code7InvalidPassword = 0xD602
-    # Code7NoPasswordToClear = 0xD604
-    # Code7NoPasswordToSet = 0xD605
-    # Code7FunNotAvailable = 0x8104
-    # Code7DataOverPDU = 0x8500
-    #
+    Code7AddressOutOfRange = 0x0005
+    Code7InvalidTransportSize = 0x0006
+    Code7WriteDataSizeMismatch = 0x0007
+    Code7ResItemNotAvailable = 0x000A
+    Code7ResItemNotAvailable1 = 0xD209
+    Code7InvalidValue = 0xDC01
+    Code7NeedPassword = 0xD241
+    Code7InvalidPassword = 0xD602
+    Code7NoPasswordToClear = 0xD604
+    Code7NoPasswordToSet = 0xD605
+    Code7FunNotAvailable = 0x8104
+    Code7DataOverPDU = 0x8500
+
 
 
     @staticmethod
@@ -548,8 +612,10 @@ class S7Protocol:
         Buffer[Pos + 4 : Pos + 4 + size * 2] = Value.encode("utf-16-be")
 
     @staticmethod
-    def get_chars_at(Buffer, Pos, Size):
-        return Buffer[Pos : Pos + Size].decode("utf-8")
+    def get_chars_at(buffer : bytearray, pos : int, size : int) -> str:
+        if len(buffer) < pos + size or size < 0:
+            return ""
+        return buffer[pos: pos + size].decode("utf-8")
 
     @staticmethod
     def SetCharsAt(Buffer, Pos, Value):
@@ -610,3 +676,30 @@ class S7Protocol:
     @staticmethod
     def SetLTimeAt(Buffer, Pos, Value):
         S7Protocol.SetLIntAt(Buffer, Pos, int(Value.total_seconds() * 1000000000))
+
+    @classmethod
+    def cpu_error(cls, error_code):
+        if error_code == 0:
+            return 0
+        elif cls.Code7AddressOutOfRange == error_code:
+            return cls.errCliAddressOutOfRange
+        elif cls.Code7InvalidTransportSize == error_code:
+            return cls.errCliInvalidTransportSize
+        elif cls.Code7WriteDataSizeMismatch == error_code:
+            return cls.errCliWriteDataSizeMismatch
+        elif cls.Code7ResItemNotAvailable == error_code or cls.Code7ResItemNotAvailable1 == error_code:
+            return cls.errCliItemNotAvailable
+        elif cls.Code7DataOverPDU == error_code:
+            return cls.errCliSizeOverPDU
+        elif cls.Code7InvalidValue == error_code:
+            return cls.errCliInvalidValue
+        elif cls.Code7FunNotAvailable == error_code:
+            return cls.errCliFunNotAvailable
+        elif cls.Code7NeedPassword == error_code:
+            return cls.errCliNeedPassword
+        elif cls.Code7InvalidPassword == error_code:
+            return cls.errCliInvalidPassword
+        elif cls.Code7NoPasswordToClear == error_code or cls.Code7NoPasswordToSet == error_code:
+            return cls.errCliNoPasswordToSetOrClear
+
+        return cls.errCliFunctionRefused
