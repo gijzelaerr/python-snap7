@@ -527,6 +527,100 @@ class S7Client:
 
         return self._last_error
 
+    # Convenience methods for reading different data types
+    def read_bool(self, area: int, start: int, bit: int, db_number: int = 0) -> tuple[int, bool]:
+        """Read a single boolean value"""
+        buffer = bytearray(1)
+        error = self.read_area(area, start, 1, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetBitAt(buffer, 0, bit)
+        return error, False
+
+    def read_int(self, area: int, start: int, db_number: int = 0) -> tuple[int, int]:
+        """Read a 16-bit signed integer"""
+        buffer = bytearray(2)
+        error = self.read_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.get_int_at(buffer, 0)
+        return error, 0
+
+    def read_word(self, area: int, start: int, db_number: int = 0) -> tuple[int, int]:
+        """Read a 16-bit unsigned integer"""
+        buffer = bytearray(2)
+        error = self.read_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.get_word_at(buffer, 0)
+        return error, 0
+
+    def read_dword(self, area: int, start: int, db_number: int = 0) -> tuple[int, int]:
+        """Read a 32-bit unsigned integer"""
+        buffer = bytearray(4)
+        error = self.read_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetDWordAt(buffer, 0)
+        return error, 0
+
+    def read_real(self, area: int, start: int, db_number: int = 0) -> tuple[int, float]:
+        """Read a 32-bit real (float) value"""
+        buffer = bytearray(4)
+        error = self.read_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetRealAt(buffer, 0)
+        return error, 0.0
+
+    def read_string(self, area: int, start: int, max_len: int, db_number: int = 0) -> tuple[int, str]:
+        """Read a string value"""
+        buffer = bytearray(max_len + 2)  # +2 for length bytes
+        error = self.read_area(area, start, max_len + 2, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetStringAt(buffer, 0)
+        return error, ""
+
+    # Convenience methods for writing different data types
+    def write_bool(self, area: int, start: int, bit: int, value: bool, db_number: int = 0) -> int:
+        """Write a single boolean value"""
+        buffer = bytearray(1)
+        # First read the current byte
+        read_error = self.read_area(area, start, 1, S7.S7WLByte, buffer, db_number)
+        if read_error != 0:
+            return read_error
+        
+        # Modify the specific bit
+        S7.SetBitAt(buffer, 0, bit, value)
+        
+        # Write back the modified byte
+        return self.write_area(area, start, 1, S7.S7WLByte, buffer, db_number)
+
+    def write_int(self, area: int, start: int, value: int, db_number: int = 0) -> int:
+        """Write a 16-bit signed integer"""
+        buffer = bytearray(2)
+        S7.SetIntAt(buffer, 0, value)
+        return self.write_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+
+    def write_word(self, area: int, start: int, value: int, db_number: int = 0) -> int:
+        """Write a 16-bit unsigned integer"""
+        buffer = bytearray(2)
+        S7.set_word_at(buffer, 0, value)
+        return self.write_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+
+    def write_dword(self, area: int, start: int, value: int, db_number: int = 0) -> int:
+        """Write a 32-bit unsigned integer"""
+        buffer = bytearray(4)
+        S7.SetDWordAt(buffer, 0, value)
+        return self.write_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+
+    def write_real(self, area: int, start: int, value: float, db_number: int = 0) -> int:
+        """Write a 32-bit real (float) value"""
+        buffer = bytearray(4)
+        S7.SetRealAt(buffer, 0, value)
+        return self.write_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+
+    def write_string(self, area: int, start: int, value: str, max_len: int, db_number: int = 0) -> int:
+        """Write a string value"""
+        buffer = bytearray(max_len + 2)  # +2 for length bytes
+        S7.SetStringAt(buffer, 0, max_len, value)
+        return self.write_area(area, start, max_len + 2, S7.S7WLByte, buffer, db_number)
+
 
     def ab_write(self, start: int, size: int, buffer: bytearray) -> int:
         return self.write_area(S7.S7AreaPA, start, size, S7.S7WLByte, buffer)
