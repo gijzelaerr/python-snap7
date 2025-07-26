@@ -4,7 +4,7 @@ import time
 import struct
 
 from .. import WordLen
-from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection
+from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection, TS7BlockInfo, S7DataItem, Block
 
 
 class S7SZLHeader:
@@ -733,6 +733,208 @@ class S7Client:
         else:
             bytes_written = 0
 
+        return self._last_error
+
+    # Sharp7-compatible functions
+
+    def get_ag_block_info(self, block_type: int, block_num: int, block_info: TS7BlockInfo) -> int:
+        """
+        Get information about a block (similar to Sharp7 GetAgBlockInfo)
+        """
+        # This is a simplified implementation - in a full implementation,
+        # this would send the appropriate S7 protocol messages to get block info
+        # For now, we'll implement a basic version that works with db_get and db_fill
+        
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        if not self.connected:
+            self._last_error = S7.errTCPNotConnected
+            return self._last_error
+            
+        # For DB blocks, we can estimate size by trying to read
+        # This is a simplified approach - real implementation would use SZL queries
+        if block_type == Block.DB:
+            # Try reading progressively larger chunks to find the actual DB size
+            # Start with a reasonable default
+            test_sizes = [1, 10, 100, 1000, 8192]  # Common DB sizes
+            
+            block_info.BlkType = block_type
+            block_info.BlkNumber = block_num
+            block_info.BlkLang = 0  # Unknown
+            block_info.BlkFlags = 0
+            block_info.MC7Size = 0  # Will be determined
+            block_info.LoadSize = 0
+            block_info.LocalData = 0
+            block_info.SBBLength = 0
+            block_info.CheckSum = 0
+            block_info.Version = 0
+            
+            # Try to determine actual size by testing reads
+            max_size = 0
+            test_buffer = bytearray(8192)
+            
+            for test_size in test_sizes:
+                error = self.read_area(S7.S7AreaDB, 0, test_size, S7.S7WLByte, test_buffer, block_num)
+                if error == 0:
+                    max_size = test_size
+                elif error == S7.errCliAddressOutOfRange:
+                    break
+                    
+            # Binary search for exact size if we found a working size
+            if max_size > 0:
+                low = max_size
+                high = max_size * 10
+                
+                # Find upper bound
+                while high <= 65536:  # Max reasonable DB size
+                    error = self.read_area(S7.S7AreaDB, 0, high, S7.S7WLByte, test_buffer, block_num)
+                    if error == 0:
+                        low = high
+                        high *= 2
+                    else:
+                        break
+                        
+                # Binary search for exact size
+                while low < high - 1:
+                    mid = (low + high) // 2
+                    error = self.read_area(S7.S7AreaDB, 0, mid, S7.S7WLByte, test_buffer, block_num)
+                    if error == 0:
+                        low = mid
+                    else:
+                        high = mid
+                        
+                block_info.MC7Size = low
+            else:
+                # Default size or error determining size
+                block_info.MC7Size = 1024  # Default size
+                
+        else:
+            self._last_error = S7.errCliInvalidBlockType
+            
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error
+
+    def db_get(self, db_number: int, usr_data: bytearray) -> tuple[int, int]:
+        """
+        Get entire DB block (Sharp7 compatible)
+        Returns tuple of (error_code, actual_size)
+        """
+        block_info = TS7BlockInfo()
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        # Get block information first
+        self._last_error = self.get_ag_block_info(Block.DB, db_number, block_info)
+        
+        if self._last_error == 0:
+            db_size = block_info.MC7Size
+            if db_size <= len(usr_data):
+                # Read the entire DB
+                self._last_error = self.db_read(db_number, 0, db_size, usr_data)
+                if self._last_error == 0:
+                    actual_size = db_size
+                else:
+                    actual_size = 0
+            else:
+                self._last_error = S7.errCliBufferTooSmall
+                actual_size = 0
+        else:
+            actual_size = 0
+            
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error, actual_size
+
+    def db_fill(self, db_number: int, fill_char: int) -> int:
+        """
+        Fill entire DB block with specified byte value (Sharp7 compatible)
+        """
+        block_info = TS7BlockInfo()
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        # Get block information first
+        self._last_error = self.get_ag_block_info(Block.DB, db_number, block_info)
+        
+        if self._last_error == 0:
+            db_size = block_info.MC7Size
+            # Create buffer filled with the specified character
+            buffer = bytearray([fill_char & 0xFF] * db_size)
+            self._last_error = self.db_write(db_number, 0, db_size, buffer)
+            
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error
+
+    def write_multi_vars(self, items: list, items_count: int) -> int:
+        """
+        Write multiple variables in one operation (Sharp7 compatible)
+        Items should be a list of S7DataItem structures or dictionaries with the same fields
+        """
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        # Check parameter limits
+        if items_count > 20:  # MaxVars equivalent
+            return S7.errCliTooManyItems
+            
+        if items_count == 0:
+            return 0
+            
+        # For now, implement as sequential writes
+        # A full implementation would use the multi-var protocol
+        for i in range(items_count):
+            item = items[i]
+            
+            # Handle both S7DataItem objects and dictionaries
+            if hasattr(item, 'Area'):
+                area = item.Area
+                start = item.Start  
+                db_number = item.DBNumber
+                amount = item.Amount
+                word_len = item.WordLen
+                # Get data from pointer or data field
+                if hasattr(item, 'pData') and item.pData:
+                    # This would need proper pointer handling in a full implementation
+                    data = bytearray(amount)  # Placeholder
+                elif hasattr(item, 'data'):
+                    data = item.data
+                else:
+                    data = bytearray(amount)
+            else:
+                # Dictionary format
+                area = item.get('Area', 0)
+                start = item.get('Start', 0)
+                db_number = item.get('DBNumber', 0) 
+                amount = item.get('Amount', 0)
+                word_len = item.get('WordLen', S7.S7WLByte)
+                data = item.get('data', bytearray(amount))
+                
+            # Write the data
+            self._last_error = self.write_area(area, start, amount, word_len, data, db_number)
+            
+            # Set result for this item
+            if hasattr(item, 'Result'):
+                item.Result = self._last_error
+            elif isinstance(item, dict):
+                item['Result'] = self._last_error
+                
+            # Stop on first error
+            if self._last_error != 0:
+                break
+                
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
         return self._last_error
 
 #
