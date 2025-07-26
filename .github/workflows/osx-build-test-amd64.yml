@@ -9,7 +9,7 @@ jobs:
 
   osx-build:
     name: Build wheel for OSX
-    runs-on: macos-12
+    runs-on: macos-13
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,8 +46,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-14, macos-12]
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        os: ["macos-13", "macos-14", "macos-15"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

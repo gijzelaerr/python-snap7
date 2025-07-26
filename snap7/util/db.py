@@ -104,6 +104,7 @@ from snap7.util import (
     set_int,
     set_word,
     set_byte,
+    set_char,
     set_usint,
     set_sint,
     set_time,
@@ -315,7 +316,7 @@ class DB:
             if key and key in self.index:
                 msg = f"{key} not unique!"
                 logger.error(msg)
-            self.index[key] = row
+            self.index[str(key)] = row
 
     def __getitem__(self, key: str, default: Optional[None] = None) -> Union[None, "Row"]:
         """Access a row of the table through its index.
@@ -676,6 +677,9 @@ class Row:
 
         if type_ == "LREAL" and isinstance(value, float):
             return set_lreal(bytearray_, byte_index, value)
+
+        if type_ == "CHAR" and isinstance(value, str):
+            return set_char(bytearray_, byte_index, value)
 
         if isinstance(value, int):
             type_to_func = {

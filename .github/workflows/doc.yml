@@ -6,7 +6,7 @@ on:
     branches: [master]
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,14 +17,11 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: 3.12
       - name: Install dependencies
         run: |
           python3 -m venv venv
           venv/bin/pip install --upgrade pip
           venv/bin/pip install ".[doc,cli]"
       - name: Run doc
-        run: |
-          source venv/bin/activate
-          cd doc
-          make html
+        run:  venv/bin/sphinx-build -N -bhtml doc/ doc/_build -W

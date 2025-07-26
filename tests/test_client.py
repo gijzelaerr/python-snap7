@@ -18,7 +18,7 @@ from ctypes import (
     pointer,
     Array,
 )
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, timezone
 from multiprocessing import Process
 from unittest import mock
 from typing import cast as typing_cast
@@ -382,8 +382,8 @@ class TestClient(unittest.TestCase):
             self.assertRaises(Exception, self.client.get_param, non_client)
 
     def test_as_copy_ram_to_rom(self) -> None:
-        response = self.client.as_copy_ram_to_rom(timeout=1)
-        self.client.wait_as_completion(1100)
+        response = self.client.as_copy_ram_to_rom(timeout=2)
+        self.client.wait_as_completion(2000)
         self.assertEqual(0, response)
 
     def test_as_ct_read(self) -> None:
@@ -714,7 +714,7 @@ class TestClient(unittest.TestCase):
 
     def test_copy_ram_to_rom(self) -> None:
         # Cli_CopyRamToRom
-        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=1))
+        self.assertEqual(0, self.client.copy_ram_to_rom(timeout=2))
 
     def test_ct_read(self) -> None:
         # Cli_CTRead
@@ -803,8 +803,14 @@ class TestClient(unittest.TestCase):
         self.assertEqual(10, block_info.BlkType)
         self.assertEqual(99, block_info.BlkNumber)
         self.assertEqual(2752512, block_info.SBBLength)
-        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.CodeDate)
-        self.assertEqual(bytes((date(2019, 6, 27).strftime("%Y/%m/%d")), encoding="utf-8"), block_info.IntfDate)
+        self.assertEqual(
+            bytes((datetime(2019, 6, 27, tzinfo=timezone.utc).astimezone().strftime("%Y/%m/%d")), encoding="utf-8"),
+            block_info.CodeDate,
+        )
+        self.assertEqual(
+            bytes((datetime(2019, 6, 27, tzinfo=timezone.utc).astimezone().strftime("%Y/%m/%d")), encoding="utf-8"),
+            block_info.IntfDate,
+        )
 
     def test_iso_exchange_buffer(self) -> None:
         # Cli_IsoExchangeBuffer
