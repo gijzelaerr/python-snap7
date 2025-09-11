@@ -197,9 +197,9 @@ def print_row(data: bytearray) -> None:
         c = c + (w - 1) * " " + ","
         chr_line2 += c
 
-    print(index_line)
-    print(pri_line1)
-    print(chr_line2)
+    logger.info(index_line)
+    logger.info(pri_line1)
+    logger.info(chr_line2)
 
 
 class DB:
