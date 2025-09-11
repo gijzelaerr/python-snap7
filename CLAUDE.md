@@ -93,7 +93,7 @@ pip install -e ".[cli]"
 
 Tests are organized with pytest markers:
 - `client`: Client functionality tests
-- `server`: Server functionality tests  
+- `server`: Server functionality tests
 - `util`: Utility function tests
 - `logo`: Logo PLC tests
 - `partner`: Partner connection tests
@@ -104,7 +104,7 @@ Tests are organized with pytest markers:
 
 **Fully tested and supported Python versions:**
 - **Python 3.9** (EOL: October 2025) ✅
-- **Python 3.10** (EOL: October 2026) ✅  
+- **Python 3.10** (EOL: October 2026) ✅
 - **Python 3.11** (EOL: October 2027) ✅
 - **Python 3.12** (EOL: October 2028) ✅
 - **Python 3.13** (EOL: October 2029) ✅
@@ -133,7 +133,7 @@ mypy snap7 tests example
 # Expected: "Success: no issues found in 27 source files"
 
 # Ruff should pass all checks
-ruff check snap7 tests example  
+ruff check snap7 tests example
 # Expected: "All checks passed!"
 
 # Tests should pass with high coverage
@@ -175,6 +175,6 @@ pytest tests/
 
 ### Common Development Tasks
 - **Adding new PLC operations**: Extend client.py with proper error handling and logging
-- **Utility functions**: Add to appropriate modules in snap7/util/ following existing patterns  
+- **Utility functions**: Add to appropriate modules in snap7/util/ following existing patterns
 - **Type definitions**: Update snap7/type.py for new enums or structures
 - **Cross-platform testing**: Use tox environments or manual virtual environment testing
