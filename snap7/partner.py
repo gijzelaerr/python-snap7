@@ -90,7 +90,7 @@ class Partner:
         :param active: 0
         :returns: a pointer to the partner object
         """
-        self._library.Par_Create.restype = S7Object  # type: ignore[attr-defined]
+        self._library.Par_Create.restype = S7Object
         self._pointer = S7Object(self._library.Par_Create(int(active)))
 
     def destroy(self) -> Optional[int]:
