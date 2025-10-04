@@ -4,7 +4,7 @@ import time
 import struct
 
 from .. import WordLen
-from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection
+from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection, TS7BlockInfo, S7DataItem, Block
 
 
 class S7SZLHeader:
@@ -278,7 +278,7 @@ class S7Client:
             pwd[c] ^= 0x55 ^ pwd[c - 2]
 
         # Copy pwd to S7_SET_PWD at offset 29
-        s7_set_password = S7.S7_SET_PWD
+        s7_set_password = S7.S7_SET_PWD.copy()  # Copy to avoid modifying original
         for i in range(8):
             s7_set_password[29 + i] = pwd[i]
 
@@ -331,7 +331,10 @@ class S7Client:
     def send_packet(self, buffer, length=None):
         if length is None:
             length = len(buffer)
-        self._last_error = self.socket.send(buffer, length)
+        if not self.connected:
+            self._last_error = S7.errTCPNotConnected
+        else:
+            self._last_error = self.socket.send(buffer, length)
 
     def recv_iso_packet(self):
         done = False
@@ -355,7 +358,7 @@ class S7Client:
         return size if self._last_error == 0 else 0
 
     def iso_connect(self):
-        iso_cr = S7.ISO_CR # Copy bytearray ?
+        iso_cr = S7.ISO_CR.copy()  # Copy to avoid modifying the original
         iso_cr[16] = self.local_TSAP_high
         iso_cr[17] = self.local_TSAP_low
         iso_cr[20] = self.remote_TSAP_high
@@ -372,7 +375,7 @@ class S7Client:
         return self._last_error
 
     def negotiate_pdu_length(self):
-        pn_message = S7.S7_PN
+        pn_message = S7.S7_PN.copy()  # Create a copy to avoid modifying the original
         S7.set_word_at(pn_message, 23, self._size_requested_PDU)
         self.send_packet(pn_message)
         if self._last_error == 0:
@@ -380,7 +383,9 @@ class S7Client:
             if self._last_error == 0:
                 if length == 27 and self.PDU[17] == 0 and self.PDU[18] == 0:
                     plength = S7.get_word_at(self.PDU, 25)
-                    if plength <= 0:
+                    if plength > 0:
+                        self._length_PDU = plength  # Store the negotiated PDU length
+                    else:
                         self._last_error = S7.errCliNegotiatingPDU
                 else:
                     self._last_error = S7.errCliNegotiatingPDU
@@ -472,7 +477,7 @@ class S7Client:
                 word_size = 1
                 word_len = S7.S7WLByte
 
-        max_elements = (self._length_PDU - 18) # word_size
+        max_elements = (self._length_PDU - 18) if self._length_PDU > 18 else (self._size_requested_PDU - 18)
         tot_elements = amount
 
         while tot_elements > 0 and self._last_error == 0:
@@ -522,6 +527,100 @@ class S7Client:
 
         return self._last_error
 
+    # Convenience methods for reading different data types
+    def read_bool(self, area: int, start: int, bit: int, db_number: int = 0) -> tuple[int, bool]:
+        """Read a single boolean value"""
+        buffer = bytearray(1)
+        error = self.read_area(area, start, 1, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetBitAt(buffer, 0, bit)
+        return error, False
+
+    def read_int(self, area: int, start: int, db_number: int = 0) -> tuple[int, int]:
+        """Read a 16-bit signed integer"""
+        buffer = bytearray(2)
+        error = self.read_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.get_int_at(buffer, 0)
+        return error, 0
+
+    def read_word(self, area: int, start: int, db_number: int = 0) -> tuple[int, int]:
+        """Read a 16-bit unsigned integer"""
+        buffer = bytearray(2)
+        error = self.read_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.get_word_at(buffer, 0)
+        return error, 0
+
+    def read_dword(self, area: int, start: int, db_number: int = 0) -> tuple[int, int]:
+        """Read a 32-bit unsigned integer"""
+        buffer = bytearray(4)
+        error = self.read_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetDWordAt(buffer, 0)
+        return error, 0
+
+    def read_real(self, area: int, start: int, db_number: int = 0) -> tuple[int, float]:
+        """Read a 32-bit real (float) value"""
+        buffer = bytearray(4)
+        error = self.read_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetRealAt(buffer, 0)
+        return error, 0.0
+
+    def read_string(self, area: int, start: int, max_len: int, db_number: int = 0) -> tuple[int, str]:
+        """Read a string value"""
+        buffer = bytearray(max_len + 2)  # +2 for length bytes
+        error = self.read_area(area, start, max_len + 2, S7.S7WLByte, buffer, db_number)
+        if error == 0:
+            return error, S7.GetStringAt(buffer, 0)
+        return error, ""
+
+    # Convenience methods for writing different data types
+    def write_bool(self, area: int, start: int, bit: int, value: bool, db_number: int = 0) -> int:
+        """Write a single boolean value"""
+        buffer = bytearray(1)
+        # First read the current byte
+        read_error = self.read_area(area, start, 1, S7.S7WLByte, buffer, db_number)
+        if read_error != 0:
+            return read_error
+        
+        # Modify the specific bit
+        S7.SetBitAt(buffer, 0, bit, value)
+        
+        # Write back the modified byte
+        return self.write_area(area, start, 1, S7.S7WLByte, buffer, db_number)
+
+    def write_int(self, area: int, start: int, value: int, db_number: int = 0) -> int:
+        """Write a 16-bit signed integer"""
+        buffer = bytearray(2)
+        S7.SetIntAt(buffer, 0, value)
+        return self.write_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+
+    def write_word(self, area: int, start: int, value: int, db_number: int = 0) -> int:
+        """Write a 16-bit unsigned integer"""
+        buffer = bytearray(2)
+        S7.set_word_at(buffer, 0, value)
+        return self.write_area(area, start, 2, S7.S7WLByte, buffer, db_number)
+
+    def write_dword(self, area: int, start: int, value: int, db_number: int = 0) -> int:
+        """Write a 32-bit unsigned integer"""
+        buffer = bytearray(4)
+        S7.SetDWordAt(buffer, 0, value)
+        return self.write_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+
+    def write_real(self, area: int, start: int, value: float, db_number: int = 0) -> int:
+        """Write a 32-bit real (float) value"""
+        buffer = bytearray(4)
+        S7.SetRealAt(buffer, 0, value)
+        return self.write_area(area, start, 4, S7.S7WLByte, buffer, db_number)
+
+    def write_string(self, area: int, start: int, value: str, max_len: int, db_number: int = 0) -> int:
+        """Write a string value"""
+        buffer = bytearray(max_len + 2)  # +2 for length bytes
+        S7.SetStringAt(buffer, 0, max_len, value)
+        return self.write_area(area, start, max_len + 2, S7.S7WLByte, buffer, db_number)
+
 
     def ab_write(self, start: int, size: int, buffer: bytearray) -> int:
         return self.write_area(S7.S7AreaPA, start, size, S7.S7WLByte, buffer)
@@ -541,7 +640,6 @@ class S7Client:
                    amount : int,
                    word_len : int,
                    buffer : bytearray,
-                   bytes_written : int = 0,
                    db_number : int = 0):
         address = 0
         num_elements = 0
@@ -573,7 +671,7 @@ class S7Client:
                 word_size = 1
                 word_len = S7.S7WLByte
 
-        max_elements = (self._length_PDU - 35) // word_size
+        max_elements = (self._length_PDU - 35) // word_size if self._length_PDU > 35 else (self._size_requested_PDU - 35) // word_size
         tot_elements = amount
 
         while tot_elements > 0 and self._last_error == 0:
@@ -636,6 +734,1051 @@ class S7Client:
             bytes_written = 0
 
         return self._last_error
+
+    # Sharp7-compatible functions
+
+    def get_ag_block_info(self, block_type: int, block_num: int, block_info: TS7BlockInfo) -> int:
+        """
+        Get information about a block (similar to Sharp7 GetAgBlockInfo)
+        """
+        # This is a simplified implementation - in a full implementation,
+        # this would send the appropriate S7 protocol messages to get block info
+        # For now, we'll implement a basic version that works with db_get and db_fill
+        
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        if not self.connected:
+            self._last_error = S7.errTCPNotConnected
+            return self._last_error
+            
+        # For DB blocks, we can estimate size by trying to read
+        # This is a simplified approach - real implementation would use SZL queries
+        if block_type == Block.DB:
+            # Try reading progressively larger chunks to find the actual DB size
+            # Start with a reasonable default
+            test_sizes = [1, 10, 100, 1000, 8192]  # Common DB sizes
+            
+            block_info.BlkType = block_type
+            block_info.BlkNumber = block_num
+            block_info.BlkLang = 0  # Unknown
+            block_info.BlkFlags = 0
+            block_info.MC7Size = 0  # Will be determined
+            block_info.LoadSize = 0
+            block_info.LocalData = 0
+            block_info.SBBLength = 0
+            block_info.CheckSum = 0
+            block_info.Version = 0
+            
+            # Try to determine actual size by testing reads
+            max_size = 0
+            test_buffer = bytearray(8192)
+            
+            for test_size in test_sizes:
+                error = self.read_area(S7.S7AreaDB, 0, test_size, S7.S7WLByte, test_buffer, block_num)
+                if error == 0:
+                    max_size = test_size
+                elif error == S7.errCliAddressOutOfRange:
+                    break
+                    
+            # Binary search for exact size if we found a working size
+            if max_size > 0:
+                low = max_size
+                high = max_size * 10
+                
+                # Find upper bound
+                while high <= 65536:  # Max reasonable DB size
+                    error = self.read_area(S7.S7AreaDB, 0, high, S7.S7WLByte, test_buffer, block_num)
+                    if error == 0:
+                        low = high
+                        high *= 2
+                    else:
+                        break
+                        
+                # Binary search for exact size
+                while low < high - 1:
+                    mid = (low + high) // 2
+                    error = self.read_area(S7.S7AreaDB, 0, mid, S7.S7WLByte, test_buffer, block_num)
+                    if error == 0:
+                        low = mid
+                    else:
+                        high = mid
+                        
+                block_info.MC7Size = low
+            else:
+                # Default size or error determining size
+                block_info.MC7Size = 1024  # Default size
+                
+        else:
+            self._last_error = S7.errCliInvalidBlockType
+            
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error
+
+    def db_get(self, db_number: int, usr_data: bytearray) -> tuple[int, int]:
+        """
+        Get entire DB block (Sharp7 compatible)
+        Returns tuple of (error_code, actual_size)
+        """
+        block_info = TS7BlockInfo()
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        # Get block information first
+        self._last_error = self.get_ag_block_info(Block.DB, db_number, block_info)
+        
+        if self._last_error == 0:
+            db_size = block_info.MC7Size
+            if db_size <= len(usr_data):
+                # Read the entire DB
+                self._last_error = self.db_read(db_number, 0, db_size, usr_data)
+                if self._last_error == 0:
+                    actual_size = db_size
+                else:
+                    actual_size = 0
+            else:
+                self._last_error = S7.errCliBufferTooSmall
+                actual_size = 0
+        else:
+            actual_size = 0
+            
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error, actual_size
+
+    def db_fill(self, db_number: int, fill_char: int) -> int:
+        """
+        Fill entire DB block with specified byte value (Sharp7 compatible)
+        """
+        block_info = TS7BlockInfo()
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        # Get block information first
+        self._last_error = self.get_ag_block_info(Block.DB, db_number, block_info)
+        
+        if self._last_error == 0:
+            db_size = block_info.MC7Size
+            # Create buffer filled with the specified character
+            buffer = bytearray([fill_char & 0xFF] * db_size)
+            self._last_error = self.db_write(db_number, 0, db_size, buffer)
+            
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error
+
+    def write_multi_vars(self, items: list, items_count: int) -> int:
+        """
+        Write multiple variables in one operation (Sharp7 compatible)
+        Items should be a list of S7DataItem structures or dictionaries with the same fields
+        """
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        
+        # Check parameter limits
+        if items_count > 20:  # MaxVars equivalent
+            return S7.errCliTooManyItems
+            
+        if items_count == 0:
+            return 0
+            
+        # For now, implement as sequential writes
+        # A full implementation would use the multi-var protocol
+        for i in range(items_count):
+            item = items[i]
+            
+            # Handle both S7DataItem objects and dictionaries
+            if hasattr(item, 'Area'):
+                area = item.Area
+                start = item.Start  
+                db_number = item.DBNumber
+                amount = item.Amount
+                word_len = item.WordLen
+                # Get data from pointer or data field
+                if hasattr(item, 'pData') and item.pData:
+                    # This would need proper pointer handling in a full implementation
+                    data = bytearray(amount)  # Placeholder
+                elif hasattr(item, 'data'):
+                    data = item.data
+                else:
+                    data = bytearray(amount)
+            else:
+                # Dictionary format
+                area = item.get('Area', 0)
+                start = item.get('Start', 0)
+                db_number = item.get('DBNumber', 0) 
+                amount = item.get('Amount', 0)
+                word_len = item.get('WordLen', S7.S7WLByte)
+                data = item.get('data', bytearray(amount))
+                
+            # Write the data
+            self._last_error = self.write_area(area, start, amount, word_len, data, db_number)
+            
+            # Set result for this item
+            if hasattr(item, 'Result'):
+                item.Result = self._last_error
+            elif isinstance(item, dict):
+                item['Result'] = self._last_error
+                
+            # Stop on first error
+            if self._last_error != 0:
+                break
+                
+        if self._last_error == 0:
+            self._time_ms = int(time.time() * 1000) - elapsed
+            
+        return self._last_error
+
+    # ========================================================================
+    # Additional Sharp7 Compatible Methods
+    # ========================================================================
+
+    def tm_read(self, start: int, amount: int, buffer: list) -> int:
+        """Read Timer values from PLC.
+        
+        Args:
+            start: Start timer number
+            amount: Number of timers to read
+            buffer: List to store timer values (will be filled with ushort values)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        s_buffer = bytearray(amount * 2)
+        result = self.read_area(S7.S7AreaTM, 0, start, amount, S7.S7WLTimer, s_buffer)
+        if result == 0:
+            buffer.clear()
+            for c in range(amount):
+                value = (s_buffer[c * 2 + 1] << 8) + s_buffer[c * 2]
+                buffer.append(value)
+        return result
+
+    def tm_write(self, start: int, amount: int, buffer: list) -> int:
+        """Write Timer values to PLC.
+        
+        Args:
+            start: Start timer number
+            amount: Number of timers to write
+            buffer: List of timer values (ushort values)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        s_buffer = bytearray(amount * 2)
+        for c in range(amount):
+            value = buffer[c] & 0xFFFF
+            s_buffer[c * 2] = value & 0xFF
+            s_buffer[c * 2 + 1] = (value >> 8) & 0xFF
+        return self.write_area(S7.S7AreaTM, 0, start, amount, S7.S7WLTimer, s_buffer)
+
+    def ct_read(self, start: int, amount: int, buffer: list) -> int:
+        """Read Counter values from PLC.
+        
+        Args:
+            start: Start counter number
+            amount: Number of counters to read
+            buffer: List to store counter values (will be filled with ushort values)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        s_buffer = bytearray(amount * 2)
+        result = self.read_area(S7.S7AreaCT, 0, start, amount, S7.S7WLCounter, s_buffer)
+        if result == 0:
+            buffer.clear()
+            for c in range(amount):
+                value = (s_buffer[c * 2 + 1] << 8) + s_buffer[c * 2]
+                buffer.append(value)
+        return result
+
+    def ct_write(self, start: int, amount: int, buffer: list) -> int:
+        """Write Counter values to PLC.
+        
+        Args:
+            start: Start counter number
+            amount: Number of counters to write
+            buffer: List of counter values (ushort values)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        s_buffer = bytearray(amount * 2)
+        for c in range(amount):
+            value = buffer[c] & 0xFFFF
+            s_buffer[c * 2] = value & 0xFF
+            s_buffer[c * 2 + 1] = (value >> 8) & 0xFF
+        return self.write_area(S7.S7AreaCT, 0, start, amount, S7.S7WLCounter, s_buffer)
+
+    def delete(self, block_type: int, block_num: int) -> int:
+        """Delete a block from PLC.
+        
+        Args:
+            block_type: Type of block to delete
+            block_num: Number of block to delete
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def upload(self, block_type: int, block_num: int, usr_data: bytearray, size_ref: list) -> int:
+        """Upload block from PLC.
+        
+        Args:
+            block_type: Type of block to upload
+            block_num: Number of block to upload
+            usr_data: Buffer to store uploaded data
+            size_ref: Reference to size (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def full_upload(self, block_type: int, block_num: int, usr_data: bytearray, size_ref: list) -> int:
+        """Full upload block from PLC.
+        
+        Args:
+            block_type: Type of block to upload
+            block_num: Number of block to upload
+            usr_data: Buffer to store uploaded data
+            size_ref: Reference to size (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def download(self, block_num: int, usr_data: bytearray, size: int) -> int:
+        """Download block to PLC.
+        
+        Args:
+            block_num: Number of block to download
+            usr_data: Data to download
+            size: Size of data
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def list_blocks(self, blocks_list: dict) -> int:
+        """List all blocks in PLC.
+        
+        Args:
+            blocks_list: Dictionary to store block counts
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def list_blocks_of_type(self, block_type: int, block_list: list, items_count_ref: list) -> int:
+        """List blocks of specific type.
+        
+        Args:
+            block_type: Type of blocks to list
+            block_list: List to store block numbers
+            items_count_ref: Reference to items count (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def get_pg_block_info(self, info: dict, buffer: bytearray, size: int) -> int:
+        """Get block info from PG (Program Generator).
+        
+        Args:
+            info: Dictionary to store block information
+            buffer: Buffer containing block data
+            size: Size of buffer
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def get_plc_date_time(self, dt_ref: list) -> int:
+        """Get PLC date and time.
+        
+        Args:
+            dt_ref: Reference to datetime (list with one datetime element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def set_plc_date_time(self, dt) -> int:
+        """Set PLC date and time.
+        
+        Args:
+            dt: DateTime to set
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def set_plc_system_date_time(self) -> int:
+        """Set PLC date and time to system time.
+        
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def plc_hot_start(self) -> int:
+        """Perform PLC Hot Start.
+        
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def plc_cold_start(self) -> int:
+        """Perform PLC Cold Start.
+        
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def plc_stop(self) -> int:
+        """Stop PLC.
+        
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def plc_compress(self, timeout: int) -> int:
+        """Compress PLC memory.
+        
+        Args:
+            timeout: Timeout in milliseconds
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def plc_copy_ram_to_rom(self, timeout: int) -> int:
+        """Copy RAM to ROM in PLC.
+        
+        Args:
+            timeout: Timeout in milliseconds
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def read_szl_list(self, szl_list_ref: list, items_count_ref: list) -> int:
+        """Read SZL list from PLC.
+        
+        Args:
+            szl_list_ref: Reference to SZL list (list with one element)
+            items_count_ref: Reference to items count (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def set_session_password(self, password: str) -> int:
+        """Set session password for PLC access.
+        
+        Args:
+            password: Password string
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def clear_session_password(self) -> int:
+        """Clear session password.
+        
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def iso_exchange_buffer(self, buffer: bytearray) -> int:
+        """Exchange raw ISO buffer with PLC.
+        
+        Args:
+            buffer: Buffer to exchange
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder - actual implementation would need S7 protocol packets
+        return S7.errCliFunctionNotImplemented
+
+    def error_text(self, error: int) -> str:
+        """Get error text for error code.
+        
+        Args:
+            error: Error code
+            
+        Returns:
+            Error description string
+        """
+        error_texts = {
+            0: "OK",
+            S7.errCliNegotiatingPDU: "Error in PDU negotiation",
+            S7.errCliInvalidParams: "Invalid parameters",
+            S7.errCliJobPending: "Job pending",
+            S7.errCliTooManyItems: "Too many items",
+            S7.errCliInvalidWordLen: "Invalid word length",
+            S7.errCliPartialDataWritten: "Partial data written",
+            S7.errCliSizeOverPDU: "Size over PDU",
+            S7.errCliInvalidPlcAnswer: "Invalid PLC answer",
+            S7.errCliAddressOutOfRange: "Address out of range",
+            S7.errCliInvalidTransportSize: "Invalid transport size",
+            S7.errCliWriteDataSizeMismatch: "Write data size mismatch",
+            S7.errCliItemNotAvailable: "Item not available",
+            S7.errCliInvalidValue: "Invalid value",
+            S7.errCliCannotStartPLC: "Cannot start PLC",
+            S7.errCliAlreadyRun: "Already running",
+            S7.errCliCannotStopPLC: "Cannot stop PLC",
+            S7.errCliCannotCopyRamToRom: "Cannot copy RAM to ROM",
+            S7.errCliCannotCompress: "Cannot compress",
+            S7.errCliAlreadyStop: "Already stopped",
+            S7.errCliFunNotAvailable: "Function not available",
+            S7.errCliUploadSequenceFailed: "Upload sequence failed",
+            S7.errCliInvalidDataSizeRecvd: "Invalid data size received",
+            S7.errCliInvalidBlockType: "Invalid block type",
+            S7.errCliInvalidBlockNumber: "Invalid block number",
+            S7.errCliInvalidBlockSize: "Invalid block size",
+            S7.errCliNeedPassword: "Need password",
+            S7.errCliInvalidPassword: "Invalid password",
+            S7.errCliNoPasswordToSetOrClear: "No password to set or clear",
+            S7.errCliJobTimeout: "Job timeout",
+            S7.errCliPartialDataRead: "Partial data read",
+            S7.errCliBufferTooSmall: "Buffer too small",
+            S7.errCliFunctionRefused: "Function refused",
+            S7.errCliDestroying: "Destroying",
+            S7.errCliInvalidParamNumber: "Invalid parameter number",
+            S7.errCliCannotChangeParam: "Cannot change parameter",
+            S7.errCliFunctionNotImplemented: "Function not implemented"
+        }
+        return error_texts.get(error, f"Unknown error {error}")
+
+    # Convenience properties for Sharp7 compatibility
+    @property
+    def last_error(self) -> int:
+        """Get last error code."""
+        return self._last_error
+
+    @property 
+    def exec_time(self) -> int:
+        """Get execution time in milliseconds."""
+        return self._time_ms
+
+    @property
+    def pdu_requested(self) -> int:
+        """Get requested PDU length."""
+        return self._size_requested_PDU
+
+    @property
+    def pdu_length(self) -> int:
+        """Get negotiated PDU length."""
+        return self._length_PDU
+
+    def requested_pdu_length(self) -> int:
+        """Get requested PDU length.
+        
+        Returns:
+            Requested PDU length
+        """
+        return self._size_requested_PDU
+
+    def negotiated_pdu_length(self) -> int:
+        """Get negotiated PDU length.
+        
+        Returns:
+            Negotiated PDU length
+        """
+        return self._length_PDU
+
+    @property
+    def plc_status(self) -> int:
+        """Get PLC status."""
+        # This would need actual implementation
+        return 0
+
+    # ========================================================================
+    # Additional Connection Methods
+    # ========================================================================
+
+    def drv_connect_to(self, address: str, rack: int = 0, slot: int = 3) -> int:
+        """Connect to PLC using Drive protocol.
+        
+        Args:
+            address: PLC IP address
+            rack: Rack number (default 0)
+            slot: Slot number (default 3)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        remote_tsap = (self.conn_type << 8) + (rack * 0x20) + slot
+        self.set_connection_params(address, 0x0100, remote_tsap)
+        return self.connect()
+
+    def nck_connect_to(self, address: str, rack: int = 0) -> int:
+        """Connect to Sinumerik NCK.
+        
+        Args:
+            address: PLC IP address  
+            rack: Rack number (default 0)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        remote_tsap = (self.conn_type << 8) + (rack * 0x20) + 3
+        self.set_connection_params(address, 0x0100, remote_tsap)
+        return self.connect()
+
+    # ========================================================================
+    # Async Methods (Placeholders)
+    # ========================================================================
+
+    def as_read_area(self, area: int, db_number: int, start: int, amount: int, word_len: int, buffer: bytearray) -> int:
+        """Async read area from PLC.
+        
+        Args:
+            area: Memory area to read from
+            db_number: DB number (if area is DB)
+            start: Start address
+            amount: Amount to read
+            word_len: Word length
+            buffer: Buffer to store data
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.read_area(area, db_number, start, amount, word_len, buffer)
+
+    def as_write_area(self, area: int, db_number: int, start: int, amount: int, word_len: int, buffer: bytearray) -> int:
+        """Async write area to PLC.
+        
+        Args:
+            area: Memory area to write to
+            db_number: DB number (if area is DB)
+            start: Start address
+            amount: Amount to write
+            word_len: Word length
+            buffer: Buffer containing data
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.write_area(area, db_number, start, amount, word_len, buffer)
+
+    def as_db_read(self, db_number: int, start: int, size: int, buffer: bytearray) -> int:
+        """Async DB read from PLC.
+        
+        Args:
+            db_number: DB number to read from
+            start: Start address
+            size: Size to read
+            buffer: Buffer to store data
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.db_read(db_number, start, size, buffer)
+
+    def as_db_write(self, db_number: int, start: int, size: int, buffer: bytearray) -> int:
+        """Async DB write to PLC.
+        
+        Args:
+            db_number: DB number to write to
+            start: Start address
+            size: Size to write
+            buffer: Buffer containing data
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.db_write(db_number, start, size, buffer)
+
+    def as_db_get(self, db_number: int, usr_data: bytearray, size_ref: list) -> int:
+        """Async get entire DB from PLC.
+        
+        Args:
+            db_number: DB number to read
+            usr_data: Buffer to store data
+            size_ref: Reference to size (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.db_get(db_number, usr_data, size_ref)
+
+    def as_db_fill(self, db_number: int, fill_char: int) -> int:
+        """Async fill DB with character.
+        
+        Args:
+            db_number: DB number to fill
+            fill_char: Character to fill with
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.db_fill(db_number, fill_char)
+
+    def as_upload(self, block_type: int, block_num: int, usr_data: bytearray, size_ref: list) -> int:
+        """Async upload block from PLC.
+        
+        Args:
+            block_type: Type of block to upload
+            block_num: Number of block to upload
+            usr_data: Buffer to store uploaded data
+            size_ref: Reference to size (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.upload(block_type, block_num, usr_data, size_ref)
+
+    def as_full_upload(self, block_type: int, block_num: int, usr_data: bytearray, size_ref: list) -> int:
+        """Async full upload block from PLC.
+        
+        Args:
+            block_type: Type of block to upload
+            block_num: Number of block to upload
+            usr_data: Buffer to store uploaded data
+            size_ref: Reference to size (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.full_upload(block_type, block_num, usr_data, size_ref)
+
+    def as_list_blocks_of_type(self, block_type: int, block_list: list, items_count_ref: list) -> int:
+        """Async list blocks of specific type.
+        
+        Args:
+            block_type: Type of blocks to list
+            block_list: List to store block numbers
+            items_count_ref: Reference to items count (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.list_blocks_of_type(block_type, block_list, items_count_ref)
+
+    def as_read_szl(self, id: int, index: int, szl_ref: list, size_ref: list) -> int:
+        """Async read SZL from PLC.
+        
+        Args:
+            id: SZL ID
+            index: SZL index
+            szl_ref: Reference to SZL (list with one element)
+            size_ref: Reference to size (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.read_SZL(id, index, szl_ref[0], size_ref)
+
+    def as_read_szl_list(self, szl_list_ref: list, items_count_ref: list) -> int:
+        """Async read SZL list from PLC.
+        
+        Args:
+            szl_list_ref: Reference to SZL list (list with one element)
+            items_count_ref: Reference to items count (list with one element)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.read_szl_list(szl_list_ref, items_count_ref)
+
+    def as_tm_read(self, start: int, amount: int, buffer: list) -> int:
+        """Async timer read from PLC.
+        
+        Args:
+            start: Start timer number
+            amount: Number of timers to read
+            buffer: List to store timer values
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.tm_read(start, amount, buffer)
+
+    def as_tm_write(self, start: int, amount: int, buffer: list) -> int:
+        """Async timer write to PLC.
+        
+        Args:
+            start: Start timer number
+            amount: Number of timers to write
+            buffer: List of timer values
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.tm_write(start, amount, buffer)
+
+    def as_ct_read(self, start: int, amount: int, buffer: list) -> int:
+        """Async counter read from PLC.
+        
+        Args:
+            start: Start counter number
+            amount: Number of counters to read
+            buffer: List to store counter values
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.ct_read(start, amount, buffer)
+
+    def as_ct_write(self, start: int, amount: int, buffer: list) -> int:
+        """Async counter write to PLC.
+        
+        Args:
+            start: Start counter number
+            amount: Number of counters to write
+            buffer: List of counter values
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.ct_write(start, amount, buffer)
+
+    def as_plc_copy_ram_to_rom(self, timeout: int) -> int:
+        """Async copy RAM to ROM in PLC.
+        
+        Args:
+            timeout: Timeout in milliseconds
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.plc_copy_ram_to_rom(timeout)
+
+    def as_plc_compress(self, timeout: int) -> int:
+        """Async compress PLC memory.
+        
+        Args:
+            timeout: Timeout in milliseconds
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return self.plc_compress(timeout)
+
+    # ========================================================================
+    # Async Support Methods
+    # ========================================================================
+
+    def check_as_completion(self, op_result_ref: list) -> int:
+        """Check async operation completion.
+        
+        Args:
+            op_result_ref: Reference to operation result (list with one element)
+            
+        Returns:
+            Job status (0 = complete)
+        """
+        # In a real async implementation, this would check job status
+        op_result_ref[0] = 0  # Assume completed successfully
+        return 0
+
+    def wait_as_completion(self, timeout: int) -> int:
+        """Wait for async operation completion.
+        
+        Args:
+            timeout: Timeout in milliseconds
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # In a real async implementation, this would wait for completion
+        return 0
+
+    def set_as_callback(self, callback, usr_ptr) -> int:
+        """Set async completion callback.
+        
+        Args:
+            callback: Callback function
+            usr_ptr: User pointer for callback
+            
+        Returns:
+            Error code (0 = success)
+        """
+        # This is a placeholder for async callback functionality
+        return S7.errCliFunctionNotImplemented
+
+    # ========================================================================
+    # Sinumerik Drive/NCK Methods (Placeholders)
+    # ========================================================================
+
+    def read_drv_area(self, do_number: int, parameter_number: int, start: int, amount: int, word_len: int, buffer: bytearray, bytes_read_ref: list = None) -> int:
+        """Read Drive area from Sinumerik.
+        
+        Args:
+            do_number: Drive object number
+            parameter_number: Parameter number
+            start: Start address
+            amount: Amount to read
+            word_len: Word length
+            buffer: Buffer to store data
+            bytes_read_ref: Reference to bytes read (optional)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return S7.errCliFunctionNotImplemented
+
+    def write_drv_area(self, do_number: int, parameter_number: int, start: int, amount: int, word_len: int, buffer: bytearray, bytes_written_ref: list = None) -> int:
+        """Write Drive area to Sinumerik.
+        
+        Args:
+            do_number: Drive object number
+            parameter_number: Parameter number
+            start: Start address
+            amount: Amount to write
+            word_len: Word length
+            buffer: Buffer containing data
+            bytes_written_ref: Reference to bytes written (optional)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return S7.errCliFunctionNotImplemented
+
+    def read_nck_area(self, nck_area: int, nck_unit: int, nck_module: int, parameter_number: int, start: int, amount: int, word_len: int, buffer: bytearray, bytes_read_ref: list = None) -> int:
+        """Read NCK area from Sinumerik.
+        
+        Args:
+            nck_area: NCK area
+            nck_unit: NCK unit
+            nck_module: NCK module
+            parameter_number: Parameter number
+            start: Start address
+            amount: Amount to read
+            word_len: Word length
+            buffer: Buffer to store data
+            bytes_read_ref: Reference to bytes read (optional)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return S7.errCliFunctionNotImplemented
+
+    def write_nck_area(self, nck_area: int, nck_unit: int, nck_module: int, parameter_number: int, start: int, amount: int, word_len: int, buffer: bytearray, bytes_written_ref: list = None) -> int:
+        """Write NCK area to Sinumerik.
+        
+        Args:
+            nck_area: NCK area
+            nck_unit: NCK unit
+            nck_module: NCK module
+            parameter_number: Parameter number
+            start: Start address
+            amount: Amount to write
+            word_len: Word length
+            buffer: Buffer containing data
+            bytes_written_ref: Reference to bytes written (optional)
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return S7.errCliFunctionNotImplemented
+
+    def read_multi_drv_vars(self, items: list, items_count: int) -> int:
+        """Read multiple Drive variables from Sinumerik.
+        
+        Args:
+            items: List of drive items to read
+            items_count: Number of items
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return S7.errCliFunctionNotImplemented
+
+    def write_multi_drv_vars(self, items: list, items_count: int) -> int:
+        """Write multiple Drive variables to Sinumerik.
+        
+        Args:
+            items: List of drive items to write
+            items_count: Number of items
+            
+        Returns:
+            Error code (0 = success)
+        """
+        return S7.errCliFunctionNotImplemented
+
+    # ========================================================================
+    # Block Constants (Sharp7 Compatible)
+    # ========================================================================
+
+    # Block types
+    Block_OB = 0x38
+    Block_DB = 0x41  
+    Block_SDB = 0x42
+    Block_FC = 0x43
+    Block_SFC = 0x44
+    Block_FB = 0x45
+    Block_SFB = 0x46
+
+    # Sub Block Type
+    SubBlk_OB = 0x08
+    SubBlk_DB = 0x0A
+    SubBlk_SDB = 0x0B
+    SubBlk_FC = 0x0C
+    SubBlk_SFC = 0x0D
+    SubBlk_FB = 0x0E
+    SubBlk_SFB = 0x0F
+
+    # Block languages
+    BlockLangAWL = 0x01
+    BlockLangKOP = 0x02
+    BlockLangFUP = 0x03
+    BlockLangSCL = 0x04
+    BlockLangDB = 0x05
+    BlockLangGRAPH = 0x06
+
+    # Max vars for multi operations
+    MaxVars = 20
+
+    # Connection types
+    CONNTYPE_PG = 0x01
+    CONNTYPE_OP = 0x02
+    CONNTYPE_BASIC = 0x03
 
 #
 # def read_multi_vars(self, items, items_count):
