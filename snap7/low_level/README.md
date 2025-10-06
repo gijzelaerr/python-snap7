@@ -13,7 +13,8 @@ The native Python S7 client provides a pure Python implementation for communicat
 - **S7Client** (`s7_client.py`) - Main client class for connecting to S7 PLCs
 - **S7Protocol** (`s7_protocol.py`) - Protocol definitions, constants, and data conversion utilities
 - **S7Socket** (`s7_socket.py`) - TCP socket handling and communication
-- **S7Server** (`s7_server.py`) - Basic S7 server implementation for testing
+- **S7Server** (`s7_server.py`) - S7 server implementation for PLC simulation
+- **S7Partner** (`s7_partner.py`) - S7 partner implementation for peer-to-peer communication
 - **S7IsoTcp** (`s7_isotcp.py`) - ISO TCP protocol layer (partial implementation)
 
 ### Key Features
@@ -237,6 +238,64 @@ To extend the implementation:
 3. **Add Security** - Implement S7 security features
 4. **Optimize Performance** - Add connection pooling, async operations
 5. **Add Testing** - Create tests with real PLC hardware
+
+### Using S7Server
+
+```python
+from snap7.low_level.s7_server import S7Server
+
+# Create and start server
+server = S7Server()
+
+# Register a data block
+db_data = bytearray(1024)
+server.register_area(0x84, 1, db_data)  # DB1 with 1024 bytes
+
+# Start server on port 102
+error = server.start("0.0.0.0", 102)
+if error == 0:
+    print("Server started successfully!")
+    
+    # Get server status
+    server_status, cpu_status, clients_count = server.get_status()
+    print(f"Server Status: {server_status}, CPU: {cpu_status}, Clients: {clients_count}")
+    
+    # Server runs in background thread
+    # ... do other work ...
+    
+    # Stop server
+    server.stop()
+```
+
+### Using S7Partner
+
+```python
+from snap7.low_level.s7_partner import S7Partner
+
+# Create active partner (initiates connection)
+partner = S7Partner(active=True)
+
+# Connect to remote partner
+error = partner.start_to("0.0.0.0", "192.168.1.100")
+if error == 0:
+    print("Connected to partner!")
+    
+    # Send data synchronously
+    partner.send_buffer = bytearray(b"Hello Partner!")
+    partner.send_size = 14
+    error = partner.b_send()
+    
+    # Receive data synchronously
+    error = partner.b_recv()
+    if error == 0:
+        print(f"Received: {partner.recv_buffer[:partner.recv_size]}")
+    
+    # Or send asynchronously
+    partner.as_b_send()
+    status, result = partner.check_as_b_send_completion()
+    
+    partner.stop()
+```
 
 ## Contributing
 
