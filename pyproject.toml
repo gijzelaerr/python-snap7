@@ -55,7 +55,10 @@ markers =[
     "mainloop",
     "partner",
     "server",
-    "util"
+    "util",
+    "low_level_client",
+    "low_level_server",
+    "low_level_partner"
     ]
 
 [tool.mypy]
