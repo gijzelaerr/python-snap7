@@ -1,10 +1,13 @@
+import datetime
+
+from .s7_consts import S7Consts
 from .s7_socket import S7Socket
 from .s7_protocol import S7Protocol as S7
 import time
 import struct
 
 from .. import WordLen
-from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection, TS7BlockInfo, S7DataItem, Block
+from ..type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection, TS7BlockInfo,  Block
 
 
 class S7SZLHeader:
@@ -977,7 +980,7 @@ class S7Client:
             value = buffer[c] & 0xFFFF
             s_buffer[c * 2] = value & 0xFF
             s_buffer[c * 2 + 1] = (value >> 8) & 0xFF
-        return self.write_area(S7.S7AreaTM, 0, start, amount, S7.S7WLTimer, s_buffer)
+        return self.write_area(S7.S7AreaTM, start, amount, S7.S7WLTimer, s_buffer)
 
     def ct_read(self, start: int, amount: int, buffer: list) -> int:
         """Read Counter values from PLC.
@@ -991,7 +994,7 @@ class S7Client:
             Error code (0 = success)
         """
         s_buffer = bytearray(amount * 2)
-        result = self.read_area(S7.S7AreaCT, 0, start, amount, S7.S7WLCounter, s_buffer)
+        result = self.read_area(S7.S7AreaCT,  start, amount, S7.S7WLCounter, s_buffer)
         if result == 0:
             buffer.clear()
             for c in range(amount):
@@ -1015,284 +1018,78 @@ class S7Client:
             value = buffer[c] & 0xFFFF
             s_buffer[c * 2] = value & 0xFF
             s_buffer[c * 2 + 1] = (value >> 8) & 0xFF
-        return self.write_area(S7.S7AreaCT, 0, start, amount, S7.S7WLCounter, s_buffer)
+        return self.write_area(S7.S7AreaCT,  start, amount, S7.S7WLCounter, s_buffer)
 
     def delete(self, block_type: int, block_num: int) -> int:
-        """Delete a block from PLC.
-        
-        Args:
-            block_type: Type of block to delete
-            block_num: Number of block to delete
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
-
-    def upload(self, block_type: int, block_num: int, usr_data: bytearray, size_ref: list) -> int:
-        """Upload block from PLC.
-        
-        Args:
-            block_type: Type of block to upload
-            block_num: Number of block to upload
-            usr_data: Buffer to store uploaded data
-            size_ref: Reference to size (list with one element)
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
-
-    def full_upload(self, block_type: int, block_num: int, usr_data: bytearray, size_ref: list) -> int:
-        """Full upload block from PLC.
-        
-        Args:
-            block_type: Type of block to upload
-            block_num: Number of block to upload
-            usr_data: Buffer to store uploaded data
-            size_ref: Reference to size (list with one element)
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
-
-    def download(self, block_num: int, usr_data: bytearray, size: int) -> int:
-        """Download block to PLC.
-        
-        Args:
-            block_num: Number of block to download
-            usr_data: Data to download
-            size: Size of data
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
-
-    def list_blocks(self, blocks_list: dict) -> int:
-        """List all blocks in PLC.
-        
-        Args:
-            blocks_list: Dictionary to store block counts
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
-
-    def list_blocks_of_type(self, block_type: int, block_list: list, items_count_ref: list) -> int:
-        """List blocks of specific type.
-        
-        Args:
-            block_type: Type of blocks to list
-            block_list: List to store block numbers
-            items_count_ref: Reference to items count (list with one element)
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement block deletion if needed
         return S7.errCliFunctionNotImplemented
 
     def get_pg_block_info(self, info: dict, buffer: bytearray, size: int) -> int:
-        """Get block info from PG (Program Generator).
-        
-        Args:
-            info: Dictionary to store block information
-            buffer: Buffer containing block data
-            size: Size of buffer
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement block deletion if needed
         return S7.errCliFunctionNotImplemented
 
     def get_plc_date_time(self, dt_ref: list) -> int:
-        """Get PLC date and time.
-        
-        Args:
-            dt_ref: Reference to datetime (list with one datetime element)
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement reading PLC date/time if needed
         return S7.errCliFunctionNotImplemented
+
 
     def set_plc_date_time(self, dt) -> int:
-        """Set PLC date and time.
-        
-        Args:
-            dt: DateTime to set
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement reading PLC date/time if needed
         return S7.errCliFunctionNotImplemented
 
-    def set_plc_system_date_time(self) -> int:
-        """Set PLC date and time to system time.
-        
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
 
     def plc_hot_start(self) -> int:
-        """Perform PLC Hot Start.
-        
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement this function if needed
         return S7.errCliFunctionNotImplemented
 
     def plc_cold_start(self) -> int:
-        """Perform PLC Cold Start.
-        
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement this function if needed
         return S7.errCliFunctionNotImplemented
 
     def plc_stop(self) -> int:
-        """Stop PLC.
-        
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement this function if needed
         return S7.errCliFunctionNotImplemented
 
     def plc_compress(self, timeout: int) -> int:
-        """Compress PLC memory.
-        
-        Args:
-            timeout: Timeout in milliseconds
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement this function if needed
         return S7.errCliFunctionNotImplemented
 
     def plc_copy_ram_to_rom(self, timeout: int) -> int:
-        """Copy RAM to ROM in PLC.
-        
-        Args:
-            timeout: Timeout in milliseconds
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
+        # TODO: Implement this function if needed
         return S7.errCliFunctionNotImplemented
 
     def read_szl_list(self, szl_list_ref: list, items_count_ref: list) -> int:
-        """Read SZL list from PLC.
-        
+        """
+        Read the list of available SZL (System Zone List) from the PLC.
+
         Args:
-            szl_list_ref: Reference to SZL list (list with one element)
-            items_count_ref: Reference to items count (list with one element)
-            
+            szl_list_ref: List to store tuples of (SZL ID, SZL Index)
+            items_count_ref: List with one element to store the count of items read
+
         Returns:
             Error code (0 = success)
         """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
+        self._last_error = 0
+        self._time_ms = 0
+        elapsed = int(time.time() * 1000)
+        if not self.connected:
+            self._last_error = S7.errTCPNotConnected
+            return self._last_error
+        szl = S7SZL(1024)
+        self._last_error = self.read_SZL(0x0000, 0x0000, szl)
+        if self._last_error == 0:
+            count = szl.Header.N_DR
+            szl_list_ref.clear()
+            for i in range(count):
+                szl_id = S7.get_word_at(szl.Data, i * 4)
+                szl_index = S7.get_word_at(szl.Data, i * 4 + 2)
+                szl_list_ref.append((szl_id, szl_index))
+            items_count_ref[0] = count
+            self._time_ms = int(time.time() * 1000) - elapsed
+        return self._last_error
 
-    def set_session_password(self, password: str) -> int:
-        """Set session password for PLC access.
-        
-        Args:
-            password: Password string
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
 
-    def clear_session_password(self) -> int:
-        """Clear session password.
-        
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
 
-    def iso_exchange_buffer(self, buffer: bytearray) -> int:
-        """Exchange raw ISO buffer with PLC.
-        
-        Args:
-            buffer: Buffer to exchange
-            
-        Returns:
-            Error code (0 = success)
-        """
-        # This is a placeholder - actual implementation would need S7 protocol packets
-        return S7.errCliFunctionNotImplemented
-
-    def error_text(self, error: int) -> str:
-        """Get error text for error code.
-        
-        Args:
-            error: Error code
-            
-        Returns:
-            Error description string
-        """
-        error_texts = {
-            0: "OK",
-            S7.errCliNegotiatingPDU: "Error in PDU negotiation",
-            S7.errCliInvalidParams: "Invalid parameters",
-            S7.errCliJobPending: "Job pending",
-            S7.errCliTooManyItems: "Too many items",
-            S7.errCliInvalidWordLen: "Invalid word length",
-            S7.errCliPartialDataWritten: "Partial data written",
-            S7.errCliSizeOverPDU: "Size over PDU",
-            S7.errCliInvalidPlcAnswer: "Invalid PLC answer",
-            S7.errCliAddressOutOfRange: "Address out of range",
-            S7.errCliInvalidTransportSize: "Invalid transport size",
-            S7.errCliWriteDataSizeMismatch: "Write data size mismatch",
-            S7.errCliItemNotAvailable: "Item not available",
-            S7.errCliInvalidValue: "Invalid value",
-            S7.errCliCannotStartPLC: "Cannot start PLC",
-            S7.errCliAlreadyRun: "Already running",
-            S7.errCliCannotStopPLC: "Cannot stop PLC",
-            S7.errCliCannotCopyRamToRom: "Cannot copy RAM to ROM",
-            S7.errCliCannotCompress: "Cannot compress",
-            S7.errCliAlreadyStop: "Already stopped",
-            S7.errCliFunNotAvailable: "Function not available",
-            S7.errCliUploadSequenceFailed: "Upload sequence failed",
-            S7.errCliInvalidDataSizeRecvd: "Invalid data size received",
-            S7.errCliInvalidBlockType: "Invalid block type",
-            S7.errCliInvalidBlockNumber: "Invalid block number",
-            S7.errCliInvalidBlockSize: "Invalid block size",
-            S7.errCliNeedPassword: "Need password",
-            S7.errCliInvalidPassword: "Invalid password",
-            S7.errCliNoPasswordToSetOrClear: "No password to set or clear",
-            S7.errCliJobTimeout: "Job timeout",
-            S7.errCliPartialDataRead: "Partial data read",
-            S7.errCliBufferTooSmall: "Buffer too small",
-            S7.errCliFunctionRefused: "Function refused",
-            S7.errCliDestroying: "Destroying",
-            S7.errCliInvalidParamNumber: "Invalid parameter number",
-            S7.errCliCannotChangeParam: "Cannot change parameter",
-            S7.errCliFunctionNotImplemented: "Function not implemented"
-        }
-        return error_texts.get(error, f"Unknown error {error}")
 
     # Convenience properties for Sharp7 compatibility
     @property
@@ -1337,10 +1134,6 @@ class S7Client:
         # This would need actual implementation
         return 0
 
-    # ========================================================================
-    # Additional Connection Methods
-    # ========================================================================
-
     def drv_connect_to(self, address: str, rack: int = 0, slot: int = 3) -> int:
         """Connect to PLC using Drive protocol.
         
@@ -1370,9 +1163,6 @@ class S7Client:
         self.set_connection_params(address, 0x0100, remote_tsap)
         return self.connect()
 
-    # ========================================================================
-    # Async Methods (Placeholders)
-    # ========================================================================
 
     def as_read_area(self, area: int, db_number: int, start: int, amount: int, word_len: int, buffer: bytearray) -> int:
         """Async read area from PLC.
@@ -1388,7 +1178,7 @@ class S7Client:
         Returns:
             Error code (0 = success)
         """
-        return self.read_area(area, db_number, start, amount, word_len, buffer)
+        return self.read_area(area, start, amount, word_len, buffer, db_number)
 
     def as_write_area(self, area: int, db_number: int, start: int, amount: int, word_len: int, buffer: bytearray) -> int:
         """Async write area to PLC.
@@ -1404,7 +1194,7 @@ class S7Client:
         Returns:
             Error code (0 = success)
         """
-        return self.write_area(area, db_number, start, amount, word_len, buffer)
+        return self.write_area(area, start, amount, word_len, buffer, db_number)
 
     def as_db_read(self, db_number: int, start: int, size: int, buffer: bytearray) -> int:
         """Async DB read from PLC.
@@ -1780,182 +1570,182 @@ class S7Client:
     CONNTYPE_OP = 0x02
     CONNTYPE_BASIC = 0x03
 
-#
-# def read_multi_vars(self, items, items_count):
-#     offset = 0
-#     length = 0
-#     item_size = 0
-#     s7_item = bytearray(12)
-#     s7_item_read = bytearray(1024)
-#     self._last_error = 0
-#     self.Time_ms = 0
-#     elapsed = time.time()
-#
-#     if items_count > self.MaxVars:
-#         return S7.errCliTooManyItems
-#
-#     self.PDU[: len(self.S7_MRD_HEADER)] = self.S7_MRD_HEADER
-#     S7.set_word_at(self.PDU, 13, items_count * len(s7_item) + 2)
-#     self.PDU[18] = items_count
-#     offset = 19
-#
-#     for item in items:
-#         s7_item[:] = self.S7_MRD_ITEM
-#         s7_item[3] = item.WordLen
-#         S7.set_word_at(s7_item, 4, item.Amount)
-#         if item.Area == S7.S7AreaDB:
-#             S7.set_word_at(s7_item, 6, item.DBNumber)
-#         s7_item[8] = item.Area
-#         address = item.Start
-#         s7_item[11] = address & 0xFF
-#         address >>= 8
-#         s7_item[10] = address & 0xFF
-#         address >>= 8
-#         s7_item[9] = address & 0xFF
-#         self.PDU[offset : offset + len(s7_item)] = s7_item
-#         offset += len(s7_item)
-#
-#     if offset > self._PduLength:
-#         return S7.errCliSizeOverPDU
-#
-#     S7.set_word_at(self.PDU, 2, offset)
-#     self.send_packet(self.PDU, offset)
-#
-#     if self._last_error != 0:
-#         return self._last_error
-#
-#     length = self.recv_iso_packet()
-#
-#     if self._last_error != 0:
-#         return self._last_error
-#
-#     if length < 22:
-#         self._last_error = S7.errIsoInvalidPDU
-#         return self._last_error
-#
-#     self._last_error = self.cpu_error(S7.get_word_at(self.PDU, 17))
-#
-#     if self._last_error != 0:
-#         return self._last_error
-#
-#     items_read = S7.get_byte_at(self.PDU, 20)
-#
-#     if items_read != items_count or items_read > self.MaxVars:
-#         self._last_error = S7.errCliInvalidPlcAnswer
-#         return self._last_error
-#
-#     offset = 21
-#
-#     for item in items:
-#         s7_item_read[: length - offset] = self.PDU[offset:length]
-#         if s7_item_read[0] == 0xFF:
-#             item_size = S7.get_word_at(s7_item_read, 2)
-#             if s7_item_read[1] not in (self.TS_ResOctet, self.TS_ResReal, self.TS_ResBit):
-#                 item_size >>= 3
-#             item.pData[:item_size] = s7_item_read[4 : 4 + item_size]
-#             item.Result = 0
-#             if item_size % 2 != 0:
-#                 item_size += 1
-#             offset += 4 + item_size
-#         else:
-#             item.Result = self.cpu_error(s7_item_read[0])
-#             offset += 4
-#
-#     self.Time_ms = int((time.time() - elapsed) * 1000)
-#     return self._last_error
-#
-#
-# def write_multi_vars(self, items, items_count):
-#     offset = 0
-#     par_length = 0
-#     data_length = 0
-#     item_data_size = 0
-#     s7_par_item = bytearray(len(self.S7_MWR_PARAM))
-#     s7_data_item = bytearray(1024)
-#     self._last_error = 0
-#     self.Time_ms = 0
-#     elapsed = time.time()
-#
-#     if items_count > self.MaxVars:
-#         return S7.errCliTooManyItems
-#
-#     self.PDU[: len(self.S7_MWR_HEADER)] = self.S7_MWR_HEADER
-#     par_length = items_count * len(self.S7_MWR_PARAM) + 2
-#     S7.set_word_at(self.PDU, 13, par_length)
-#     self.PDU[18] = items_count
-#     offset = len(self.S7_MWR_HEADER)
-#
-#     for item in items:
-#         s7_par_item[:] = self.S7_MWR_PARAM
-#         s7_par_item[3] = item.WordLen
-#         s7_par_item[8] = item.Area
-#         S7.set_word_at(s7_par_item, 4, item.Amount)
-#         S7.set_word_at(s7_par_item, 6, item.DBNumber)
-#         address = item.Start
-#         s7_par_item[11] = address & 0xFF
-#         address >>= 8
-#         s7_par_item[10] = address & 0xFF
-#         address >>= 8
-#         s7_par_item[9] = address & 0xFF
-#         self.PDU[offset : offset + len(s7_par_item)] = s7_par_item
-#         offset += len(s7_par_item)
-#
-#     data_length = 0
-#
-#     for item in items:
-#         s7_data_item[0] = 0x00
-#         if item.WordLen == S7.S7WLBit:
-#             s7_data_item[1] = self.TS_ResBit
-#         elif item.WordLen in (S7.S7WLCounter, S7.S7WLTimer):
-#             s7_data_item[1] = self.TS_ResOctet
-#         else:
-#             s7_data_item[1] = self.TS_ResByte
-#
-#         if item.WordLen in (S7.S7WLCounter, S7.S7WLTimer):
-#             item_data_size = item.Amount * 2
-#         else:
-#             item_data_size = item.Amount
-#
-#         if s7_data_item[1] not in (self.TS_ResOctet, self.TS_ResBit):
-#             S7.set_word_at(s7_data_item, 2, item_data_size * 8)
-#         else:
-#             S7.set_word_at(s7_data_item, 2, item_data_size)
-#
-#         s7_data_item[4 : 4 + item_data_size] = item.pData[:item_data_size]
-#
-#         if item_data_size % 2 != 0:
-#             s7_data_item[item_data_size + 4] = 0x00
-#             item_data_size += 1
-#
-#         self.PDU[offset : offset + item_data_size + 4] = s7_data_item[: item_data_size + 4]
-#         offset += item_data_size + 4
-#         data_length += item_data_size + 4
-#
-#     if offset > self._PduLength:
-#         return S7.errCliSizeOverPDU
-#
-#     S7.set_word_at(self.PDU, 2, offset)
-#     S7.set_word_at(self.PDU, 15, data_length)
-#     self.send_packet(self.PDU, offset)
-#     self.recv_iso_packet()
-#
-#     if self._last_error == 0:
-#         self._last_error = self.cpu_error(S7.get_word_at(self.PDU, 17))
-#         if self._last_error != 0:
-#             return self._last_error
-#
-#         items_written = S7.get_byte_at(self.PDU, 20)
-#
-#         if items_written != items_count or items_written > self.MaxVars:
-#             self._last_error = S7.errCliInvalidPlcAnswer
-#             return self._last_error
-#
-#         for i, item in enumerate(items):
-#             if self.PDU[i + 21] == 0xFF:
-#                 item.Result = 0
-#             else:
-#                 item.Result = self.cpu_error(self.PDU[i + 21])
-#
-#         self.Time_ms = int((time.time() - elapsed) * 1000)
-#
-#     return self._last_error
+
+def read_multi_vars(self, items, items_count):
+    offset = 0
+    length = 0
+    item_size = 0
+    s7_item = bytearray(12)
+    s7_item_read = bytearray(1024)
+    self._last_error = 0
+    self.Time_ms = 0
+    elapsed = time.time()
+
+    if items_count > self.MaxVars:
+        return S7.errCliTooManyItems
+
+    self.PDU[: len(self.S7_MRD_HEADER)] = self.S7_MRD_HEADER
+    S7.set_word_at(self.PDU, 13, items_count * len(s7_item) + 2)
+    self.PDU[18] = items_count
+    offset = 19
+
+    for item in items:
+        s7_item[:] = self.S7_MRD_ITEM
+        s7_item[3] = item.WordLen
+        S7.set_word_at(s7_item, 4, item.Amount)
+        if item.Area == S7.S7AreaDB:
+            S7.set_word_at(s7_item, 6, item.DBNumber)
+        s7_item[8] = item.Area
+        address = item.Start
+        s7_item[11] = address & 0xFF
+        address >>= 8
+        s7_item[10] = address & 0xFF
+        address >>= 8
+        s7_item[9] = address & 0xFF
+        self.PDU[offset : offset + len(s7_item)] = s7_item
+        offset += len(s7_item)
+
+    if offset > self._PduLength:
+        return S7.errCliSizeOverPDU
+
+    S7.set_word_at(self.PDU, 2, offset)
+    self.send_packet(self.PDU, offset)
+
+    if self._last_error != 0:
+        return self._last_error
+
+    length = self.recv_iso_packet()
+
+    if self._last_error != 0:
+        return self._last_error
+
+    if length < 22:
+        self._last_error = S7.errIsoInvalidPDU
+        return self._last_error
+
+    self._last_error = self.cpu_error(S7.get_word_at(self.PDU, 17))
+
+    if self._last_error != 0:
+        return self._last_error
+
+    items_read = S7.get_byte_at(self.PDU, 20)
+
+    if items_read != items_count or items_read > self.MaxVars:
+        self._last_error = S7.errCliInvalidPlcAnswer
+        return self._last_error
+
+    offset = 21
+
+    for item in items:
+        s7_item_read[: length - offset] = self.PDU[offset:length]
+        if s7_item_read[0] == 0xFF:
+            item_size = S7.get_word_at(s7_item_read, 2)
+            if s7_item_read[1] not in (self.TS_ResOctet, self.TS_ResReal, self.TS_ResBit):
+                item_size >>= 3
+            item.pData[:item_size] = s7_item_read[4 : 4 + item_size]
+            item.Result = 0
+            if item_size % 2 != 0:
+               item_size += 1
+            offset += 4 + item_size
+        else:
+            item.Result = self.cpu_error(s7_item_read[0])
+            offset += 4
+
+    self.Time_ms = int((time.time() - elapsed) * 1000)
+    return self._last_error
+
+
+def write_multi_vars(self, items, items_count):
+    offset = 0
+    par_length = 0
+    data_length = 0
+    item_data_size = 0
+    s7_par_item = bytearray(len(self.S7_MWR_PARAM))
+    s7_data_item = bytearray(1024)
+    self._last_error = 0
+    self.Time_ms = 0
+    elapsed = time.time()
+
+    if items_count > self.MaxVars:
+        return S7.errCliTooManyItems
+
+    self.PDU[: len(self.S7_MWR_HEADER)] = self.S7_MWR_HEADER
+    par_length = items_count * len(self.S7_MWR_PARAM) + 2
+    S7.set_word_at(self.PDU, 13, par_length)
+    self.PDU[18] = items_count
+    offset = len(self.S7_MWR_HEADER)
+
+    for item in items:
+        s7_par_item[:] = self.S7_MWR_PARAM
+        s7_par_item[3] = item.WordLen
+        s7_par_item[8] = item.Area
+        S7.set_word_at(s7_par_item, 4, item.Amount)
+        S7.set_word_at(s7_par_item, 6, item.DBNumber)
+        address = item.Start
+        s7_par_item[11] = address & 0xFF
+        address >>= 8
+        s7_par_item[10] = address & 0xFF
+        address >>= 8
+        s7_par_item[9] = address & 0xFF
+        self.PDU[offset : offset + len(s7_par_item)] = s7_par_item
+        offset += len(s7_par_item)
+
+    data_length = 0
+
+    for item in items:
+        s7_data_item[0] = 0x00
+        if item.WordLen == S7.S7WLBit:
+            s7_data_item[1] = self.TS_ResBit
+        elif item.WordLen in (S7.S7WLCounter, S7.S7WLTimer):
+            s7_data_item[1] = self.TS_ResOctet
+        else:
+            s7_data_item[1] = self.TS_ResByte
+
+        if item.WordLen in (S7.S7WLCounter, S7.S7WLTimer):
+            item_data_size = item.Amount * 2
+        else:
+            item_data_size = item.Amount
+
+        if s7_data_item[1] not in (self.TS_ResOctet, self.TS_ResBit):
+            S7.set_word_at(s7_data_item, 2, item_data_size * 8)
+        else:
+            S7.set_word_at(s7_data_item, 2, item_data_size)
+
+        s7_data_item[4 : 4 + item_data_size] = item.pData[:item_data_size]
+
+        if item_data_size % 2 != 0:
+            s7_data_item[item_data_size + 4] = 0x00
+            item_data_size += 1
+
+        self.PDU[offset : offset + item_data_size + 4] = s7_data_item[: item_data_size + 4]
+        offset += item_data_size + 4
+        data_length += item_data_size + 4
+
+    if offset > self._PduLength:
+        return S7.errCliSizeOverPDU
+
+    S7.set_word_at(self.PDU, 2, offset)
+    S7.set_word_at(self.PDU, 15, data_length)
+    self.send_packet(self.PDU, offset)
+    self.recv_iso_packet()
+
+    if self._last_error == 0:
+        self._last_error = self.cpu_error(S7.get_word_at(self.PDU, 17))
+        if self._last_error != 0:
+            return self._last_error
+
+        items_written = S7.get_byte_at(self.PDU, 20)
+
+        if items_written != items_count or items_written > self.MaxVars:
+            self._last_error = S7.errCliInvalidPlcAnswer
+            return self._last_error
+
+        for i, item in enumerate(items):
+            if self.PDU[i + 21] == 0xFF:
+                item.Result = 0
+            else:
+                item.Result = self.cpu_error(self.PDU[i + 21])
+
+        self.Time_ms = int((time.time() - elapsed) * 1000)
+
+    return self._last_error
