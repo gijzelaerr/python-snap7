@@ -9,6 +9,8 @@ from ctypes import Array, c_byte, c_char_p, c_int, c_int32, c_uint16, c_ulong, c
 from datetime import datetime
 from typing import Any, Callable, List, Optional, Tuple, Union, Type
 
+import snap7.low_level
+from snap7.low_level import S7Client
 from .error import error_wrap, check_error
 from types import TracebackType
 
@@ -45,8 +47,9 @@ class Client:
     _read_callback = None
     _callback = None
     _s7_client: S7Object
+    _s7_client_native : snap7.low_level.S7Client
 
-    def __init__(self, lib_location: Optional[str] = None):
+    def __init__(self, lib_location: Optional[str] = None, native: bool = False) -> None:
         """Creates a new `Client` instance.
 
         Args:
@@ -58,8 +61,14 @@ class Client:
             >>> client2 = snap7.client.Client(lib_location="/path/to/snap7.dll")  # If the dll is in another location
             <snap7.client.Client object at 0x0000028B257128E0>
         """
+        self._native = native
+        if not native:
+            self._lib: Snap7CliProtocol = load_library(lib_location)
+        else:
+            logger.warning("Native mode activated")
+            logger.warning("Some methods could not work properly")
+            logger.warning("Use in for development case only")
 
-        self._lib: Snap7CliProtocol = load_library(lib_location)
         self.create()
 
     def __enter__(self) -> "Client":
@@ -76,8 +85,11 @@ class Client:
     def create(self) -> None:
         """Creates a SNAP7 client."""
         logger.info("creating snap7 client")
-        self._lib.Cli_Create.restype = S7Object
-        self._s7_client = S7Object(self._lib.Cli_Create())
+        if self._native:
+            self._s7_client_native = snap7.low_level.S7Client()
+        else:
+            self._lib.Cli_Create.restype = S7Object
+            self._s7_client = S7Object(self._lib.Cli_Create())
 
     def destroy(self) -> Optional[int]:
         """Destroys the Client object.
@@ -174,7 +186,7 @@ class Client:
         logger.info("disconnecting snap7 client")
         return self._lib.Cli_Disconnect(self._s7_client)
 
-    def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> "Client":
+    def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> S7Client | "Client":
         """Connects a Client Object to a PLC.
 
         Args:
@@ -192,10 +204,13 @@ class Client:
             >>> client.connect("192.168.0.1", 0, 0)  # port is implicit = 102.
         """
         logger.info(f"connecting to {address}:{tcp_port} rack {rack} slot {slot}")
-
-        self.set_param(parameter=Parameter.RemotePort, value=tcp_port)
-        check_error(self._lib.Cli_ConnectTo(self._s7_client, c_char_p(address.encode()), c_int(rack), c_int(slot)))
-        return self
+        if self._native:
+            self._s7_client_native.connect_to(address, tcp_port, rack, slot)
+            return self._s7_client_native
+        else:
+            self.set_param(parameter=Parameter.RemotePort, value=tcp_port)
+            check_error(self._lib.Cli_ConnectTo(self._s7_client, c_char_p(address.encode()), c_int(rack), c_int(slot)))
+            return self
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """Reads a part of a DB from a PLC
