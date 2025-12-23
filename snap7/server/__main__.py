@@ -16,7 +16,7 @@ except ImportError:
 
 from snap7 import __version__
 from snap7.common import load_library
-from snap7.server import mainloop
+from snap7.clib.server import mainloop
 
 logger = logging.getLogger("Snap7.Server")
 

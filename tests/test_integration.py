@@ -5,7 +5,7 @@ Tests for pure Python client integration.
 import pytest
 import snap7
 from snap7.client import Client as CtypesClient
-from snap7.native_client import Client as PureClient
+from snap7.native.client import Client as PureClient
 
 
 class TestIntegration:

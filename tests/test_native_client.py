@@ -5,7 +5,7 @@ Tests for pure Python S7 client implementation.
 import pytest
 from unittest.mock import Mock, patch
 
-from snap7.native_client import Client
+from snap7.native.client import Client
 from snap7.native.errors import S7ConnectionError
 from snap7.type import Area
 

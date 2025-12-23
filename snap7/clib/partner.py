@@ -1,5 +1,5 @@
 """
-Snap7 code for partnering with a siemens 7 server.
+Snap7 partner using ctypes to interface with the native Snap7 C library.
 
 This allows you to create a S7 peer to peer communication. Unlike the
 client-server model, where the client makes a request and the server replies to
@@ -11,26 +11,48 @@ is requesting the connection.
 import re
 import logging
 from ctypes import byref, c_int, c_int32, c_uint32, c_void_p
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Type
+from types import TracebackType
 
-from .common import ipv4, load_library
-from .error import check_error, error_wrap
-from .protocol import Snap7CliProtocol
-from .type import S7Object, word, Parameter
+from snap7.common import ipv4, load_library
+from snap7.error import check_error, error_wrap
+from snap7.protocol import Snap7CliProtocol
+from snap7.type import S7Object, word, Parameter
+
+# Import Partner after other imports to avoid circular dependency
+from snap7.partner import Partner  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
-class Partner:
+class ClibPartner(Partner):
     """
-    A snap7 partner.
+    A snap7 partner using ctypes to interface with the native Snap7 C library.
+
+    This is the traditional implementation that requires the Snap7 C library to be installed.
     """
 
     _pointer: c_void_p
+    _library: Snap7CliProtocol
 
-    def __init__(self, active: bool = False):
-        self._library: Snap7CliProtocol = load_library()
+    def __init__(self, active: bool = False, **kwargs):
+        """Create a new ClibPartner instance.
+
+        Args:
+            active: If True, this partner initiates the connection.
+            **kwargs: Accepts and ignores extra keyword arguments (e.g., pure_python)
+                     for compatibility with the Partner factory.
+        """
+        self._library = load_library()
         self.create(active)
+
+    def __enter__(self) -> "ClibPartner":
+        return self
+
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
+        self.destroy()
 
     def __del__(self) -> None:
         self.destroy()

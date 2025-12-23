@@ -4,11 +4,10 @@ Simple test to verify memory area access is working.
 
 import pytest
 import time
-import struct
 from ctypes import c_char
 
-from snap7.native_server import Server as PureServer
-from snap7.native_client import Client as PureClient
+from snap7.native.server import Server as PureServer
+from snap7.native.client import Client as PureClient
 from snap7.type import SrvArea
 
 

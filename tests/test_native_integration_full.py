@@ -11,8 +11,8 @@ from ctypes import c_char
 import struct
 
 import snap7
-from snap7.native_server import Server as PureServer, mainloop as pure_mainloop 
-from snap7.native_client import Client as PureClient
+from snap7.native.server import Server as PureServer, mainloop as pure_mainloop
+from snap7.native.client import Client as PureClient
 from snap7.type import SrvArea, Area
 
 

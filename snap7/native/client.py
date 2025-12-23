@@ -1,146 +1,111 @@
 """
-Pure Python S7 client implementation.
+Drop-in replacement client using pure Python S7 implementation.
 
-Drop-in replacement for the ctypes-based client with native Python implementation.
+This module provides a Client class that is API-compatible with the existing
+ctypes-based client but uses the pure Python S7 implementation instead of
+the native Snap7 C library.
 """
 
 import logging
-from typing import List, Any, Optional
+from typing import List, Any
 from datetime import datetime
 
-from .connection import ISOTCPConnection
-from .protocol import S7Protocol
-from .datatypes import S7Area, S7WordLen
-from .errors import S7Error, S7ConnectionError, S7ProtocolError
-
-# Import existing types for compatibility
-from ..type import Area, Block, BlocksList, S7CpuInfo, TS7BlockInfo
+from snap7.native.wire_client import WireClient
+from snap7.native.errors import S7Error, S7ConnectionError
+from snap7.type import Area, Block, BlocksList, S7CpuInfo, TS7BlockInfo
+from snap7.client import Client as BaseClient
 
 logger = logging.getLogger(__name__)
 
 
-class S7Client:
+class Client(BaseClient):
     """
-    Pure Python S7 client implementation.
+    Pure Python S7 client - drop-in replacement for ctypes version.
     
-    Drop-in replacement for the ctypes-based client that provides native Python
-    communication with Siemens S7 PLCs without requiring the Snap7 C library.
+    This class provides the same API as the original ctypes-based Client
+    but uses a pure Python implementation of the S7 protocol instead of
+    the native Snap7 C library.
+    
+    Usage:
+        >>> import snap7.native_client as snap7
+        >>> client = snap7.Client()
+        >>> client.connect("192.168.1.10", 0, 1)
+        >>> data = client.db_read(1, 0, 4)
     """
     
-    def __init__(self):
-        """Initialize S7 client."""
-        self.connection: Optional[ISOTCPConnection] = None
-        self.protocol = S7Protocol()
-        self.connected = False
-        self.host = ""
-        self.port = 102
-        self.rack = 0
-        self.slot = 0
-        self.pdu_length = 480  # Negotiated PDU length
-        
-        # Connection parameters  
-        self.local_tsap = 0x0100   # Default local TSAP
-        self.remote_tsap = 0x0102  # Default remote TSAP
-        
-        logger.info("S7Client initialized (pure Python implementation)")
+    def __init__(self, **kwargs):
+        """
+        Initialize pure Python S7 client.
+
+        Args:
+            **kwargs: Accepts and ignores extra keyword arguments (e.g., pure_python, lib_location)
+                     for compatibility with the Client factory.
+        """
+        self._client = WireClient()
+        logger.info("Pure Python S7 client initialized")
     
-    def connect(self, host: str, rack: int, slot: int, port: int = 102) -> "S7Client":
+    def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> "Client":
         """
         Connect to S7 PLC.
         
         Args:
-            host: PLC IP address
+            address: PLC IP address
             rack: Rack number
-            slot: Slot number  
-            port: TCP port (default 102)
+            slot: Slot number
+            tcp_port: TCP port (default 102)
             
         Returns:
             Self for method chaining
         """
-        self.host = host
-        self.port = port
-        self.rack = rack
-        self.slot = slot
-        
-        # Calculate TSAP values from rack/slot
-        # Remote TSAP: rack and slot encoded as per S7 specification
-        self.remote_tsap = 0x0100 | (rack << 5) | slot
-        
         try:
-            # Establish ISO on TCP connection
-            self.connection = ISOTCPConnection(
-                host=host,
-                port=port,
-                local_tsap=self.local_tsap,
-                remote_tsap=self.remote_tsap
-            )
-            
-            self.connection.connect()
-            
-            # Setup communication and negotiate PDU length
-            self._setup_communication()
-            
-            self.connected = True
-            logger.info(f"Connected to {host}:{port} rack {rack} slot {slot}")
-            
+            self._client.connect(address, rack, slot, tcp_port)
+            return self
+        except S7Error:
+            # Re-raise S7 errors as-is
+            raise
         except Exception as e:
-            self.disconnect()
-            if isinstance(e, S7Error):
-                raise
-            else:
-                raise S7ConnectionError(f"Connection failed: {e}")
-                
-        return self
+            # Wrap other exceptions as S7ConnectionError for compatibility
+            raise S7ConnectionError(f"Connection failed: {e}")
     
     def disconnect(self) -> None:
         """Disconnect from S7 PLC."""
-        if self.connection:
-            self.connection.disconnect()
-            self.connection = None
-            
-        self.connected = False
-        logger.info(f"Disconnected from {self.host}:{self.port}")
+        self._client.disconnect()
     
     def get_connected(self) -> bool:
-        """Check if client is connected to PLC."""
-        return self.connected and self.connection and self.connection.connected
+        """Check if client is connected."""
+        return self._client.get_connected()
     
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """
         Read data from DB.
         
         Args:
-            db_number: DB number to read from
+            db_number: DB number
             start: Start byte offset
             size: Number of bytes to read
             
         Returns:
             Data read from DB
         """
-        logger.debug(f"db_read: DB{db_number}, start={start}, size={size}")
-        
-        data = self.read_area(Area.DB, db_number, start, size)
-        return data
+        return self._client.db_read(db_number, start, size)
     
     def db_write(self, db_number: int, start: int, data: bytearray) -> None:
         """
         Write data to DB.
         
         Args:
-            db_number: DB number to write to
+            db_number: DB number
             start: Start byte offset
             data: Data to write
         """
-        logger.debug(f"db_write: DB{db_number}, start={start}, size={len(data)}")
-        
-        self.write_area(Area.DB, db_number, start, data)
+        self._client.db_write(db_number, start, data)
     
     def read_area(self, area: Area, db_number: int, start: int, size: int) -> bytearray:
         """
         Read data from memory area.
         
         Args:
-            area: Memory area to read from
+            area: Memory area
             db_number: DB number (for DB area only)
             start: Start address
             size: Number of bytes to read
@@ -148,182 +113,68 @@ class S7Client:
         Returns:
             Data read from area
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-            
-        # Map area enum to native area
-        s7_area = self._map_area(area)
-        
-        # Build and send read request
-        request = self.protocol.build_read_request(
-            area=s7_area,
-            db_number=db_number,
-            start=start,
-            word_len=S7WordLen.BYTE,
-            count=size
-        )
-        
-        self.connection.send_data(request)
-        
-        # Receive and parse response
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
-        
-        # Extract data from response
-        values = self.protocol.extract_read_data(response, S7WordLen.BYTE, size)
-        
-        return bytearray(values)
+        return self._client.read_area(area, db_number, start, size)
     
     def write_area(self, area: Area, db_number: int, start: int, data: bytearray) -> None:
         """
         Write data to memory area.
         
         Args:
-            area: Memory area to write to
+            area: Memory area
             db_number: DB number (for DB area only)
             start: Start address
             data: Data to write
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-            
-        # Map area enum to native area
-        s7_area = self._map_area(area)
-        
-        # Build and send write request
-        request = self.protocol.build_write_request(
-            area=s7_area,
-            db_number=db_number,
-            start=start,
-            word_len=S7WordLen.BYTE,
-            data=bytes(data)
-        )
-        
-        self.connection.send_data(request)
-        
-        # Receive and parse response
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
-        
-        # Check for write errors
-        self.protocol.check_write_response(response)
+        self._client.write_area(area, db_number, start, data)
     
-    def read_multi_vars(self, items: List[dict]) -> List[Any]:
-        """
-        Read multiple variables in a single request.
-        
-        Args:
-            items: List of item specifications
-            
-        Returns:
-            List of read values
-        """
-        if not items:
-            return []
-        
-        # Group items by area and DB to optimize reads
-        grouped_reads = {}
-        for i, item in enumerate(items):
-            area = item['area']
-            db_number = item.get('db_number', 0)
-            start = item['start']
-            size = item['size']
-            
-            key = (area, db_number)
-            if key not in grouped_reads:
-                grouped_reads[key] = []
-            grouped_reads[key].append((i, start, size))
-        
-        # Execute optimized reads
-        results = [None] * len(items)
-        
-        for (area, db_number), reads in grouped_reads.items():
-            if len(reads) == 1:
-                # Single read - use normal read_area
-                i, start, size = reads[0]
-                data = self.read_area(area, db_number, start, size)
-                results[i] = data
-            else:
-                # Multiple reads from same area - try to optimize
-                # Sort by start address
-                reads.sort(key=lambda x: x[1])
-                
-                # Check if we can do a single large read
-                first_start = reads[0][1]
-                last_read = reads[-1]
-                last_end = last_read[1] + last_read[2]
-                total_span = last_end - first_start
-                
-                if total_span <= 512:  # If total span is reasonable, do one read
-                    try:
-                        large_data = self.read_area(area, db_number, first_start, total_span)
-                        # Extract individual pieces
-                        for i, start, size in reads:
-                            offset = start - first_start
-                            results[i] = large_data[offset:offset+size]
-                    except Exception:
-                        # Fall back to individual reads
-                        for i, start, size in reads:
-                            results[i] = self.read_area(area, db_number, start, size)
-                else:
-                    # Do individual reads
-                    for i, start, size in reads:
-                        results[i] = self.read_area(area, db_number, start, size)
-        
-        return results
+    def ab_read(self, start: int, size: int) -> bytearray:
+        """Read from process input area (IPU)."""
+        return self.read_area(Area.PE, 0, start, size)
     
-    def write_multi_vars(self, items: List[dict]) -> None:
-        """
-        Write multiple variables in a single request.
-        
-        Args:
-            items: List of item specifications with data
-        """
-        if not items:
-            return
-        
-        # Group items by area and DB to potentially optimize writes
-        grouped_writes = {}
-        for item in items:
-            area = item['area']
-            db_number = item.get('db_number', 0)
-            start = item['start']
-            data = item['data']
-            
-            key = (area, db_number)
-            if key not in grouped_writes:
-                grouped_writes[key] = []
-            grouped_writes[key].append((start, data))
-        
-        # Execute writes (for now still individual, but structured for future optimization)
-        for (area, db_number), writes in grouped_writes.items():
-            for start, data in writes:
-                self.write_area(area, db_number, start, data)
+    def ab_write(self, start: int, data: bytearray) -> None:
+        """Write to process input area (IPU)."""
+        self.write_area(Area.PE, 0, start, data)
+    
+    def eb_read(self, start: int, size: int) -> bytearray:
+        """Read from process input area."""
+        return self.read_area(Area.PE, 0, start, size)
+    
+    def eb_write(self, start: int, size: int, data: bytearray) -> None:
+        """Write to process input area."""
+        self.write_area(Area.PE, 0, start, data)
+    
+    def mb_read(self, start: int, size: int) -> bytearray:
+        """Read from memory/flag area."""
+        return self.read_area(Area.MK, 0, start, size)
+    
+    def mb_write(self, start: int, size: int, data: bytearray) -> None:
+        """Write to memory/flag area."""
+        self.write_area(Area.MK, 0, start, data)
+    
+    def tm_read(self, start: int, amount: int) -> bytearray:
+        """Read timers."""
+        return self.read_area(Area.TM, 0, start, amount * 2)  # Timers are 2 bytes each
+    
+    def tm_write(self, start: int, amount: int, data: bytearray) -> None:
+        """Write timers."""
+        self.write_area(Area.TM, 0, start, data)
+    
+    def ct_read(self, start: int, amount: int) -> bytearray:
+        """Read counters."""
+        return self.read_area(Area.CT, 0, start, amount * 2)  # Counters are 2 bytes each
+    
+    def ct_write(self, start: int, amount: int, data: bytearray) -> None:
+        """Write counters."""
+        self.write_area(Area.CT, 0, start, data)
     
     def list_blocks(self) -> BlocksList:
         """
-        List blocks available in PLC.
+        List blocks in PLC.
         
         Returns:
             Block list structure
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Create a basic block list for the pure Python server
-        # In a real implementation, this would use SZL (System Status List) functions
-        block_list = BlocksList()
-        
-        # Initialize block counts to simulate a basic PLC configuration
-        block_list.OBCount = 1   # Organization blocks
-        block_list.FBCount = 0   # Function blocks
-        block_list.FCCount = 0   # Functions  
-        block_list.SFBCount = 0  # System function blocks
-        block_list.SFCCount = 0  # System functions
-        block_list.DBCount = 5   # Data blocks (simulate having DB1-DB5)
-        block_list.SDBCount = 0  # System data blocks
-        
-        return block_list
+        return self._client.list_blocks()
     
     def get_cpu_info(self) -> S7CpuInfo:
         """
@@ -332,40 +183,70 @@ class S7Client:
         Returns:
             CPU information structure
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Create a basic CPU info structure for the pure Python server
-        # In a real implementation, this would query the PLC via SZL functions
-        cpu_info = S7CpuInfo()
-        cpu_info.ModuleTypeName = b"Pure Python S7"
-        cpu_info.SerialNumber = b"PY-S7-001"
-        cpu_info.ASName = b"Pure Python"
-        cpu_info.Copyright = b"Pure Python"
-        cpu_info.ModuleName = b"CPU 317-2 PN/DP"
-        
-        return cpu_info
+        return self._client.get_cpu_info()
     
     def get_cpu_state(self) -> str:
         """
-        Get CPU state (running/stopped).
+        Get CPU state.
         
         Returns:
             CPU state string
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        return self._client.get_cpu_state()
+    
+    def plc_stop(self) -> None:
+        """Stop PLC CPU."""
+        self._client.plc_stop()
+    
+    def plc_hot_start(self) -> None:
+        """Hot start PLC CPU."""
+        self._client.plc_hot_start()
+    
+    def plc_cold_start(self) -> None:
+        """Cold start PLC CPU."""
+        self._client.plc_cold_start()
+    
+    def get_pdu_length(self) -> int:
+        """
+        Get negotiated PDU length.
         
-        # Send CPU state request
-        request = self.protocol.build_cpu_state_request()
-        self.connection.send_data(request)
+        Returns:
+            PDU length in bytes
+        """
+        return self._client.get_pdu_length()
+    
+    def error_text(self, error_code: int) -> str:
+        """
+        Get error text for error code.
         
-        # Receive response
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
+        Args:
+            error_code: S7 error code
+            
+        Returns:
+            Error description
+        """
+        return self._client.error_text(error_code)
+    
+    def read_multi_vars(self, items: List[dict]) -> List[Any]:
+        """
+        Read multiple variables.
         
-        # Extract CPU state from response
-        return self.protocol.extract_cpu_state(response)
+        Args:
+            items: List of variable specifications
+            
+        Returns:
+            List of read values
+        """
+        return self._client.read_multi_vars(items)
+    
+    def write_multi_vars(self, items: List[dict]) -> None:
+        """
+        Write multiple variables.
+        
+        Args:
+            items: List of variable specifications with data
+        """
+        self._client.write_multi_vars(items)
     
     def get_block_info(self, block_type: Block, db_number: int) -> TS7BlockInfo:
         """
@@ -378,42 +259,7 @@ class S7Client:
         Returns:
             Block information structure
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Create basic block info for the pure Python server
-        # In a real implementation, this would query the PLC via SZL functions
-        block_info = TS7BlockInfo()
-        
-        # Simulate block information based on type and number
-        if block_type == Block.DB:
-            block_info.BlkType = 0x41  # DB block type
-            block_info.BlkNumber = db_number
-            block_info.BlkLang = 0x05  # STL/AWL
-            block_info.BlkFlags = 0x00
-            block_info.MC7Size = 100   # Simulated size
-            block_info.LoadSize = 100
-            block_info.LocalData = 0
-            block_info.SBBLength = 0
-            block_info.CheckSum = 0x1234
-            block_info.Version = 1
-            # Set creation/modification time to current
-            import time
-            current_time = time.localtime()
-            block_info.CodeDate = f"{current_time.tm_year:04d}/{current_time.tm_mon:02d}/{current_time.tm_mday:02d}".encode()
-            block_info.IntfDate = block_info.CodeDate
-            block_info.Author = b"PurePy"
-            block_info.Family = b"S7-300"
-            block_info.Header = b"DB Block"
-        else:
-            # Other block types - set minimal info
-            block_info.BlkType = block_type
-            block_info.BlkNumber = db_number
-            block_info.BlkLang = 0x05
-            block_info.MC7Size = 0
-            block_info.LoadSize = 0
-        
-        return block_info
+        return self._client.get_block_info(block_type, db_number)
     
     def upload(self, block_num: int) -> bytearray:
         """
@@ -425,113 +271,111 @@ class S7Client:
         Returns:
             Block data
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # For pure Python server, simulate block upload
-        # In a real implementation, this would use upload functions
-        logger.info(f"Simulating upload of block {block_num}")
-        
-        # Return simulated block data - basic AWL/STL block structure
-        # This would normally be the actual compiled block from the PLC
-        block_header = b"BLOCK_HEADER"
-        block_code = b"NOP 0;\nBE;\n"  # Simple AWL/STL code
-        
-        return bytearray(block_header + block_code)
+        return self._client.upload(block_num)
     
     def download(self, data: bytearray, block_num: int = -1) -> None:
         """
         Download block to PLC.
         
         Args:
-            data: Block data to download
-            block_num: Block number (-1 to extract from data)
+            data: Block data
+            block_num: Block number
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # For pure Python server, simulate block download
-        # In a real implementation, this would use download functions
-        logger.info(f"Simulating download of {len(data)} bytes to block {block_num}")
-        
-        # In a real implementation, this would:
-        # 1. Parse the block data to extract block information
-        # 2. Send download request to PLC
-        # 3. Transfer the block data in chunks
-        # 4. Verify the download completed successfully
-        
-        # For now, just log the operation
-        logger.info("Block download simulation completed")
+        self._client.download(data, block_num)
     
-    def plc_stop(self) -> None:
-        """Stop PLC CPU."""
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Send PLC stop command
-        request = self.protocol.build_plc_control_request('stop')
-        self.connection.send_data(request)
-        
-        # Receive response
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
-        
-        # Check for errors
-        self.protocol.check_control_response(response)
-    
-    def plc_hot_start(self) -> None:
-        """Hot start PLC CPU."""
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Send PLC hot start command
-        request = self.protocol.build_plc_control_request('hot_start')
-        self.connection.send_data(request)
-        
-        # Receive response
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
-        
-        # Check for errors
-        self.protocol.check_control_response(response)
-    
-    def plc_cold_start(self) -> None:
-        """Cold start PLC CPU."""
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Send PLC cold start command
-        request = self.protocol.build_plc_control_request('cold_start')
-        self.connection.send_data(request)
-        
-        # Receive response
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
-        
-        # Check for errors
-        self.protocol.check_control_response(response)
-    
-    def get_pdu_length(self) -> int:
+    def db_get(self, db_number: int) -> bytearray:
         """
-        Get negotiated PDU length.
-        
-        Returns:
-            PDU length in bytes
-        """
-        return self.pdu_length
-    
-    def error_text(self, error_code: int) -> str:
-        """
-        Get error description for error code.
+        Get entire DB.
         
         Args:
-            error_code: S7 error code
+            db_number: DB number
             
         Returns:
-            Error description
+            Complete DB data
         """
-        from .errors import get_error_message
-        return get_error_message(error_code)
+        # For now, try to read a large block and return what we get
+        # In a real implementation, we would first query the DB size
+        # Check connection first
+        if not self._client.get_connected():
+            raise Exception("Not connected to PLC")
+        
+        try:
+            # Try reading up to 8KB (reasonable DB size limit)
+            max_size = 8192
+            data = self._client.db_read(db_number, 0, max_size)
+            return data
+        except Exception as e:
+            # If reading large block fails, try smaller incremental reads
+            logger.warning(f"Large DB read failed, trying incremental read: {e}")
+            
+            # Try reading in 512-byte chunks until we hit the end
+            chunk_size = 512
+            result_data = bytearray()
+            offset = 0
+            
+            while offset < 4096:  # Max 4KB for safety
+                try:
+                    chunk = self._client.db_read(db_number, offset, chunk_size)
+                    if not chunk or len(chunk) == 0:
+                        break
+                    result_data.extend(chunk)
+                    offset += len(chunk)
+                    
+                    # If we got less than requested, we've hit the end
+                    if len(chunk) < chunk_size:
+                        break
+                except Exception:
+                    # Hit the end or an error, stop here
+                    break
+            
+            return result_data
+    
+    def set_session_password(self, password: str) -> None:
+        """
+        Set session password.
+        
+        Args:
+            password: Password to set
+        """
+        # Store password for potential future use
+        # In a real implementation, this would send authentication to PLC
+        if hasattr(self._client, 'session_password'):
+            self._client.session_password = password
+        logger.info("Session password set (stored for future authentication)")
+    
+    def clear_session_password(self) -> None:
+        """Clear session password."""
+        # Clear stored password
+        if hasattr(self._client, 'session_password'):
+            self._client.session_password = None
+        logger.info("Session password cleared")
+    
+    def set_connection_params(self, address: str, local_tsap: int, remote_tsap: int) -> None:
+        """
+        Set connection parameters.
+        
+        Args:
+            address: PLC IP address
+            local_tsap: Local TSAP
+            remote_tsap: Remote TSAP
+        """
+        # Store parameters for next connection
+        if hasattr(self._client, 'connection') and self._client.connection:
+            self._client.connection.local_tsap = local_tsap
+            self._client.connection.remote_tsap = remote_tsap
+    
+    def set_connection_type(self, connection_type: int) -> None:
+        """
+        Set connection type.
+        
+        Args:
+            connection_type: Connection type (1=PG, 2=OP, 3-10=S7 Basic)
+        """
+        # Store connection type for potential future use
+        # In a real implementation, this would affect TSAP values and connection behavior
+        if hasattr(self._client, 'connection_type'):
+            self._client.connection_type = connection_type
+        logger.info(f"Connection type set to {connection_type} (stored for reference)")
     
     def get_plc_datetime(self) -> datetime:
         """
@@ -540,13 +384,7 @@ class S7Client:
         Returns:
             PLC date and time
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # For pure Python server, return current system time
-        # In a real implementation, this would query the PLC's clock
-        logger.info("Getting PLC datetime (returning system time)")
-        return datetime.now()
+        return self._client.get_plc_datetime()
     
     def set_plc_datetime(self, dt: datetime) -> None:
         """
@@ -555,60 +393,21 @@ class S7Client:
         Args:
             dt: Date and time to set
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # For pure Python server, simulate setting PLC time
-        # In a real implementation, this would send time to PLC
-        logger.info(f"Setting PLC datetime to {dt} (simulated)")
+        self._client.set_plc_datetime(dt)
     
     def set_plc_system_datetime(self) -> None:
         """Set PLC time to system time."""
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
-        
-        # Set PLC time to current system time
-        current_time = datetime.now()
-        self.set_plc_datetime(current_time)
-        logger.info(f"Set PLC time to current system time: {current_time}")
+        self._client.set_plc_system_datetime()
     
-    def _setup_communication(self) -> None:
-        """Setup communication and negotiate PDU length."""
-        request = self.protocol.build_setup_communication_request(
-            max_amq_caller=1,
-            max_amq_callee=1, 
-            pdu_length=self.pdu_length
-        )
-        
-        self.connection.send_data(request)
-        
-        response_data = self.connection.receive_data()
-        response = self.protocol.parse_response(response_data)
-        
-        # Extract negotiated PDU length
-        if response.get('parameters'):
-            params = response['parameters']
-            if 'pdu_length' in params:
-                self.pdu_length = params['pdu_length']
-                logger.info(f"Negotiated PDU length: {self.pdu_length}")
+    def destroy(self) -> None:
+        """Destroy client (disconnect)."""
+        self.disconnect()
     
-    def _map_area(self, area: Area) -> S7Area:
-        """Map library area enum to native S7 area."""
-        area_mapping = {
-            Area.PE: S7Area.PE,
-            Area.PA: S7Area.PA,
-            Area.MK: S7Area.MK,
-            Area.DB: S7Area.DB,
-            Area.CT: S7Area.CT,
-            Area.TM: S7Area.TM,
-        }
-        
-        if area not in area_mapping:
-            raise S7ProtocolError(f"Unsupported area: {area}")
-            
-        return area_mapping[area]
+    def create(self) -> None:
+        """Create client (no-op for compatibility)."""
+        pass
     
-    def __enter__(self) -> "S7Client":
+    def __enter__(self) -> "Client":
         """Context manager entry."""
         return self
     

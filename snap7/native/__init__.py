@@ -19,16 +19,16 @@ Components:
 - S7Errors: Error handling and exception mapping
 """
 
-from .client import S7Client
+from .wire_client import WireClient
 from .protocol import S7Protocol
 from .connection import ISOTCPConnection
 from .datatypes import S7DataTypes
 from .errors import S7Error, S7ConnectionError, S7ProtocolError
-from .server import S7Server
+from .wire_server import WireServer
 
 __all__ = [
-    'S7Client',
-    'S7Server',
+    'WireClient',
+    'WireServer',
     'S7Protocol', 
     'ISOTCPConnection',
     'S7DataTypes',
