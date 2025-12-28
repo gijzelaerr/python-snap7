@@ -71,6 +71,7 @@ jobs:
 
       - name: Install python-snap7
         run: |
+            uv venv
             uv pip install pytest
             uv pip install dist/*.whl
 

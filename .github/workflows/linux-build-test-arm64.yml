@@ -65,6 +65,7 @@ jobs:
             --platform linux/arm64 \
             "arm64v8/python:${{ matrix.python-version }}-bookworm" /bin/bash -s <<EOF
           pip install --upgrade pip uv
+          uv venv
           uv pip install pytest
           uv pip install dist/*.whl
           uv run pytest -m "server or util or client or mainloop or partner"
