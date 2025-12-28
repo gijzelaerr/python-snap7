@@ -57,8 +57,7 @@ def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
             bytearray(b"\\xFF")
     """
     _int = int(_int)
-    _bytes = struct.pack("B", _int)
-    bytearray_[byte_index : byte_index + 1] = _bytes
+    bytearray_[byte_index : byte_index + 1] = struct.pack("B", _int)
     return bytearray_
 
 
@@ -77,8 +76,7 @@ def set_word(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
         buffer with the written value
     """
     _int = int(_int)
-    _bytes = struct.unpack("2B", struct.pack(">H", _int))
-    bytearray_[byte_index : byte_index + 2] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">H", _int)
     return bytearray_
 
 
@@ -103,8 +101,7 @@ def set_int(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """
     # make sure were dealing with an int
     _int = int(_int)
-    _bytes = struct.unpack("2B", struct.pack(">h", _int))
-    bytearray_[byte_index : byte_index + 2] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">h", _int)
     return bytearray_
 
 
@@ -130,8 +127,7 @@ def set_uint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     """
     # make sure were dealing with an int
     _int = int(_int)
-    _bytes = struct.unpack("2B", struct.pack(">H", _int))
-    bytearray_[byte_index : byte_index + 2] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">H", _int)
     return bytearray_
 
 
@@ -155,9 +151,7 @@ def set_real(bytearray_: bytearray, byte_index: int, real: Union[bool, str, floa
         >>> set_real(data, 0, 123.321)
             bytearray(b'B\\xf6\\xa4Z')
     """
-    real_packed = struct.pack(">f", float(real))
-    _bytes = struct.unpack("4B", real_packed)
-    bytearray_[byte_index : byte_index + 4] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 4] = struct.pack(">f", float(real))
     return bytearray_
 
 
@@ -273,8 +267,7 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> None:
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
     dword = int(dword)
-    _bytes = struct.unpack("4B", struct.pack(">I", dword))
-    bytearray_[byte_index : byte_index + 4] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 4] = struct.pack(">I", dword)
 
 
 def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> None:
@@ -297,8 +290,7 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> None:
             bytearray(b'\\x7f\\xff\\xff\\xff')
     """
     dint = int(dint)
-    _bytes = struct.unpack("4B", struct.pack(">i", dint))
-    bytearray_[byte_index : byte_index + 4] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 4] = struct.pack(">i", dint)
 
 
 def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> None:
@@ -321,8 +313,7 @@ def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> None:
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
     udint = int(udint)
-    _bytes = struct.unpack("4B", struct.pack(">I", udint))
-    bytearray_[byte_index : byte_index + 4] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 4] = struct.pack(">I", udint)
 
 
 def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytearray:
@@ -394,8 +385,7 @@ def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
             bytearray(b'\\xff')
     """
     _int = int(_int)
-    _bytes = struct.unpack("B", struct.pack(">B", _int))
-    bytearray_[byte_index] = _bytes[0]
+    bytearray_[byte_index] = struct.pack(">B", _int)[0]
     return bytearray_
 
 
@@ -421,8 +411,7 @@ def set_sint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
             bytearray(b'\\x7f')
     """
     _int = int(_int)
-    _bytes = struct.unpack("B", struct.pack(">b", _int))
-    bytearray_[byte_index] = _bytes[0]
+    bytearray_[byte_index] = struct.pack(">b", _int)[0]
     return bytearray_
 
 
@@ -542,6 +531,5 @@ def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
     elif date_ > date(2168, 12, 31):
         raise ValueError("date is higher than specification allows.")
     _days = (date_ - date(1990, 1, 1)).days
-    _bytes = struct.unpack("2B", struct.pack(">h", _days))
-    bytearray_[byte_index : byte_index + 2] = bytes(_bytes)
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">h", _days)
     return bytearray_
