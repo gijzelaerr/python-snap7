@@ -71,9 +71,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: install python-snap7
-        run: |
-          uv venv venv
-          uv pip install --python venv/bin/python --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+        run: uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
 
   test-pypi-package-windows:
     runs-on: ${{ matrix.os }}

@@ -20,10 +20,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Install python-snap7
-        run: |
-          uv venv venv --python python${{ matrix.python-version }}
-          uv pip install --python venv/bin/python -e ".[test]"
+        run: uv pip install --python python${{ matrix.python-version }} -e ".[test]"
       - name: Run pytest
         run: |
-          venv/bin/pytest -m "server or util or client or mainloop"
-          sudo venv/bin/pytest -m partner
+          uv run --python python${{ matrix.python-version }} pytest -m "server or util or client or mainloop"
+          sudo .venv/bin/pytest -m partner

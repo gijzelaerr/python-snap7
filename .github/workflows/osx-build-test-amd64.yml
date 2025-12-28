@@ -71,11 +71,10 @@ jobs:
 
       - name: Install python-snap7
         run: |
-            uv venv venv
-            uv pip install --python venv/bin/python pytest
-            uv pip install --python venv/bin/python dist/*.whl
+            uv pip install pytest
+            uv pip install dist/*.whl
 
       - name: Run tests
         run: |
-            venv/bin/pytest -m "server or util or client or mainloop"
-            sudo venv/bin/pytest -m partner
+            uv run pytest -m "server or util or client or mainloop"
+            sudo .venv/bin/pytest -m partner
