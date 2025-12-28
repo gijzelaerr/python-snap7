@@ -68,6 +68,6 @@ jobs:
           uv venv
           uv pip install pytest
           uv pip install dist/*.whl
-          # Use .venv/bin/pytest directly - uv run would rebuild from source
-          .venv/bin/pytest -m "server or util or client or mainloop or partner"
+          # Use --no-project to prevent uv from rebuilding from source
+          uv run --no-project pytest -m "server or util or client or mainloop or partner"
           EOF
