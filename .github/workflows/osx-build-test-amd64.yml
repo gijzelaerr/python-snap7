@@ -24,11 +24,12 @@ jobs:
           pushd snap7-full-1.4.2/build/osx/
           make -f x86_64_osx.mk all
           make -f arm64_osx.mk all
-          lipo -create -output /usr/local/lib/libsnap7.dylib ../bin/x86_64-osx/libsnap7.dylib ../bin/arm64-osx/libsnap7.dylib
-          install_name_tool -id /usr/local/lib/libsnap7.dylib /usr/local/lib/libsnap7.dylib
+          mkdir -p snap7/lib/
+          lipo -create -output snap7/lib/libsnap7.dylib ../bin/x86_64-osx/libsnap7.dylib ../bin/arm64-osx/libsnap7.dylib
+          install_name_tool -id @rpath/libsnap7.dylib snap7/lib/libsnap7.dylib
           popd
           mkdir -p snap7/lib/
-          cp /usr/local/lib/libsnap7.dylib snap7/lib/
+          cp snap7-full-1.4.2/build/osx/snap7/lib/libsnap7.dylib snap7/lib/
 
       - name: Build wheel
         run: |
