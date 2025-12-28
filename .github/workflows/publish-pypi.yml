@@ -53,8 +53,8 @@ jobs:
     needs: publish-to-testpypi
     strategy:
       matrix:
-        os: ["ubuntu-24.04"," ubuntu-22.04", "macos-13", "macos-14", "macos-15"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        os: ["ubuntu-24.04", "ubuntu-22.04", "macos-14", "macos-15"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,11 +64,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: install python-snap7
         run: |
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+          uv venv venv
+          uv pip install --python venv/bin/python --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
 
   test-pypi-package-windows:
     runs-on: ${{ matrix.os }}
@@ -76,7 +78,7 @@ jobs:
     strategy:
       matrix:
         os: ["windows-2025", "windows-2022"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -86,7 +88,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: install python-snap7
         run: |
-          pip.exe install --upgrade pip
-          pip.exe install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+          uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
