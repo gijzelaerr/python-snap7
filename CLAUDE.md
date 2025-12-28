@@ -50,13 +50,13 @@ ruff check --fix snap7 tests example
 
 ### Development with tox
 ```bash
-# Run all tox environments (mypy, lint, py39-py313)
+# Run all tox environments (mypy, lint, py310-py314)
 tox
 
 # Run specific environments
 tox -e mypy
 tox -e lint-ruff
-tox -e py39
+tox -e py310
 ```
 
 ### Using Makefile
@@ -103,13 +103,13 @@ Tests are organized with pytest markers:
 ## Python Version Compatibility
 
 **Fully tested and supported Python versions:**
-- **Python 3.9** (EOL: October 2025) ✅
 - **Python 3.10** (EOL: October 2026) ✅
 - **Python 3.11** (EOL: October 2027) ✅
 - **Python 3.12** (EOL: October 2028) ✅
 - **Python 3.13** (EOL: October 2029) ✅
+- **Python 3.14** (EOL: October 2030) ✅
 
-All versions pass the complete test suite (188 tests) and have been verified for type checking, linting, and functionality.
+All versions pass the complete test suite and have been verified for type checking, linting, and functionality.
 
 ## Cross-Platform Development
 

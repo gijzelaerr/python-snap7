@@ -34,7 +34,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-2022, windows-2025]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,6 +43,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -57,8 +60,8 @@ jobs:
 
       - name: Install python-snap7
         run: |
-          python3 -m pip install --upgrade pip pytest
-          python3 -m pip install $(ls dist/*.whl)
+          uv pip install --system pytest
+          uv pip install --system $(ls dist/*.whl)
 
       - name: Run pytest
         run: |

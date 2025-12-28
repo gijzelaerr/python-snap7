@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,9 +64,9 @@ jobs:
             -v $PWD/dist:/dist \
             --platform linux/arm64 \
             "arm64v8/python:${{ matrix.python-version }}-bookworm" /bin/bash -s <<EOF
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install pytest
-          venv/bin/pip install dist/*.whl
+          pip install --upgrade pip uv
+          uv venv venv
+          uv pip install --python venv/bin/python pytest
+          uv pip install --python venv/bin/python dist/*.whl
           venv/bin/pytest -m "server or util or client or mainloop or partner"
           EOF

@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         os: ["macos-13", "macos-14", "macos-15"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout
@@ -58,6 +58,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -66,10 +69,9 @@ jobs:
 
       - name: Install python-snap7
         run: |
-            python3 -m venv venv
-            venv/bin/pip install --upgrade pip
-            venv/bin/pip install pytest
-            venv/bin/pip install dist/*.whl
+            uv venv venv
+            uv pip install --python venv/bin/python pytest
+            uv pip install --python venv/bin/python dist/*.whl
 
       - name: Run tests
         run: |

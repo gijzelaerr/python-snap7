@@ -6,13 +6,18 @@ on:
     branches: [master]
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Debian packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y python3-pip
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
       - name: Run mypy
-        run: make mypy
+        run: |
+          uv venv venv
+          uv pip install --python venv/bin/python -e ".[test]"
+          venv/bin/mypy snap7 tests example
