@@ -20,6 +20,7 @@ jobs:
       - name: Prepare files
         run: |
           cp .github/build_scripts/arm64_osx.mk snap7-full-1.4.2/build/osx/
+          cp .github/build_scripts/x86_64_osx.mk snap7-full-1.4.2/build/osx/
           pushd snap7-full-1.4.2/build/osx/
           make -f x86_64_osx.mk all
           make -f arm64_osx.mk all
