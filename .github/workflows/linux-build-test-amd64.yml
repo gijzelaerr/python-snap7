@@ -64,6 +64,9 @@ jobs:
             uv pip install pytest
             uv pip install dist/*.whl
 
+      # Use .venv/bin/pytest directly instead of uv run, because uv run
+      # syncs from pyproject.toml which rebuilds from source and loses
+      # the bundled snap7 library from the wheel we just installed.
       - name: Run tests
         run: |
             .venv/bin/pytest -m "server or util or client or mainloop"

@@ -32,7 +32,9 @@ jobs:
           Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll C:\Windows\System32\.
 
       - name: Install python libraries
-        run: uv pip install --system ".[test]"
+        run: |
+          uv venv
+          uv pip install ".[test]"
 
       - name: Run tests
-        run: python3 -m pytest -m "server or util or client or mainloop or partner"
+        run: uv run pytest -m "server or util or client or mainloop or partner"

@@ -18,11 +18,11 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install build tools
         run: |
-          uv venv venv
-          uv pip install --python venv/bin/python build
+          uv venv
+          uv pip install build
       - name: Create source tarball
         run: |
-           venv/bin/python -m build . --sdist
+           uv run python -m build . --sdist
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

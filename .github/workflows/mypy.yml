@@ -18,6 +18,6 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Run mypy
         run: |
-          uv venv venv
-          uv pip install --python venv/bin/python -e ".[test]"
-          venv/bin/mypy snap7 tests example
+          uv venv
+          uv pip install -e ".[test]"
+          uv run mypy snap7 tests example

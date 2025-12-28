@@ -21,4 +21,4 @@ jobs:
           uv venv
           uv pip install ".[doc,cli]"
       - name: Run doc
-        run: .venv/bin/sphinx-build -N -bhtml doc/ doc/_build -W
+        run: uv run sphinx-build -N -bhtml doc/ doc/_build -W
