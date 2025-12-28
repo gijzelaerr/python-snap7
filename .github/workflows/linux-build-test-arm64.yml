@@ -68,5 +68,5 @@ jobs:
           uv venv
           uv pip install pytest
           uv pip install dist/*.whl
-          uv run pytest -m "server or util or client or mainloop or partner"
+          .venv/bin/pytest -m "server or util or client or mainloop or partner"
           EOF

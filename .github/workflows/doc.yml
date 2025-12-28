@@ -13,12 +13,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.10"
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: |
-          uv venv venv
-          uv pip install --python venv/bin/python ".[doc,cli]"
+          uv venv
+          uv pip install ".[doc,cli]"
       - name: Run doc
-        run: venv/bin/sphinx-build -N -bhtml doc/ doc/_build -W
+        run: .venv/bin/sphinx-build -N -bhtml doc/ doc/_build -W

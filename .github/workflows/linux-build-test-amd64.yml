@@ -66,5 +66,5 @@ jobs:
 
       - name: Run tests
         run: |
-            uv run pytest -m "server or util or client or mainloop"
+            .venv/bin/pytest -m "server or util or client or mainloop"
             sudo .venv/bin/pytest -m partner
