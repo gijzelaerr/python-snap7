@@ -1,29 +1,36 @@
-name: Test with Debian packages
+name: Build source distribution
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Debian packages
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y python3 python3-pip
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
       - name: Install build tools
         run: |
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip wheel build setuptools
+          uv venv
+          uv pip install build
       - name: Create source tarball
         run: |
-           venv/bin/python -m build . --sdist
+           uv run python -m build . --sdist
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-source
           path: dist/*.tar.gz

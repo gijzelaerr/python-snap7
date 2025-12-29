@@ -4,6 +4,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   linux-build-amd64:
     name: Build wheel for linux AMD64
@@ -27,7 +30,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-linux-amd64
           path: dist/*.whl
 
 
@@ -39,7 +42,7 @@ jobs:
     strategy:
       matrix:
         os: ["ubuntu-24.04", "ubuntu-22.04"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,20 +52,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-linux-amd64
           path: dist
 
       - name: Install python-snap7
         run: |
-            python3 -m venv venv
-            venv/bin/pip install --upgrade pip
-            venv/bin/pip install pytest
-            venv/bin/pip install dist/*.whl
+            uv venv
+            uv pip install pytest
+            uv pip install dist/*.whl
 
+      # Use --no-project to prevent uv from syncing pyproject.toml,
+      # which would rebuild from source and lose the bundled snap7 library.
       - name: Run tests
         run: |
-            venv/bin/pytest -m "server or util or client or mainloop"
-            sudo venv/bin/pytest -m partner
+            uv run --no-project pytest -m "server or util or client or mainloop"
+            sudo .venv/bin/pytest -m partner
