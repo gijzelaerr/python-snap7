@@ -610,6 +610,64 @@ class Client:
         logger.info(f"Simulating download of {len(data)} bytes to block {block_num}")
         return 0
 
+    def delete(self, block_type: Block, block_num: int) -> int:
+        """Delete a block from PLC.
+
+        Args:
+            block_type: Type of block (DB, OB, FB, FC, etc.)
+            block_num: Block number to delete
+
+        Returns:
+            0 on success
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        logger.info(f"Deleting block {block_type.name} {block_num}")
+        # In pure Python implementation, we simulate the delete operation
+        # In a real PLC, this would send an S7 protocol delete command
+        return 0
+
+    def full_upload(self, block_type: Block, block_num: int) -> Tuple[bytearray, int]:
+        """Upload a block from PLC with header and footer info.
+
+        The whole block (including header and footer) is copied into the
+        user buffer.
+
+        Args:
+            block_type: Type of block (DB, OB, FB, FC, etc.)
+            block_num: Block number to upload
+
+        Returns:
+            Tuple of (buffer, size) where buffer contains the complete block
+            with headers and size is the actual data length.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        logger.info(f"Full upload of block {block_type.name} {block_num}")
+
+        # Create a simulated block with header and footer
+        # S7 block structure: MC7 header + code + footer
+        block_header = struct.pack(
+            ">BBHBBBBHH",
+            0x70,  # Block type marker
+            block_type.value,  # Block type
+            block_num,  # Block number
+            0x00,  # Language
+            0x00,  # Properties
+            0x00,  # Reserved
+            0x00,  # Reserved
+            100,  # Block length
+            50,  # MC7 code length
+        )
+
+        block_code = b"NOP 0;\nBE;\n"  # Simulated MC7 code
+        block_footer = b"\x00" * 4  # Simulated footer
+
+        full_block = bytearray(block_header + block_code + block_footer)
+        return full_block, len(full_block)
+
     def plc_stop(self) -> int:
         """Stop PLC CPU.
 

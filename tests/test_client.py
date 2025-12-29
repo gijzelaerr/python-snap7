@@ -19,7 +19,6 @@ from ctypes import (
 )
 from datetime import datetime, timedelta, timezone
 from multiprocessing import Process
-from unittest import mock
 from typing import cast as typing_cast
 
 from snap7.util import get_real, get_int, set_int
@@ -473,18 +472,12 @@ class TestClient(unittest.TestCase):
             self.assertEqual(getattr(cpuInfo, param).decode("utf-8"), value)
 
     def test_db_write_with_byte_literal_does_not_throw(self) -> None:
-        mock_write = mock.MagicMock()
-        mock_write.return_value = None
-        original = self.client._lib.Cli_DBWrite
-        self.client._lib.Cli_DBWrite = mock_write
         data = b"\xde\xad\xbe\xef"
 
         try:
             self.client.db_write(db_number=1, start=0, data=bytearray(data))
         except TypeError as e:
             self.fail(str(e))
-        finally:
-            self.client._lib.Cli_DBWrite = original
 
     def test_get_plc_time(self) -> None:
         self.assertAlmostEqual(datetime.now().replace(microsecond=0), self.client.get_plc_datetime(), delta=timedelta(seconds=1))
@@ -736,15 +729,13 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
     def test_eb_read(self) -> None:
-        # Cli_EBRead
-        self.client._lib.Cli_EBRead = mock.Mock(return_value=0)
+        # Cli_EBRead - reads process inputs (PE area)
         response = self.client.eb_read(0, 1)
         self.assertTrue(isinstance(response, bytearray))
         self.assertEqual(1, len(response))
 
     def test_eb_write(self) -> None:
-        # Cli_EBWrite
-        self.client._lib.Cli_EBWrite = mock.Mock(return_value=0)
+        # Cli_EBWrite - writes to process inputs (PE area)
         response = self.client.eb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
 
@@ -821,15 +812,13 @@ class TestClient(unittest.TestCase):
         self.assertEqual(expected, self.client.iso_exchange_buffer(bytearray(data)))
 
     def test_mb_read(self) -> None:
-        # Cli_MBRead
-        self.client._lib.Cli_MBRead = mock.Mock(return_value=0)
+        # Cli_MBRead - reads marker area (MK)
         response = self.client.mb_read(0, 10)
         self.assertTrue(isinstance(response, bytearray))
         self.assertEqual(10, len(response))
 
     def test_mb_write(self) -> None:
-        # Cli_MBWrite
-        self.client._lib.Cli_MBWrite = mock.Mock(return_value=0)
+        # Cli_MBWrite - writes to marker area (MK)
         response = self.client.mb_write(0, 1, bytearray(b"\x00"))
         self.assertEqual(0, response)
 
