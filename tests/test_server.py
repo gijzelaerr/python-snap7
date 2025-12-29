@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.WARNING)
 class TestServer(unittest.TestCase):
     def setUp(self) -> None:
         self.server = Server()
-        self.server.start(tcp_port=1102)
+        self.server.start(tcp_port=12102)  # Use unique port for server tests
 
     def tearDown(self) -> None:
         self.server.stop()
@@ -120,7 +120,7 @@ class TestServer(unittest.TestCase):
 
     def test_get_param(self) -> None:
         # check the defaults
-        self.assertEqual(self.server.get_param(Parameter.LocalPort), 1102)
+        self.assertEqual(self.server.get_param(Parameter.LocalPort), 12102)
         self.assertEqual(self.server.get_param(Parameter.WorkInterval), 100)
         self.assertEqual(self.server.get_param(Parameter.MaxClients), 1024)
 

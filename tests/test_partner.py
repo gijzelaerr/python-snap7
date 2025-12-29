@@ -14,6 +14,8 @@ logging.basicConfig(level=logging.WARNING)
 class TestPartner(unittest.TestCase):
     def setUp(self) -> None:
         self.partner = snap7.partner.Partner()
+        self.partner.port = 12103  # Use unique port for partner tests
+        self.partner.remote_port = 12103
         self.partner.start()
 
     def tearDown(self) -> None:
@@ -48,7 +50,7 @@ class TestPartner(unittest.TestCase):
     def test_get_param(self) -> None:
         expected = (
             (Parameter.LocalPort, 0),
-            (Parameter.RemotePort, 1102),  # Non-privileged port
+            (Parameter.RemotePort, 12103),  # Non-privileged port for tests
             (Parameter.PingTimeout, 750),
             (Parameter.SendTimeout, 10),
             (Parameter.RecvTimeout, 3000),
