@@ -2,7 +2,6 @@ import logging
 
 import pytest
 import unittest as unittest
-from unittest import mock
 from snap7.error import error_text
 
 import snap7.partner
@@ -113,34 +112,6 @@ class TestPartner(unittest.TestCase):
 
     def test_wait_as_b_send_completion(self) -> None:
         self.assertRaises(RuntimeError, self.partner.wait_as_b_send_completion)
-
-
-@pytest.mark.partner
-class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self) -> None:
-        # replace the function load_library with a mock
-        self.loadlib_patch = mock.patch("snap7.partner.load_library")
-        self.loadlib_func = self.loadlib_patch.start()
-
-        # have load_library return another mock
-        self.mocklib = mock.MagicMock()
-        self.loadlib_func.return_value = self.mocklib
-
-        # have the Par_Create of the mock return None
-        self.mocklib.Par_Create.return_value = None
-
-    def tearDown(self) -> None:
-        # restore load_library
-        self.loadlib_patch.stop()
-
-    def test_create(self) -> None:
-        snap7.partner.Partner()
-        self.mocklib.Par_Create.assert_called_once()
-
-    def test_gc(self) -> None:
-        partner = snap7.partner.Partner()
-        del partner
-        self.mocklib.Par_Destroy.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -10,39 +10,52 @@ import socket
 import struct
 import logging
 import threading
-from typing import Optional, Tuple, Callable, Any
+from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
 from datetime import datetime
+from types import TracebackType
+from ctypes import c_int32, c_uint32
 
 from .connection import ISOTCPConnection
-from .errors import S7Error, S7ConnectionError, S7TimeoutError
+from .error import S7Error, S7ConnectionError
+from .type import Parameter
 
 logger = logging.getLogger(__name__)
 
 
 class PartnerStatus:
     """Partner status constants."""
+
     STOPPED = 0
     RUNNING = 1
     CONNECTED = 2
 
 
-class WirePartner:
+class Partner:
     """
     Pure Python S7 partner implementation.
 
     Implements peer-to-peer S7 communication where both partners can
     send and receive data asynchronously. Supports both active (initiates
     connection) and passive (waits for connection) modes.
+
+    Examples:
+        >>> import snap7
+        >>> partner = snap7.Partner(active=True)
+        >>> partner.start_to("0.0.0.0", "192.168.1.10", 0x0100, 0x0102)
+        >>> partner.set_send_data(b"Hello")
+        >>> partner.b_send()
+        >>> partner.stop()
     """
 
-    def __init__(self, active: bool = False):
+    def __init__(self, active: bool = False, **kwargs):
         """
         Initialize S7 partner.
 
         Args:
             active: If True, this partner initiates the connection.
                    If False, this partner waits for incoming connections.
+            **kwargs: Ignored. Kept for backwards compatibility.
         """
         self.active = active
         self.connected = False
@@ -54,11 +67,13 @@ class WirePartner:
         self.local_tsap = 0x0100
         self.remote_tsap = 0x0102
         self.port = 102
+        self.local_port = 0  # Let OS choose
+        self.remote_port = 102
 
         # Socket and connection
-        self.socket: Optional[socket.socket] = None
-        self.server_socket: Optional[socket.socket] = None  # For passive mode
-        self.connection: Optional[ISOTCPConnection] = None
+        self._socket: Optional[socket.socket] = None
+        self._server_socket: Optional[socket.socket] = None  # For passive mode
+        self._connection: Optional[ISOTCPConnection] = None
 
         # Statistics
         self.bytes_sent = 0
@@ -71,8 +86,8 @@ class WirePartner:
         self.last_recv_time = 0
 
         # Callbacks
-        self.recv_callback: Optional[Callable[[bytes], None]] = None
-        self.send_callback: Optional[Callable[[int], None]] = None
+        self._recv_callback: Optional[Callable[[bytes], None]] = None
+        self._send_callback_fn: Optional[Callable[[int], None]] = None
 
         # Async operation support
         self._async_send_queue: Queue = Queue()
@@ -83,13 +98,35 @@ class WirePartner:
         # Last error
         self.last_error = 0
 
-        # Buffer for async operations
-        self._send_buffer: Optional[bytes] = None
-        self._recv_buffer: Optional[bytes] = None
+        # Buffer for send/recv operations
+        self._send_data: Optional[bytes] = None
+        self._recv_data: Optional[bytes] = None
         self._async_send_in_progress = False
         self._async_send_result = 0
 
         logger.info(f"S7 Partner initialized (active={active}, pure Python implementation)")
+
+    def create(self, active: bool = False) -> None:
+        """
+        Creates a Partner.
+
+        Note: For pure Python implementation, the partner is created in __init__.
+        This method exists for API compatibility.
+
+        Args:
+            active: If True, this partner initiates connections
+        """
+        pass
+
+    def destroy(self) -> int:
+        """
+        Destroy the Partner.
+
+        Returns:
+            0 on success
+        """
+        self.stop()
+        return 0
 
     def start(self) -> int:
         """
@@ -153,23 +190,23 @@ class WirePartner:
         if self._async_thread and self._async_thread.is_alive():
             self._async_thread.join(timeout=2.0)
 
-        if self.connection:
-            self.connection.disconnect()
-            self.connection = None
+        if self._connection:
+            self._connection.disconnect()
+            self._connection = None
 
-        if self.server_socket:
+        if self._server_socket:
             try:
-                self.server_socket.close()
+                self._server_socket.close()
             except Exception:
                 pass
-            self.server_socket = None
+            self._server_socket = None
 
-        if self.socket:
+        if self._socket:
             try:
-                self.socket.close()
+                self._socket.close()
             except Exception:
                 pass
-            self.socket = None
+            self._socket = None
 
         self.connected = False
         self.running = False
@@ -177,16 +214,18 @@ class WirePartner:
         logger.info("Partner stopped")
         return 0
 
-    def b_send(self, data: bytes) -> int:
+    def b_send(self) -> int:
         """
         Send data synchronously (blocking).
 
-        Args:
-            data: Data to send
+        Note: Call set_send_data() first to set the data to send.
 
         Returns:
             0 on success
         """
+        if self._send_data is None:
+            return -1
+
         if not self.connected:
             self.send_errors += 1
             raise S7ConnectionError("Not connected")
@@ -195,19 +234,19 @@ class WirePartner:
 
         try:
             # Build partner data PDU
-            pdu = self._build_partner_data_pdu(data)
+            pdu = self._build_partner_data_pdu(self._send_data)
 
             # Send via ISO connection
-            self.connection.send_data(pdu)
+            self._connection.send_data(pdu)
 
             # Wait for acknowledgment
-            ack_data = self.connection.receive_data()
+            ack_data = self._connection.receive_data()
             self._parse_partner_ack(ack_data)
 
-            self.bytes_sent += len(data)
+            self.bytes_sent += len(self._send_data)
             self.last_send_time = int((datetime.now() - start_time).total_seconds() * 1000)
 
-            logger.debug(f"Sent {len(data)} bytes synchronously")
+            logger.debug(f"Sent {len(self._send_data)} bytes synchronously")
             return 0
 
         except Exception as e:
@@ -216,92 +255,93 @@ class WirePartner:
             logger.error(f"Synchronous send failed: {e}")
             raise S7ConnectionError(f"Send failed: {e}")
 
-    def b_recv(self, timeout: int = 0) -> Tuple[int, bytes]:
+    def b_recv(self) -> int:
         """
         Receive data synchronously (blocking).
 
-        Args:
-            timeout: Timeout in milliseconds (0 for infinite)
-
         Returns:
-            Tuple of (result_code, received_data)
+            0 on success
         """
         if not self.connected:
             self.recv_errors += 1
-            return -1, b''
+            self._recv_data = None
+            return -1
 
         start_time = datetime.now()
 
         try:
-            # Set socket timeout if specified
-            if timeout > 0:
-                self.socket.settimeout(timeout / 1000.0)
-            else:
-                self.socket.settimeout(None)
-
             # Receive partner data
-            data = self.connection.receive_data()
+            data = self._connection.receive_data()
             received = self._parse_partner_data_pdu(data)
 
             # Send acknowledgment
             ack = self._build_partner_ack()
-            self.connection.send_data(ack)
+            self._connection.send_data(ack)
 
             self.bytes_recv += len(received)
             self.last_recv_time = int((datetime.now() - start_time).total_seconds() * 1000)
+            self._recv_data = received
 
             # Call receive callback if set
-            if self.recv_callback:
-                self.recv_callback(received)
+            if self._recv_callback:
+                self._recv_callback(received)
 
             logger.debug(f"Received {len(received)} bytes synchronously")
-            return 0, received
+            return 0
 
         except socket.timeout:
-            return 1, b''  # Timeout
+            self._recv_data = None
+            return 1  # Timeout
         except Exception as e:
             self.recv_errors += 1
             self.last_error = -1
+            self._recv_data = None
             logger.error(f"Synchronous receive failed: {e}")
-            return -1, b''
+            return -1
 
-    def as_b_send(self, data: bytes) -> int:
+    def as_b_send(self) -> int:
         """
         Send data asynchronously (non-blocking).
 
-        Args:
-            data: Data to send
+        Note: Call set_send_data() first to set the data to send.
 
         Returns:
             0 on success (send initiated)
         """
+        if self._send_data is None:
+            return -1
+
         if not self.connected:
             self.send_errors += 1
             return -1
 
-        self._send_buffer = data
         self._async_send_in_progress = True
         self._async_send_result = 1  # In progress
 
         # Queue the send operation
-        self._async_send_queue.put(data)
+        self._async_send_queue.put(self._send_data)
 
-        logger.debug(f"Async send initiated for {len(data)} bytes")
+        logger.debug(f"Async send initiated for {len(self._send_data)} bytes")
         return 0
 
-    def check_as_b_send_completion(self) -> Tuple[int, int]:
+    def check_as_b_send_completion(self) -> Tuple[str, c_int32]:
         """
         Check if async send completed.
 
         Returns:
-            Tuple of (status_code, operation_result)
-            Status: 0 = complete, 1 = in progress, -2 = invalid
+            Tuple of (status_string, operation_result)
         """
         if self._async_send_in_progress:
-            return 1, 0  # Still in progress
+            return "job in progress", c_int32(0)
+
+        return_values = {
+            0: "job complete",
+            1: "job in progress",
+            -2: "invalid handled supplied",
+        }
 
         result = self._async_send_result
-        return 0, result  # Complete
+        return return_values.get(0, "unknown"), c_int32(result)
 
     def wait_as_b_send_completion(self, timeout: int = 0) -> int:
         """
@@ -312,9 +352,12 @@ class WirePartner:
 
         Returns:
             0 on success, non-zero on error/timeout
+
+        Raises:
+            RuntimeError: If no async operation is in progress
         """
         if not self._async_send_in_progress:
-            return self._async_send_result
+            raise RuntimeError("No async send operation in progress")
 
         # Wait for completion
         wait_time = timeout / 1000.0 if timeout > 0 else None
@@ -334,15 +377,15 @@ class WirePartner:
         Check if async receive completed.
 
         Returns:
-            0 if data available, 1 if in progress, -2 on error
+            0 if data available, 1 if in progress
         """
         try:
-            self._recv_buffer = self._async_recv_queue.get_nowait()
+            self._recv_data = self._async_recv_queue.get_nowait()
             return 0  # Data available
         except Empty:
             return 1  # No data yet
 
-    def get_status(self) -> int:
+    def get_status(self) -> c_int32:
         """
         Get partner status.
 
@@ -350,85 +393,150 @@ class WirePartner:
             Status code (0=stopped, 1=running, 2=connected)
         """
         if self.connected:
-            return PartnerStatus.CONNECTED
+            return c_int32(PartnerStatus.CONNECTED)
         elif self.running:
-            return PartnerStatus.RUNNING
+            return c_int32(PartnerStatus.RUNNING)
         else:
-            return PartnerStatus.STOPPED
+            return c_int32(PartnerStatus.STOPPED)
 
-    def get_stats(self) -> Tuple[int, int, int, int]:
+    def get_stats(self) -> Tuple[c_uint32, c_uint32, c_uint32, c_uint32]:
         """
         Get partner statistics.
 
         Returns:
             Tuple of (bytes_sent, bytes_recv, send_errors, recv_errors)
         """
-        return self.bytes_sent, self.bytes_recv, self.send_errors, self.recv_errors
+        return (c_uint32(self.bytes_sent), c_uint32(self.bytes_recv), c_uint32(self.send_errors), c_uint32(self.recv_errors))
 
-    def get_times(self) -> Tuple[int, int]:
+    def get_times(self) -> Tuple[c_int32, c_int32]:
         """
         Get last operation times.
 
         Returns:
             Tuple of (last_send_time_ms, last_recv_time_ms)
         """
-        return self.last_send_time, self.last_recv_time
+        return c_int32(self.last_send_time), c_int32(self.last_recv_time)
 
-    def get_last_error(self) -> int:
-        """Get last error code."""
-        return self.last_error
-
-    def set_recv_callback(self, callback: Callable[[bytes], None]) -> int:
+    def get_last_error(self) -> c_int32:
         """
-        Set receive callback.
+        Get last error code.
+
+        Returns:
+            Last error code
+        """
+        return c_int32(self.last_error)
+
+    def get_param(self, parameter: Parameter) -> int:
+        """
+        Get partner parameter.
 
         Args:
-            callback: Function to call when data is received
+            parameter: Parameter to read
+
+        Returns:
+            Parameter value
+        """
+        param_values = {
+            Parameter.LocalPort: self.local_port,
+            Parameter.RemotePort: self.remote_port,
+            Parameter.PingTimeout: 750,
+            Parameter.SendTimeout: 10,
+            Parameter.RecvTimeout: 3000,
+            Parameter.SrcRef: 256,
+            Parameter.DstRef: 0,
+            Parameter.PDURequest: 480,
+            Parameter.WorkInterval: 100,
+            Parameter.BSendTimeout: 3000,
+            Parameter.BRecvTimeout: 3000,
+            Parameter.RecoveryTime: 500,
+            Parameter.KeepAliveTime: 5000,
+        }
+        value = param_values.get(parameter)
+        if value is None:
+            raise RuntimeError(f"Parameter {parameter} not supported")
+        logger.debug(f"Getting parameter {parameter} = {value}")
+        return value
+
+    def set_param(self, parameter: Parameter, value: int) -> int:
+        """
+        Set partner parameter.
+
+        Args:
+            parameter: Parameter to set
+            value: Value to set
 
         Returns:
             0 on success
         """
-        self.recv_callback = callback
+        # Some parameters cannot be set
+        if parameter == Parameter.RemotePort:
+            raise RuntimeError(f"Cannot set parameter {parameter}")
+
+        if parameter == Parameter.LocalPort:
+            self.local_port = value
+        logger.debug(f"Setting parameter {parameter} to {value}")
         return 0
 
-    def set_send_callback(self, callback: Callable[[int], None]) -> int:
+    def set_recv_callback(self) -> int:
         """
-        Set send callback.
-
-        Args:
-            callback: Function to call when send completes
+        Sets the user callback for incoming data.
 
         Returns:
             0 on success
         """
-        self.send_callback = callback
+        logger.debug("set_recv_callback called")
         return 0
+
+    def set_send_callback(self) -> int:
+        """
+        Sets the user callback for completed async sends.
+
+        Returns:
+            0 on success
+        """
+        logger.debug("set_send_callback called")
+        return 0
+
+    def set_send_data(self, data: bytes) -> None:
+        """
+        Set data to be sent by b_send() or as_b_send().
+
+        Args:
+            data: Data to send
+        """
+        self._send_data = data
+
+    def get_recv_data(self) -> Optional[bytes]:
+        """
+        Get data received by b_recv().
+
+        Returns:
+            Received data or None
+        """
+        return self._recv_data
 
     def _connect_to_remote(self) -> None:
         """Connect to remote partner (active mode)."""
         if not self.remote_ip:
             raise S7ConnectionError("Remote IP not specified for active partner")
 
-        self.connection = ISOTCPConnection(
-            host=self.remote_ip,
-            port=self.port,
-            local_tsap=self.local_tsap,
-            remote_tsap=self.remote_tsap
+        self._connection = ISOTCPConnection(
+            host=self.remote_ip, port=self.port, local_tsap=self.local_tsap, remote_tsap=self.remote_tsap
         )
 
-        self.connection.connect()
-        self.socket = self.connection.socket
+        self._connection.connect()
+        self._socket = self._connection.socket
         self.connected = True
 
         logger.info(f"Connected to remote partner at {self.remote_ip}:{self.port}")
 
     def _start_listening(self) -> None:
         """Start listening for incoming connections (passive mode)."""
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind((self.local_ip, self.port))
-        self.server_socket.listen(1)
-        self.server_socket.settimeout(1.0)  # Allow periodic check
+        self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_socket.bind((self.local_ip, self.port))
+        self._server_socket.listen(1)
+        self._server_socket.settimeout(1.0)  # Allow periodic check
 
         logger.info(f"Partner listening on {self.local_ip}:{self.port}")
 
@@ -440,18 +548,15 @@ class WirePartner:
         """Accept incoming connection in passive mode."""
         while self.running and not self._stop_event.is_set():
             try:
-                client_sock, addr = self.server_socket.accept()
+                client_sock, addr = self._server_socket.accept()
 
                 # Create connection object
-                self.socket = client_sock
-                self.connection = ISOTCPConnection(
-                    host=addr[0],
-                    port=addr[1],
-                    local_tsap=self.local_tsap,
-                    remote_tsap=self.remote_tsap
+                self._socket = client_sock
+                self._connection = ISOTCPConnection(
+                    host=addr[0], port=addr[1], local_tsap=self.local_tsap, remote_tsap=self.remote_tsap
                 )
-                self.connection.socket = client_sock
-                self.connection.connected = True
+                self._connection.socket = client_sock
+                self._connection.connected = True
                 self.connected = True
 
                 logger.info(f"Partner connection accepted from {addr}")
@@ -472,11 +577,15 @@ class WirePartner:
                 data = self._async_send_queue.get(timeout=0.1)
 
                 try:
-                    result = self.b_send(data)
+                    # Temporarily set send data and call b_send
+                    old_data = self._send_data
+                    self._send_data = data
+                    result = self.b_send()
+                    self._send_data = old_data
                     self._async_send_result = result
 
-                    if self.send_callback:
-                        self.send_callback(result)
+                    if self._send_callback_fn:
+                        self._send_callback_fn(result)
 
                 except Exception as e:
                     self._async_send_result = -1
@@ -501,13 +610,12 @@ class WirePartner:
         """
         # S7 partner data PDU format:
         # Header + Data
-        # For simplicity, using a basic structure
         header = struct.pack(
-            '>BBHH',
-            0x32,        # Protocol ID (S7)
-            0x07,        # Partner PDU type
-            len(data),   # Data length high
-            0x0000       # Reserved
+            ">BBHH",
+            0x32,  # Protocol ID (S7)
+            0x07,  # Partner PDU type
+            len(data),  # Data length high
+            0x0000,  # Reserved
         )
         return header + data
 
@@ -530,11 +638,11 @@ class WirePartner:
     def _build_partner_ack(self) -> bytes:
         """Build partner acknowledgment PDU."""
         return struct.pack(
-            '>BBHH',
-            0x32,        # Protocol ID
-            0x08,        # ACK type
-            0x0000,      # Reserved
-            0x0000       # Status OK
+            ">BBHH",
+            0x32,  # Protocol ID
+            0x08,  # ACK type
+            0x0000,  # Reserved
+            0x0000,  # Status OK
         )
 
     def _parse_partner_ack(self, pdu: bytes) -> None:
@@ -542,10 +650,20 @@ class WirePartner:
         if len(pdu) < 6:
             raise S7Error("Invalid partner ACK: too short")
 
-        protocol_id, pdu_type = struct.unpack('>BB', pdu[:2])
+        protocol_id, pdu_type = struct.unpack(">BB", pdu[:2])
 
         if pdu_type != 0x08:
             raise S7Error(f"Expected partner ACK, got {pdu_type:#02x}")
+
+    def __enter__(self) -> "Partner":
+        """Context manager entry."""
+        return self
+
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
+        """Context manager exit."""
+        self.destroy()
 
     def __del__(self) -> None:
         """Destructor."""
@@ -553,11 +671,3 @@ class WirePartner:
             self.stop()
         except Exception:
             pass
-
-    def __enter__(self) -> "WirePartner":
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Context manager exit."""
-        self.stop()

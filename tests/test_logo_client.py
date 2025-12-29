@@ -100,7 +100,7 @@ class TestLogoClient(unittest.TestCase):
 
         # invalid param for client
         for param in non_client:
-            self.assertRaises(Exception, self.client.get_param, non_client)
+            self.assertRaises(Exception, self.client.get_param, param)
 
 
 @pytest.mark.logo

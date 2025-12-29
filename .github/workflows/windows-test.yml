@@ -1,4 +1,4 @@
-name: Windows Test
+name: Windows Tests
 on:
   push:
     branches: [master]
@@ -8,38 +8,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  windows_wheel:
+  test:
     strategy:
       matrix:
-        runs-on: [ "windows-2022", "windows-2025" ]
+        runs-on: ["windows-2022", "windows-2025"]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-
-      - name: Prepare snap7 archive
-        uses: ./.github/actions/prepare_snap7
-
-      - name: Get snap7
-        run: |
-          Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll snap7\.
-          Copy-Item snap7-full-1.4.2\release\Windows\Win64\snap7.dll C:\Windows\System32\.
-
       - name: Install python libraries
         run: |
           uv venv
           uv pip install ".[test]"
-
       - name: Run tests
         run: uv run pytest -m "server or util or client or mainloop or partner"

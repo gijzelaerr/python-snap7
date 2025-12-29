@@ -4,115 +4,82 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python-snap7 is a Python wrapper for the Snap7 library, providing Ethernet communication with Siemens S7 PLCs. The library supports Python 3.10+ and runs on Windows, Linux, and macOS.
+Python-snap7 is a pure Python S7 communication library for interfacing with Siemens S7 PLCs. The library supports Python 3.10+ and runs on Windows, Linux, and macOS without any native dependencies.
 
 ## Key Architecture
 
 - **snap7/client.py**: Main Client class for connecting to S7 PLCs
 - **snap7/server.py**: Server implementation for PLC simulation
 - **snap7/logo.py**: Logo PLC communication
-- **snap7/partner.py**: Partner connection functionality
+- **snap7/partner.py**: Partner (peer-to-peer) connection functionality
+- **snap7/connection.py**: ISO on TCP implementation (TPKT/COTP layers)
+- **snap7/s7protocol.py**: S7 PDU encoding/decoding
+- **snap7/datatypes.py**: S7 data types and address encoding
 - **snap7/util/**: Utility functions for data conversion (getters.py, setters.py, db.py)
-- **snap7/protocol.py**: Low-level protocol bindings to the native Snap7 library
 - **snap7/type.py**: Type definitions and enums (Area, Block, WordLen, etc.)
-- **snap7/common.py**: Common utilities including library loading
 - **snap7/error.py**: Error handling and exceptions
 
-The library traditionally uses ctypes to interface with the native Snap7 C library (libsnap7.so/snap7.dll/libsnap7.dylib), but now also includes a **pure Python implementation** that removes the dependency on the C library.
+## Implementation Details
 
-## Pure Python Implementation
+### Protocol Stack
+The library implements the complete S7 protocol stack:
+1. **TCP/IP**: Standard socket communication
+2. **TPKT**: RFC 1006 framing layer
+3. **COTP**: ISO 8073 Class 0 connection-oriented transport
+4. **S7**: Siemens S7 protocol for PLC communication
 
-### Overview
-
-The project includes a complete pure Python implementation of the S7 protocol that eliminates the need for the Snap7 C library. This implementation provides:
-
-- **Zero dependencies** on external C libraries
-- **Cross-platform compatibility** without platform-specific binaries
-- **Full S7 protocol support** for basic operations (read/write/connect)
-- **Drop-in replacement** API compatibility with the ctypes version
-
-### Architecture
-
-**snap7/native/**: Pure Python S7 protocol implementation
-- **snap7/native/client.py**: Core S7Client class with connection management
-- **snap7/native/connection.py**: ISO on TCP implementation (TPKT/COTP layers)
-- **snap7/native/protocol.py**: S7 PDU encoding/decoding
-- **snap7/native/datatypes.py**: S7 data types and address encoding
-- **snap7/native/errors.py**: S7-specific error handling
-- **snap7/native/__init__.py**: Package initialization
-
-**snap7/native_client.py**: Drop-in replacement Client class that wraps the pure Python implementation
+### Features
+- TCP connection management
+- ISO on TCP (TPKT/COTP) transport layers
+- S7 protocol PDU encoding/decoding
+- Read/write operations for all memory areas (DB, M, I, Q, T, C)
+- Error handling and connection management
+- Data type conversions (BYTE, WORD, DWORD, INT, DINT, REAL)
+- Multi-variable operations
+- PLC control functions (start/stop/hot start/cold start)
+- CPU information retrieval
+- Block operations (list, info, upload, download)
+- Date/time operations
 
 ### Usage
 
 ```python
 import snap7
 
-# Option 1: Use get_client() function to choose backend
-client = snap7.get_client(pure_python=True)  # Pure Python
-client = snap7.get_client(pure_python=False)  # Ctypes (default)
-
-# Option 2: Import directly
-from snap7 import PureClient
-client = PureClient()
-
-# Option 3: Traditional way (uses ctypes)
-from snap7 import Client
-client = Client()
-
-# All clients have the same API
+# Create and connect client
+client = snap7.Client()
 client.connect("192.168.1.10", 0, 1)
+
+# Read/write operations
 data = client.db_read(1, 0, 4)
 client.db_write(1, 0, bytearray([1, 2, 3, 4]))
+
+# Memory area access
+marker_data = client.mb_read(0, 4)
+client.mb_write(0, 4, bytearray([1, 2, 3, 4]))
+
+# Disconnect
 client.disconnect()
 ```
 
-### Implementation Status
+### Server Usage
 
-**✅ Implemented:**
-- TCP connection management
-- ISO on TCP (TPKT/COTP) transport layers
-- S7 protocol PDU encoding/decoding
-- Read/write operations for all memory areas (DB, M, I, Q, T, C)
-- Error handling and connection management
-- Data type conversions (BYTE, WORD, DWORD, INT, DINT, REAL, BIT)
-- Multi-variable operations
-- API compatibility with ctypes version
+```python
+from snap7.server import Server, mainloop
+from snap7.type import SrvArea
+from ctypes import c_char
 
-**🚧 Not Yet Implemented:**
-- Block operations (upload/download)
-- PLC control functions (start/stop)
-- CPU information retrieval
-- Authentication/password handling
-- Advanced S7 userdata functions
-- Time/date operations
+# Start a simple server
+server = Server()
+size = 100
+db_data = bytearray(size)
+db_array = (c_char * size).from_buffer(db_data)
+server.register_area(SrvArea.DB, 1, db_array)
+server.start(tcp_port=102)
 
-### Testing
-
-```bash
-# Test pure Python implementation specifically
-pytest tests/test_native_client.py tests/test_native_datatypes.py
-
-# Test integration between backends
-pytest tests/test_integration.py
-
-# Run all tests (includes pure Python tests)
-pytest tests/
+# Or use the mainloop function
+mainloop(tcp_port=102)
 ```
-
-### Performance Considerations
-
-- **Pure Python**: No C library dependencies, easier deployment, potentially slower
-- **Ctypes**: Uses optimized C library, faster execution, requires platform-specific binaries
-- **Use case**: Pure Python ideal for cloud/container deployments where C dependencies are problematic
-
-### Development Notes
-
-- The pure Python implementation is designed as a learning reference and dependency-free alternative
-- Protocol implementation follows the official Siemens S7 specification
-- Socket-level programming uses standard Python libraries only
-- All S7 protocol constants and structures are faithfully reproduced
-- Error codes and messages match the original Snap7 library
 
 ## Essential Commands
 
@@ -192,31 +159,15 @@ Tests are organized with pytest markers:
 - `logo`: Logo PLC tests
 - `partner`: Partner connection tests
 - `mainloop`: Main loop tests
-- `common`: Common functionality tests
 
 ## Python Version Compatibility
 
 **Fully tested and supported Python versions:**
-- **Python 3.10** (EOL: October 2026) ✅
-- **Python 3.11** (EOL: October 2027) ✅
-- **Python 3.12** (EOL: October 2028) ✅
-- **Python 3.13** (EOL: October 2029) ✅
-- **Python 3.14** (EOL: October 2030) ✅
-
-All versions pass the complete test suite and have been verified for type checking, linting, and functionality.
-
-## Cross-Platform Development
-
-This library supports **Windows, Linux, and macOS** through ctypes bindings:
-
-- **Windows**: Uses `windll` from ctypes for library loading
-- **Linux/macOS**: Uses `cdll` from ctypes for library loading
-- **Library files**: Includes platform-specific Snap7 libraries (snap7.dll, libsnap7.so, libsnap7.dylib)
-
-### Platform-Specific Notes
-- The conditional import in `snap7/common.py` handles platform differences automatically
-- No `# type: ignore` comments needed for platform-specific imports in modern mypy
-- Cross-platform compatibility is maintained through the ctypes interface
+- **Python 3.10** (EOL: October 2026)
+- **Python 3.11** (EOL: October 2027)
+- **Python 3.12** (EOL: October 2028)
+- **Python 3.13** (EOL: October 2029)
+- **Python 3.14** (EOL: October 2030)
 
 ## Code Quality Standards
 
@@ -224,31 +175,19 @@ This library supports **Windows, Linux, and macOS** through ctypes bindings:
 ```bash
 # MyPy should show clean results
 mypy snap7 tests example
-# Expected: "Success: no issues found in 27 source files"
 
 # Ruff should pass all checks
 ruff check snap7 tests example
-# Expected: "All checks passed!"
 
-# Tests should pass with high coverage
+# Tests should pass
 pytest tests/
-# Expected: "188 passed, 4 skipped"
 ```
-
-### Common Code Quality Issues and Fixes
-
-1. **Print statements in production code**: Replace with `logger.info()` or appropriate log level
-2. **Unused type ignore comments**: Remove if not needed, or make platform-specific
-3. **Formatting inconsistencies**: Run `ruff format` to auto-fix
-4. **Type annotation issues**: Use strict mypy checking to catch early
 
 ### Development Best Practices
 
 - **Always use logging instead of print()** for debug output (except CLI error messages)
 - **Test across Python versions** when making changes that might affect compatibility
-- **Use existing patterns** for ctypes interactions and error handling
 - **Follow the established project structure** when adding new functionality
-- **Maintain cross-platform compatibility** - test platform-specific code paths
 
 ## Configuration Notes
 
@@ -256,19 +195,16 @@ pytest tests/
 - **tox.ini**: Multi-environment testing configuration
 - **.pre-commit-config.yaml**: Pre-commit hooks for code quality
 - **Ruff**: Line length set to 130, targets Python 3.10+
-- **MyPy**: Strict mode enabled with specific error code exceptions
-- **Protocol exclusion**: snap7/protocol.py is excluded from some linting due to generated bindings
+- **MyPy**: Strict mode enabled
 
 ## Library Architecture Notes
 
 ### Key Design Patterns
-- **Error wrapping**: Uses `@error_wrap` decorator for consistent error handling
-- **Type safety**: Extensive use of ctypes with proper type annotations
-- **Platform abstraction**: Single codebase works across Windows/Linux/macOS
+- **Error wrapping**: Uses custom exception classes for S7-specific errors
+- **Type safety**: Uses ctypes structures for data type compatibility
 - **Modular design**: Clear separation between client, server, utilities, and protocol layers
 
 ### Common Development Tasks
 - **Adding new PLC operations**: Extend client.py with proper error handling and logging
 - **Utility functions**: Add to appropriate modules in snap7/util/ following existing patterns
 - **Type definitions**: Update snap7/type.py for new enums or structures
-- **Cross-platform testing**: Use tox environments or manual virtual environment testing

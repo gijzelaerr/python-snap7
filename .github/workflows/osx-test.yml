@@ -1,4 +1,4 @@
-name: Test on macOS with brew
+name: macOS Tests
 on:
   push:
     branches: [master]
@@ -8,18 +8,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  osx_wheel:
+  test:
     strategy:
       matrix:
-        python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14" ]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         runs-on: ["macos-14", "macos-15"]
-
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install snap7
-        run: brew install --overwrite snap7 python@${{ matrix.python-version }}
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -30,5 +27,4 @@ jobs:
           uv pip install -e ".[test]"
       - name: Run pytest
         run: |
-          uv run pytest -m "server or util or client or mainloop"
-          sudo uv run pytest -m partner
+          uv run pytest -m "server or util or client or mainloop or partner"

@@ -1,4 +1,3 @@
-import gc
 import logging
 import struct
 import time
@@ -379,7 +378,7 @@ class TestClient(unittest.TestCase):
 
         # invalid param for client
         for param in non_client:
-            self.assertRaises(Exception, self.client.get_param, non_client)
+            self.assertRaises(Exception, self.client.get_param, param)
 
     def test_as_copy_ram_to_rom(self) -> None:
         response = self.client.as_copy_ram_to_rom(timeout=2)
@@ -408,7 +407,7 @@ class TestClient(unittest.TestCase):
     def test_as_db_fill(self) -> None:
         filler = 31
         expected = bytearray(filler.to_bytes(1, byteorder="big") * 100)
-        self.client.db_fill(1, filler)
+        self.client.as_db_fill(1, filler)
         self.client.wait_as_completion(500)
         self.assertEqual(expected, self.client.db_read(1, 0, 100))
 
@@ -942,48 +941,6 @@ class TestClientBeforeConnect(unittest.TestCase):
         )
         for param, value in values:
             self.client.set_param(param, value)
-
-
-@pytest.mark.client
-class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self) -> None:
-        # Clear the cache on load_library to ensure mock is used
-        from snap7.common import load_library
-
-        load_library.cache_clear()
-
-        # have load_library return another mock
-        self.mocklib = mock.MagicMock()
-
-        # have the Cli_Create of the mock return None
-        self.mocklib.Cli_Create.return_value = None
-        self.mocklib.Cli_Destroy.return_value = None
-
-        # replace the function load_library with a mock
-        # Use patch.object for Python 3.11+ compatibility (avoids path resolution issues)
-        import snap7.client
-
-        self.loadlib_patch = mock.patch.object(snap7.client, "load_library", return_value=self.mocklib)
-        self.loadlib_func = self.loadlib_patch.start()
-
-    def tearDown(self) -> None:
-        # restore load_library
-        self.loadlib_patch.stop()
-
-    def test_create(self) -> None:
-        Client()
-        self.mocklib.Cli_Create.assert_called_once()
-
-    def test_gc(self) -> None:
-        client = Client()
-        del client
-        gc.collect()
-        self.mocklib.Cli_Destroy.assert_called_once()
-
-    def test_context_manager(self) -> None:
-        with Client() as _:
-            pass
-        self.mocklib.Cli_Destroy.assert_called_once()
 
 
 if __name__ == "__main__":

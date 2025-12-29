@@ -1,11 +1,9 @@
 from ctypes import c_char
-import gc
 import logging
 
 import pytest
 import unittest
 from threading import Thread
-from unittest import mock
 
 from snap7.error import server_errors, error_text
 from snap7.server import Server
@@ -141,43 +139,6 @@ class TestServerBeforeStart(unittest.TestCase):
 
     def test_set_param(self) -> None:
         self.server.set_param(Parameter.LocalPort, 1102)
-
-
-@pytest.mark.server
-class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self) -> None:
-        # Clear the cache on load_library to ensure mock is used
-        from snap7.common import load_library
-
-        load_library.cache_clear()
-
-        # have load_library return another mock
-        self.mocklib = mock.MagicMock()
-
-        # have the Srv_Create of the mock return None
-        self.mocklib.Srv_Create.return_value = None
-        self.mocklib.Srv_Destroy.return_value = None
-
-        # replace the function load_library with a mock
-        # Use patch.object for Python 3.11+ compatibility (avoids path resolution issues)
-        import snap7.server
-
-        self.loadlib_patch = mock.patch.object(snap7.server, "load_library", return_value=self.mocklib)
-        self.loadlib_func = self.loadlib_patch.start()
-
-    def tearDown(self) -> None:
-        # restore load_library
-        self.loadlib_patch.stop()
-
-    def test_create(self) -> None:
-        server = Server(log=False)
-        del server
-        gc.collect()
-        self.mocklib.Srv_Create.assert_called_once()
-
-    def test_context_manager(self) -> None:
-        with Server(log=False) as _:
-            pass
 
 
 if __name__ == "__main__":
