@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python-snap7 is a Python wrapper for the Snap7 library, providing Ethernet communication with Siemens S7 PLCs. The library supports Python 3.9+ and runs on Windows, Linux, and macOS.
+Python-snap7 is a Python wrapper for the Snap7 library, providing Ethernet communication with Siemens S7 PLCs. The library supports Python 3.10+ and runs on Windows, Linux, and macOS.
 
 ## Key Architecture
 
@@ -161,7 +161,7 @@ pytest tests/
 - **pyproject.toml**: Main project configuration with build, dependencies, and tool settings
 - **tox.ini**: Multi-environment testing configuration
 - **.pre-commit-config.yaml**: Pre-commit hooks for code quality
-- **Ruff**: Line length set to 130, targets Python 3.9+
+- **Ruff**: Line length set to 130, targets Python 3.10+
 - **MyPy**: Strict mode enabled with specific error code exceptions
 - **Protocol exclusion**: snap7/protocol.py is excluded from some linting due to generated bindings
 

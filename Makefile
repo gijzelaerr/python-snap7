@@ -15,7 +15,7 @@ all: test
 	uv pip install -e ".[test]"
 
 .venv/bin/sphinx-build:  .venv/
-	uv run pip install -e ".[doc,cli]"
+	uv pip install -e ".[doc,cli]"
 
 .venv/bin/tox: .venv/
 	uv pip install tox tox-uv
