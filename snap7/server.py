@@ -120,6 +120,9 @@ class Server:
         self.port = tcp_port
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Try to use SO_REUSEPORT if available (Linux, macOS) for faster port reuse
+        if hasattr(socket, "SO_REUSEPORT"):
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
 
         try:
             self.server_socket.bind((self.host, self.port))

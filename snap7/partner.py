@@ -535,6 +535,9 @@ class Partner:
         """Start listening for incoming connections (passive mode)."""
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Try to use SO_REUSEPORT if available (Linux, macOS) for faster port reuse
+        if hasattr(socket, "SO_REUSEPORT"):
+            self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         self._server_socket.bind((self.local_ip, self.port))
         self._server_socket.listen(1)
         self._server_socket.settimeout(1.0)  # Allow periodic check
