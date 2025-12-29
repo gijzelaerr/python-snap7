@@ -357,7 +357,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
             (int(days) * sign * 3600 * 24 + (hours % 24) * 3600 + (minutes % 60) * 60 + seconds % 60) * 1000 + milli_seconds
         ) * sign
         bytes_array = time_int.to_bytes(4, byteorder="big", signed=True)
-        bytearray_[byte_index : byte_index + 4] = bytes(bytes_array)
+        bytearray_[byte_index : byte_index + 4] = bytes_array
         return bytearray_
     else:
         raise ValueError("time value out of range, please check the value interval")
