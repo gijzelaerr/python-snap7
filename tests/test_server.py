@@ -1,5 +1,6 @@
 from ctypes import c_char
 import logging
+import time
 
 import pytest
 import unittest
@@ -21,6 +22,7 @@ class TestServer(unittest.TestCase):
     def tearDown(self) -> None:
         self.server.stop()
         self.server.destroy()
+        time.sleep(0.2)  # Give OS time to release the port
 
     def test_register_area(self) -> None:
         db1_type = c_char * 1024

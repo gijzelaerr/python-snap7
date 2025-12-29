@@ -1,4 +1,5 @@
 import logging
+import time
 
 import pytest
 import unittest as unittest
@@ -21,6 +22,7 @@ class TestPartner(unittest.TestCase):
     def tearDown(self) -> None:
         self.partner.stop()
         self.partner.destroy()
+        time.sleep(0.2)  # Give OS time to release the port
 
     def test_as_b_send(self) -> None:
         self.partner.as_b_send()
