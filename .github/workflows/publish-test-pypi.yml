@@ -19,30 +19,36 @@ jobs:
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: osx-build-test-amd64.yml
-        path: .
+        name: dist-osx-universal
+        path: dist
     - name: "Download Linux/amd64 artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: linux-build-test-amd64.yml
-        path: .
+        name: dist-linux-amd64
+        path: dist
     - name: "Download Linux/arm64 artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: linux-build-test-arm64.yml
-        path: .
+        name: dist-linux-arm64
+        path: dist
     - name: "Download Windows artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: windows-build-test-amd64.yml
-        path: .
+        name: dist-windows-amd64
+        path: dist
     - name: "Download source artifacts"
       uses: dawidd6/action-download-artifact@v6
       with:
         workflow: source-build.yml
-        path: .
+        name: dist-source
+        path: dist
     - name: Combine artifacts
       uses: actions/upload-artifact@v4
       with:
+        name: dist-combined
         path: dist
     - name: show dist layout
       run: find dist
@@ -69,6 +75,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       - name: install python-snap7
         run: |
@@ -93,6 +101,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       - name: install python-snap7
         run: |

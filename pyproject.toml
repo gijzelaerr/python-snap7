@@ -69,6 +69,6 @@ output-format = "full"
 line-length = 130
 target-version = "py310"
 
-[lint]
+[tool.ruff.lint]
 ignore = []
 mccabe.max-complexity = 10

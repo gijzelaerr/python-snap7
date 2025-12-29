@@ -4,6 +4,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   windows_wheel:
     strategy:
@@ -22,6 +25,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
 
       - name: Prepare snap7 archive
         uses: ./.github/actions/prepare_snap7
