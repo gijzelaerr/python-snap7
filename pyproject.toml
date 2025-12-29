@@ -16,7 +16,6 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Intended Audience :: Developers",
     "Intended Audience :: Manufacturing",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -24,7 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
-license = {text = "MIT License"}
+license = "MIT"
 requires-python = ">=3.10"
 keywords = ["snap7", "s7", "siemens", "plc"]
 
