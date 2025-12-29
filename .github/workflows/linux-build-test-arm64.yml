@@ -4,6 +4,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   linux-build-arm64:
     name: Build wheel for linux arm64
@@ -32,7 +35,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-linux-arm64
           path: dist/*.whl
 
   linux-test-arm64:
@@ -41,7 +44,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,7 +52,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-linux-arm64
           path: dist
 
       - name: Set up QEMU
@@ -64,9 +67,10 @@ jobs:
             -v $PWD/dist:/dist \
             --platform linux/arm64 \
             "arm64v8/python:${{ matrix.python-version }}-bookworm" /bin/bash -s <<EOF
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install pytest
-          venv/bin/pip install dist/*.whl
-          venv/bin/pytest -m "server or util or client or mainloop or partner"
+          pip install --upgrade pip uv
+          uv venv
+          uv pip install pytest
+          uv pip install dist/*.whl
+          # Use --no-project to prevent uv from rebuilding from source
+          uv run --no-project pytest -m "server or util or client or mainloop or partner"
           EOF
