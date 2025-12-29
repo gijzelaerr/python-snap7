@@ -947,17 +947,24 @@ class TestClientBeforeConnect(unittest.TestCase):
 @pytest.mark.client
 class TestLibraryIntegration(unittest.TestCase):
     def setUp(self) -> None:
-        # replace the function load_library with a mock
-        self.loadlib_patch = mock.patch("snap7.client.load_library")
-        self.loadlib_func = self.loadlib_patch.start()
+        # Clear the cache on load_library to ensure mock is used
+        from snap7.common import load_library
+
+        load_library.cache_clear()
 
         # have load_library return another mock
         self.mocklib = mock.MagicMock()
-        self.loadlib_func.return_value = self.mocklib
 
         # have the Cli_Create of the mock return None
         self.mocklib.Cli_Create.return_value = None
         self.mocklib.Cli_Destroy.return_value = None
+
+        # replace the function load_library with a mock
+        # Use patch.object for Python 3.11+ compatibility (avoids path resolution issues)
+        import snap7.client
+
+        self.loadlib_patch = mock.patch.object(snap7.client, "load_library", return_value=self.mocklib)
+        self.loadlib_func = self.loadlib_patch.start()
 
     def tearDown(self) -> None:
         # restore load_library

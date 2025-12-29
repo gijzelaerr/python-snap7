@@ -4,12 +4,15 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
 
 
   osx-build:
     name: Build wheel for OSX
-    runs-on: macos-13
+    runs-on: macos-14
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,14 +23,16 @@ jobs:
       - name: Prepare files
         run: |
           cp .github/build_scripts/arm64_osx.mk snap7-full-1.4.2/build/osx/
+          cp .github/build_scripts/x86_64_osx.mk snap7-full-1.4.2/build/osx/
           pushd snap7-full-1.4.2/build/osx/
           make -f x86_64_osx.mk all
           make -f arm64_osx.mk all
-          lipo -create -output /usr/local/lib/libsnap7.dylib ../bin/x86_64-osx/libsnap7.dylib ../bin/arm64-osx/libsnap7.dylib
-          install_name_tool -id /usr/local/lib/libsnap7.dylib /usr/local/lib/libsnap7.dylib
+          mkdir -p snap7/lib/
+          lipo -create -output snap7/lib/libsnap7.dylib ../bin/x86_64-osx/libsnap7.dylib ../bin/arm64-osx/libsnap7.dylib
+          install_name_tool -id @rpath/libsnap7.dylib snap7/lib/libsnap7.dylib
           popd
           mkdir -p snap7/lib/
-          cp /usr/local/lib/libsnap7.dylib snap7/lib/
+          cp snap7-full-1.4.2/build/osx/snap7/lib/libsnap7.dylib snap7/lib/
 
       - name: Build wheel
         run: |
@@ -36,7 +41,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-osx-universal
           path: dist/*.whl
 
 
@@ -46,8 +51,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ["macos-13", "macos-14", "macos-15"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        os: ["macos-14", "macos-15"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout
@@ -58,20 +63,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-osx-universal
           path: dist
 
       - name: Install python-snap7
         run: |
-            python3 -m venv venv
-            venv/bin/pip install --upgrade pip
-            venv/bin/pip install pytest
-            venv/bin/pip install dist/*.whl
+            uv venv
+            uv pip install pytest
+            uv pip install dist/*.whl
 
+      # Use --no-project to prevent uv from syncing pyproject.toml,
+      # which would rebuild from source and lose the bundled snap7 library.
       - name: Run tests
         run: |
-            venv/bin/pytest -m "server or util or client or mainloop"
-            sudo venv/bin/pytest -m partner
+            uv run --no-project pytest -m "server or util or client or mainloop"
+            sudo .venv/bin/pytest -m partner

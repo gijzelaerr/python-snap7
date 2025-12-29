@@ -4,6 +4,9 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   windows-build:
     name: Build wheel for windows AMD64
@@ -24,7 +27,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
+          name: dist-windows-amd64
           path: dist/*.whl
 
   windows-test-amd64:
@@ -34,7 +37,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-2022, windows-2025]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,10 +47,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist
+          name: dist-windows-amd64
           path: dist
 
       - name: List files
@@ -57,9 +65,11 @@ jobs:
 
       - name: Install python-snap7
         run: |
-          python3 -m pip install --upgrade pip pytest
-          python3 -m pip install $(ls dist/*.whl)
+          uv venv
+          uv pip install pytest
+          uv pip install $(ls dist/*.whl)
 
+      # Use --no-project to prevent uv from syncing pyproject.toml,
+      # which would rebuild from source and lose the bundled snap7 library.
       - name: Run pytest
-        run: |
-            pytest -m "server or util or client or mainloop or partner"
+        run: uv run --no-project pytest -m "server or util or client or mainloop or partner"

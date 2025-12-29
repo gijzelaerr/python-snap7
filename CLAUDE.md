@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python-snap7 is a Python wrapper for the Snap7 library, providing Ethernet communication with Siemens S7 PLCs. The library supports Python 3.9+ and runs on Windows, Linux, and macOS.
+Python-snap7 is a Python wrapper for the Snap7 library, providing Ethernet communication with Siemens S7 PLCs. The library supports Python 3.10+ and runs on Windows, Linux, and macOS.
 
 ## Key Architecture
 
@@ -144,13 +144,13 @@ ruff check --fix snap7 tests example
 
 ### Development with tox
 ```bash
-# Run all tox environments (mypy, lint, py39-py313)
+# Run all tox environments (mypy, lint, py310-py314)
 tox
 
 # Run specific environments
 tox -e mypy
 tox -e lint-ruff
-tox -e py39
+tox -e py310
 ```
 
 ### Using Makefile
@@ -197,13 +197,13 @@ Tests are organized with pytest markers:
 ## Python Version Compatibility
 
 **Fully tested and supported Python versions:**
-- **Python 3.9** (EOL: October 2025) ✅
 - **Python 3.10** (EOL: October 2026) ✅
 - **Python 3.11** (EOL: October 2027) ✅
 - **Python 3.12** (EOL: October 2028) ✅
 - **Python 3.13** (EOL: October 2029) ✅
+- **Python 3.14** (EOL: October 2030) ✅
 
-All versions pass the complete test suite (188 tests) and have been verified for type checking, linting, and functionality.
+All versions pass the complete test suite and have been verified for type checking, linting, and functionality.
 
 ## Cross-Platform Development
 
@@ -255,7 +255,7 @@ pytest tests/
 - **pyproject.toml**: Main project configuration with build, dependencies, and tool settings
 - **tox.ini**: Multi-environment testing configuration
 - **.pre-commit-config.yaml**: Pre-commit hooks for code quality
-- **Ruff**: Line length set to 130, targets Python 3.9+
+- **Ruff**: Line length set to 130, targets Python 3.10+
 - **MyPy**: Strict mode enabled with specific error code exceptions
 - **Protocol exclusion**: snap7/protocol.py is excluded from some linting due to generated bindings
 

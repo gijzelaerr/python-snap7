@@ -4,11 +4,14 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         runs-on: ["ubuntu-22.04", "ubuntu-24.04"]
     runs-on: ${{ matrix.runs-on }}
     steps:
@@ -21,17 +24,19 @@ jobs:
           sudo add-apt-repository -y ppa:gijzelaar/snap7
           sudo apt-get update -qq
           sudo apt-get install -y libsnap7-dev libsnap7-1
-      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
       - name: Install dependencies
         run: |
-          python3 -m venv venv
-          venv/bin/pip install --upgrade pip
-          venv/bin/pip install ".[test]"
+          uv venv
+          uv pip install ".[test]"
       - name: Run pytest
         run: |
-          venv/bin/pytest -m "server or util or client or mainloop"
-          sudo venv/bin/pytest -m partner
+          .venv/bin/pytest -m "server or util or client or mainloop"
+          sudo .venv/bin/pytest -m partner

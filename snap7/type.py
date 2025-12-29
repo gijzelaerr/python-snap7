@@ -278,6 +278,7 @@ class S7DataItem(Structure):
     """ """
 
     _pack_ = 1
+    _layout_ = "ms"
     _fields_ = [
         ("Area", c_int32),
         ("WordLen", c_int32),
