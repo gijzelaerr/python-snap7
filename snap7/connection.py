@@ -8,7 +8,8 @@ Transport Protocol) layers for S7 communication.
 import socket
 import struct
 import logging
-from typing import Optional
+from typing import Optional, Type
+from types import TracebackType
 
 from .error import S7ConnectionError, S7TimeoutError
 
@@ -109,7 +110,7 @@ class ISOTCPConnection:
         Args:
             data: S7 PDU data to send
         """
-        if not self.connected:
+        if not self.connected or self.socket is None:
             raise S7ConnectionError("Not connected")
 
         # Wrap data in COTP Data Transfer PDU
@@ -173,6 +174,9 @@ class ISOTCPConnection:
 
     def _iso_connect(self) -> None:
         """Establish ISO connection using COTP handshake."""
+        if self.socket is None:
+            raise S7ConnectionError("Socket not initialized")
+
         # Send Connection Request
         cr_pdu = self._build_cotp_cr()
         tpkt_frame = self._build_tpkt(cr_pdu)
@@ -314,6 +318,9 @@ class ISOTCPConnection:
 
     def _send_cotp_disconnect(self) -> None:
         """Send COTP Disconnect Request."""
+        if self.socket is None:
+            return  # Nothing to disconnect
+
         dr_pdu = struct.pack(
             ">BBHHBB",
             6,  # PDU length
@@ -344,6 +351,9 @@ class ISOTCPConnection:
             S7ConnectionError: If connection is lost
             S7TimeoutError: If timeout occurs
         """
+        if self.socket is None:
+            raise S7ConnectionError("Socket not initialized")
+
         data = bytearray()
 
         while len(data) < size:
@@ -359,10 +369,15 @@ class ISOTCPConnection:
 
         return bytes(data)
 
-    def __enter__(self):
+    def __enter__(self) -> "ISOTCPConnection":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Context manager exit."""
         self.disconnect()

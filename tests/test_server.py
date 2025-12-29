@@ -93,13 +93,13 @@ class TestServer(unittest.TestCase):
         self.server.unregister_area(area_code, index)
 
     def test_events_callback(self) -> None:
-        def event_call_back(event: str) -> None:
+        def event_call_back(event: SrvEvent) -> None:
             logging.debug(event)
 
         self.server.set_events_callback(event_call_back)
 
     def test_read_events_callback(self) -> None:
-        def read_events_call_back(event: str) -> None:
+        def read_events_call_back(event: SrvEvent) -> None:
             logging.debug(event)
 
         self.server.set_read_events_callback(read_events_call_back)

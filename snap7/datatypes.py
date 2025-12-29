@@ -6,7 +6,7 @@ Handles S7-specific data types, endianness conversion, and address encoding.
 
 import struct
 from enum import IntEnum
-from typing import Tuple
+from typing import List, Sequence, Tuple, Union
 
 
 class S7Area(IntEnum):
@@ -99,13 +99,13 @@ class S7DataTypes:
         )
 
     @staticmethod
-    def decode_s7_data(data: bytes, word_len: S7WordLen, count: int) -> list:
+    def decode_s7_data(data: bytes, word_len: S7WordLen, count: int) -> List[Union[bool, int, float]]:
         """
         Decode S7 data from bytes to Python values.
 
         Handles Siemens big-endian byte order.
         """
-        values = []
+        values: List[Union[bool, int, float]] = []
         offset = 0
 
         for i in range(count):
@@ -153,7 +153,7 @@ class S7DataTypes:
         return values
 
     @staticmethod
-    def encode_s7_data(values: list, word_len: S7WordLen) -> bytes:
+    def encode_s7_data(values: Sequence[Union[bool, int, float]], word_len: S7WordLen) -> bytes:
         """
         Encode Python values to S7 data bytes.
 

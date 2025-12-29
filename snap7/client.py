@@ -7,7 +7,7 @@ Drop-in replacement for the ctypes-based client with native Python implementatio
 import logging
 import struct
 import time
-from typing import List, Any, Optional, Tuple, Union, Callable
+from typing import List, Any, Optional, Tuple, Union, Callable, cast
 from datetime import datetime
 from ctypes import (
     c_int,
@@ -91,6 +91,10 @@ class Client:
         # Session password
         self.session_password: Optional[str] = None
 
+        # Execution time tracking
+        self._exec_time = 0
+        self.last_error = 0
+
         # Parameter storage
         self._params = {
             Parameter.LocalPort: 0,
@@ -115,6 +119,12 @@ class Client:
         self._lib = _LibMock()
 
         logger.info("S7Client initialized (pure Python implementation)")
+
+    def _get_connection(self) -> ISOTCPConnection:
+        """Get connection, raising if not connected."""
+        if self.connection is None:
+            raise S7ConnectionError("Not connected to PLC")
+        return self.connection
 
     def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> "Client":
         """
@@ -267,8 +277,7 @@ class Client:
         Returns:
             Data read from area
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
         start_time = time.time()
 
@@ -286,10 +295,10 @@ class Client:
         # Build and send read request
         request = self.protocol.build_read_request(area=s7_area, db_number=db_number, start=start, word_len=word_len, count=size)
 
-        self.connection.send_data(request)
+        conn.send_data(request)
 
         # Receive and parse response
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         # Extract data from response - pass item count, not byte count
@@ -311,8 +320,7 @@ class Client:
         Returns:
             0 on success
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
         start_time = time.time()
 
@@ -332,10 +340,10 @@ class Client:
             area=s7_area, db_number=db_number, start=start, word_len=word_len, data=bytes(data)
         )
 
-        self.connection.send_data(request)
+        conn.send_data(request)
 
         # Receive and parse response
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         # Check for write errors
@@ -343,7 +351,7 @@ class Client:
         self._exec_time = int((time.time() - start_time) * 1000)
         return 0
 
-    def read_multi_vars(self, items: Union[List[dict], "Array[S7DataItem]"]) -> Tuple[int, Any]:
+    def read_multi_vars(self, items: Union[List[dict[str, Any]], "Array[S7DataItem]"]) -> Tuple[int, Any]:
         """
         Read multiple variables in a single request.
 
@@ -358,34 +366,36 @@ class Client:
 
         # Handle S7DataItem array (ctypes)
         if hasattr(items, "_type_") and hasattr(items[0], "Area"):
-            # This is a ctypes array of S7DataItem
-            for item in items:
-                area = Area(item.Area)
-                db_number = item.DBNumber
-                start = item.Start
-                size = item.Amount
+            # This is a ctypes array of S7DataItem - use cast for type safety
+            s7_items = cast("Array[S7DataItem]", items)
+            for s7_item in s7_items:
+                area = Area(s7_item.Area)
+                db_number = s7_item.DBNumber
+                start = s7_item.Start
+                size = s7_item.Amount
                 data = self.read_area(area, db_number, start, size)
 
                 # Copy data to pData buffer
-                if item.pData:
+                if s7_item.pData:
                     for i, b in enumerate(data):
-                        item.pData[i] = b
+                        s7_item.pData[i] = b
 
             return (0, items)
 
         # Handle dict list
+        dict_items = cast(List[dict[str, Any]], items)
         results = []
-        for item in items:
-            area = item["area"]
-            db_number = item.get("db_number", 0)
-            start = item["start"]
-            size = item["size"]
+        for dict_item in dict_items:
+            area = dict_item["area"]
+            db_number = dict_item.get("db_number", 0)
+            start = dict_item["start"]
+            size = dict_item["size"]
             data = self.read_area(area, db_number, start, size)
             results.append(data)
 
         return (0, results)
 
-    def write_multi_vars(self, items: Union[List[dict], List[S7DataItem]]) -> int:
+    def write_multi_vars(self, items: Union[List[dict[str, Any]], List[S7DataItem]]) -> int:
         """
         Write multiple variables in a single request.
 
@@ -400,27 +410,29 @@ class Client:
 
         # Handle S7DataItem list (ctypes)
         if hasattr(items[0], "Area"):
-            for item in items:
-                area = Area(item.Area)
-                db_number = item.DBNumber
-                start = item.Start
-                size = item.Amount
+            s7_items = cast(List[S7DataItem], items)
+            for s7_item in s7_items:
+                area = Area(s7_item.Area)
+                db_number = s7_item.DBNumber
+                start = s7_item.Start
+                size = s7_item.Amount
 
                 # Extract data from pData
                 data = bytearray(size)
-                if item.pData:
+                if s7_item.pData:
                     for i in range(size):
-                        data[i] = item.pData[i]
+                        data[i] = s7_item.pData[i]
 
                 self.write_area(area, db_number, start, data)
             return 0
 
         # Handle dict list
-        for item in items:
-            area = item["area"]
-            db_number = item.get("db_number", 0)
-            start = item["start"]
-            data = item["data"]
+        dict_items = cast(List[dict[str, Any]], items)
+        for dict_item in dict_items:
+            area = dict_item["area"]
+            db_number = dict_item.get("db_number", 0)
+            start = dict_item["start"]
+            data = dict_item["data"]
             self.write_area(area, db_number, start, data)
 
         return 0
@@ -491,13 +503,12 @@ class Client:
         Returns:
             CPU state string
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
         request = self.protocol.build_cpu_state_request()
-        self.connection.send_data(request)
+        conn.send_data(request)
 
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         return self.protocol.extract_cpu_state(response)
@@ -674,13 +685,12 @@ class Client:
         Returns:
             0 on success
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
         request = self.protocol.build_plc_control_request("stop")
-        self.connection.send_data(request)
+        conn.send_data(request)
 
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         self.protocol.check_control_response(response)
@@ -692,13 +702,12 @@ class Client:
         Returns:
             0 on success
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
         request = self.protocol.build_plc_control_request("hot_start")
-        self.connection.send_data(request)
+        conn.send_data(request)
 
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         self.protocol.check_control_response(response)
@@ -710,13 +719,12 @@ class Client:
         Returns:
             0 on success
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
         request = self.protocol.build_plc_control_request("cold_start")
-        self.connection.send_data(request)
+        conn.send_data(request)
 
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         self.protocol.check_control_response(response)
@@ -944,11 +952,10 @@ class Client:
         Returns:
             Response PDU data
         """
-        if not self.get_connected():
-            raise S7ConnectionError("Not connected to PLC")
+        conn = self._get_connection()
 
-        self.connection.send_data(bytes(data))
-        response = self.connection.receive_data()
+        conn.send_data(bytes(data))
+        response = conn.receive_data()
         return bytearray(response)
 
     # Convenience methods for specific memory areas
@@ -1409,11 +1416,12 @@ class Client:
 
     def _setup_communication(self) -> None:
         """Setup communication and negotiate PDU length."""
+        conn = self._get_connection()
         request = self.protocol.build_setup_communication_request(max_amq_caller=1, max_amq_callee=1, pdu_length=self.pdu_length)
 
-        self.connection.send_data(request)
+        conn.send_data(request)
 
-        response_data = self.connection.receive_data()
+        response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
         if response.get("parameters"):

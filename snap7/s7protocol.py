@@ -46,7 +46,7 @@ class S7Protocol:
     Handles encoding and decoding of S7 PDUs for communication with Siemens PLCs.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.sequence = 0  # Message sequence counter
 
     def _next_sequence(self) -> int:

@@ -9,7 +9,8 @@ import struct
 import threading
 import time
 import logging
-from typing import Dict, Optional, List, Callable, Any, Tuple, Union
+from typing import Dict, Optional, List, Callable, Any, Tuple, Type, Union
+from types import TracebackType
 from enum import IntEnum
 from ctypes import Array, c_char
 
@@ -51,7 +52,7 @@ class Server:
         >>> server.stop()
     """
 
-    def __init__(self, log: bool = True, **kwargs):
+    def __init__(self, log: bool = True, **kwargs: object) -> None:
         """
         Initialize S7 server.
 
@@ -1245,7 +1246,12 @@ class Server:
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         """Context manager exit."""
         self.destroy()
 

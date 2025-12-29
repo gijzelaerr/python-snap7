@@ -23,7 +23,7 @@ class TestAllClientMethods:
     port = 11050
 
     @classmethod
-    def setup_class(cls):
+    def setup_class(cls) -> None:
         """Set up shared test server."""
         cls.server = Server()
 
@@ -72,7 +72,7 @@ class TestAllClientMethods:
         time.sleep(0.2)
 
     @classmethod
-    def teardown_class(cls):
+    def teardown_class(cls) -> None:
         """Clean up shared server."""
         try:
             cls.server.stop()
@@ -81,12 +81,12 @@ class TestAllClientMethods:
             pass
         time.sleep(0.2)
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up client for each test."""
         self.client = Client()
         self.client.connect("127.0.0.1", 0, 1, self.port)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up client after each test."""
         try:
             self.client.disconnect()
@@ -94,7 +94,7 @@ class TestAllClientMethods:
             pass
 
     # Basic connection methods
-    def test_connect_disconnect(self):
+    def test_connect_disconnect(self) -> None:
         """Test connect/disconnect methods."""
         # Already connected in setup
         assert self.client.get_connected()
@@ -107,7 +107,7 @@ class TestAllClientMethods:
         self.client.connect("127.0.0.1", 0, 1, self.port)
         assert self.client.get_connected()
 
-    def test_create_destroy(self):
+    def test_create_destroy(self) -> None:
         """Test create/destroy methods."""
         # These should be no-ops for compatibility
         self.client.create()  # Should not raise
@@ -115,7 +115,7 @@ class TestAllClientMethods:
         assert not self.client.get_connected()
 
     # DB methods
-    def test_db_read(self):
+    def test_db_read(self) -> None:
         """Test DB read operations."""
         # Read various sizes
         data = self.client.db_read(1, 0, 1)
@@ -127,7 +127,7 @@ class TestAllClientMethods:
         data = self.client.db_read(1, 10, 10)
         assert len(data) >= 10
 
-    def test_db_write(self):
+    def test_db_write(self) -> None:
         """Test DB write operations."""
         # Write various sizes
         test_data = bytearray([0x11])
@@ -139,7 +139,7 @@ class TestAllClientMethods:
         test_data = bytearray(range(10))
         self.client.db_write(1, 50, test_data)
 
-    def test_db_get(self):
+    def test_db_get(self) -> None:
         """Test getting entire DB."""
         try:
             data = self.client.db_get(1)
@@ -148,7 +148,7 @@ class TestAllClientMethods:
             pytest.skip("db_get not implemented yet")
 
     # Area read/write methods
-    def test_read_area_all_types(self):
+    def test_read_area_all_types(self) -> None:
         """Test reading from all area types."""
         # For TM/CT, size is number of items (each 2 bytes), for others it's bytes
         areas_to_test = [
@@ -171,7 +171,7 @@ class TestAllClientMethods:
                 if "not yet implemented" not in str(e):
                     raise
 
-    def test_write_area_all_types(self):
+    def test_write_area_all_types(self) -> None:
         """Test writing to all area types."""
         test_data = bytearray([0xAA, 0xBB, 0xCC, 0xDD])
 
@@ -194,7 +194,7 @@ class TestAllClientMethods:
                     raise
 
     # Convenience methods
-    def test_ab_read_write(self):
+    def test_ab_read_write(self) -> None:
         """Test process output (AB) read/write."""
         try:
             data = self.client.ab_read(0, 4)
@@ -208,7 +208,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_eb_read_write(self):
+    def test_eb_read_write(self) -> None:
         """Test process input (EB) read/write."""
         try:
             data = self.client.eb_read(0, 4)
@@ -222,7 +222,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_mb_read_write(self):
+    def test_mb_read_write(self) -> None:
         """Test memory/flag (MB) read/write."""
         try:
             data = self.client.mb_read(0, 4)
@@ -236,7 +236,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_tm_read_write(self):
+    def test_tm_read_write(self) -> None:
         """Test timer (TM) read/write."""
         try:
             data = self.client.tm_read(0, 2)  # 2 timers
@@ -250,7 +250,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_ct_read_write(self):
+    def test_ct_read_write(self) -> None:
         """Test counter (CT) read/write."""
         try:
             data = self.client.ct_read(0, 2)  # 2 counters
@@ -265,7 +265,7 @@ class TestAllClientMethods:
                 raise
 
     # Multi-variable operations
-    def test_read_multi_vars(self):
+    def test_read_multi_vars(self) -> None:
         """Test reading multiple variables."""
         items = [
             {"area": Area.DB, "db_number": 1, "start": 0, "size": 4},
@@ -286,7 +286,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_write_multi_vars(self):
+    def test_write_multi_vars(self) -> None:
         """Test writing multiple variables."""
         items = [
             {"area": Area.DB, "db_number": 1, "start": 100, "data": bytearray([0x11, 0x22, 0x33, 0x44])},
@@ -303,7 +303,7 @@ class TestAllClientMethods:
                 raise
 
     # PLC info and control methods
-    def test_list_blocks(self):
+    def test_list_blocks(self) -> None:
         """Test listing PLC blocks."""
         try:
             blocks = self.client.list_blocks()
@@ -315,7 +315,7 @@ class TestAllClientMethods:
             print(f"✗ List blocks failed: {e}")
             raise
 
-    def test_get_cpu_info(self):
+    def test_get_cpu_info(self) -> None:
         """Test getting CPU information."""
         try:
             cpu_info = self.client.get_cpu_info()
@@ -327,7 +327,7 @@ class TestAllClientMethods:
             print(f"✗ Get CPU info failed: {e}")
             raise
 
-    def test_get_cpu_state(self):
+    def test_get_cpu_state(self) -> None:
         """Test getting CPU state."""
         try:
             state = self.client.get_cpu_state()
@@ -339,7 +339,7 @@ class TestAllClientMethods:
             print(f"✗ Get CPU state failed: {e}")
             raise
 
-    def test_plc_control(self):
+    def test_plc_control(self) -> None:
         """Test PLC control operations."""
         # Test PLC stop
         try:
@@ -375,7 +375,7 @@ class TestAllClientMethods:
                 raise
 
     # PDU and error methods
-    def test_get_pdu_length(self):
+    def test_get_pdu_length(self) -> None:
         """Test getting PDU length."""
         try:
             pdu_length = self.client.get_pdu_length()
@@ -386,7 +386,7 @@ class TestAllClientMethods:
             print(f"✗ Get PDU length failed: {e}")
             raise
 
-    def test_error_text(self):
+    def test_error_text(self) -> None:
         """Test error text retrieval."""
         try:
             error_msg = self.client.error_text(0)
@@ -397,7 +397,7 @@ class TestAllClientMethods:
             raise
 
     # Block operations
-    def test_get_block_info(self):
+    def test_get_block_info(self) -> None:
         """Test getting block information."""
         try:
             block_info = self.client.get_block_info(Block.DB, 1)
@@ -410,7 +410,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_upload_download(self):
+    def test_upload_download(self) -> None:
         """Test block upload/download."""
         # Test upload
         try:
@@ -437,7 +437,7 @@ class TestAllClientMethods:
                 raise
 
     # Authentication methods
-    def test_session_password(self):
+    def test_session_password(self) -> None:
         """Test session password operations."""
         try:
             self.client.set_session_password("test123")
@@ -453,7 +453,7 @@ class TestAllClientMethods:
                 raise
 
     # Connection parameter methods
-    def test_set_connection_params(self):
+    def test_set_connection_params(self) -> None:
         """Test setting connection parameters."""
         try:
             self.client.set_connection_params("127.0.0.1", 0x0100, 0x0102)
@@ -463,7 +463,7 @@ class TestAllClientMethods:
             if "not yet implemented" not in str(e):
                 raise
 
-    def test_set_connection_type(self):
+    def test_set_connection_type(self) -> None:
         """Test setting connection type."""
         try:
             self.client.set_connection_type(1)  # PG connection
@@ -474,7 +474,7 @@ class TestAllClientMethods:
                 raise
 
     # DateTime methods
-    def test_plc_datetime(self):
+    def test_plc_datetime(self) -> None:
         """Test PLC date/time operations."""
         # Test get PLC datetime
         try:
@@ -512,7 +512,7 @@ class TestAllClientMethods:
                 raise
 
     # Context manager test
-    def test_context_manager(self):
+    def test_context_manager(self) -> None:
         """Test client as context manager."""
         with Client() as client:
             client.connect("127.0.0.1", 0, 1, self.port)
@@ -529,7 +529,7 @@ class TestAllClientMethods:
 class TestServerRobustness:
     """Test server robustness and edge cases."""
 
-    def test_multiple_server_instances(self):
+    def test_multiple_server_instances(self) -> None:
         """Test multiple server instances on different ports."""
         servers = []
         clients = []
@@ -577,7 +577,7 @@ class TestServerRobustness:
                 except Exception:
                     pass
 
-    def test_server_area_management(self):
+    def test_server_area_management(self) -> None:
         """Test server area registration/unregistration."""
         server = Server()
         port = 11070

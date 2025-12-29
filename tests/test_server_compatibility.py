@@ -8,6 +8,7 @@ work correctly together.
 import time
 from ctypes import c_char
 import struct
+from typing import Any, Generator
 
 import pytest
 import snap7
@@ -15,7 +16,7 @@ from snap7.type import SrvArea, Area, Block
 
 
 @pytest.fixture
-def server_client_pair():
+def server_client_pair() -> Generator[tuple[Any, Any, str], None, None]:
     """
     Fixture that provides a server and client for testing.
 
@@ -76,7 +77,7 @@ def server_client_pair():
 class TestServerCompatibility:
     """Test that both server implementations produce identical results."""
 
-    def test_basic_db_operations(self, server_client_pair):
+    def test_basic_db_operations(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test basic DB read/write operations produce same results."""
         server, client, server_type = server_client_pair
 
@@ -95,7 +96,7 @@ class TestServerCompatibility:
         # Note: Pure Python server actually stores data, native might not
         # So we test that the operation completes without error
 
-    def test_connection_management(self, server_client_pair):
+    def test_connection_management(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test connection state management is consistent."""
         server, client, server_type = server_client_pair
 
@@ -110,7 +111,7 @@ class TestServerCompatibility:
         client.connect("127.0.0.1", 0, 1, 11060)
         assert client.get_connected()
 
-    def test_memory_area_access(self, server_client_pair):
+    def test_memory_area_access(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test memory area access patterns are consistent."""
         server, client, server_type = server_client_pair
 
@@ -134,7 +135,7 @@ class TestServerCompatibility:
                 # Both implementations should handle errors consistently
                 assert "not supported" in str(e) or "not implemented" in str(e)
 
-    def test_convenience_methods(self, server_client_pair):
+    def test_convenience_methods(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test convenience methods work consistently."""
         server, client, server_type = server_client_pair
 
@@ -154,7 +155,7 @@ class TestServerCompatibility:
             # Both should handle unsupported operations consistently
             pass
 
-    def test_server_status(self, server_client_pair):
+    def test_server_status(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test server status reporting is consistent."""
         server, client, server_type = server_client_pair
 
@@ -169,7 +170,7 @@ class TestServerCompatibility:
         # Server should be running (different servers may use different status strings)
         assert server_status in ["Running", "Run", "SrvRunning"]
 
-    def test_client_info_functions(self, server_client_pair):
+    def test_client_info_functions(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test client info functions return consistent types."""
         server, client, server_type = server_client_pair
 
@@ -182,7 +183,7 @@ class TestServerCompatibility:
         error_text = client.error_text(0)
         assert isinstance(error_text, str)
 
-    def test_connection_parameters(self, server_client_pair):
+    def test_connection_parameters(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test connection parameter functions work consistently."""
         server, client, server_type = server_client_pair
 
@@ -198,7 +199,7 @@ class TestServerCompatibility:
 class TestTodoFunctionCompatibility:
     """Test that all implemented TODO functions work on both servers."""
 
-    def test_db_get_function(self, server_client_pair):
+    def test_db_get_function(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test db_get works consistently."""
         server, client, server_type = server_client_pair
 
@@ -207,7 +208,7 @@ class TestTodoFunctionCompatibility:
         assert len(data) > 0
         assert isinstance(data, bytearray)
 
-    def test_plc_control_functions(self, server_client_pair):
+    def test_plc_control_functions(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test PLC control functions work consistently."""
         server, client, server_type = server_client_pair
 
@@ -216,7 +217,7 @@ class TestTodoFunctionCompatibility:
         client.plc_hot_start()
         client.plc_cold_start()
 
-    def test_cpu_info_functions(self, server_client_pair):
+    def test_cpu_info_functions(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test CPU info functions return consistent types."""
         server, client, server_type = server_client_pair
 
@@ -232,7 +233,7 @@ class TestTodoFunctionCompatibility:
         # Different implementations may return different state formats
         assert cpu_state in ["RUN", "STOP", "UNKNOWN", "S7CpuStatusRun", "S7CpuStatusStop"]
 
-    def test_block_operations(self, server_client_pair):
+    def test_block_operations(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test block operations work consistently."""
         server, client, server_type = server_client_pair
 
@@ -268,7 +269,7 @@ class TestTodoFunctionCompatibility:
             assert "not implemented" in str(e).lower() or "not authorized" in str(e).lower()
             pass
 
-    def test_datetime_functions(self, server_client_pair):
+    def test_datetime_functions(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test datetime functions work consistently."""
         server, client, server_type = server_client_pair
 
@@ -290,7 +291,7 @@ class TestTodoFunctionCompatibility:
             # Both should handle not implemented consistently
             pass
 
-    def test_multi_variable_operations(self, server_client_pair):
+    def test_multi_variable_operations(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test multi-variable operations work consistently."""
         server, client, server_type = server_client_pair
 
@@ -335,14 +336,14 @@ class TestTodoFunctionCompatibility:
 class TestErrorHandlingCompatibility:
     """Test that error handling is consistent between implementations."""
 
-    def test_disconnected_client_errors(self):
+    def test_disconnected_client_errors(self) -> None:
         """Test that client handles disconnection properly."""
         client = snap7.Client()
 
         with pytest.raises(Exception):
             client.db_read(1, 0, 4)
 
-    def test_invalid_operations_consistent(self, server_client_pair):
+    def test_invalid_operations_consistent(self, server_client_pair: tuple[Any, Any, str]) -> None:
         """Test that invalid operations are handled consistently."""
         server, client, server_type = server_client_pair
 

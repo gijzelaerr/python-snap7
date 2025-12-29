@@ -13,14 +13,14 @@ import struct
 import snap7
 from snap7.server import Server, mainloop as pure_mainloop
 from snap7.client import Client
-from snap7.type import SrvArea, Area
+from snap7.type import SrvArea, Area, SrvEvent
 
 
 class TestNativeIntegrationFull:
     """Full integration tests using pure Python implementation."""
 
     @classmethod
-    def setup_class(cls):
+    def setup_class(cls) -> None:
         """Set up a shared server for all tests."""
         cls.server = Server()
         cls.port = 11030  # Use non-standard port
@@ -63,7 +63,7 @@ class TestNativeIntegrationFull:
         time.sleep(0.2)
 
     @classmethod
-    def teardown_class(cls):
+    def teardown_class(cls) -> None:
         """Clean up the shared server."""
         try:
             cls.server.stop()
@@ -74,19 +74,19 @@ class TestNativeIntegrationFull:
         # Give server time to clean up
         time.sleep(0.2)
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up client for each test."""
         self.client = Client()
         self.client.connect("127.0.0.1", 0, 1, self.port)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up client after each test."""
         try:
             self.client.disconnect()
         except Exception:
             pass
 
-    def test_db_read_write_byte(self):
+    def test_db_read_write_byte(self) -> None:
         """Test reading and writing individual bytes."""
         # Read single byte
         data = self.client.db_read(1, 0, 1)
@@ -100,7 +100,7 @@ class TestNativeIntegrationFull:
         data = self.client.db_read(1, 0, 1)
         assert len(data) >= 1
 
-    def test_db_read_write_word(self):
+    def test_db_read_write_word(self) -> None:
         """Test reading and writing words."""
         # Read word
         data = self.client.db_read(1, 10, 2)
@@ -114,7 +114,7 @@ class TestNativeIntegrationFull:
         data = self.client.db_read(1, 10, 2)
         assert len(data) >= 2
 
-    def test_db_read_write_dword(self):
+    def test_db_read_write_dword(self) -> None:
         """Test reading and writing double words."""
         # Read dword
         data = self.client.db_read(1, 20, 4)
@@ -128,7 +128,7 @@ class TestNativeIntegrationFull:
         data = self.client.db_read(1, 20, 4)
         assert len(data) >= 4
 
-    def test_different_memory_areas(self):
+    def test_different_memory_areas(self) -> None:
         """Test accessing different memory areas."""
         # Test different area read operations
         areas_to_test = [
@@ -151,7 +151,7 @@ class TestNativeIntegrationFull:
                 # Some areas might not be implemented in server
                 assert "not yet implemented" in str(e) or "not supported" in str(e)
 
-    def test_convenience_methods(self):
+    def test_convenience_methods(self) -> None:
         """Test convenience methods for memory access."""
         # Test various convenience methods
         try:
@@ -173,7 +173,7 @@ class TestNativeIntegrationFull:
             # Some methods might not be fully implemented
             pass
 
-    def test_multiple_clients_concurrent(self):
+    def test_multiple_clients_concurrent(self) -> None:
         """Test multiple clients accessing server concurrently."""
         clients = []
 
@@ -185,7 +185,7 @@ class TestNativeIntegrationFull:
                 clients.append(client)
 
             # Perform operations concurrently
-            def client_operations(client, client_id):
+            def client_operations(client: snap7.Client, client_id: int) -> None:
                 for j in range(5):
                     # Read operation
                     data = client.db_read(1, j, 1)
@@ -220,7 +220,7 @@ class TestNativeIntegrationFull:
                 except Exception:
                     pass
 
-    def test_server_status_monitoring(self):
+    def test_server_status_monitoring(self) -> None:
         """Test server status monitoring."""
         # Check initial server status
         server_status, cpu_status, client_count = self.server.get_status()
@@ -233,14 +233,14 @@ class TestNativeIntegrationFull:
         assert isinstance(cpu_status, str)
         assert isinstance(client_count, int)
 
-    def test_server_callback_events(self):
+    def test_server_callback_events(self) -> None:
         """Test server event callbacks."""
-        events_received = []
+        events_received: list[object] = []
 
-        def event_callback(event):
+        def event_callback(event: SrvEvent) -> None:
             events_received.append(event)
 
-        def read_callback(event):
+        def read_callback(event: SrvEvent) -> None:
             events_received.append(("read", event))
 
         # Set up callbacks
@@ -257,7 +257,7 @@ class TestNativeIntegrationFull:
         # We might receive events (implementation dependent)
         # Just verify no exceptions were thrown
 
-    def test_error_conditions(self):
+    def test_error_conditions(self) -> None:
         """Test various error conditions."""
         # Test reading from invalid address (server may handle gracefully)
         try:
@@ -277,7 +277,7 @@ class TestNativeIntegrationFull:
             # Expected for oversized writes
             pass
 
-    def test_connection_robustness(self):
+    def test_connection_robustness(self) -> None:
         """Test connection handling and recovery."""
         # Verify initial connection
         assert self.client.get_connected()
@@ -302,13 +302,13 @@ class TestNativeIntegrationFull:
 class TestPureMainloop:
     """Test the pure Python mainloop function."""
 
-    def test_mainloop_can_start_and_stop(self):
+    def test_mainloop_can_start_and_stop(self) -> None:
         """Test that pure mainloop can start and be stopped."""
         server_thread = None
 
         try:
             # Start mainloop in a separate thread
-            def run_mainloop():
+            def run_mainloop() -> None:
                 try:
                     pure_mainloop(tcp_port=11040, init_standard_values=True)
                 except KeyboardInterrupt:
@@ -341,7 +341,7 @@ class TestPureMainloop:
                 # Thread will terminate when function exits
                 pass
 
-    def test_server_class(self):
+    def test_server_class(self) -> None:
         """Test the Server class."""
         # Test server creation
         server = snap7.Server()

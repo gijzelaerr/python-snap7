@@ -12,7 +12,7 @@ from ctypes import c_char
 
 from snap7.server import Server
 from snap7.client import Client
-from snap7.type import SrvArea, Area
+from snap7.type import SrvArea, Area, SrvEvent
 
 
 class TestServerClientIntegration:
@@ -21,7 +21,7 @@ class TestServerClientIntegration:
     port = 11020
 
     @classmethod
-    def setup_class(cls):
+    def setup_class(cls) -> None:
         """Set up shared test server."""
         cls.server = Server()
 
@@ -44,7 +44,7 @@ class TestServerClientIntegration:
         time.sleep(0.2)
 
     @classmethod
-    def teardown_class(cls):
+    def teardown_class(cls) -> None:
         """Clean up shared server."""
         try:
             cls.server.stop()
@@ -53,19 +53,19 @@ class TestServerClientIntegration:
             pass
         time.sleep(0.2)
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up client for each test."""
         self.client = Client()
         self.client.connect("127.0.0.1", 0, 1, self.port)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up client after each test."""
         try:
             self.client.disconnect()
         except Exception:
             pass
 
-    def test_server_startup_shutdown(self):
+    def test_server_startup_shutdown(self) -> None:
         """Test that server can start and stop."""
         # Server should be running
         server_status, cpu_status, client_count = self.server.get_status()
@@ -83,7 +83,7 @@ class TestServerClientIntegration:
         server_status, _, _ = self.server.get_status()
         assert server_status == "Running"
 
-    def test_client_connection(self):
+    def test_client_connection(self) -> None:
         """Test that client can connect to pure Python server."""
         # Client is connected in setup_method
         assert self.client.get_connected()
@@ -92,7 +92,7 @@ class TestServerClientIntegration:
         server_status, cpu_status, client_count = self.server.get_status()
         assert client_count >= 0  # May be 0 or 1 depending on timing
 
-    def test_client_server_communication(self):
+    def test_client_server_communication(self) -> None:
         """Test basic read/write operations between client and server."""
         # Test DB read - this will return dummy data from our simple server
         # The current server implementation returns fixed dummy data
@@ -104,7 +104,7 @@ class TestServerClientIntegration:
         test_data = bytearray([0x01, 0x02, 0x03, 0x04])
         self.client.db_write(1, 0, test_data)  # Should not raise exception
 
-    def test_multiple_clients(self):
+    def test_multiple_clients(self) -> None:
         """Test multiple clients connecting simultaneously."""
         clients = [self.client]  # Include the one from setup_method
 
@@ -135,14 +135,14 @@ class TestServerClientIntegration:
                 except Exception:
                     pass
 
-    def test_server_callbacks(self):
+    def test_server_callbacks(self) -> None:
         """Test server event callbacks."""
-        callback_events = []
+        callback_events: list[object] = []
 
-        def event_callback(event):
+        def event_callback(event: SrvEvent) -> None:
             callback_events.append(event)
 
-        def read_callback(event):
+        def read_callback(event: SrvEvent) -> None:
             callback_events.append(("read", event))
 
         # Set callbacks
@@ -159,7 +159,7 @@ class TestServerClientIntegration:
         # Note: callback behavior depends on server implementation
         # For now, just verify no exceptions were thrown
 
-    def test_context_managers(self):
+    def test_context_managers(self) -> None:
         """Test using server and client as context managers."""
         # Test server context manager
         with Server() as test_server:
@@ -181,7 +181,7 @@ class TestServerClientIntegration:
 
         # Both should be cleaned up automatically
 
-    def test_area_operations(self):
+    def test_area_operations(self) -> None:
         """Test different memory area operations."""
         # Test different area types (server returns dummy data)
         # These test the protocol handling, not actual data storage
@@ -201,7 +201,7 @@ class TestServerClientIntegration:
         data = self.client.eb_read(0, 2)
         assert len(data) >= 1
 
-    def test_error_handling(self):
+    def test_error_handling(self) -> None:
         """Test error handling in client-server communication."""
         # Test connection to non-existent server
         bad_client = Client()

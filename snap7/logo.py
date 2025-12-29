@@ -67,14 +67,14 @@ class Logo(Client):
         For more information see examples for Siemens Logo 7 and 8
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         """
         Initialize Logo client.
 
         Args:
             **kwargs: Ignored. Kept for backwards compatibility.
         """
-        super().__init__(**kwargs)
+        super().__init__()
         self._logo_tsap_snap7: Optional[int] = None
         self._logo_tsap_logo: Optional[int] = None
 

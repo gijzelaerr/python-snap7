@@ -16,7 +16,7 @@ class TestWriteOperations:
     port = 11100
 
     @classmethod
-    def setup_class(cls):
+    def setup_class(cls) -> None:
         """Set up shared test server."""
         cls.server = Server()
 
@@ -37,7 +37,7 @@ class TestWriteOperations:
         time.sleep(0.2)
 
     @classmethod
-    def teardown_class(cls):
+    def teardown_class(cls) -> None:
         """Clean up shared server."""
         try:
             cls.server.stop()
@@ -46,19 +46,19 @@ class TestWriteOperations:
             pass
         time.sleep(0.2)
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up client for each test."""
         self.client = Client()
         self.client.connect("127.0.0.1", 0, 1, self.port)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up client after each test."""
         try:
             self.client.disconnect()
         except Exception:
             pass
 
-    def test_write_then_read_back(self):
+    def test_write_then_read_back(self) -> None:
         """Test writing data then reading it back to verify storage."""
         print("\nTesting write then read back...")
 

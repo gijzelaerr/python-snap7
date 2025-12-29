@@ -12,6 +12,7 @@ import logging
 import threading
 from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
+from typing import Any
 from datetime import datetime
 from types import TracebackType
 from ctypes import c_int32, c_uint32
@@ -48,7 +49,7 @@ class Partner:
         >>> partner.stop()
     """
 
-    def __init__(self, active: bool = False, **kwargs):
+    def __init__(self, active: bool = False, **kwargs: object) -> None:
         """
         Initialize S7 partner.
 
@@ -66,9 +67,9 @@ class Partner:
         self.remote_ip = ""
         self.local_tsap = 0x0100
         self.remote_tsap = 0x0102
-        self.port = 102
+        self.port = 1102  # Non-privileged port (was 102)
         self.local_port = 0  # Let OS choose
-        self.remote_port = 102
+        self.remote_port = 1102  # Non-privileged port (was 102)
 
         # Socket and connection
         self._socket: Optional[socket.socket] = None
@@ -90,8 +91,8 @@ class Partner:
         self._send_callback_fn: Optional[Callable[[int], None]] = None
 
         # Async operation support
-        self._async_send_queue: Queue = Queue()
-        self._async_recv_queue: Queue = Queue()
+        self._async_send_queue: Queue[Any] = Queue()
+        self._async_recv_queue: Queue[Any] = Queue()
         self._async_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
 
@@ -226,7 +227,7 @@ class Partner:
         if self._send_data is None:
             return -1
 
-        if not self.connected:
+        if not self.connected or self._connection is None:
             self.send_errors += 1
             raise S7ConnectionError("Not connected")
 
@@ -262,7 +263,7 @@ class Partner:
         Returns:
             0 on success
         """
-        if not self.connected:
+        if not self.connected or self._connection is None:
             self.recv_errors += 1
             self._recv_data = None
             return -1
@@ -546,6 +547,9 @@ class Partner:
 
     def _accept_connection(self) -> None:
         """Accept incoming connection in passive mode."""
+        if self._server_socket is None:
+            return
+
         while self.running and not self._stop_event.is_set():
             try:
                 client_sock, addr = self._server_socket.accept()

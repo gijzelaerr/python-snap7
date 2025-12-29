@@ -16,7 +16,7 @@ class TestSimpleMemoryAccess:
     port = 11080
 
     @classmethod
-    def setup_class(cls):
+    def setup_class(cls) -> None:
         """Set up shared test server."""
         cls.server = Server()
 
@@ -45,7 +45,7 @@ class TestSimpleMemoryAccess:
         time.sleep(0.2)
 
     @classmethod
-    def teardown_class(cls):
+    def teardown_class(cls) -> None:
         """Clean up shared server."""
         try:
             cls.server.stop()
@@ -54,19 +54,19 @@ class TestSimpleMemoryAccess:
             pass
         time.sleep(0.2)
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up client for each test."""
         self.client = Client()
         self.client.connect("127.0.0.1", 0, 1, self.port)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up client after each test."""
         try:
             self.client.disconnect()
         except Exception:
             pass
 
-    def test_simple_db_read(self):
+    def test_simple_db_read(self) -> None:
         """Test simple DB read to verify memory area access."""
         print("\nTesting simple DB read...")
 
@@ -82,7 +82,7 @@ class TestSimpleMemoryAccess:
         print(f"Expected: 11223344, Got: {data[:4].hex()}")
         assert len(data) >= 4
 
-    def test_verify_real_data(self):
+    def test_verify_real_data(self) -> None:
         """Verify we're getting real data from memory area."""
         print("\nTesting real data retrieval...")
 

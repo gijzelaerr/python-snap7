@@ -48,7 +48,7 @@ class TestPartner(unittest.TestCase):
     def test_get_param(self) -> None:
         expected = (
             (Parameter.LocalPort, 0),
-            (Parameter.RemotePort, 102),
+            (Parameter.RemotePort, 1102),  # Non-privileged port
             (Parameter.PingTimeout, 750),
             (Parameter.SendTimeout, 10),
             (Parameter.RecvTimeout, 3000),

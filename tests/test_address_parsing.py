@@ -13,7 +13,7 @@ from snap7.type import SrvArea
 class TestAddressParsing:
     """Test address parsing and memory access with different parameters."""
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         """Set up test server and client."""
         self.server = Server()
         self.port = 11090
@@ -38,7 +38,7 @@ class TestAddressParsing:
         self.client = Client()
         self.client.connect("127.0.0.1", 0, 1, self.port)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         """Clean up."""
         try:
             self.client.disconnect()
@@ -53,7 +53,7 @@ class TestAddressParsing:
 
         time.sleep(0.1)
 
-    def test_different_read_sizes(self):
+    def test_different_read_sizes(self) -> None:
         """Test reading different sizes."""
         print("\\nTesting different read sizes...")
 
@@ -76,7 +76,7 @@ class TestAddressParsing:
         for i in range(10):
             assert data[i] == i + 1, f"Byte {i}: expected {i + 1}, got {data[i]}"
 
-    def test_different_offsets(self):
+    def test_different_offsets(self) -> None:
         """Test reading from different offsets."""
         print("\\nTesting different offsets...")
 
@@ -93,7 +93,7 @@ class TestAddressParsing:
         for i in range(5):
             assert data[i] == 11 + i, f"Byte {i}: expected {11 + i}, got {data[i]}"
 
-    def test_large_read(self):
+    def test_large_read(self) -> None:
         """Test reading larger amounts of data."""
         print("\\nTesting large read...")
 
@@ -107,7 +107,7 @@ class TestAddressParsing:
             expected = i + 1
             assert data[i] == expected, f"Byte {i}: expected {expected}, got {data[i]}"
 
-    def test_boundary_conditions(self):
+    def test_boundary_conditions(self) -> None:
         """Test reading at boundaries."""
         print("\\nTesting boundary conditions...")
 
