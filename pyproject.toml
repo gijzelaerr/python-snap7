@@ -23,7 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.10"
 keywords = ["snap7", "s7", "siemens", "plc"]
 
