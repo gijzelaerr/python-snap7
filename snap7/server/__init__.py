@@ -14,10 +14,10 @@ from types import TracebackType
 from enum import IntEnum
 from ctypes import Array, c_char
 
-from .s7protocol import S7Protocol, S7Function, S7PDUType
-from .datatypes import S7Area, S7WordLen
-from .error import S7ConnectionError, S7ProtocolError
-from .type import SrvArea, SrvEvent, Parameter
+from ..s7protocol import S7Protocol, S7Function, S7PDUType
+from ..datatypes import S7Area, S7WordLen
+from ..error import S7ConnectionError, S7ProtocolError
+from ..type import SrvArea, SrvEvent, Parameter
 
 logger = logging.getLogger(__name__)
 
