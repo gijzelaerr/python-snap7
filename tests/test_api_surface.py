@@ -146,6 +146,7 @@ SNAP7_SERVER_FUNCTIONS = {
     "Srv_SetMask": "set_mask",
     "Srv_SetEventsCallback": "set_events_callback",
     "Srv_SetReadEventsCallback": "set_read_events_callback",
+    "Srv_SetRWAreaCallback": "set_rw_area_callback",
     "Srv_GetStatus": "get_status",
     "Srv_SetCpuStatus": "set_cpu_status",
     "Srv_EventText": "event_text",

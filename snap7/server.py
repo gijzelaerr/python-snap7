@@ -368,6 +368,22 @@ class Server:
         logger.info("Read event callback set")
         return 0
 
+    def set_rw_area_callback(self, callback: Callable[[Any], int]) -> int:
+        """
+        Set callback for read/write area operations.
+
+        This is a stub for API compatibility with the C library's Srv_SetRWAreaCallback.
+        In the native implementation, read/write operations are handled directly.
+
+        Args:
+            callback: RW area callback function
+
+        Returns:
+            0 on success
+        """
+        logger.debug("set_rw_area_callback called (stub for API compatibility)")
+        return 0
+
     def event_text(self, event: SrvEvent) -> str:
         """
         Get event text description.

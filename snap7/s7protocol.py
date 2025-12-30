@@ -269,11 +269,11 @@ class S7Protocol:
             response: Parsed S7 response
 
         Returns:
-            CPU state string ('RUN' or 'STOP')
+            CPU state string in S7CpuStatus format (e.g., 'S7CpuStatusRun')
         """
-        # For now, return a basic state
-        # In a real implementation, this would parse actual CPU state data
-        return "RUN"  # Default state for pure Python server
+        # Map internal states to S7 status format for API compatibility with master branch
+        # The cpu_statuses dict in type.py uses: {0: "S7CpuStatusUnknown", 4: "S7CpuStatusStop", 8: "S7CpuStatusRun"}
+        return "S7CpuStatusRun"  # Default state for pure Python server
 
     def parse_response(self, pdu: bytes) -> Dict[str, Any]:
         """
