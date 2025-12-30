@@ -143,6 +143,101 @@ class TestServerBeforeStart(unittest.TestCase):
         self.server.set_param(Parameter.LocalPort, 1102)
 
 
+@pytest.mark.server
+class TestServerRobustness(unittest.TestCase):
+    """Test server robustness and edge cases."""
+
+    def test_multiple_server_instances(self) -> None:
+        """Test multiple server instances on different ports."""
+        from snap7.client import Client
+
+        servers = []
+        clients = []
+
+        try:
+            # Start multiple servers
+            for i in range(3):
+                server = Server()
+                port = 12110 + i
+
+                # Register test area
+                data = (c_char * 100)()
+                data[0] = bytes([i + 1])  # Unique identifier
+                server.register_area(SrvArea.DB, 1, data)
+
+                server.start(port)
+                servers.append((server, port))
+                time.sleep(0.1)
+
+            # Connect clients to each server
+            for i, (server, port) in enumerate(servers):
+                client = Client()
+                client.connect("127.0.0.1", 0, 1, port)
+                clients.append(client)
+
+                # Verify unique data
+                read_data = client.db_read(1, 0, 1)
+                self.assertEqual(read_data[0], i + 1)
+
+        finally:
+            # Clean up
+            for client in clients:
+                try:
+                    client.disconnect()
+                except Exception:
+                    pass
+
+            for server, port in servers:
+                try:
+                    server.stop()
+                    server.destroy()
+                except Exception:
+                    pass
+
+    def test_server_area_management(self) -> None:
+        """Test server area registration/unregistration."""
+        from snap7.client import Client
+
+        server = Server()
+        port = 12120
+
+        try:
+            # Test area registration
+            area1 = (c_char * 50)()
+            area2 = (c_char * 100)()
+
+            result1 = server.register_area(SrvArea.DB, 1, area1)
+            result2 = server.register_area(SrvArea.DB, 2, area2)
+            self.assertEqual(result1, 0)
+            self.assertEqual(result2, 0)
+
+            # Start server
+            server.start(port)
+            time.sleep(0.1)
+
+            # Test client access to both areas
+            client = Client()
+            client.connect("127.0.0.1", 0, 1, port)
+
+            data1 = client.db_read(1, 0, 4)
+            data2 = client.db_read(2, 0, 4)
+            self.assertEqual(len(data1), 4)
+            self.assertEqual(len(data2), 4)
+
+            # Test area unregistration
+            result3 = server.unregister_area(SrvArea.DB, 1)
+            self.assertEqual(result3, 0)
+
+            client.disconnect()
+
+        finally:
+            try:
+                server.stop()
+                server.destroy()
+            except Exception:
+                pass
+
+
 if __name__ == "__main__":
     import logging
 

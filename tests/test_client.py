@@ -907,6 +907,16 @@ class TestClient(unittest.TestCase):
 
         self.client.set_as_callback(event_call_back)
 
+    def test_context_manager(self) -> None:
+        """Test client as context manager."""
+        with Client() as client:
+            client.connect(ip, rack, slot, tcpport)
+            self.assertTrue(client.get_connected())
+            data = client.db_read(1, 0, 4)
+            self.assertEqual(len(data), 4)
+        # Should be disconnected after context exit
+        self.assertFalse(client.get_connected())
+
 
 @pytest.mark.client
 class TestClientBeforeConnect(unittest.TestCase):
