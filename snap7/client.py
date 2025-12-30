@@ -40,17 +40,6 @@ from .type import (
 logger = logging.getLogger(__name__)
 
 
-class _LibMock:
-    """Mock object for _lib attribute to support tests that mock library functions."""
-
-    def __getattr__(self, name: str) -> Any:
-        # Return a callable that raises NotImplementedError
-        def not_implemented(*args: Any, **kwargs: Any) -> int:
-            raise NotImplementedError(f"Native library function {name} not available in pure Python mode")
-
-        return not_implemented
-
-
 class Client:
     """
     Pure Python S7 client implementation.
@@ -114,9 +103,6 @@ class Client:
         self._async_error: Optional[int] = None
         self._last_error = 0
         self._exec_time = 0
-
-        # Mock _lib for tests that mock library functions
-        self._lib = _LibMock()
 
         logger.info("S7Client initialized (pure Python implementation)")
 
