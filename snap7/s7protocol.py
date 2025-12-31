@@ -6,6 +6,7 @@ Handles S7 PDU encoding/decoding and protocol operations.
 
 import struct
 import logging
+from datetime import datetime
 from typing import List, Dict, Any
 from enum import IntEnum
 
@@ -515,6 +516,148 @@ class S7Protocol:
         result["data"] = raw_data[4:]
 
         return result
+
+    def build_get_clock_request(self) -> bytes:
+        """
+        Build USER_DATA request for reading PLC clock.
+
+        Returns:
+            Complete S7 PDU for get clock request
+        """
+        # Parameter section for USER_DATA clock request
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            0x47,  # Type (4=request) | Group (7=grClock)
+            S7UserDataSubfunction.GET_CLOCK,  # Subfunction (0x01)
+            self._next_sequence() & 0xFF,  # Sequence number
+        )
+
+        # Data section: empty for get clock
+        data_section = struct.pack(
+            ">BBH",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0000,  # Length (0 bytes)
+        )
+
+        # S7 header for USER_DATA
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def build_set_clock_request(self, dt: "datetime") -> bytes:
+        """
+        Build USER_DATA request for setting PLC clock.
+
+        Args:
+            dt: Datetime to set
+
+        Returns:
+            Complete S7 PDU for set clock request
+        """
+        # Convert datetime to BCD format
+        # BCD encoding: each decimal digit is stored in a nibble
+        def to_bcd(value: int) -> int:
+            return ((value // 10) << 4) | (value % 10)
+
+        year = dt.year % 100  # Only last 2 digits
+        bcd_time = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            to_bcd(year),  # Year (BCD)
+            to_bcd(dt.month),  # Month (BCD)
+            to_bcd(dt.day),  # Day (BCD)
+            to_bcd(dt.hour),  # Hour (BCD)
+            to_bcd(dt.minute),  # Minute (BCD)
+            to_bcd(dt.second),  # Second (BCD)
+            (dt.weekday() + 1) & 0x0F,  # Day of week (1=Monday)
+        )
+
+        # Parameter section for USER_DATA clock request
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            0x47,  # Type (4=request) | Group (7=grClock)
+            S7UserDataSubfunction.SET_CLOCK,  # Subfunction (0x02)
+            self._next_sequence() & 0xFF,  # Sequence number
+        )
+
+        # Data section with BCD time
+        data_section = struct.pack(
+            ">BBH",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            len(bcd_time),  # Length
+        ) + bcd_time
+
+        # S7 header for USER_DATA
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def parse_get_clock_response(self, response: Dict[str, Any]) -> "datetime":
+        """
+        Parse get clock response.
+
+        Args:
+            response: Parsed S7 response
+
+        Returns:
+            Datetime from PLC
+        """
+        from datetime import datetime as dt_class
+
+        data_info = response.get("data", {})
+        raw_data = data_info.get("data", b"")
+
+        if len(raw_data) < 8:
+            # Return current time if no valid data
+            return dt_class.now().replace(microsecond=0)
+
+        # Parse BCD time
+        def from_bcd(value: int) -> int:
+            return ((value >> 4) * 10) + (value & 0x0F)
+
+        # Skip first byte (reserved)
+        year = from_bcd(raw_data[1])
+        month = from_bcd(raw_data[2])
+        day = from_bcd(raw_data[3])
+        hour = from_bcd(raw_data[4])
+        minute = from_bcd(raw_data[5])
+        second = from_bcd(raw_data[6])
+
+        # Determine century (assume 2000s for years 0-99)
+        full_year = 2000 + year if year < 90 else 1900 + year
+
+        try:
+            return dt_class(full_year, month, day, hour, minute, second)
+        except ValueError:
+            return dt_class.now().replace(microsecond=0)
 
     def build_cpu_state_request(self) -> bytes:
         """

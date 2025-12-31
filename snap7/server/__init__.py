@@ -1601,11 +1601,95 @@ class Server:
         """
         Handle clock requests (get/set time).
 
-        Stub implementation - returns "not available" error.
-        Will be implemented in Chunk 8.
+        Supports:
+        - GET_CLOCK (0x01): Returns current server time in BCD format
+        - SET_CLOCK (0x02): Accepts time setting (logs but doesn't persist)
+
+        Args:
+            request: Parsed S7 request
+            userdata_params: Parsed USER_DATA parameters
+            client_address: Client address
+
+        Returns:
+            Response PDU with clock data
         """
-        logger.debug(f"Clock request from {client_address} (stub - not implemented)")
-        return self._build_userdata_error_response(request, 0x8104)  # Object does not exist
+        subfunction = userdata_params.get("subfunction", 0)
+
+        if subfunction == 0x01:  # GET_CLOCK
+            return self._handle_get_clock(request, userdata_params, client_address)
+        elif subfunction == 0x02:  # SET_CLOCK
+            return self._handle_set_clock(request, userdata_params, client_address)
+        else:
+            logger.warning(f"Unknown clock subfunction: {subfunction:#04x}")
+            return self._build_userdata_error_response(request, 0x8104)
+
+    def _handle_get_clock(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle get clock request - returns current server time.
+
+        Returns time in BCD format (8 bytes):
+        - Byte 0: Reserved (0x00)
+        - Byte 1: Year (BCD, 0-99)
+        - Byte 2: Month (BCD, 1-12)
+        - Byte 3: Day (BCD, 1-31)
+        - Byte 4: Hour (BCD, 0-23)
+        - Byte 5: Minute (BCD, 0-59)
+        - Byte 6: Second (BCD, 0-59)
+        - Byte 7: Day of week (1=Monday)
+        """
+        from datetime import datetime
+
+        now = datetime.now()
+
+        def to_bcd(value: int) -> int:
+            return ((value // 10) << 4) | (value % 10)
+
+        year = now.year % 100
+        bcd_time = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            to_bcd(year),  # Year (BCD)
+            to_bcd(now.month),  # Month (BCD)
+            to_bcd(now.day),  # Day (BCD)
+            to_bcd(now.hour),  # Hour (BCD)
+            to_bcd(now.minute),  # Minute (BCD)
+            to_bcd(now.second),  # Second (BCD)
+            (now.weekday() + 1) & 0x0F,  # Day of week (1=Monday)
+        )
+
+        logger.debug(f"Get clock from {client_address}: returning {now}")
+        return self._build_userdata_success_response(request, userdata_params, bcd_time)
+
+    def _handle_set_clock(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle set clock request - accepts time setting.
+
+        The emulator logs the time but doesn't persist it (always returns current time on get).
+        """
+        data_section = request.get("data", {})
+        raw_data = data_section.get("data", b"")
+
+        if len(raw_data) >= 8:
+            def from_bcd(value: int) -> int:
+                return ((value >> 4) * 10) + (value & 0x0F)
+
+            year = from_bcd(raw_data[1])
+            month = from_bcd(raw_data[2])
+            day = from_bcd(raw_data[3])
+            hour = from_bcd(raw_data[4])
+            minute = from_bcd(raw_data[5])
+            second = from_bcd(raw_data[6])
+
+            logger.info(f"Set clock from {client_address}: 20{year:02d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}")
+        else:
+            logger.debug(f"Set clock from {client_address}: no time data provided")
+
+        # Return success (empty response data)
+        return self._build_userdata_success_response(request, userdata_params, b"")
 
     def _handle_security(
         self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]

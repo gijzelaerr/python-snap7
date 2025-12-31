@@ -798,18 +798,37 @@ class Client:
         """
         Get PLC date/time.
 
+        Sends real S7 USER_DATA protocol request to server.
+
         Returns:
             PLC date and time
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info("Getting PLC datetime (returning system time)")
-        return datetime.now().replace(microsecond=0)
+        conn = self._get_connection()
+
+        # Build and send get clock request
+        request = self.protocol.build_get_clock_request()
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        if response.get("error_code", 0) != 0:
+            logger.warning("Get clock failed, returning system time")
+            return datetime.now().replace(microsecond=0)
+
+        # Parse clock response
+        return self.protocol.parse_get_clock_response(response)
 
     def set_plc_datetime(self, dt: datetime) -> int:
         """
         Set PLC date/time.
+
+        Sends real S7 USER_DATA protocol request to server.
 
         Args:
             dt: Date and time to set
@@ -820,7 +839,21 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Setting PLC datetime to {dt} (simulated)")
+        conn = self._get_connection()
+
+        # Build and send set clock request
+        request = self.protocol.build_set_clock_request(dt)
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Set clock failed with error: {response['error_code']}")
+
+        logger.info(f"Set PLC datetime to {dt}")
         return 0
 
     def set_plc_system_datetime(self) -> int:
