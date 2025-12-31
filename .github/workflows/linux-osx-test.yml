@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        runs-on: ["ubuntu-22.04", "ubuntu-24.04"]
+        runs-on: ["ubuntu-22.04", "ubuntu-24.04", "macos-14", "macos-15"]
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
@@ -27,8 +27,7 @@ jobs:
           enable-cache: true
       - name: Install dependencies
         run: |
-          uv venv
+          uv venv --python python${{ matrix.python-version }}
           uv pip install ".[test]"
       - name: Run pytest
-        run: |
-          .venv/bin/pytest -m "server or util or client or mainloop or partner"
+        run: uv run pytest

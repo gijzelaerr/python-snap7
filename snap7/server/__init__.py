@@ -1270,8 +1270,7 @@ class Server:
             group = type_group & 0x0F
 
             logger.debug(
-                f"USER_DATA params: method={method:#02x}, type={req_type}, "
-                f"group={group}, subfunc={subfunction}, seq={sequence}"
+                f"USER_DATA params: method={method:#02x}, type={req_type}, group={group}, subfunc={subfunction}, seq={sequence}"
             )
 
             return {
@@ -1526,9 +1525,7 @@ class Server:
             logger.warning(f"Unsupported block info subfunction: {subfunction:#02x}")
             return self._build_userdata_error_response(request, 0x8104)
 
-    def _handle_szl(
-        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
-    ) -> bytes:
+    def _handle_szl(self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
         """
         Handle SZL (System Status List) requests.
 
@@ -1643,9 +1640,7 @@ class Server:
 
         return None
 
-    def _handle_clock(
-        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
-    ) -> bytes:
+    def _handle_clock(self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
         """
         Handle clock requests (get/set time).
 
@@ -1722,6 +1717,7 @@ class Server:
         raw_data = data_section.get("data", b"")
 
         if len(raw_data) >= 8:
+
             def from_bcd(value: int) -> int:
                 return ((value >> 4) * 10) + (value & 0x0F)
 
@@ -1732,7 +1728,9 @@ class Server:
             minute = from_bcd(raw_data[5])
             second = from_bcd(raw_data[6])
 
-            logger.info(f"Set clock from {client_address}: 20{year:02d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}")
+            logger.info(
+                f"Set clock from {client_address}: 20{year:02d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
+            )
         else:
             logger.debug(f"Set clock from {client_address}: no time data provided")
 
@@ -1996,9 +1994,7 @@ class Server:
 
         return header + param_data + data_section
 
-    def _build_userdata_success_response(
-        self, request: Dict[str, Any], userdata_params: Dict[str, Any], data: bytes
-    ) -> bytes:
+    def _build_userdata_success_response(self, request: Dict[str, Any], userdata_params: Dict[str, Any], data: bytes) -> bytes:
         """
         Build USER_DATA success response PDU.
 
@@ -2106,14 +2102,17 @@ class Server:
 
             # Build response: function + status + reserved + upload_id + block_len_string_len + block_len_string
             block_len_str = f"{block_length:06d}".encode("ascii")
-            param_data = struct.pack(
-                ">BBBIB",
-                S7Function.START_UPLOAD,
-                0x00,  # Status
-                0x00,  # Reserved
-                upload_id,
-                len(block_len_str),
-            ) + block_len_str
+            param_data = (
+                struct.pack(
+                    ">BBBIB",
+                    S7Function.START_UPLOAD,
+                    0x00,  # Status
+                    0x00,  # Reserved
+                    upload_id,
+                    len(block_len_str),
+                )
+                + block_len_str
+            )
 
             header = struct.pack(
                 ">BBHHHHBB",

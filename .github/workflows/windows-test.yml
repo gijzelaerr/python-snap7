@@ -30,4 +30,4 @@ jobs:
           uv venv
           uv pip install ".[test]"
       - name: Run tests
-        run: uv run pytest -m "server or util or client or mainloop or partner"
+        run: uv run pytest

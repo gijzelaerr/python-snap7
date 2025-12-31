@@ -281,18 +281,21 @@ class S7Protocol:
 
         # Parameter section: function code + PI service
         # Format: func(1) + unknown(7) + pi_len(1) + pi_service
-        param_data = struct.pack(
-            ">BBBBBBBBB",
-            S7Function.PLC_CONTROL,  # 0x28
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            len(pi_service),  # PI service length
-        ) + pi_service
+        param_data = (
+            struct.pack(
+                ">BBBBBBBBB",
+                S7Function.PLC_CONTROL,  # 0x28
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                len(pi_service),  # PI service length
+            )
+            + pi_service
+        )
 
         header = struct.pack(
             ">BBHHHH",
@@ -321,18 +324,22 @@ class S7Protocol:
         file_id = b"P"  # P = passive file system (ROM)
 
         # Parameter section with file system identifier
-        param_data = struct.pack(
-            ">BBBBBBBBB",
-            S7Function.PLC_CONTROL,  # 0x28
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            len(file_id),  # File ID length
-            len(pi_service),  # PI service length
-        ) + file_id + pi_service
+        param_data = (
+            struct.pack(
+                ">BBBBBBBBB",
+                S7Function.PLC_CONTROL,  # 0x28
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                len(file_id),  # File ID length
+                len(pi_service),  # PI service length
+            )
+            + file_id
+            + pi_service
+        )
 
         header = struct.pack(
             ">BBHHHH",
@@ -366,14 +373,17 @@ class S7Protocol:
         block_addr = f"{block_type:02X}{block_num:05d}A".encode("ascii")
 
         # Parameters: function + status + reserved + upload_id + block_addr_len + block_addr
-        param_data = struct.pack(
-            ">BBBIB",
-            S7Function.START_UPLOAD,  # Function code
-            0x00,  # Status
-            0x00,  # Reserved (error code)
-            0x00000000,  # Upload ID (0 for start)
-            len(block_addr),  # Block address length
-        ) + block_addr
+        param_data = (
+            struct.pack(
+                ">BBBIB",
+                S7Function.START_UPLOAD,  # Function code
+                0x00,  # Status
+                0x00,  # Reserved (error code)
+                0x00000000,  # Upload ID (0 for start)
+                len(block_addr),  # Block address length
+            )
+            + block_addr
+        )
 
         header = struct.pack(
             ">BBHHHH",
@@ -507,14 +517,19 @@ class S7Protocol:
         length_str = f"{len(block_data):06d}".encode("ascii")
 
         # Parameters
-        param_data = struct.pack(
-            ">BBBBB",
-            S7Function.REQUEST_DOWNLOAD,  # Function code
-            0x00,  # Status
-            0x00,  # Reserved
-            0x00,  # Reserved
-            len(block_addr),  # Block address length
-        ) + block_addr + struct.pack(">B", len(length_str)) + length_str
+        param_data = (
+            struct.pack(
+                ">BBBBB",
+                S7Function.REQUEST_DOWNLOAD,  # Function code
+                0x00,  # Status
+                0x00,  # Reserved
+                0x00,  # Reserved
+                len(block_addr),  # Block address length
+            )
+            + block_addr
+            + struct.pack(">B", len(length_str))
+            + length_str
+        )
 
         header = struct.pack(
             ">BBHHHH",
@@ -548,18 +563,22 @@ class S7Protocol:
         block_spec = f"{block_type:02X}{block_num:05d}P".encode("ascii")
 
         # Parameter section
-        param_data = struct.pack(
-            ">BBBBBBBBB",
-            S7Function.PLC_CONTROL,  # 0x28
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            0x00,  # Reserved
-            len(block_spec),  # Block spec length
-            len(pi_service),  # PI service length
-            0x00,  # Reserved
-        ) + block_spec + pi_service
+        param_data = (
+            struct.pack(
+                ">BBBBBBBBB",
+                S7Function.PLC_CONTROL,  # 0x28
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                0x00,  # Reserved
+                len(block_spec),  # Block spec length
+                len(pi_service),  # PI service length
+                0x00,  # Reserved
+            )
+            + block_spec
+            + pi_service
+        )
 
         header = struct.pack(
             ">BBHHHH",
@@ -978,6 +997,7 @@ class S7Protocol:
         Returns:
             Complete S7 PDU for set clock request
         """
+
         # Convert datetime to BCD format
         # BCD encoding: each decimal digit is stored in a nibble
         def to_bcd(value: int) -> int:
@@ -1010,12 +1030,15 @@ class S7Protocol:
         )
 
         # Data section with BCD time
-        data_section = struct.pack(
-            ">BBH",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
-            len(bcd_time),  # Length
-        ) + bcd_time
+        data_section = (
+            struct.pack(
+                ">BBH",
+                0x0A,  # Return value (request)
+                0x00,  # Transport size
+                len(bcd_time),  # Length
+            )
+            + bcd_time
+        )
 
         # S7 header for USER_DATA
         header = struct.pack(
