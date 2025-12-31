@@ -39,6 +39,34 @@ class S7PDUType(IntEnum):
     USERDATA = 0x07
 
 
+class S7UserDataGroup(IntEnum):
+    """S7 USER_DATA type groups (from s7_types.h)."""
+
+    PROGRAMMER = 0x01  # grProgrammer
+    CYCLIC_DATA = 0x02  # grCyclicData
+    BLOCK_INFO = 0x03  # grBlocksInfo
+    SZL = 0x04  # grSZL
+    SECURITY = 0x05  # grPassword
+    TIME = 0x07  # grClock
+
+
+class S7UserDataSubfunction(IntEnum):
+    """S7 USER_DATA subfunctions."""
+
+    # Block info subfunctions
+    LIST_ALL = 0x01  # SFun_ListAll
+    LIST_BLOCKS_OF_TYPE = 0x02  # SFun_ListBoT
+    BLOCK_INFO = 0x03  # SFun_BlkInfo
+
+    # SZL subfunctions
+    READ_SZL = 0x01  # SFun_ReadSZL
+    SYSTEM_STATE = 0x02  # System state request
+
+    # Clock subfunctions
+    GET_CLOCK = 0x01
+    SET_CLOCK = 0x02
+
+
 class S7Protocol:
     """
     S7 protocol implementation.
@@ -238,6 +266,256 @@ class S7Protocol:
         if response.get("error_code", 0) != 0:
             raise S7ProtocolError(f"PLC control failed with error: {response['error_code']}")
 
+    # ========================================================================
+    # USER_DATA PDU Builders (Chunk 3 of protocol implementation)
+    # ========================================================================
+
+    def build_list_blocks_request(self) -> bytes:
+        """
+        Build USER_DATA request for listing all blocks.
+
+        Returns:
+            Complete S7 PDU for list blocks request
+        """
+        # USER_DATA PDU format:
+        # - S7 header (10 bytes)
+        # - Parameter section (8 bytes for USER_DATA)
+        # - Data section (4 bytes for list blocks)
+
+        # Parameter section for USER_DATA request
+        # Format: header + method + type|group + subfunction + seq
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            0x43,  # Type (4=request) | Group (3=grBlocksInfo)
+            S7UserDataSubfunction.LIST_ALL,  # Subfunction (0x01 = list all)
+            self._next_sequence() & 0xFF,  # Sequence number (1 byte)
+        )
+
+        # Data section: return code placeholder
+        data_section = struct.pack(
+            ">BBH",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0000,  # Length (0 for request)
+        )
+
+        # S7 header for USER_DATA
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def build_list_blocks_of_type_request(self, block_type: int) -> bytes:
+        """
+        Build USER_DATA request for listing blocks of a specific type.
+
+        Args:
+            block_type: Block type code (e.g., 0x41 for DB)
+
+        Returns:
+            Complete S7 PDU for list blocks of type request
+        """
+        # Parameter section for USER_DATA request
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            0x43,  # Type (4=request) | Group (3=grBlocksInfo)
+            S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE,  # Subfunction (0x02)
+            self._next_sequence() & 0xFF,  # Sequence number
+        )
+
+        # Data section: block type
+        data_section = struct.pack(
+            ">BBHB",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0001,  # Length (1 byte for block type)
+            block_type,  # Block type code
+        )
+
+        # S7 header for USER_DATA
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def parse_list_blocks_response(self, response: Dict[str, Any]) -> Dict[str, int]:
+        """
+        Parse list blocks response and extract block counts.
+
+        Args:
+            response: Parsed S7 response
+
+        Returns:
+            Dictionary mapping block type names to counts
+        """
+        result = {
+            "OBCount": 0,
+            "FBCount": 0,
+            "FCCount": 0,
+            "SFBCount": 0,
+            "SFCCount": 0,
+            "DBCount": 0,
+            "SDBCount": 0,
+        }
+
+        data_info = response.get("data", {})
+        raw_data = data_info.get("data", b"")
+
+        if not raw_data:
+            return result
+
+        # Parse block entries (4 bytes each: 0x30 | type | count_hi | count_lo)
+        # Block type codes
+        type_to_name = {
+            0x38: "OBCount",  # Organization Block
+            0x41: "DBCount",  # Data Block
+            0x42: "SDBCount",  # System Data Block
+            0x43: "FCCount",  # Function
+            0x44: "SFCCount",  # System Function
+            0x45: "FBCount",  # Function Block
+            0x46: "SFBCount",  # System Function Block
+        }
+
+        offset = 0
+        while offset + 4 <= len(raw_data):
+            indicator = raw_data[offset]
+            block_type = raw_data[offset + 1]
+            count = struct.unpack(">H", raw_data[offset + 2 : offset + 4])[0]
+
+            if indicator == 0x30 and block_type in type_to_name:
+                result[type_to_name[block_type]] = count
+
+            offset += 4
+
+        return result
+
+    def parse_list_blocks_of_type_response(self, response: Dict[str, Any]) -> List[int]:
+        """
+        Parse list blocks of type response and extract block numbers.
+
+        Args:
+            response: Parsed S7 response
+
+        Returns:
+            List of block numbers
+        """
+        result: List[int] = []
+
+        data_info = response.get("data", {})
+        raw_data = data_info.get("data", b"")
+
+        if not raw_data:
+            return result
+
+        # Parse block numbers (2 bytes each, big-endian)
+        offset = 0
+        while offset + 2 <= len(raw_data):
+            block_num = struct.unpack(">H", raw_data[offset : offset + 2])[0]
+            result.append(block_num)
+            offset += 2
+
+        return result
+
+    def build_read_szl_request(self, szl_id: int, szl_index: int) -> bytes:
+        """
+        Build USER_DATA request for reading SZL (System Status List).
+
+        Args:
+            szl_id: SZL identifier
+            szl_index: SZL index
+
+        Returns:
+            Complete S7 PDU for read SZL request
+        """
+        # Parameter section for USER_DATA SZL request
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            0x44,  # Type (4=request) | Group (4=grSZL)
+            S7UserDataSubfunction.READ_SZL,  # Subfunction (0x01)
+            self._next_sequence() & 0xFF,  # Sequence number
+        )
+
+        # Data section: SZL ID and Index
+        data_section = struct.pack(
+            ">BBHHH",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0004,  # Length (4 bytes for ID + Index)
+            szl_id,  # SZL ID
+            szl_index,  # SZL Index
+        )
+
+        # S7 header for USER_DATA
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def parse_read_szl_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse read SZL response.
+
+        Args:
+            response: Parsed S7 response
+
+        Returns:
+            Dictionary with SZL ID, Index, and data
+        """
+        result: Dict[str, Any] = {
+            "szl_id": 0,
+            "szl_index": 0,
+            "data": b"",
+        }
+
+        data_info = response.get("data", {})
+        raw_data = data_info.get("data", b"")
+
+        if len(raw_data) < 4:
+            return result
+
+        # Parse SZL header: ID (2) + Index (2)
+        result["szl_id"] = struct.unpack(">H", raw_data[0:2])[0]
+        result["szl_index"] = struct.unpack(">H", raw_data[2:4])[0]
+        result["data"] = raw_data[4:]
+
+        return result
+
     def build_cpu_state_request(self) -> bytes:
         """
         Build CPU state request.
@@ -295,7 +573,8 @@ class S7Protocol:
         if protocol_id != 0x32:
             raise S7ProtocolError(f"Invalid protocol ID: {protocol_id:#02x}")
 
-        if pdu_type != S7PDUType.RESPONSE:
+        # Accept both standard RESPONSE and USERDATA response types
+        if pdu_type not in (S7PDUType.RESPONSE, S7PDUType.USERDATA):
             raise S7ProtocolError(f"Expected response PDU, got {pdu_type}")
 
         response = {
@@ -384,13 +663,21 @@ class S7Protocol:
             # Simple return code (for write responses)
             return {"return_code": data_section[0], "transport_size": 0, "data_length": 0, "data": b""}
         elif len(data_section) >= 4:
-            # Full data header (for read responses)
+            # Full data header
             return_code = data_section[0]
             transport_size = data_section[1]
             data_length = struct.unpack(">H", data_section[2:4])[0]
 
-            # Extract actual data
-            actual_data = data_section[4 : 4 + (data_length // 8)]
+            # Extract actual data - length interpretation depends on transport_size
+            # Transport size 0x09 (octet string): byte length (USERDATA responses)
+            # Transport size 0x00: byte length (USERDATA requests)
+            # Transport size 0x04 (byte): bit length (READ_AREA responses)
+            if transport_size in (0x00, 0x09):
+                # USERDATA uses byte length directly
+                actual_data = data_section[4 : 4 + data_length]
+            else:
+                # READ_AREA responses use bit length
+                actual_data = data_section[4 : 4 + (data_length // 8)]
 
             return {"return_code": return_code, "transport_size": transport_size, "data_length": data_length, "data": actual_data}
         else:

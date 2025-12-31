@@ -14,7 +14,7 @@ from types import TracebackType
 from enum import IntEnum
 from ctypes import Array, c_char
 
-from ..s7protocol import S7Protocol, S7Function, S7PDUType
+from ..s7protocol import S7Protocol, S7Function, S7PDUType, S7UserDataGroup, S7UserDataSubfunction
 from ..datatypes import S7Area, S7WordLen
 from ..error import S7ConnectionError, S7ProtocolError
 from ..type import SrvArea, SrvEvent, Parameter
@@ -659,6 +659,14 @@ class Server:
             # Parse S7 request
             request = self._parse_request(request_data)
 
+            # Check PDU type first
+            pdu_type = request.get("pdu_type", S7PDUType.REQUEST)
+
+            if pdu_type == S7PDUType.USERDATA:
+                # Handle USER_DATA PDU (block info, SZL, clock, etc.)
+                return self._handle_userdata(request, client_address)
+
+            # Handle REQUEST PDU (read/write areas, setup, control)
             # Extract function code from parameters
             if not request.get("parameters"):
                 return None
@@ -1096,6 +1104,7 @@ class Server:
             raise S7ProtocolError(f"Invalid protocol ID: {protocol_id:#02x}")
 
         request: Dict[str, Any] = {
+            "pdu_type": pdu_type,
             "sequence": sequence,
             "param_length": param_len,
             "data_length": data_len,
@@ -1112,7 +1121,13 @@ class Server:
                 raise S7ProtocolError("Parameter section extends beyond PDU")
 
             param_data = pdu[offset : offset + param_len]
-            request["parameters"] = self._parse_request_parameters(param_data)
+
+            # Store raw parameters for USER_DATA parsing
+            if pdu_type == S7PDUType.USERDATA:
+                request["raw_parameters"] = param_data
+                request["parameters"] = self._parse_userdata_request_parameters(param_data)
+            else:
+                request["parameters"] = self._parse_request_parameters(param_data)
             offset += param_len
 
         # Parse data if present
@@ -1169,6 +1184,59 @@ class Server:
                     return {"function_code": function_code, "item_count": item_count, "address_spec": parsed_addr}
 
         return {"function_code": function_code}
+
+    def _parse_userdata_request_parameters(self, param_data: bytes) -> Dict[str, Any]:
+        """
+        Parse USER_DATA request parameters.
+
+        USER_DATA parameter format (from C s7_types.h TReqFunTypedParams):
+        - Byte 0: Reserved (0x00)
+        - Byte 1: Parameter count (usually 0x01)
+        - Byte 2: Type/length header (0x12)
+        - Byte 3: Length (0x04 or 0x08)
+        - Byte 4: Method (0x11 = request, 0x12 = response)
+        - Byte 5: Type (high nibble 0x4=req, 0x8=resp) | Group (low nibble)
+        - Byte 6: Subfunction
+        - Byte 7: Sequence number
+
+        Args:
+            param_data: Raw parameter bytes
+
+        Returns:
+            Dictionary with parsed USER_DATA parameters
+        """
+        if len(param_data) < 8:
+            logger.debug(f"USER_DATA parameters too short: {len(param_data)} bytes")
+            return {}
+
+        try:
+            # Parse USER_DATA header
+            # Bytes 0-3 are header (reserved, param_count, type_len_header, length)
+            method = param_data[4]
+            type_group = param_data[5]
+            subfunction = param_data[6]
+            sequence = param_data[7]
+
+            # Extract type (high nibble) and group (low nibble)
+            req_type = (type_group >> 4) & 0x0F
+            group = type_group & 0x0F
+
+            logger.debug(
+                f"USER_DATA params: method={method:#02x}, type={req_type}, "
+                f"group={group}, subfunc={subfunction}, seq={sequence}"
+            )
+
+            return {
+                "method": method,
+                "type": req_type,
+                "group": group,
+                "subfunction": subfunction,
+                "sequence": sequence,
+            }
+
+        except Exception as e:
+            logger.error(f"Error parsing USER_DATA parameters: {e}")
+            return {}
 
     def _parse_address_specification(self, addr_spec: bytes) -> Dict[str, Any]:
         """
@@ -1236,8 +1304,16 @@ class Server:
             transport_size = data_section[1]
             data_length = struct.unpack(">H", data_section[2:4])[0]
 
-            # Extract actual data
-            actual_data = data_section[4 : 4 + (data_length // 8)]
+            # Extract actual data - length interpretation depends on transport_size
+            # Transport size 0x09 (octet string): byte length (USERDATA responses)
+            # Transport size 0x00: byte length (USERDATA requests)
+            # Transport size 0x04 (byte): bit length (READ_AREA responses)
+            if transport_size in (0x00, 0x09):
+                # USERDATA uses byte length directly
+                actual_data = data_section[4 : 4 + data_length]
+            else:
+                # READ_AREA responses use bit length
+                actual_data = data_section[4 : 4 + (data_length // 8)]
 
             return {"return_code": return_code, "transport_size": transport_size, "data_length": data_length, "data": actual_data}
         else:
@@ -1260,6 +1336,583 @@ class Server:
         )
 
         return header
+
+    # ========================================================================
+    # USER_DATA PDU Handlers (Chunk 1 of protocol implementation)
+    # ========================================================================
+
+    def _handle_userdata(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle USER_DATA PDU requests.
+
+        USER_DATA PDUs are used for:
+        - Block operations (list, info)
+        - SZL (System Status List) requests
+        - Clock operations (get/set time)
+        - Security operations (password)
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU data
+        """
+        try:
+            # Parse USER_DATA specific parameters
+            userdata_params = self._parse_userdata_parameters(request)
+            if not userdata_params:
+                logger.warning(f"Failed to parse USER_DATA parameters from {client_address}")
+                return self._build_userdata_error_response(request, 0x8104)  # Object does not exist
+
+            group = userdata_params.get("group", 0)
+            subfunction = userdata_params.get("subfunction", 0)
+
+            logger.debug(f"USER_DATA request: group={group:#04x}, subfunction={subfunction:#02x}")
+
+            # Route to appropriate handler based on group
+            if group == S7UserDataGroup.BLOCK_INFO:
+                return self._handle_block_info(request, userdata_params, client_address)
+            elif group == S7UserDataGroup.SZL:
+                return self._handle_szl(request, userdata_params, client_address)
+            elif group == S7UserDataGroup.TIME:
+                return self._handle_clock(request, userdata_params, client_address)
+            elif group == S7UserDataGroup.SECURITY:
+                return self._handle_security(request, userdata_params, client_address)
+            else:
+                logger.warning(f"Unsupported USER_DATA group: {group:#04x}")
+                return self._build_userdata_error_response(request, 0x8104)
+
+        except Exception as e:
+            logger.error(f"Error handling USER_DATA request: {e}")
+            return self._build_userdata_error_response(request, 0x8000)
+
+    def _parse_userdata_parameters(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse USER_DATA specific parameters.
+
+        USER_DATA parameter format (from C s7_types.h):
+        - Byte 0-2: Parameter header
+        - Byte 3: Parameter length
+        - Byte 4: Method (0x11 = request, 0x12 = response)
+        - Byte 5 (high nibble): Type (0x4 = request, 0x8 = response)
+        - Byte 5 (low nibble): Function group
+        - Byte 6: Subfunction
+        - Byte 7: Sequence number
+
+        Args:
+            request: Parsed S7 request
+
+        Returns:
+            Dictionary with parsed USER_DATA parameters
+        """
+        try:
+            params = request.get("parameters")
+            if not params:
+                # Try to get raw parameter data from request
+                return {}
+
+            # If we have raw parameter data in the request, parse it
+            raw_params = request.get("raw_parameters", b"")
+            if not raw_params and isinstance(params, dict):
+                # Already parsed - check if it has userdata fields
+                if "group" in params:
+                    return params
+                return {}
+
+            if len(raw_params) < 8:
+                logger.debug(f"USER_DATA parameters too short: {len(raw_params)} bytes")
+                return {}
+
+            # Parse USER_DATA parameter format
+            # Skip first 4 bytes (header), then:
+            method = raw_params[4]
+            type_group = raw_params[5]
+            subfunction = raw_params[6]
+            sequence = raw_params[7]
+
+            # Extract type (high nibble) and group (low nibble)
+            req_type = (type_group >> 4) & 0x0F
+            group = type_group & 0x0F
+
+            return {
+                "method": method,
+                "type": req_type,
+                "group": group,
+                "subfunction": subfunction,
+                "sequence": sequence,
+            }
+
+        except Exception as e:
+            logger.error(f"Error parsing USER_DATA parameters: {e}")
+            return {}
+
+    def _handle_block_info(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle block info group requests (grBlocksInfo).
+
+        Subfunctions:
+        - SFun_ListAll (0x01): List all block counts
+        - SFun_ListBoT (0x02): List blocks of type
+        - SFun_BlkInfo (0x03): Get block info
+
+        Args:
+            request: Parsed S7 request
+            userdata_params: Parsed USER_DATA parameters
+            client_address: Client address
+
+        Returns:
+            Response PDU
+        """
+        subfunction = userdata_params.get("subfunction", 0)
+
+        if subfunction == S7UserDataSubfunction.LIST_ALL:
+            return self._handle_list_all_blocks(request, userdata_params, client_address)
+        elif subfunction == S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE:
+            return self._handle_list_blocks_of_type(request, userdata_params, client_address)
+        elif subfunction == S7UserDataSubfunction.BLOCK_INFO:
+            return self._handle_get_block_info(request, userdata_params, client_address)
+        else:
+            logger.warning(f"Unsupported block info subfunction: {subfunction:#02x}")
+            return self._build_userdata_error_response(request, 0x8104)
+
+    def _handle_szl(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle SZL (System Status List) requests.
+
+        SZL provides system status information about the PLC.
+        Common SZL IDs:
+        - 0x001C: Component identification (for get_cpu_info)
+        - 0x0011: Module identification (for get_order_code)
+        - 0x0131: Communication parameters (for get_cp_info)
+        - 0x0232: Protection level (for get_protection)
+
+        Args:
+            request: Parsed S7 request
+            userdata_params: Parsed USER_DATA parameters
+            client_address: Client address
+
+        Returns:
+            Response PDU with SZL data
+        """
+        # Extract SZL ID and index from request data
+        data_section = request.get("data", {})
+        raw_data = data_section.get("data", b"")
+
+        # SZL request data: return_code (1) + transport (1) + length (2) + SZL_ID (2) + Index (2)
+        if len(raw_data) >= 4:
+            szl_id = struct.unpack(">H", raw_data[0:2])[0]
+            szl_index = struct.unpack(">H", raw_data[2:4])[0]
+        else:
+            szl_id = 0
+            szl_index = 0
+
+        logger.debug(f"SZL request from {client_address}: ID={szl_id:#06x}, Index={szl_index:#06x}")
+
+        # Get SZL data for the requested ID
+        szl_data = self._get_szl_data(szl_id, szl_index)
+
+        if szl_data is None:
+            logger.debug(f"SZL ID {szl_id:#06x} not available")
+            return self._build_userdata_error_response(request, 0x8104)
+
+        # Build response with SZL header: SZL_ID (2) + Index (2) + data
+        response_data = struct.pack(">HH", szl_id, szl_index) + szl_data
+
+        return self._build_userdata_success_response(request, userdata_params, response_data)
+
+    def _get_szl_data(self, szl_id: int, szl_index: int) -> Optional[bytes]:
+        """
+        Get SZL data for a specific ID and index.
+
+        Args:
+            szl_id: SZL identifier
+            szl_index: SZL index
+
+        Returns:
+            SZL data bytes or None if not available
+        """
+        # SZL 0x001C: Component identification (S7CpuInfo)
+        if szl_id == 0x001C:
+            # S7CpuInfo structure fields (each is a null-terminated string)
+            module_type = b"CPU 315-2 PN/DP\x00"
+            serial_number = b"S C-C2UR28922012\x00"
+            as_name = b"SNAP7-SERVER\x00"
+            copyright_info = b"Original Siemens Equipment\x00"
+            module_name = b"CPU 315-2 PN/DP\x00"
+
+            # Pad to fixed sizes (from C structure)
+            module_type = module_type.ljust(32, b"\x00")[:32]
+            serial_number = serial_number.ljust(24, b"\x00")[:24]
+            as_name = as_name.ljust(24, b"\x00")[:24]
+            copyright_info = copyright_info.ljust(26, b"\x00")[:26]
+            module_name = module_name.ljust(24, b"\x00")[:24]
+
+            return module_type + serial_number + as_name + copyright_info + module_name
+
+        # SZL 0x0011: Module identification (S7OrderCode)
+        elif szl_id == 0x0011:
+            order_code = b"6ES7 315-2EH14-0AB0\x00"
+            version = b"V3.3\x00"
+
+            order_code = order_code.ljust(20, b"\x00")[:20]
+            version = version.ljust(4, b"\x00")[:4]
+
+            return order_code + version
+
+        # SZL 0x0131: Communication parameters (S7CpInfo)
+        elif szl_id == 0x0131:
+            # S7CpInfo structure
+            max_pdu = 480
+            max_connections = 32
+            max_mpi = 12
+            max_bus = 12
+
+            return struct.pack(">HHHH", max_pdu, max_connections, max_mpi, max_bus)
+
+        # SZL 0x0232: Protection level (S7Protection)
+        elif szl_id == 0x0232:
+            # S7Protection structure
+            # sch_schal: 1=no password, 2=password level 1, 3=password level 2
+            # sch_par: protection level during runtime
+            # sch_rel: protection level during download
+            # bart_sch: startup protection level
+            # anl_sch: factory setting protection
+            return struct.pack(">HHHHH", 1, 0, 0, 0, 0)  # No protection
+
+        # SZL 0x0000: SZL list
+        elif szl_id == 0x0000:
+            # Return list of available SZL IDs
+            available_ids = [0x0000, 0x0011, 0x001C, 0x0131, 0x0232]
+            data = b""
+            for id_val in available_ids:
+                data += struct.pack(">H", id_val)
+            return data
+
+        return None
+
+    def _handle_clock(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle clock requests (get/set time).
+
+        Stub implementation - returns "not available" error.
+        Will be implemented in Chunk 8.
+        """
+        logger.debug(f"Clock request from {client_address} (stub - not implemented)")
+        return self._build_userdata_error_response(request, 0x8104)  # Object does not exist
+
+    def _handle_security(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle security requests (password operations).
+
+        Stub implementation - returns success (no password required).
+        """
+        logger.debug(f"Security request from {client_address} (returning success)")
+        # Return success - emulator doesn't require password
+        return self._build_userdata_success_response(request, userdata_params, b"")
+
+    def _handle_list_all_blocks(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle list all blocks request (SFun_ListAll).
+
+        Returns count of each block type (OB, FB, FC, DB, SDB, SFC, SFB).
+
+        Response data format (TDataFunListAll):
+        For each block type (7 types):
+        - Byte 0: 0x30 (indicator)
+        - Byte 1: Block type code
+        - Bytes 2-3: Block count (big-endian)
+
+        Args:
+            request: Parsed S7 request
+            userdata_params: Parsed USER_DATA parameters
+            client_address: Client address
+
+        Returns:
+            Response PDU with block counts
+        """
+        logger.debug(f"List all blocks request from {client_address}")
+
+        # Count registered DB areas
+        db_count = sum(1 for (area, _) in self.memory_areas.keys() if area == S7Area.DB)
+
+        # Block type codes (from C s7_types.h)
+        BLOCK_OB = 0x38  # Organization Block
+        BLOCK_DB = 0x41  # Data Block
+        BLOCK_SDB = 0x42  # System Data Block
+        BLOCK_FC = 0x43  # Function
+        BLOCK_SFC = 0x44  # System Function
+        BLOCK_FB = 0x45  # Function Block
+        BLOCK_SFB = 0x46  # System Function Block
+
+        # Build response data - 4 bytes per block type, 7 block types
+        # Format: 0x30 | block_type | count (2 bytes big-endian)
+        data = b""
+        for block_type, count in [
+            (BLOCK_OB, 0),  # No OBs in emulator
+            (BLOCK_FB, 0),  # No FBs
+            (BLOCK_FC, 0),  # No FCs
+            (BLOCK_DB, db_count),  # Registered DBs
+            (BLOCK_SDB, 0),  # No SDBs
+            (BLOCK_SFC, 0),  # No SFCs
+            (BLOCK_SFB, 0),  # No SFBs
+        ]:
+            data += struct.pack(">BBH", 0x30, block_type, count)
+
+        logger.debug(f"List all blocks: DB count = {db_count}")
+        return self._build_userdata_success_response(request, userdata_params, data)
+
+    def _handle_list_blocks_of_type(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle list blocks of type request (SFun_ListBoT).
+
+        Returns list of block numbers for a specific block type.
+
+        Request data contains:
+        - Block type code to query
+
+        Response data format:
+        - 2 bytes per block: block number (big-endian)
+
+        Args:
+            request: Parsed S7 request
+            userdata_params: Parsed USER_DATA parameters
+            client_address: Client address
+
+        Returns:
+            Response PDU with block numbers
+        """
+        logger.debug(f"List blocks of type request from {client_address}")
+
+        # Get requested block type from request data section
+        data_section = request.get("data", {})
+        raw_data = data_section.get("data", b"")
+
+        # Block type code constants
+        block_db = 0x41  # Data Block
+
+        # Default to DB type if not specified
+        requested_type = raw_data[0] if len(raw_data) > 0 else block_db
+
+        # Currently only support DB type (others not implemented in emulator)
+        if requested_type == block_db:
+            # Get all registered DB numbers
+            db_numbers = sorted([idx for (area, idx) in self.memory_areas.keys() if area == S7Area.DB])
+
+            # Build response data - 2 bytes per block number
+            data = b""
+            for db_num in db_numbers:
+                data += struct.pack(">H", db_num)
+
+            logger.debug(f"List blocks of type DB: {db_numbers}")
+            return self._build_userdata_success_response(request, userdata_params, data)
+        else:
+            # Other block types not available in emulator
+            logger.debug(f"Block type {requested_type:#02x} not available")
+            return self._build_userdata_success_response(request, userdata_params, b"")
+
+    def _handle_get_block_info(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
+    ) -> bytes:
+        """
+        Handle get block info request (SFun_BlkInfo).
+
+        Returns information about a specific block.
+
+        Request data contains:
+        - Block type code
+        - Block number
+        - Block language (optional)
+
+        Response data format (TS7BlockInfo):
+        - Various block metadata fields
+
+        Args:
+            request: Parsed S7 request
+            userdata_params: Parsed USER_DATA parameters
+            client_address: Client address
+
+        Returns:
+            Response PDU with block info
+        """
+        logger.debug(f"Get block info request from {client_address}")
+
+        # Get requested block from request data section
+        data_section = request.get("data", {})
+        raw_data = data_section.get("data", b"")
+
+        # Block type code constants
+        block_db = 0x41  # Data Block
+
+        # Parse request: usually block_type (1 byte) + block_number (2 bytes)
+        if len(raw_data) >= 3:
+            requested_type = raw_data[0]
+            block_number = struct.unpack(">H", raw_data[1:3])[0]
+        else:
+            # Default values
+            requested_type = block_db
+            block_number = 1
+
+        # Check if block exists
+        if requested_type == block_db:
+            area_key = (S7Area.DB, block_number)
+            if area_key in self.memory_areas:
+                block_size = len(self.memory_areas[area_key])
+
+                # Build block info structure (simplified version)
+                # TS7BlockInfo structure:
+                # - BlkType (4 bytes)
+                # - BlkNumber (4 bytes)
+                # - BlkLang (4 bytes)
+                # - BlkFlags (4 bytes)
+                # - MC7Size (4 bytes) - block size
+                # - LoadSize (4 bytes)
+                # - LocalData (4 bytes)
+                # - SBBLength (4 bytes)
+                # - CheckSum (4 bytes)
+                # - Version (4 bytes)
+                # - CodeDate (char[11])
+                # - IntfDate (char[11])
+                # - Author (char[9])
+                # - Family (char[9])
+                # - Header (char[9])
+
+                data = struct.pack(
+                    ">IIIIIIIIII",
+                    requested_type,  # BlkType
+                    block_number,  # BlkNumber
+                    0,  # BlkLang (0 = undefined)
+                    0,  # BlkFlags
+                    block_size,  # MC7Size (use actual size)
+                    block_size,  # LoadSize
+                    0,  # LocalData
+                    0,  # SBBLength
+                    0,  # CheckSum
+                    1,  # Version (1.0)
+                )
+
+                # Add date and name fields (fixed size, padded with zeros)
+                data += b"\x00" * 11  # CodeDate
+                data += b"\x00" * 11  # IntfDate
+                data += b"SNAP7EMU\x00"  # Author (9 bytes)
+                data += b"EMULATOR\x00"  # Family (9 bytes)
+                data += b"DB\x00\x00\x00\x00\x00\x00\x00"  # Header (9 bytes)
+
+                logger.debug(f"Get block info for DB{block_number}: size={block_size}")
+                return self._build_userdata_success_response(request, userdata_params, data)
+            else:
+                logger.debug(f"Block DB{block_number} not found")
+                return self._build_userdata_error_response(request, 0x8104)  # Object not found
+        else:
+            # Other block types not available
+            logger.debug(f"Block type {requested_type:#02x} not available")
+            return self._build_userdata_error_response(request, 0x8104)
+
+    def _build_userdata_error_response(self, request: Dict[str, Any], error_code: int) -> bytes:
+        """
+        Build USER_DATA error response PDU.
+
+        Args:
+            request: Original request
+            error_code: S7 error code
+
+        Returns:
+            Error response PDU
+        """
+        # USER_DATA response format is different from standard response
+        # Parameter section: header + type/group + subfunction + sequence + error
+        param_data = struct.pack(
+            ">BBBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length
+            0x12,  # Method (response)
+            0x84,  # Type (8=response) | Group (4=SZL, but used for error)
+            0x01,  # Subfunction
+            0x00,  # Sequence
+            0x00,  # Reserved
+        )
+
+        # Data section: return code only
+        data_section = struct.pack(">BB", (error_code >> 8) & 0xFF, error_code & 0xFF)
+
+        # Build S7 header with error bytes
+        header = struct.pack(
+            ">BBHHHHBB",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type
+            0x0000,  # Reserved
+            request.get("sequence", 0),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+            (error_code >> 8) & 0xFF,  # Error class
+            error_code & 0xFF,  # Error code
+        )
+
+        return header + param_data + data_section
+
+    def _build_userdata_success_response(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], data: bytes
+    ) -> bytes:
+        """
+        Build USER_DATA success response PDU.
+
+        Args:
+            request: Original request
+            userdata_params: Parsed USER_DATA parameters
+            data: Response data
+
+        Returns:
+            Success response PDU
+        """
+        group = userdata_params.get("group", 0)
+        subfunction = userdata_params.get("subfunction", 0)
+        seq = userdata_params.get("sequence", 0)
+
+        # Parameter section for success response
+        param_data = struct.pack(
+            ">BBBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length
+            0x12,  # Method (response)
+            0x80 | group,  # Type (8=response) | Group
+            subfunction,  # Subfunction
+            seq,  # Sequence
+            0x00,  # Reserved
+        )
+
+        # Data section: return code (0xFF = success) + data
+        data_section = struct.pack(">BBH", 0xFF, 0x09, len(data)) + data
+
+        # Build S7 header
+        header = struct.pack(
+            ">BBHHHHBB",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type
+            0x0000,  # Reserved
+            request.get("sequence", 0),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+            0x00,  # Error class (success)
+            0x00,  # Error code (success)
+        )
+
+        return header + param_data + data_section
 
     def __enter__(self) -> "Server":
         """Context manager entry."""

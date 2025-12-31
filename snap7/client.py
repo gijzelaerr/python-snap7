@@ -427,26 +427,48 @@ class Client:
         """
         List blocks available in PLC.
 
+        Sends real S7 USER_DATA protocol request to server.
+
         Returns:
-            Block list structure
+            Block list structure with counts for each block type
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
+        conn = self._get_connection()
+
+        # Build and send list blocks request
+        request = self.protocol.build_list_blocks_request()
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        if response.get("error_code", 0) != 0:
+            logger.warning(f"List blocks returned error code: {response['error_code']}")
+
+        # Parse block counts from response
+        counts = self.protocol.parse_list_blocks_response(response)
+
+        # Build BlocksList structure
         block_list = BlocksList()
-        block_list.OBCount = 1
-        block_list.FBCount = 0
-        block_list.FCCount = 0
-        block_list.SFBCount = 0
-        block_list.SFCCount = 0
-        block_list.DBCount = 5
-        block_list.SDBCount = 0
+        block_list.OBCount = counts.get("OBCount", 0)
+        block_list.FBCount = counts.get("FBCount", 0)
+        block_list.FCCount = counts.get("FCCount", 0)
+        block_list.SFBCount = counts.get("SFBCount", 0)
+        block_list.SFCCount = counts.get("SFCCount", 0)
+        block_list.DBCount = counts.get("DBCount", 0)
+        block_list.SDBCount = counts.get("SDBCount", 0)
 
         return block_list
 
     def list_blocks_of_type(self, block_type: Block, max_count: int) -> List[int]:
         """
         List blocks of a specific type.
+
+        Sends real S7 USER_DATA protocol request to server.
 
         Args:
             block_type: Type of blocks to list
@@ -458,14 +480,44 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        # Return dummy block list
-        if block_type == Block.DB:
-            return [1, 2, 3, 4, 5][:max_count]
-        return []
+        conn = self._get_connection()
+
+        # Map Block enum to S7 block type codes
+        block_type_codes = {
+            Block.OB: 0x38,  # Organization Block
+            Block.DB: 0x41,  # Data Block
+            Block.SDB: 0x42,  # System Data Block
+            Block.FC: 0x43,  # Function
+            Block.SFC: 0x44,  # System Function
+            Block.FB: 0x45,  # Function Block
+            Block.SFB: 0x46,  # System Function Block
+        }
+
+        type_code = block_type_codes.get(block_type, 0x41)  # Default to DB
+
+        # Build and send list blocks of type request
+        request = self.protocol.build_list_blocks_of_type_request(type_code)
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        if response.get("error_code", 0) != 0:
+            logger.warning(f"List blocks of type returned error code: {response['error_code']}")
+
+        # Parse block numbers from response
+        block_numbers = self.protocol.parse_list_blocks_of_type_response(response)
+
+        # Limit to max_count
+        return block_numbers[:max_count]
 
     def get_cpu_info(self) -> S7CpuInfo:
         """
         Get CPU information.
+
+        Uses read_szl(0x001C) to get component identification data.
 
         Returns:
             CPU information structure
@@ -473,12 +525,29 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
+        # Read SZL 0x001C for component identification
+        szl = self.read_szl(0x001C, 0)
+
+        # Parse SZL data into S7CpuInfo structure
         cpu_info = S7CpuInfo()
-        cpu_info.ModuleTypeName = b"CPU 315-2 PN/DP"
-        cpu_info.SerialNumber = b"S C-C2UR28922012"
-        cpu_info.ASName = b"SNAP7-SERVER"
-        cpu_info.Copyright = b"Original Siemens Equipment"
-        cpu_info.ModuleName = b"CPU 315-2 PN/DP"
+        data = bytes(szl.Data[: szl.Header.LengthDR])
+
+        # S7CpuInfo field sizes (from C structure):
+        # ModuleTypeName: 32 bytes
+        # SerialNumber: 24 bytes
+        # ASName: 24 bytes
+        # Copyright: 26 bytes
+        # ModuleName: 24 bytes
+        if len(data) >= 32:
+            cpu_info.ModuleTypeName = data[0:32].rstrip(b"\x00")
+        if len(data) >= 56:
+            cpu_info.SerialNumber = data[32:56].rstrip(b"\x00")
+        if len(data) >= 80:
+            cpu_info.ASName = data[56:80].rstrip(b"\x00")
+        if len(data) >= 106:
+            cpu_info.Copyright = data[80:106].rstrip(b"\x00")
+        if len(data) >= 130:
+            cpu_info.ModuleName = data[106:130].rstrip(b"\x00")
 
         return cpu_info
 
@@ -804,17 +873,31 @@ class Client:
         """
         Get CP (Communication Processor) information.
 
+        Uses read_szl(0x0131) to get communication parameters.
+
         Returns:
             CP information structure
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
+        # Read SZL 0x0131 for communication parameters
+        szl = self.read_szl(0x0131, 0)
+
+        # Parse SZL data into S7CpInfo structure
         cp_info = S7CpInfo()
-        cp_info.MaxPduLength = 2048
-        cp_info.MaxConnections = 0
-        cp_info.MaxMpiRate = 1024
-        cp_info.MaxBusRate = 0
+        # Use bytearray to handle c_byte (signed) values properly
+        data = bytearray(b & 0xFF for b in szl.Data[: szl.Header.LengthDR])
+
+        # S7CpInfo structure: 4 x uint16 (big-endian)
+        if len(data) >= 2:
+            cp_info.MaxPduLength = struct.unpack(">H", data[0:2])[0]
+        if len(data) >= 4:
+            cp_info.MaxConnections = struct.unpack(">H", data[2:4])[0]
+        if len(data) >= 6:
+            cp_info.MaxMpiRate = struct.unpack(">H", data[4:6])[0]
+        if len(data) >= 8:
+            cp_info.MaxBusRate = struct.unpack(">H", data[6:8])[0]
 
         return cp_info
 
@@ -822,17 +905,30 @@ class Client:
         """
         Get order code.
 
+        Uses read_szl(0x0011) to get module identification.
+
         Returns:
             Order code structure
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
+        # Read SZL 0x0011 for module identification
+        szl = self.read_szl(0x0011, 0)
+
+        # Parse SZL data into S7OrderCode structure
         order_code = S7OrderCode()
-        order_code.OrderCode = b"6ES7 315-2EH14-0AB0 "
-        order_code.V1 = 1
-        order_code.V2 = 0
-        order_code.V3 = 0
+        data = bytes(szl.Data[: szl.Header.LengthDR])
+
+        # OrderCode: 20 bytes, Version: 4 bytes
+        if len(data) >= 20:
+            order_code.OrderCode = data[0:20].rstrip(b"\x00")
+        if len(data) >= 21:
+            order_code.V1 = data[20]
+        if len(data) >= 22:
+            order_code.V2 = data[21]
+        if len(data) >= 23:
+            order_code.V3 = data[22]
 
         return order_code
 
@@ -840,18 +936,32 @@ class Client:
         """
         Get protection settings.
 
+        Uses read_szl(0x0232) to get protection level.
+
         Returns:
             Protection structure
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
+        # Read SZL 0x0232 for protection level
+        szl = self.read_szl(0x0232, 0)
+
+        # Parse SZL data into S7Protection structure
         protection = S7Protection()
-        protection.sch_schal = 1
-        protection.sch_par = 0
-        protection.sch_rel = 1
-        protection.bart_sch = 2
-        protection.anl_sch = 0
+        data = bytes(szl.Data[: szl.Header.LengthDR])
+
+        # S7Protection structure: 5 x uint16 (big-endian)
+        if len(data) >= 2:
+            protection.sch_schal = struct.unpack(">H", data[0:2])[0]
+        if len(data) >= 4:
+            protection.sch_par = struct.unpack(">H", data[2:4])[0]
+        if len(data) >= 6:
+            protection.sch_rel = struct.unpack(">H", data[4:6])[0]
+        if len(data) >= 8:
+            protection.bart_sch = struct.unpack(">H", data[6:8])[0]
+        if len(data) >= 10:
+            protection.anl_sch = struct.unpack(">H", data[8:10])[0]
 
         return protection
 
@@ -877,41 +987,45 @@ class Client:
         """
         Read SZL (System Status List).
 
+        Sends real S7 USER_DATA protocol request to server.
+
         Args:
             ssl_id: SZL ID
             index: SZL index
 
         Returns:
-            SZL structure
+            SZL structure with header and data
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        szl = S7SZL()
+        conn = self._get_connection()
 
-        # Simulate SZL responses based on ID
-        if ssl_id == 0x001C:
-            # Partial list index
-            szl.Header.LengthDR = 34
-            szl.Header.NDR = 10
-        elif ssl_id == 0x011C:
-            # Component identification
-            szl.Header.LengthDR = 34
-            szl.Header.NDR = 1
-            # Put serial number at correct offset
-            serial = b"S C-C2UR28922012\x00\x00\x00\x00\x00\x00\x00\x00"
-            for i, b in enumerate(serial):
-                szl.Data[2 + i] = b
-        elif ssl_id == 0x0111:
-            # Order number
-            szl.Header.LengthDR = 28
-            szl.Header.NDR = 1
-            order = b"6ES7 315-2EH14-0AB0 "
-            for i, b in enumerate(order):
-                szl.Data[2 + i] = b
-        else:
-            # Unknown SZL - raise error
-            raise RuntimeError(f"Unknown SZL ID: {ssl_id:#06x}")
+        # Build and send read SZL request
+        request = self.protocol.build_read_szl_request(ssl_id, index)
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Read SZL failed with error: {response['error_code']}")
+
+        # Parse SZL response
+        szl_result = self.protocol.parse_read_szl_response(response)
+
+        # Build S7SZL structure
+        # S7SZLHeader only has LengthDR and NDR fields
+        szl = S7SZL()
+        szl.Header.LengthDR = len(szl_result["data"])
+        szl.Header.NDR = 1
+
+        # Copy data to SZL.Data array
+        data = szl_result["data"]
+        for i, b in enumerate(data[: min(len(data), len(szl.Data))]):
+            szl.Data[i] = b
 
         return szl
 
@@ -919,14 +1033,19 @@ class Client:
         """
         Read list of available SZL IDs.
 
+        Sends real S7 USER_DATA protocol request to server.
+
         Returns:
             SZL list data
         """
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        # Return a simulated SZL list
-        return b"\x00\x00\x00\x0f\x02\x00\x11\x00\x11\x01\x11\x0f\x12\x00\x12\x01"
+        # Read SZL ID 0x0000 to get list of available IDs
+        szl = self.read_szl(0x0000, 0)
+
+        # Return raw data
+        return bytes(szl.Data[: szl.Header.LengthDR])
 
     def iso_exchange_buffer(self, data: bytearray) -> bytearray:
         """
