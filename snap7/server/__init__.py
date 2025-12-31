@@ -567,7 +567,7 @@ class Server:
         try:
             while self.running and self.server_socket:
                 try:
-                    self.server_socket.settimeout(1.0)  # Non-blocking accept
+                    self.server_socket.settimeout(0.1)  # Short timeout for responsive shutdown
                     client_socket, address = self.server_socket.accept()
 
                     logger.info(f"Client connected from {address}")

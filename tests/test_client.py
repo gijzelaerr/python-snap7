@@ -18,13 +18,13 @@ from ctypes import (
     Array,
 )
 from datetime import datetime, timedelta, timezone
-from multiprocessing import Process
 from typing import cast as typing_cast
 
 from snap7.util import get_real, get_int, set_int
 from snap7.error import check_error
-from snap7.server import mainloop
+from snap7.server import Server
 from snap7.client import Client
+from snap7.type import SrvArea
 from snap7.type import (
     S7DataItem,
     S7SZL,
@@ -70,21 +70,31 @@ def _prepare_as_write_area(area: Area, data: bytearray) -> Tuple[WordLen, CDataA
 # noinspection PyTypeChecker,PyCallingNonCallable
 @pytest.mark.client
 class TestClient(unittest.TestCase):
-    process = None
+    server: Server = None  # type: ignore
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.process = Process(target=mainloop)
-        cls.process.start()
-        time.sleep(2)  # wait for server to start
+        cls.server = Server()
+        # Register memory areas (same as mainloop)
+        cls.server.register_area(SrvArea.DB, 0, bytearray(600))
+        cls.server.register_area(SrvArea.DB, 1, bytearray(600))
+        cls.server.register_area(SrvArea.PA, 0, bytearray(100))
+        cls.server.register_area(SrvArea.PA, 1, bytearray(100))
+        cls.server.register_area(SrvArea.PE, 0, bytearray(100))
+        cls.server.register_area(SrvArea.PE, 1, bytearray(100))
+        cls.server.register_area(SrvArea.MK, 0, bytearray(100))
+        cls.server.register_area(SrvArea.MK, 1, bytearray(100))
+        cls.server.register_area(SrvArea.TM, 0, bytearray(100))
+        cls.server.register_area(SrvArea.TM, 1, bytearray(100))
+        cls.server.register_area(SrvArea.CT, 0, bytearray(100))
+        cls.server.register_area(SrvArea.CT, 1, bytearray(100))
+        cls.server.start(tcp_port=tcpport)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        if cls.process:
-            cls.process.terminate()
-            cls.process.join(1)
-            if cls.process.is_alive():
-                cls.process.kill()
+        if cls.server:
+            cls.server.stop()
+            cls.server.destroy()
 
     def setUp(self) -> None:
         self.client = Client()

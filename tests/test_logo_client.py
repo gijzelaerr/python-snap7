@@ -1,12 +1,11 @@
 import logging
-import time
 import pytest
 import unittest
-from multiprocessing import Process
+from typing import Optional
 
 import snap7
-from snap7.server import mainloop
-from snap7.type import Parameter
+from snap7.server import Server
+from snap7.type import Parameter, SrvArea
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -19,22 +18,20 @@ slot = 0x2000
 
 @pytest.mark.logo
 class TestLogoClient(unittest.TestCase):
-    process = None
+    server: Optional[Server] = None
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.process = Process(target=mainloop)
-        cls.process.start()
-        time.sleep(2)  # wait for server to start
+        cls.server = Server()
+        cls.server.register_area(SrvArea.DB, 0, bytearray(600))
+        cls.server.register_area(SrvArea.DB, 1, bytearray(600))
+        cls.server.start(tcp_port=tcpport)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        if cls.process is None:
-            return
-        cls.process.terminate()
-        cls.process.join(1)
-        if cls.process.is_alive():
-            cls.process.kill()
+        if cls.server:
+            cls.server.stop()
+            cls.server.destroy()
 
     def setUp(self) -> None:
         self.client = snap7.logo.Logo()

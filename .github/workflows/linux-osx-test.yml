@@ -1,4 +1,4 @@
-name: Linux Tests
+name: Linux and OSX Tests
 on:
   push:
     branches: [master]
