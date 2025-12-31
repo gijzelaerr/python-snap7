@@ -2,28 +2,44 @@
 
 This document tracks remaining S7 protocol features that could be implemented in the native Python implementation.
 
-## Control Operations (Easy)
+## Control Operations - COMPLETED
 
-### compress()
-**Current state**: Client returns success without sending protocol
-**What to implement**:
-- Client: Send real `PLC_CONTROL` request with compress control code
-- Server: Acknowledge request (emulator doesn't need actual memory compaction)
-- Protocol: Function code 0x28 (PLC_CONTROL) with "compress" parameter
+### compress() - IMPLEMENTED
+- Client sends real `PLC_CONTROL` request with PI service "_MSZL"
+- Server handles the request and acknowledges
 
-### copy_ram_to_rom()
-**Current state**: Client returns success without sending protocol
-**What to implement**:
-- Client: Send real `PLC_CONTROL` request with copy control code
-- Server: Acknowledge request (could optionally persist areas to disk)
-- Protocol: Function code 0x28 (PLC_CONTROL) with "copy" parameter
+### copy_ram_to_rom() - IMPLEMENTED
+- Client sends real `PLC_CONTROL` request with PI service "_MSZL" and file ID "P"
+- Server handles the request and acknowledges
 
 ---
 
-## Authentication (Medium)
+## Block Transfer - COMPLETED
+
+### upload() - IMPLEMENTED
+- Client: Sends START_UPLOAD, UPLOAD, END_UPLOAD sequence
+- Server: Returns actual registered DB/block data
+- Tested with real protocol roundtrip
+
+### full_upload() - IMPLEMENTED
+- Same as upload() but wraps result with MC7 block header
+- Returns block data with header and footer
+
+### download() - IMPLEMENTED
+- Client: Sends REQUEST_DOWNLOAD, DOWNLOAD_BLOCK, DOWNLOAD_ENDED sequence
+- Server: Stores data in registered area
+- Tested with real protocol roundtrip
+
+### delete() - IMPLEMENTED
+- Client: Sends PLC_CONTROL with PI service "_DELE"
+- Server: Handles the request (could unregister area in future)
+
+---
+
+## Authentication (Not Implemented)
 
 ### set_session_password()
-**Current state**: Client returns success without validation
+**Current state**: Client stores password locally without sending protocol
 **What to implement**:
 - Client: Send `USER_DATA` request with password (group 0x05 = grSecurity)
 - Server: Validate password against configured value, track authenticated state per connection
@@ -31,59 +47,16 @@ This document tracks remaining S7 protocol features that could be implemented in
 - Default password could be empty or configurable
 
 ### clear_session_password()
-**Current state**: Client returns success
+**Current state**: Client clears local password
 **What to implement**:
 - Client: Send `USER_DATA` request to clear session
 - Server: Clear authenticated flag for connection
 
 ---
 
-## Block Transfer (Medium)
-
-### upload() - Transfer block FROM PLC to client
-**Current state**: Skipped in tests ("Not implemented")
-**What to implement**:
-- Client: Send upload request specifying block type and number
-- Server: Return actual registered DB/block data
-- Handle multi-packet transfers for large blocks
-- Protocol sequence:
-  1. Start upload request
-  2. Server acknowledges with upload ID
-  3. Client requests data packets
-  4. Server sends block data in chunks
-  5. End upload
-
-### full_upload()
-**Current state**: Returns dummy data
-**What to implement**:
-- Same as upload() but includes block header (MC7 format)
-- Return block metadata (size, author, timestamp, etc.)
-
-### download() - Transfer block TO PLC from client
-**Current state**: Skipped in tests ("Not implemented")
-**What to implement**:
-- Client: Send download request with block data
-- Server: Store data in registered area (create if needed)
-- Handle multi-packet transfers for large blocks
-- Protocol sequence:
-  1. Request download permission
-  2. Server acknowledges
-  3. Client sends block data in chunks
-  4. End download
-  5. Server confirms
-
-### delete()
-**Current state**: Returns success without action
-**What to implement**:
-- Client: Send delete block request
-- Server: Unregister the specified area
-- Could require authentication
-
----
-
 ## Implementation Notes
 
-### Authentication Flow
+### Authentication Flow (Future Implementation)
 ```
 Client                          Server
   |-- set_session_password -->    |
@@ -95,25 +68,11 @@ Client                          Server
   |    (now allowed)              |
 ```
 
-### Block Transfer Protocol
-The S7 block transfer uses a multi-step handshake:
-- Uses function codes 0x1D (start upload), 0x1E (upload), 0x1F (end upload)
-- For download: 0x1A (request download), 0x1B (download block), 0x1C (end download)
-- Each packet contains sequence numbers for reassembly
-
-### Server Password Configuration
+### Server Password Configuration (Future)
 Could add to Server constructor:
 ```python
 server = Server(password="secret")  # Or None for no auth required
 ```
-
----
-
-## Priority Order
-
-1. **compress / copy_ram_to_rom** - Easy wins, just need PLC_CONTROL protocol
-2. **Authentication** - Enables testing of protected operations
-3. **upload / download** - Full block transfer capability
 
 ---
 

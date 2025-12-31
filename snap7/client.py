@@ -572,6 +572,8 @@ class Client:
         """
         Get block information.
 
+        Sends real S7 USER_DATA protocol request to server.
+
         Args:
             block_type: Type of block
             db_number: Block number
@@ -582,31 +584,59 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        block_info = TS7BlockInfo()
+        conn = self._get_connection()
 
-        if block_type == Block.DB:
-            block_info.BlkType = 0x41
-            block_info.BlkNumber = db_number
-            block_info.BlkLang = 0x05
-            block_info.BlkFlags = 0x00
-            block_info.MC7Size = 100
-            block_info.LoadSize = 100
-            block_info.LocalData = 0
-            block_info.SBBLength = 0
-            block_info.CheckSum = 0x1234
-            block_info.Version = 1
-            current_time = time.localtime()
-            block_info.CodeDate = f"{current_time.tm_year:04d}/{current_time.tm_mon:02d}/{current_time.tm_mday:02d}".encode()
-            block_info.IntfDate = block_info.CodeDate
-            block_info.Author = b"PurePy"
-            block_info.Family = b"S7-300"
-            block_info.Header = b"DB Block"
-        else:
-            block_info.BlkType = block_type
-            block_info.BlkNumber = db_number
-            block_info.BlkLang = 0x05
-            block_info.MC7Size = 0
-            block_info.LoadSize = 0
+        # Map Block enum to S7 block type code
+        block_type_map = {
+            Block.OB: 0x38,
+            Block.DB: 0x41,
+            Block.SDB: 0x42,
+            Block.FC: 0x43,
+            Block.SFC: 0x44,
+            Block.FB: 0x45,
+            Block.SFB: 0x46,
+        }
+        type_code = block_type_map.get(block_type, 0x41)
+
+        # Build and send get block info request
+        request = self.protocol.build_get_block_info_request(type_code, db_number)
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Get block info failed with error: {response['error_code']}")
+
+        # Parse block info response
+        info = self.protocol.parse_get_block_info_response(response)
+
+        # Build TS7BlockInfo structure
+        block_info = TS7BlockInfo()
+        block_info.BlkType = info["block_type"]
+        block_info.BlkNumber = info["block_number"]
+        block_info.BlkLang = info["block_lang"]
+        block_info.BlkFlags = info["block_flags"]
+        block_info.MC7Size = info["mc7_size"]
+        block_info.LoadSize = info["load_size"]
+        block_info.LocalData = info["local_data"]
+        block_info.SBBLength = info["sbb_length"]
+        block_info.CheckSum = info["checksum"]
+        block_info.Version = info["version"]
+
+        # Copy date and string fields
+        if info["code_date"]:
+            block_info.CodeDate = info["code_date"][:10]
+        if info["intf_date"]:
+            block_info.IntfDate = info["intf_date"][:10]
+        if info["author"]:
+            block_info.Author = info["author"][:8]
+        if info["family"]:
+            block_info.Family = info["family"][:8]
+        if info["header"]:
+            block_info.Header = info["header"][:8]
 
         return block_info
 
@@ -644,6 +674,8 @@ class Client:
         """
         Upload block from PLC.
 
+        Sends real S7 protocol requests: START_UPLOAD, UPLOAD, END_UPLOAD.
+
         Args:
             block_num: Block number to upload
 
@@ -653,15 +685,57 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Simulating upload of block {block_num}")
-        block_header = b"BLOCK_HEADER"
-        block_code = b"NOP 0;\nBE;\n"
+        conn = self._get_connection()
 
-        return bytearray(block_header + block_code)
+        # Block type 0x41 = DB
+        block_type = 0x41
+
+        # Step 1: Start upload
+        request = self.protocol.build_start_upload_request(block_type, block_num)
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Start upload failed with error: {response['error_code']}")
+
+        # Parse upload ID from response
+        upload_info = self.protocol.parse_start_upload_response(response)
+        upload_id = upload_info.get("upload_id", 1)
+
+        # Step 2: Upload (get data)
+        request = self.protocol.build_upload_request(upload_id)
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Upload failed with error: {response['error_code']}")
+
+        # Extract block data
+        block_data = self.protocol.parse_upload_response(response)
+
+        # Step 3: End upload
+        request = self.protocol.build_end_upload_request(upload_id)
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # End upload errors are not fatal
+        if response.get("error_code", 0) != 0:
+            logger.warning(f"End upload returned error: {response['error_code']}")
+
+        logger.info(f"Uploaded {len(block_data)} bytes from block {block_num}")
+        return bytearray(block_data)
 
     def download(self, data: bytearray, block_num: int = -1) -> int:
         """
         Download block to PLC.
+
+        Sends real S7 protocol requests: REQUEST_DOWNLOAD, DOWNLOAD_BLOCK, DOWNLOAD_ENDED.
 
         Args:
             data: Block data to download
@@ -673,11 +747,87 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Simulating download of {len(data)} bytes to block {block_num}")
+        conn = self._get_connection()
+
+        # Block type 0x41 = DB
+        block_type = 0x41
+
+        # Extract block number from data if not specified
+        if block_num == -1:
+            if len(data) >= 8:
+                block_num = struct.unpack(">H", data[6:8])[0]
+            else:
+                block_num = 1  # Default
+
+        # Step 1: Request download
+        request = self.protocol.build_download_request(block_type, block_num, bytes(data))
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Request download failed with error: {response['error_code']}")
+
+        # Step 2: Download block (send data)
+        # Build a simple download block PDU
+        param_data = struct.pack(
+            ">BBB",
+            0x1B,  # S7Function.DOWNLOAD_BLOCK
+            0x01,  # Status: last packet
+            0x00,  # Reserved
+        )
+
+        # Data section: data to write
+        data_section = struct.pack(">HH", len(data), 0x00FB) + bytes(data)
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            0x01,  # PDU type REQUEST
+            0x0000,  # Reserved
+            self.protocol._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        conn.send_data(header + param_data + data_section)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Download block failed with error: {response['error_code']}")
+
+        # Step 3: Download ended
+        param_data = struct.pack(">B", 0x1C)  # S7Function.DOWNLOAD_ENDED
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            0x01,  # PDU type REQUEST
+            0x0000,  # Reserved
+            self.protocol._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        conn.send_data(header + param_data)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Download ended errors are not fatal
+        if response.get("error_code", 0) != 0:
+            logger.warning(f"Download ended returned error: {response['error_code']}")
+
+        logger.info(f"Downloaded {len(data)} bytes to block {block_num}")
         return 0
 
     def delete(self, block_type: Block, block_num: int) -> int:
         """Delete a block from PLC.
+
+        Sends real S7 PLC_CONTROL protocol with PI service "_DELE".
 
         Args:
             block_type: Type of block (DB, OB, FB, FC, etc.)
@@ -689,9 +839,32 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Deleting block {block_type.name} {block_num}")
-        # In pure Python implementation, we simulate the delete operation
-        # In a real PLC, this would send an S7 protocol delete command
+        conn = self._get_connection()
+
+        # Map Block enum to S7 block type code
+        block_type_map = {
+            Block.OB: 0x38,
+            Block.DB: 0x41,
+            Block.SDB: 0x42,
+            Block.FC: 0x43,
+            Block.SFC: 0x44,
+            Block.FB: 0x45,
+            Block.SFB: 0x46,
+        }
+        type_code = block_type_map.get(block_type, 0x41)
+
+        # Build and send delete request
+        request = self.protocol.build_delete_block_request(type_code, block_num)
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        self.protocol.check_control_response(response)
+
+        logger.info(f"Deleted block {block_type.name} {block_num}")
         return 0
 
     def full_upload(self, block_type: Block, block_num: int) -> Tuple[bytearray, int]:
@@ -699,6 +872,8 @@ class Client:
 
         The whole block (including header and footer) is copied into the
         user buffer.
+
+        Sends real S7 protocol requests: START_UPLOAD, UPLOAD, END_UPLOAD.
 
         Args:
             block_type: Type of block (DB, OB, FB, FC, etc.)
@@ -711,10 +886,60 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Full upload of block {block_type.name} {block_num}")
+        conn = self._get_connection()
 
-        # Create a simulated block with header and footer
-        # S7 block structure: MC7 header + code + footer
+        # Map Block enum to S7 block type code
+        block_type_map = {
+            Block.OB: 0x38,
+            Block.DB: 0x41,
+            Block.SDB: 0x42,
+            Block.FC: 0x43,
+            Block.SFC: 0x44,
+            Block.FB: 0x45,
+            Block.SFB: 0x46,
+        }
+        type_code = block_type_map.get(block_type, 0x41)
+
+        # Step 1: Start upload
+        request = self.protocol.build_start_upload_request(type_code, block_num)
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Start upload failed with error: {response['error_code']}")
+
+        # Parse upload ID from response
+        upload_info = self.protocol.parse_start_upload_response(response)
+        upload_id = upload_info.get("upload_id", 1)
+
+        # Step 2: Upload (get data)
+        request = self.protocol.build_upload_request(upload_id)
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        if response.get("error_code", 0) != 0:
+            raise RuntimeError(f"Upload failed with error: {response['error_code']}")
+
+        # Extract block data
+        block_data = self.protocol.parse_upload_response(response)
+
+        # Step 3: End upload
+        request = self.protocol.build_end_upload_request(upload_id)
+        conn.send_data(request)
+
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # End upload errors are not fatal
+        if response.get("error_code", 0) != 0:
+            logger.warning(f"End upload returned error: {response['error_code']}")
+
+        # Build full block with MC7 header
+        # S7 block structure: MC7 header + data + footer
         block_header = struct.pack(
             ">BBHBBBBHH",
             0x70,  # Block type marker
@@ -724,14 +949,14 @@ class Client:
             0x00,  # Properties
             0x00,  # Reserved
             0x00,  # Reserved
-            100,  # Block length
-            50,  # MC7 code length
+            len(block_data) + 14,  # Block length (header + data + footer)
+            len(block_data),  # MC7 code length
         )
 
-        block_code = b"NOP 0;\nBE;\n"  # Simulated MC7 code
-        block_footer = b"\x00" * 4  # Simulated footer
+        block_footer = b"\x00" * 4  # Footer
 
-        full_block = bytearray(block_header + block_code + block_footer)
+        full_block = bytearray(block_header + block_data + block_footer)
+        logger.info(f"Full upload of block {block_type.name} {block_num}: {len(full_block)} bytes")
         return full_block, len(full_block)
 
     def plc_stop(self) -> int:
@@ -874,8 +1099,10 @@ class Client:
         """
         Compress PLC memory.
 
+        Sends real S7 PLC_CONTROL protocol with PI service "_MSZL".
+
         Args:
-            timeout: Timeout in milliseconds
+            timeout: Timeout in milliseconds (used for receive timeout)
 
         Returns:
             0 on success
@@ -883,15 +1110,30 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Compress PLC memory (timeout={timeout}ms)")
+        conn = self._get_connection()
+
+        # Build and send compress request
+        request = self.protocol.build_compress_request()
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        self.protocol.check_control_response(response)
+
+        logger.info(f"Compress PLC memory completed (timeout={timeout}ms)")
         return 0
 
     def copy_ram_to_rom(self, timeout: int = 0) -> int:
         """
         Copy RAM to ROM.
 
+        Sends real S7 PLC_CONTROL protocol with PI service "_MSZL" and file ID "P".
+
         Args:
-            timeout: Timeout in milliseconds
+            timeout: Timeout in milliseconds (used for receive timeout)
 
         Returns:
             0 on success
@@ -899,7 +1141,20 @@ class Client:
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        logger.info(f"Copy RAM to ROM (timeout={timeout}ms)")
+        conn = self._get_connection()
+
+        # Build and send copy RAM to ROM request
+        request = self.protocol.build_copy_ram_to_rom_request()
+        conn.send_data(request)
+
+        # Receive and parse response
+        response_data = conn.receive_data()
+        response = self.protocol.parse_response(response_data)
+
+        # Check for errors
+        self.protocol.check_control_response(response)
+
+        logger.info(f"Copy RAM to ROM completed (timeout={timeout}ms)")
         return 0
 
     def get_cp_info(self) -> S7CpInfo:

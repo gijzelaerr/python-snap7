@@ -684,6 +684,18 @@ class Server:
                 return self._handle_plc_control(request, client_address)
             elif function_code == S7Function.PLC_STOP:
                 return self._handle_plc_stop(request, client_address)
+            elif function_code == S7Function.START_UPLOAD:
+                return self._handle_start_upload(request, client_address)
+            elif function_code == S7Function.UPLOAD:
+                return self._handle_upload(request, client_address)
+            elif function_code == S7Function.END_UPLOAD:
+                return self._handle_end_upload(request, client_address)
+            elif function_code == S7Function.REQUEST_DOWNLOAD:
+                return self._handle_request_download(request, client_address)
+            elif function_code == S7Function.DOWNLOAD_BLOCK:
+                return self._handle_download_block(request, client_address)
+            elif function_code == S7Function.DOWNLOAD_ENDED:
+                return self._handle_download_ended(request, client_address)
             else:
                 logger.warning(f"Unsupported function code: {function_code}")
                 return self._build_error_response(request, 0x8001)  # Function not supported
@@ -927,24 +939,34 @@ class Server:
             return self._build_error_response(request, 0x8000)
 
     def _handle_plc_control(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
-        """Handle PLC control request (start operations)."""
+        """Handle PLC control request (start, compress, copy_ram_to_rom)."""
         try:
-            # Change CPU state based on control type
             params = request.get("parameters", {})
-            if len(params) >= 2:
-                # Has restart type parameter
+            pi_service = params.get("pi_service", b"")
+
+            # Check for PI service operations
+            if pi_service == b"_MSZL":
+                file_id = params.get("file_id", b"")
+                if file_id == b"P":
+                    # Copy RAM to ROM
+                    logger.info(f"Copy RAM to ROM requested from {client_address}")
+                else:
+                    # Compress memory
+                    logger.info(f"Compress memory requested from {client_address}")
+            elif len(params) >= 2:
+                # Has restart type parameter - start operation
                 restart_type = params.get("restart_type", 1)
                 if restart_type == 1:
                     logger.info("PLC Hot Start requested")
                 else:
                     logger.info("PLC Cold Start requested")
+                # Set CPU to running state
+                self.cpu_state = CPUState.RUN
             else:
                 logger.info("PLC Start requested")
+                self.cpu_state = CPUState.RUN
 
-            # Set CPU to running state
-            self.cpu_state = CPUState.RUN
-
-            # Build successful response with error bytes
+            # Build successful response
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
@@ -1122,9 +1144,10 @@ class Server:
 
             param_data = pdu[offset : offset + param_len]
 
-            # Store raw parameters for USER_DATA parsing
+            # Store raw parameters for all request types (needed for upload/download parsing)
+            request["raw_parameters"] = param_data
+
             if pdu_type == S7PDUType.USERDATA:
-                request["raw_parameters"] = param_data
                 request["parameters"] = self._parse_userdata_request_parameters(param_data)
             else:
                 request["parameters"] = self._parse_request_parameters(param_data)
@@ -1182,6 +1205,31 @@ class Server:
                     parsed_addr = self._parse_address_specification(addr_spec)
 
                     return {"function_code": function_code, "item_count": item_count, "address_spec": parsed_addr}
+        elif function_code == S7Function.PLC_CONTROL:
+            # Parse PLC control parameters
+            # Format varies: simple start or PI service (compress/copy_ram_to_rom)
+            if len(param_data) >= 2:
+                # Check for restart type (simple start)
+                restart_type = param_data[1]
+                if restart_type in (1, 2):
+                    return {"function_code": function_code, "restart_type": restart_type}
+
+            # Check for PI service (compress/copy_ram_to_rom)
+            # Format: func(1) + reserved(7) + pi_len(1) + pi_service
+            # Or: func(1) + reserved(6) + file_id_len(1) + pi_len(1) + file_id + pi_service
+            if len(param_data) >= 10:
+                # Look for PI service
+                pi_len = param_data[8]
+                if pi_len > 0 and len(param_data) >= 9 + pi_len:
+                    pi_service = param_data[9 : 9 + pi_len]
+                    # Check for file_id (copy_ram_to_rom)
+                    file_id_len = param_data[7]
+                    file_id = b""
+                    if file_id_len > 0 and len(param_data) >= 9 + file_id_len + pi_len:
+                        # Reparse with file_id
+                        file_id = param_data[9 : 9 + file_id_len]
+                        pi_service = param_data[9 + file_id_len : 9 + file_id_len + pi_len]
+                    return {"function_code": function_code, "pi_service": pi_service, "file_id": file_id}
 
         return {"function_code": function_code}
 
@@ -1997,6 +2045,365 @@ class Server:
         )
 
         return header + param_data + data_section
+
+    # ========================================================================
+    # Block Transfer Handlers (Upload/Download/Delete)
+    # ========================================================================
+
+    def _handle_start_upload(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle start upload request.
+
+        Parses the block address and returns upload ID and block length.
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU with upload ID and block length
+        """
+        try:
+            raw_params = request.get("raw_parameters", b"")
+
+            # Parse block address from parameters
+            # Format: function + status + reserved + upload_id + block_addr_len + block_addr
+            block_type = 0x41  # Default to DB
+            block_num = 1
+
+            if len(raw_params) >= 10:
+                addr_len = raw_params[9]
+                if len(raw_params) >= 10 + addr_len:
+                    block_addr = raw_params[10 : 10 + addr_len]
+                    # Parse block address: type (2 hex) + num (5 digits) + filesystem
+                    try:
+                        block_type = int(block_addr[0:2], 16)
+                        block_num = int(block_addr[2:7])
+                    except (ValueError, IndexError):
+                        pass
+
+            logger.info(f"Start upload request from {client_address}: type={block_type:#02x}, num={block_num}")
+
+            # Generate upload ID and get block length
+            upload_id = 1  # Simple upload ID
+            block_length = 0
+
+            # Check if block exists
+            if block_type == 0x41:  # DB
+                area_key = (S7Area.DB, block_num)
+                if area_key in self.memory_areas:
+                    block_length = len(self.memory_areas[area_key])
+
+            # Store upload context for this client
+            if not hasattr(self, "_upload_contexts"):
+                self._upload_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
+            self._upload_contexts[client_address] = {
+                "upload_id": upload_id,
+                "block_type": block_type,
+                "block_num": block_num,
+                "offset": 0,
+            }
+
+            # Build response: function + status + reserved + upload_id + block_len_string_len + block_len_string
+            block_len_str = f"{block_length:06d}".encode("ascii")
+            param_data = struct.pack(
+                ">BBBIB",
+                S7Function.START_UPLOAD,
+                0x00,  # Status
+                0x00,  # Reserved
+                upload_id,
+                len(block_len_str),
+            ) + block_len_str
+
+            header = struct.pack(
+                ">BBHHHHBB",
+                0x32,  # Protocol ID
+                S7PDUType.RESPONSE,  # PDU type
+                0x0000,  # Reserved
+                request["sequence"],  # Sequence
+                len(param_data),  # Parameter length
+                0x0000,  # Data length
+                0x00,  # Error class (success)
+                0x00,  # Error code (success)
+            )
+
+            return header + param_data
+
+        except Exception as e:
+            logger.error(f"Error handling start upload: {e}")
+            return self._build_error_response(request, 0x8000)
+
+    def _handle_upload(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle upload request - return block data.
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU with block data
+        """
+        try:
+            # Get upload context for this client
+            if not hasattr(self, "_upload_contexts") or client_address not in self._upload_contexts:
+                logger.warning(f"Upload request without start_upload from {client_address}")
+                return self._build_error_response(request, 0x8104)
+
+            ctx = self._upload_contexts[client_address]
+            block_type = ctx["block_type"]
+            block_num = ctx["block_num"]
+
+            # Get block data
+            block_data = b""
+            if block_type == 0x41:  # DB
+                area_key = (S7Area.DB, block_num)
+                if area_key in self.memory_areas:
+                    with self.area_locks[area_key]:
+                        block_data = bytes(self.memory_areas[area_key])
+
+            logger.info(f"Upload request from {client_address}: sending {len(block_data)} bytes")
+
+            # Build response with data
+            # Status: 0x00 = more data, 0x01 = last packet
+            param_data = struct.pack(
+                ">BBBI",
+                S7Function.UPLOAD,
+                0x01,  # Status: last packet
+                0x00,  # Reserved
+                ctx["upload_id"],
+            )
+
+            # Data section: length (2 bytes) + unknown (2 bytes) + data
+            data_section = struct.pack(">HH", len(block_data), 0x00FB) + block_data
+
+            header = struct.pack(
+                ">BBHHHHBB",
+                0x32,  # Protocol ID
+                S7PDUType.RESPONSE,  # PDU type
+                0x0000,  # Reserved
+                request["sequence"],  # Sequence
+                len(param_data),  # Parameter length
+                len(data_section),  # Data length
+                0x00,  # Error class (success)
+                0x00,  # Error code (success)
+            )
+
+            return header + param_data + data_section
+
+        except Exception as e:
+            logger.error(f"Error handling upload: {e}")
+            return self._build_error_response(request, 0x8000)
+
+    def _handle_end_upload(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle end upload request.
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU acknowledging end of upload
+        """
+        try:
+            # Clean up upload context
+            if hasattr(self, "_upload_contexts") and client_address in self._upload_contexts:
+                del self._upload_contexts[client_address]
+
+            logger.info(f"End upload from {client_address}")
+
+            # Build simple response
+            param_data = struct.pack(">B", S7Function.END_UPLOAD)
+
+            header = struct.pack(
+                ">BBHHHHBB",
+                0x32,  # Protocol ID
+                S7PDUType.RESPONSE,  # PDU type
+                0x0000,  # Reserved
+                request["sequence"],  # Sequence
+                len(param_data),  # Parameter length
+                0x0000,  # Data length
+                0x00,  # Error class (success)
+                0x00,  # Error code (success)
+            )
+
+            return header + param_data
+
+        except Exception as e:
+            logger.error(f"Error handling end upload: {e}")
+            return self._build_error_response(request, 0x8000)
+
+    def _handle_request_download(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle request download - acknowledge download request.
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU acknowledging download request
+        """
+        try:
+            raw_params = request.get("raw_parameters", b"")
+
+            # Parse block address from parameters
+            block_type = 0x41  # Default to DB
+            block_num = 1
+
+            if len(raw_params) >= 6:
+                addr_len = raw_params[5]
+                if len(raw_params) >= 6 + addr_len:
+                    block_addr = raw_params[6 : 6 + addr_len]
+                    try:
+                        block_type = int(block_addr[0:2], 16)
+                        block_num = int(block_addr[2:7])
+                    except (ValueError, IndexError):
+                        pass
+
+            logger.info(f"Request download from {client_address}: type={block_type:#02x}, num={block_num}")
+
+            # Store download context
+            if not hasattr(self, "_download_contexts"):
+                self._download_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
+            self._download_contexts[client_address] = {
+                "block_type": block_type,
+                "block_num": block_num,
+                "data": bytearray(),
+            }
+
+            # Build response acknowledging download
+            param_data = struct.pack(">B", S7Function.REQUEST_DOWNLOAD)
+
+            header = struct.pack(
+                ">BBHHHHBB",
+                0x32,  # Protocol ID
+                S7PDUType.RESPONSE,  # PDU type
+                0x0000,  # Reserved
+                request["sequence"],  # Sequence
+                len(param_data),  # Parameter length
+                0x0000,  # Data length
+                0x00,  # Error class (success)
+                0x00,  # Error code (success)
+            )
+
+            return header + param_data
+
+        except Exception as e:
+            logger.error(f"Error handling request download: {e}")
+            return self._build_error_response(request, 0x8000)
+
+    def _handle_download_block(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle download block - receive block data.
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU acknowledging data receipt
+        """
+        try:
+            # Get download context
+            if not hasattr(self, "_download_contexts") or client_address not in self._download_contexts:
+                logger.warning(f"Download block without request_download from {client_address}")
+                return self._build_error_response(request, 0x8104)
+
+            ctx = self._download_contexts[client_address]
+
+            # Extract data from request
+            data_info = request.get("data", {})
+            block_data = data_info.get("data", b"")
+
+            # Append data to context
+            ctx["data"].extend(block_data)
+
+            logger.info(f"Download block from {client_address}: received {len(block_data)} bytes")
+
+            # Build response
+            param_data = struct.pack(">B", S7Function.DOWNLOAD_BLOCK)
+
+            header = struct.pack(
+                ">BBHHHHBB",
+                0x32,  # Protocol ID
+                S7PDUType.RESPONSE,  # PDU type
+                0x0000,  # Reserved
+                request["sequence"],  # Sequence
+                len(param_data),  # Parameter length
+                0x0000,  # Data length
+                0x00,  # Error class (success)
+                0x00,  # Error code (success)
+            )
+
+            return header + param_data
+
+        except Exception as e:
+            logger.error(f"Error handling download block: {e}")
+            return self._build_error_response(request, 0x8000)
+
+    def _handle_download_ended(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """
+        Handle download ended - finalize block storage.
+
+        Args:
+            request: Parsed S7 request
+            client_address: Client address for logging
+
+        Returns:
+            Response PDU confirming download complete
+        """
+        try:
+            # Get download context
+            if not hasattr(self, "_download_contexts") or client_address not in self._download_contexts:
+                logger.warning(f"Download ended without download_block from {client_address}")
+                return self._build_error_response(request, 0x8104)
+
+            ctx = self._download_contexts[client_address]
+            block_type = ctx["block_type"]
+            block_num = ctx["block_num"]
+            block_data = ctx["data"]
+
+            # Store block data
+            if block_type == 0x41:  # DB
+                area_key = (S7Area.DB, block_num)
+                if area_key in self.memory_areas:
+                    # Update existing area - copy data into existing area without resizing
+                    with self.area_locks[area_key]:
+                        existing_area = self.memory_areas[area_key]
+                        copy_len = min(len(block_data), len(existing_area))
+                        existing_area[0:copy_len] = block_data[0:copy_len]
+                else:
+                    # Create new area
+                    self.memory_areas[area_key] = bytearray(block_data)
+                    self.area_locks[area_key] = threading.Lock()
+
+            logger.info(f"Download ended from {client_address}: stored {len(block_data)} bytes to {block_type:#02x}:{block_num}")
+
+            # Clean up context
+            del self._download_contexts[client_address]
+
+            # Build response
+            param_data = struct.pack(">B", S7Function.DOWNLOAD_ENDED)
+
+            header = struct.pack(
+                ">BBHHHHBB",
+                0x32,  # Protocol ID
+                S7PDUType.RESPONSE,  # PDU type
+                0x0000,  # Reserved
+                request["sequence"],  # Sequence
+                len(param_data),  # Parameter length
+                0x0000,  # Data length
+                0x00,  # Error class (success)
+                0x00,  # Error code (success)
+            )
+
+            return header + param_data
+
+        except Exception as e:
+            logger.error(f"Error handling download ended: {e}")
+            return self._build_error_response(request, 0x8000)
 
     def __enter__(self) -> "Server":
         """Context manager entry."""

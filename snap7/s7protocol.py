@@ -267,6 +267,312 @@ class S7Protocol:
         if response.get("error_code", 0) != 0:
             raise S7ProtocolError(f"PLC control failed with error: {response['error_code']}")
 
+    def build_compress_request(self) -> bytes:
+        """
+        Build PLC control request for memory compression.
+
+        Uses PI service "_MSZL" (compress memory).
+
+        Returns:
+            Complete S7 PDU for compress request
+        """
+        # PI service command for compress
+        pi_service = b"_MSZL"
+
+        # Parameter section: function code + PI service
+        # Format: func(1) + unknown(7) + pi_len(1) + pi_service
+        param_data = struct.pack(
+            ">BBBBBBBBB",
+            S7Function.PLC_CONTROL,  # 0x28
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            len(pi_service),  # PI service length
+        ) + pi_service
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
+    def build_copy_ram_to_rom_request(self) -> bytes:
+        """
+        Build PLC control request for copying RAM to ROM.
+
+        Uses PI service "_MSZL" with file system parameters.
+
+        Returns:
+            Complete S7 PDU for copy RAM to ROM request
+        """
+        # PI service command for copy RAM to ROM
+        # Uses EP parameter for target file system
+        pi_service = b"_MSZL"
+        file_id = b"P"  # P = passive file system (ROM)
+
+        # Parameter section with file system identifier
+        param_data = struct.pack(
+            ">BBBBBBBBB",
+            S7Function.PLC_CONTROL,  # 0x28
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            len(file_id),  # File ID length
+            len(pi_service),  # PI service length
+        ) + file_id + pi_service
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
+    # ========================================================================
+    # Block Transfer PDU Builders (Upload/Download)
+    # ========================================================================
+
+    def build_start_upload_request(self, block_type: int, block_num: int) -> bytes:
+        """
+        Build start upload request.
+
+        Args:
+            block_type: Block type code (0x38=OB, 0x41=DB, 0x42=SDB, 0x43=FC, 0x44=SFC, 0x45=FB, 0x46=SFB)
+            block_num: Block number
+
+        Returns:
+            Complete S7 PDU for start upload request
+        """
+        # Block address string: e.g., "0A00001P" for DB1
+        # Format: block_type (2 hex) + block_num (5 digits) + file_system (1 char)
+        block_addr = f"{block_type:02X}{block_num:05d}A".encode("ascii")
+
+        # Parameters: function + status + reserved + upload_id + block_addr_len + block_addr
+        param_data = struct.pack(
+            ">BBBIB",
+            S7Function.START_UPLOAD,  # Function code
+            0x00,  # Status
+            0x00,  # Reserved (error code)
+            0x00000000,  # Upload ID (0 for start)
+            len(block_addr),  # Block address length
+        ) + block_addr
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
+    def build_upload_request(self, upload_id: int) -> bytes:
+        """
+        Build upload request to get block data.
+
+        Args:
+            upload_id: Upload ID from start upload response
+
+        Returns:
+            Complete S7 PDU for upload request
+        """
+        param_data = struct.pack(
+            ">BBBI",
+            S7Function.UPLOAD,  # Function code
+            0x00,  # Status
+            0x00,  # Reserved
+            upload_id,  # Upload ID
+        )
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
+    def build_end_upload_request(self, upload_id: int) -> bytes:
+        """
+        Build end upload request.
+
+        Args:
+            upload_id: Upload ID from start upload response
+
+        Returns:
+            Complete S7 PDU for end upload request
+        """
+        param_data = struct.pack(
+            ">BBBI",
+            S7Function.END_UPLOAD,  # Function code
+            0x00,  # Status
+            0x00,  # Reserved
+            upload_id,  # Upload ID
+        )
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
+    def parse_start_upload_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse start upload response.
+
+        Returns:
+            Dictionary with upload_id and block_length
+        """
+        result = {"upload_id": 0, "block_length": 0}
+
+        raw_params = response.get("raw_parameters", b"")
+
+        if len(raw_params) >= 8:
+            # Parse: function + status + reserved + upload_id
+            result["upload_id"] = struct.unpack(">I", raw_params[4:8])[0]
+            if len(raw_params) > 8:
+                # Block length string follows
+                len_field = raw_params[8]
+                if len(raw_params) > 9 + len_field:
+                    length_str = raw_params[9 : 9 + len_field]
+                    try:
+                        result["block_length"] = int(length_str)
+                    except ValueError:
+                        pass
+
+        return result
+
+    def parse_upload_response(self, response: Dict[str, Any]) -> bytes:
+        """
+        Parse upload response and extract block data.
+
+        Returns:
+            Block data bytes
+        """
+        data_info = response.get("data", {})
+        raw_data: bytes = data_info.get("data", b"")
+
+        # Skip the data header if present (length + unknown bytes)
+        if len(raw_data) > 2:
+            return raw_data
+        return b""
+
+    def build_download_request(self, block_type: int, block_num: int, block_data: bytes) -> bytes:
+        """
+        Build request download request.
+
+        Args:
+            block_type: Block type code
+            block_num: Block number
+            block_data: Block data to download
+
+        Returns:
+            Complete S7 PDU for request download
+        """
+        # Block address string
+        block_addr = f"{block_type:02X}{block_num:05d}P".encode("ascii")
+
+        # Block length as string
+        length_str = f"{len(block_data):06d}".encode("ascii")
+
+        # Parameters
+        param_data = struct.pack(
+            ">BBBBB",
+            S7Function.REQUEST_DOWNLOAD,  # Function code
+            0x00,  # Status
+            0x00,  # Reserved
+            0x00,  # Reserved
+            len(block_addr),  # Block address length
+        ) + block_addr + struct.pack(">B", len(length_str)) + length_str
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
+    def build_delete_block_request(self, block_type: int, block_num: int) -> bytes:
+        """
+        Build delete block request.
+
+        Uses PLC_CONTROL with PI service "_DELE" for block deletion.
+
+        Args:
+            block_type: Block type code
+            block_num: Block number
+
+        Returns:
+            Complete S7 PDU for delete block request
+        """
+        # PI service for delete
+        pi_service = b"_DELE"
+
+        # Block specification: type + number + filesystem
+        block_spec = f"{block_type:02X}{block_num:05d}P".encode("ascii")
+
+        # Parameter section
+        param_data = struct.pack(
+            ">BBBBBBBBB",
+            S7Function.PLC_CONTROL,  # 0x28
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            0x00,  # Reserved
+            len(block_spec),  # Block spec length
+            len(pi_service),  # PI service length
+            0x00,  # Reserved
+        ) + block_spec + pi_service
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            0x0000,  # Data length
+        )
+
+        return header + param_data
+
     # ========================================================================
     # USER_DATA PDU Builders (Chunk 3 of protocol implementation)
     # ========================================================================
@@ -438,6 +744,110 @@ class S7Protocol:
             block_num = struct.unpack(">H", raw_data[offset : offset + 2])[0]
             result.append(block_num)
             offset += 2
+
+        return result
+
+    def build_get_block_info_request(self, block_type: int, block_num: int) -> bytes:
+        """
+        Build USER_DATA request for getting block information.
+
+        Args:
+            block_type: Block type code (0x38=OB, 0x41=DB, 0x42=SDB, 0x43=FC, 0x44=SFC, 0x45=FB, 0x46=SFB)
+            block_num: Block number
+
+        Returns:
+            Complete S7 PDU for get block info request
+        """
+        # Parameter section for USER_DATA block info request
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            0x43,  # Type (4=request) | Group (3=grBlocksInfo)
+            S7UserDataSubfunction.BLOCK_INFO,  # Subfunction (0x03)
+            self._next_sequence() & 0xFF,  # Sequence number
+        )
+
+        # Data section: block type (1) + block number (2) + filesystem (1)
+        data_section = struct.pack(
+            ">BBHBHB",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0004,  # Length (4 bytes)
+            block_type,  # Block type code
+            block_num,  # Block number
+            0x41,  # Filesystem (A = active)
+        )
+
+        # S7 header for USER_DATA
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def parse_get_block_info_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse get block info response.
+
+        Args:
+            response: Parsed S7 response
+
+        Returns:
+            Dictionary with block info fields
+        """
+        result: Dict[str, Any] = {
+            "block_type": 0,
+            "block_number": 0,
+            "block_lang": 0,
+            "block_flags": 0,
+            "mc7_size": 0,
+            "load_size": 0,
+            "local_data": 0,
+            "sbb_length": 0,
+            "checksum": 0,
+            "version": 0,
+            "code_date": b"",
+            "intf_date": b"",
+            "author": b"",
+            "family": b"",
+            "header": b"",
+        }
+
+        data_info = response.get("data", {})
+        raw_data = data_info.get("data", b"")
+
+        if len(raw_data) < 78:
+            return result
+
+        # Parse block info structure
+        # Format from Snap7: various fixed-size fields
+        result["block_type"] = raw_data[0]
+        result["block_number"] = struct.unpack(">H", raw_data[1:3])[0]
+        result["block_lang"] = raw_data[3]
+        result["block_flags"] = raw_data[4]
+        result["mc7_size"] = struct.unpack(">H", raw_data[10:12])[0]
+        result["load_size"] = struct.unpack(">I", raw_data[6:10])[0]
+        result["local_data"] = struct.unpack(">H", raw_data[12:14])[0]
+        result["sbb_length"] = struct.unpack(">H", raw_data[14:16])[0]
+        result["checksum"] = struct.unpack(">H", raw_data[16:18])[0]
+        result["version"] = raw_data[18]
+
+        # Dates and strings
+        result["code_date"] = raw_data[20:30]
+        result["intf_date"] = raw_data[30:40]
+        result["author"] = raw_data[40:48]
+        result["family"] = raw_data[48:56]
+        result["header"] = raw_data[56:64]
 
         return result
 

@@ -182,30 +182,36 @@ class TestClient(unittest.TestCase):
         self.assertEqual(result_values[1], test_values[1])
         self.assertEqual(result_values[2], test_values[2])
 
-    @unittest.skip("Not implemented by the snap7 server")
     def test_upload(self) -> None:
-        """
-        This is not implemented by the server and will always raise a RuntimeError (security error)
-        """
-        self.assertRaises(RuntimeError, self.client.upload, db_number)
+        """Test uploading a block from PLC using real S7 protocol."""
+        # Write some data to DB1 first
+        test_data = bytearray([0x11, 0x22, 0x33, 0x44])
+        self.client.db_write(db_number, 0, test_data)
 
-    @unittest.skip("Not implemented by the snap7 server")
+        # Upload DB1 - should return the data we wrote
+        result = self.client.upload(db_number)
+        self.assertIsInstance(result, bytearray)
+        # The uploaded data should contain what we wrote
+        self.assertEqual(result[0:4], test_data)
+
+    @unittest.skip("Async upload not fully implemented")
     def test_as_upload(self) -> None:
-        """
-        This is not implemented by the server and will always raise a RuntimeError (security error)
-        """
+        """Test async upload (not fully implemented)."""
         _buffer = typing_cast(Array[c_int32], buffer_type())
         size = sizeof(_buffer)
         self.client.as_upload(1, _buffer, size)
         self.assertRaises(RuntimeError, self.client.wait_as_completion, 500)
 
-    @unittest.skip("Not implemented by the snap7 server")
     def test_download(self) -> None:
-        """
-        This is not implemented by the server and will always raise a RuntimeError (security error)
-        """
-        data = bytearray([0b11111111])
-        self.client.download(block_num=0, data=data)
+        """Test downloading a block to PLC using real S7 protocol."""
+        # Download data to DB1
+        data = bytearray([0xAA, 0xBB, 0xCC, 0xDD])
+        result = self.client.download(block_num=db_number, data=data)
+        self.assertEqual(result, 0)
+
+        # Verify by reading it back
+        read_data = self.client.db_read(db_number, 0, 4)
+        self.assertEqual(read_data, data)
 
     def test_read_area(self) -> None:
         amount = 1
@@ -440,10 +446,11 @@ class TestClient(unittest.TestCase):
         self.client.wait_as_completion(500)
         self.assertEqual(data, result)
 
-    @unittest.skip("Not implemented by the snap7 server")
     def test_as_download(self) -> None:
-        data = bytearray(128)
-        self.client.as_download(block_num=-1, data=data)
+        """Test async download to PLC."""
+        data = bytearray([0x55, 0x66, 0x77, 0x88])
+        result = self.client.as_download(block_num=db_number, data=data)
+        self.assertEqual(result, 0)
 
     def test_plc_stop(self) -> None:
         self.client.plc_stop()
