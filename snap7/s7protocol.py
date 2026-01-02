@@ -36,7 +36,8 @@ class S7PDUType(IntEnum):
     """S7 PDU type codes."""
 
     REQUEST = 0x01
-    RESPONSE = 0x03
+    ACK = 0x02  # Acknowledge without data (e.g., write responses)
+    ACK_DATA = 0x03  # Acknowledge with data (e.g., read responses)
     USERDATA = 0x07
 
 
@@ -169,12 +170,34 @@ class S7Protocol:
         address_spec = S7DataTypes.encode_address(area, db_number, start, word_len, count)
         parameters += address_spec[1:]  # Skip first byte
 
+        # Map word_len to data section transport size
+        # Data section uses different transport size codes than address specification:
+        # - 0x03 = BIT
+        # - 0x04 = BYTE/WORD/DWORD (byte-oriented data)
+        # - 0x05 = INT
+        # - 0x06 = DINT
+        # - 0x07 = REAL
+        # - 0x09 = OCTET STRING
+        transport_size_map = {
+            S7WordLen.BIT: 0x03,
+            S7WordLen.BYTE: 0x04,
+            S7WordLen.CHAR: 0x04,
+            S7WordLen.WORD: 0x04,
+            S7WordLen.INT: 0x05,
+            S7WordLen.DWORD: 0x04,
+            S7WordLen.DINT: 0x06,
+            S7WordLen.REAL: 0x07,
+            S7WordLen.COUNTER: 0x04,
+            S7WordLen.TIMER: 0x04,
+        }
+        transport_size = transport_size_map.get(word_len, 0x04)
+
         # Data section
         data_section = (
             struct.pack(
                 ">BBH",
                 0x00,  # Reserved/Error
-                word_len,  # Transport size
+                transport_size,  # Transport size (proper S7 data section format)
                 len(data) * 8,  # Bit length (data length in bits)
             )
             + data
@@ -1149,8 +1172,8 @@ class S7Protocol:
         if protocol_id != 0x32:
             raise S7ProtocolError(f"Invalid protocol ID: {protocol_id:#02x}")
 
-        # Accept both standard RESPONSE and USERDATA response types
-        if pdu_type not in (S7PDUType.RESPONSE, S7PDUType.USERDATA):
+        # Accept ACK (write responses), ACK_DATA (read responses), and USERDATA response types
+        if pdu_type not in (S7PDUType.ACK, S7PDUType.ACK_DATA, S7PDUType.USERDATA):
             raise S7ProtocolError(f"Expected response PDU, got {pdu_type}")
 
         response = {

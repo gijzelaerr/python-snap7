@@ -713,7 +713,7 @@ class Server:
         header = struct.pack(
             ">BBHHHHBB",
             0x32,  # Protocol ID
-            S7PDUType.RESPONSE,  # PDU type
+            S7PDUType.ACK_DATA,  # PDU type
             0x0000,  # Reserved
             request["sequence"],  # Sequence (echo)
             0x0008,  # Parameter length
@@ -756,7 +756,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence (echo)
                 0x0002,  # Parameter length
@@ -913,7 +913,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence (echo)
                 0x0002,  # Parameter length
@@ -970,7 +970,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence (echo)
                 0x0001,  # Parameter length
@@ -999,7 +999,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence (echo)
                 0x0001,  # Parameter length
@@ -1373,7 +1373,7 @@ class Server:
         header = struct.pack(
             ">BBHHHHBB",
             0x32,  # Protocol ID
-            S7PDUType.RESPONSE,  # PDU type
+            S7PDUType.ACK_DATA,  # PDU type
             0x0000,  # Reserved
             request.get("sequence", 0),  # Sequence (echo)
             0x0000,  # Parameter length
@@ -2117,7 +2117,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence
                 len(param_data),  # Parameter length
@@ -2179,7 +2179,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence
                 len(param_data),  # Parameter length
@@ -2218,7 +2218,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence
                 len(param_data),  # Parameter length
@@ -2278,7 +2278,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence
                 len(param_data),  # Parameter length
@@ -2327,7 +2327,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence
                 len(param_data),  # Parameter length
@@ -2389,7 +2389,7 @@ class Server:
             header = struct.pack(
                 ">BBHHHHBB",
                 0x32,  # Protocol ID
-                S7PDUType.RESPONSE,  # PDU type
+                S7PDUType.ACK_DATA,  # PDU type
                 0x0000,  # Reserved
                 request["sequence"],  # Sequence
                 len(param_data),  # Parameter length
