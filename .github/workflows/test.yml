@@ -1,4 +1,4 @@
-name: Linux and OSX Tests
+name: Linux, Windows OSX Tests
 on:
   push:
     branches: [master]
@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        runs-on: ["ubuntu-22.04", "ubuntu-24.04", "macos-14", "macos-15"]
+        runs-on: ["ubuntu-22.04", "ubuntu-24.04", "macos-14", "macos-15", "windows-2022", "windows-2025"]
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
