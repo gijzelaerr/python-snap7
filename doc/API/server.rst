@@ -1,34 +1,22 @@
 Server
 ======
 
-If you just need a quick server with some default values initalised, this package provides a default implementation.
-To use it you first need to install some aditional dependencies, using:
+The pure Python server implementation provides a simulated S7 server for testing.
 
-.. code:: bash
+To start a server programmatically:
 
-   pip install python-snap7[cli]
+.. code:: python
 
-Now you can start it using one of the following commands:
+   from snap7.server import Server, mainloop
 
-.. code:: bash
+   # Quick start with mainloop helper
+   mainloop(tcp_port=1102)
 
-   python -m snap7.server
-   # or, if your Python `Scripts/` folder is on PATH:
-   snap7-server
-
-You can optionally provide the port to be used as an argument, like this:
-
-.. code:: bash
-
-   python -m snap7.server --port 102
+   # Or create and configure manually
+   server = Server()
+   server.start(port=1102)
 
 ----
 
 .. automodule:: snap7.server
    :members:
-
-----
-
-.. automodule:: snap7.server.__main__
-
-   .. autofunction:: main(port, dll)

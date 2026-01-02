@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "python-snap7"
 version = "2.0.2"
-description = "Python wrapper for the snap7 library"
+description = "Pure Python S7 communication library for Siemens PLCs"
 readme = "README.rst"
 authors = [
     {name = "Gijs Molenaar", email = "gijsmolenaar@gmail.com"},
@@ -37,13 +37,13 @@ cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 
 [tool.setuptools.package-data]
-snap7 = ["py.typed", "lib/libsnap7.so", "lib/snap7.dll", "lib/libsnap7.dylib"]
+snap7 = ["py.typed"]
 
 [tool.setuptools.packages.find]
 include = ["snap7*"]
 
 [project.scripts]
-snap7-server = "snap7.server.__main__:main"
+snap7-server = "snap7.server:mainloop"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

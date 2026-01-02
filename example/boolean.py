@@ -27,7 +27,7 @@ plc.connect("192.168.200.24", 0, 3)
 
 reading = plc.db_read(31, 120, 1)  # read 1 byte from db 31 staring from byte 120
 set_bool(reading, 0, 5, True)  # set a value of fifth bit
-plc.db_write(reading, 31, 120, 1)  # write back the bytearray and now the boolean value is changed in the PLC.
+plc.db_write(31, 120, reading)  # write back the bytearray and now the boolean value is changed in the PLC.
 
 # NOTE you could also use the read_area and write_area functions.
 # then you can specify an area to read from:
@@ -41,6 +41,6 @@ plc.read_area(area=Area.MK, db_number=0, start=20, size=2)
 
 data = bytearray()
 set_int(data, 0, 127)
-plc.write_area(area=Area.MK, dbnumber=0, start=20, data=data)
+plc.write_area(area=Area.MK, db_number=0, start=20, data=data)
 # read the client source code!
 # and official snap7 documentation
