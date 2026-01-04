@@ -1367,13 +1367,17 @@ class Server:
             return {"raw_data": data_section}
 
     def _build_error_response(self, request: Dict[str, Any], error_code: int) -> bytes:
-        """Build an error response PDU."""
+        """Build an error response PDU.
+
+        Uses PDU type ACK (0x02) for error responses without data,
+        matching real S7-1200/1500 PLC behavior.
+        """
         error_class = (error_code >> 8) & 0xFF
         error_byte = error_code & 0xFF
         header = struct.pack(
             ">BBHHHHBB",
             0x32,  # Protocol ID
-            S7PDUType.ACK_DATA,  # PDU type
+            S7PDUType.ACK,  # PDU type (ACK for errors without data)
             0x0000,  # Reserved
             request.get("sequence", 0),  # Sequence (echo)
             0x0000,  # Parameter length

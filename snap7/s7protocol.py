@@ -1319,12 +1319,19 @@ class S7Protocol:
         Raises:
             S7ProtocolError: If write operation failed
         """
-        if not response.get("data"):
-            raise S7ProtocolError("No data in write response")
-
-        data_info = response["data"]
-        return_code = data_info.get("return_code", 0)
-
-        if return_code != 0xFF:  # 0xFF = Success
-            error_msg = f"Write operation failed with return code: {return_code:#02x}"
+        # First check for errors in the response header
+        # S7-1200/1500 returns error codes in the header for write failures
+        header_error = response.get("error_code", 0)
+        if header_error != 0:
+            error_msg = f"Write operation failed with S7 error code: {header_error:#06x}"
             raise S7ProtocolError(error_msg)
+
+        # For successful writes, check the data section return code if present
+        if response.get("data"):
+            data_info = response["data"]
+            return_code = data_info.get("return_code", 0xFF)  # Default to success
+
+            if return_code != 0xFF:  # 0xFF = Success
+                error_msg = f"Write operation failed with return code: {return_code:#02x}"
+                raise S7ProtocolError(error_msg)
+        # If no data and no header error, the write was successful (ACK without data)
