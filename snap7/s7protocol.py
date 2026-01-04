@@ -69,6 +69,39 @@ class S7UserDataSubfunction(IntEnum):
     SET_CLOCK = 0x02
 
 
+# S7 data section return codes with human-readable descriptions
+S7_RETURN_CODES: Dict[int, str] = {
+    0x00: "Reserved",
+    0x01: "Hardware error",
+    0x03: "Accessing the object not allowed",
+    0x05: "Invalid address",
+    0x06: "Data type not supported",
+    0x07: "Data type inconsistent",
+    0x0A: "Object does not exist",
+    0x10: "Invalid block type number",
+    0x11: "Block not found in storage medium",
+    0x12: "Block already exists",
+    0x13: "Block is protected",
+    0x14: "Block download without proper block first",
+    0x19: "Block download sequence error",
+    0x1A: "Insufficient working memory",
+    0x1B: "Insufficient load memory",
+    0x1C: "Not enough work retentive data (instance DBs)",
+    0x1D: "Interface error",
+    0x1E: "Delete block refused",
+    0x20: "Invalid parameter",
+    0x21: "PG resource error (max connections reached)",
+    0xFF: "Success",
+}
+
+
+def get_return_code_description(return_code: int) -> str:
+    """Get human-readable description for S7 return code."""
+    if return_code in S7_RETURN_CODES:
+        return S7_RETURN_CODES[return_code]
+    return "Unknown error"
+
+
 class S7Protocol:
     """
     S7 protocol implementation.
@@ -1315,8 +1348,8 @@ class S7Protocol:
         return_code = data_info.get("return_code", 0)
 
         if return_code != 0xFF:  # 0xFF = Success
-            error_msg = f"Read operation failed with return code: {return_code:#02x}"
-            raise S7ProtocolError(error_msg)
+            desc = get_return_code_description(return_code)
+            raise S7ProtocolError(f"Read operation failed: {desc} (0x{return_code:02x})")
 
         raw_data = data_info.get("data", b"")
 
@@ -1346,6 +1379,6 @@ class S7Protocol:
             return_code = data_info.get("return_code", 0xFF)  # Default to success
 
             if return_code != 0xFF:  # 0xFF = Success
-                error_msg = f"Write operation failed with return code: {return_code:#02x}"
-                raise S7ProtocolError(error_msg)
+                desc = get_return_code_description(return_code)
+                raise S7ProtocolError(f"Write operation failed: {desc} (0x{return_code:02x})")
         # If no data and no header error, the write was successful (ACK without data)

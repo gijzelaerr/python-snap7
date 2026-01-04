@@ -16,7 +16,7 @@ from ctypes import (
 )
 
 from .connection import ISOTCPConnection
-from .s7protocol import S7Protocol
+from .s7protocol import S7Protocol, get_return_code_description
 from .datatypes import S7Area, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError
 
@@ -1305,7 +1305,8 @@ class Client:
         data_info = response.get("data", {})
         return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
         if return_code != 0xFF:
-            raise RuntimeError(f"Read SZL failed with return code: {return_code:#02x}")
+            desc = get_return_code_description(return_code)
+            raise RuntimeError(f"Read SZL failed: {desc} (0x{return_code:02x})")
 
         # Parse SZL response
         szl_result = self.protocol.parse_read_szl_response(response)
