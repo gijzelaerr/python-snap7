@@ -50,6 +50,7 @@ testpaths = ["tests"]
 markers =[
     "client",
     "common",
+    "e2e: end-to-end tests requiring a real PLC connection",
     "logo",
     "mainloop",
     "partner",
