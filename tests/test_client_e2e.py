@@ -1,6 +1,19 @@
 """End-to-end tests for Client class against a real Siemens S7 PLC.
 
-These tests require a real PLC connection with the following data blocks configured:
+These tests require a real PLC connection. Run with:
+
+    pytest tests/test_client_e2e.py --e2e --plc-ip=YOUR_PLC_IP
+
+Available options:
+    --e2e           Enable e2e tests (required)
+    --plc-ip        PLC IP address (default: 10.10.10.100)
+    --plc-rack      PLC rack number (default: 0)
+    --plc-slot      PLC slot number (default: 1)
+    --plc-port      PLC TCP port (default: 102)
+    --plc-db-read   Read-only DB number (default: 1)
+    --plc-db-write  Read-write DB number (default: 2)
+
+The PLC needs two data blocks configured:
 
 DB1 "Read_only" - Read-only data block with predefined values:
     int1: Int = 10
@@ -20,10 +33,9 @@ DB1 "Read_only" - Read-only data block with predefined values:
     bool0-bool7: Bool (packed in 1 byte)
 
 DB2 "Data_block_2" - Read/write data block with same structure.
-
-Configure the PLC connection parameters below before running tests.
 """
 
+import os
 import pytest
 import unittest
 from ctypes import c_int32, POINTER, pointer, create_string_buffer, cast, c_uint8
@@ -51,16 +63,33 @@ from snap7.util import (
 )
 
 # =============================================================================
-# PLC Connection Configuration - MODIFY THESE VALUES FOR YOUR PLC
+# PLC Connection Configuration
+# These can be overridden via pytest command line options or environment variables
 # =============================================================================
-PLC_IP = "10.10.10.100"  # PLC IP address
-PLC_RACK = 0  # Rack number
-PLC_SLOT = 1  # Slot number
-PLC_PORT = 102  # TCP port (default 102)
+PLC_IP = os.environ.get("PLC_IP", "10.10.10.100")
+PLC_RACK = int(os.environ.get("PLC_RACK", "0"))
+PLC_SLOT = int(os.environ.get("PLC_SLOT", "1"))
+PLC_PORT = int(os.environ.get("PLC_PORT", "102"))
 
 # Data block numbers
-DB_READ_ONLY = 1  # Read-only data block
-DB_READ_WRITE = 2  # Read/write data block
+DB_READ_ONLY = int(os.environ.get("PLC_DB_READ", "1"))
+DB_READ_WRITE = int(os.environ.get("PLC_DB_WRITE", "2"))
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Update module globals from pytest command line options."""
+    global PLC_IP, PLC_RACK, PLC_SLOT, PLC_PORT, DB_READ_ONLY, DB_READ_WRITE
+    if hasattr(config, "getoption"):
+        try:
+            PLC_IP = config.getoption("--plc-ip", default=PLC_IP)
+            PLC_RACK = config.getoption("--plc-rack", default=PLC_RACK)
+            PLC_SLOT = config.getoption("--plc-slot", default=PLC_SLOT)
+            PLC_PORT = config.getoption("--plc-port", default=PLC_PORT)
+            DB_READ_ONLY = config.getoption("--plc-db-read", default=DB_READ_ONLY)
+            DB_READ_WRITE = config.getoption("--plc-db-write", default=DB_READ_WRITE)
+        except ValueError:
+            pass  # Options not available yet
+
 
 # =============================================================================
 # DB Structure - Byte offsets for each variable

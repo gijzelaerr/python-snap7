@@ -15,7 +15,42 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--plc-ip",
         action="store",
         default="10.10.10.100",
-        help="PLC IP address for e2e tests",
+        help="PLC IP address for e2e tests (default: 10.10.10.100)",
+    )
+    parser.addoption(
+        "--plc-rack",
+        action="store",
+        type=int,
+        default=0,
+        help="PLC rack number for e2e tests (default: 0)",
+    )
+    parser.addoption(
+        "--plc-slot",
+        action="store",
+        type=int,
+        default=1,
+        help="PLC slot number for e2e tests (default: 1)",
+    )
+    parser.addoption(
+        "--plc-port",
+        action="store",
+        type=int,
+        default=102,
+        help="PLC TCP port for e2e tests (default: 102)",
+    )
+    parser.addoption(
+        "--plc-db-read",
+        action="store",
+        type=int,
+        default=1,
+        help="Read-only DB number for e2e tests (default: 1)",
+    )
+    parser.addoption(
+        "--plc-db-write",
+        action="store",
+        type=int,
+        default=2,
+        help="Read-write DB number for e2e tests (default: 2)",
     )
 
 
@@ -37,3 +72,39 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "e2e" in item.keywords:
             item.add_marker(skip_e2e)
+
+
+@pytest.fixture(scope="session")
+def plc_ip(request: pytest.FixtureRequest) -> str:
+    """Get PLC IP address from command line."""
+    return str(request.config.getoption("--plc-ip"))
+
+
+@pytest.fixture(scope="session")
+def plc_rack(request: pytest.FixtureRequest) -> int:
+    """Get PLC rack number from command line."""
+    return int(request.config.getoption("--plc-rack"))
+
+
+@pytest.fixture(scope="session")
+def plc_slot(request: pytest.FixtureRequest) -> int:
+    """Get PLC slot number from command line."""
+    return int(request.config.getoption("--plc-slot"))
+
+
+@pytest.fixture(scope="session")
+def plc_port(request: pytest.FixtureRequest) -> int:
+    """Get PLC TCP port from command line."""
+    return int(request.config.getoption("--plc-port"))
+
+
+@pytest.fixture(scope="session")
+def plc_db_read(request: pytest.FixtureRequest) -> int:
+    """Get read-only DB number from command line."""
+    return int(request.config.getoption("--plc-db-read"))
+
+
+@pytest.fixture(scope="session")
+def plc_db_write(request: pytest.FixtureRequest) -> int:
+    """Get read-write DB number from command line."""
+    return int(request.config.getoption("--plc-db-write"))
