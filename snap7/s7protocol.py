@@ -1162,12 +1162,28 @@ class S7Protocol:
         Returns:
             Parsed response data
         """
-        if len(pdu) < 12:
+        if len(pdu) < 10:
             raise S7ProtocolError("PDU too short for S7 response header")
 
-        # Parse S7 response header (includes error class and error code)
-        header = struct.unpack(">BBHHHHBB", pdu[:12])
-        protocol_id, pdu_type, reserved, sequence, param_len, data_len, error_class, error_code = header
+        # First peek at PDU type to determine header size
+        pdu_type = pdu[1]
+
+        if pdu_type == S7PDUType.USERDATA:
+            # USERDATA PDUs have a 10-byte header (no error_class/error_code in header)
+            if len(pdu) < 10:
+                raise S7ProtocolError("PDU too short for USERDATA header")
+            header = struct.unpack(">BBHHHH", pdu[:10])
+            protocol_id, pdu_type, reserved, sequence, param_len, data_len = header
+            error_class = 0
+            error_code = 0
+            offset = 10
+        else:
+            # ACK/ACK_DATA PDUs have a 12-byte header (with error_class/error_code)
+            if len(pdu) < 12:
+                raise S7ProtocolError("PDU too short for ACK/ACK_DATA header")
+            header = struct.unpack(">BBHHHHBB", pdu[:12])
+            protocol_id, pdu_type, reserved, sequence, param_len, data_len, error_class, error_code = header
+            offset = 12
 
         if protocol_id != 0x32:
             raise S7ProtocolError(f"Invalid protocol ID: {protocol_id:#02x}")
@@ -1184,8 +1200,6 @@ class S7Protocol:
             "data": None,
             "error_code": (error_class << 8) | error_code,
         }
-
-        offset = 12
 
         # Parse parameters if present
         if param_len > 0:

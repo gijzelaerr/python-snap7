@@ -1980,20 +1980,18 @@ class Server:
             0x00,  # Reserved
         )
 
-        # Data section: return code only
-        data_section = struct.pack(">BB", (error_code >> 8) & 0xFF, error_code & 0xFF)
+        # Data section: return code only (error code in transport format)
+        data_section = struct.pack(">BBH", (error_code >> 8) & 0xFF, 0x00, 0)
 
-        # Build S7 header with error bytes
+        # Build S7 header for USERDATA (10 bytes, no error_class/error_code in header)
         header = struct.pack(
-            ">BBHHHHBB",
+            ">BBHHHH",
             0x32,  # Protocol ID
             S7PDUType.USERDATA,  # PDU type
             0x0000,  # Reserved
             request.get("sequence", 0),  # Sequence
             len(param_data),  # Parameter length
             len(data_section),  # Data length
-            (error_code >> 8) & 0xFF,  # Error class
-            error_code & 0xFF,  # Error code
         )
 
         return header + param_data + data_section
@@ -2031,17 +2029,15 @@ class Server:
         # Data section: return code (0xFF = success) + data
         data_section = struct.pack(">BBH", 0xFF, 0x09, len(data)) + data
 
-        # Build S7 header
+        # Build S7 header for USERDATA (10 bytes, no error_class/error_code in header)
         header = struct.pack(
-            ">BBHHHHBB",
+            ">BBHHHH",
             0x32,  # Protocol ID
             S7PDUType.USERDATA,  # PDU type
             0x0000,  # Reserved
             request.get("sequence", 0),  # Sequence
             len(param_data),  # Parameter length
             len(data_section),  # Data length
-            0x00,  # Error class (success)
-            0x00,  # Error code (success)
         )
 
         return header + param_data + data_section

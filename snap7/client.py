@@ -1297,9 +1297,15 @@ class Client:
         response_data = conn.receive_data()
         response = self.protocol.parse_response(response_data)
 
-        # Check for errors
+        # Check for errors in header (for ACK/ACK_DATA)
         if response.get("error_code", 0) != 0:
             raise RuntimeError(f"Read SZL failed with error: {response['error_code']}")
+
+        # Check for errors in data section (for USERDATA - return_code != 0xFF means error)
+        data_info = response.get("data", {})
+        return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
+        if return_code != 0xFF:
+            raise RuntimeError(f"Read SZL failed with return code: {return_code:#02x}")
 
         # Parse SZL response
         szl_result = self.protocol.parse_read_szl_response(response)
