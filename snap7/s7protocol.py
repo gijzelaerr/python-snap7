@@ -852,12 +852,15 @@ class S7Protocol:
         # Block number is 5-digit zero-padded ASCII (e.g., 1 -> "00001")
         block_num_ascii = f"{block_num:05d}".encode("ascii")
         data_payload = struct.pack(">BB", 0x30, block_type) + b"A" + block_num_ascii
-        data_section = struct.pack(
-            ">BBH",
-            0xFF,  # Return value (success/request)
-            0x09,  # Transport size (TS_ResOctet)
-            len(data_payload),  # Length (8 bytes)
-        ) + data_payload
+        data_section = (
+            struct.pack(
+                ">BBH",
+                0xFF,  # Return value (success/request)
+                0x09,  # Transport size (TS_ResOctet)
+                len(data_payload),  # Length (8 bytes)
+            )
+            + data_payload
+        )
 
         # S7 header for USER_DATA
         header = struct.pack(
