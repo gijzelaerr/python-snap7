@@ -1940,10 +1940,9 @@ class Server:
                 # Header (8 bytes at offset 58)
                 data[58:60] = b"DB"
                 data[66] = 1  # Version
-                data = bytes(data)
 
                 logger.debug(f"Get block info for DB{block_number}: size={block_size}")
-                return self._build_userdata_success_response(request, userdata_params, data)
+                return self._build_userdata_success_response(request, userdata_params, bytes(data))
             else:
                 logger.debug(f"Block DB{block_number} not found")
                 return self._build_userdata_error_response(request, 0x8104)  # Object not found
