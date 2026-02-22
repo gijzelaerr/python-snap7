@@ -1837,18 +1837,24 @@ class Server:
         # Block type code constants
         block_db = 0x41  # Data Block
 
-        # Default to DB type if not specified
-        requested_type = raw_data[0] if len(raw_data) > 0 else block_db
+        # Handle both new format [0x30, type] and old format [type]
+        if len(raw_data) >= 2 and raw_data[0] == 0x30:
+            requested_type = raw_data[1]
+        elif len(raw_data) > 0:
+            requested_type = raw_data[0]
+        else:
+            requested_type = block_db
 
         # Currently only support DB type (others not implemented in emulator)
         if requested_type == block_db:
             # Get all registered DB numbers
             db_numbers = sorted([idx for (area, idx) in self.memory_areas.keys() if area == S7Area.DB])
 
-            # Build response data - 2 bytes per block number
+            # Build response data - 4 bytes per block (TDataFunGetBotItem:
+            # BlockNum(2) + Unknown(1) + BlockLang(1))
             data = b""
             for db_num in db_numbers:
-                data += struct.pack(">H", db_num)
+                data += struct.pack(">HBB", db_num, 0, 0)
 
             logger.debug(f"List blocks of type DB: {db_numbers}")
             return self._build_userdata_success_response(request, userdata_params, data)
@@ -1890,8 +1896,17 @@ class Server:
         # Block type code constants
         block_db = 0x41  # Data Block
 
-        # Parse request: usually block_type (1 byte) + block_number (2 bytes)
-        if len(raw_data) >= 3:
+        # Parse request: handle new format [0x30, type, 'A', ASCII_num(5)]
+        # and old format [type, num(2), 0x41]
+        if len(raw_data) >= 8 and raw_data[0] == 0x30:
+            # New format: 0x30 + type + 'A' + 5-digit ASCII number
+            requested_type = raw_data[1]
+            try:
+                block_number = int(raw_data[3:8].decode("ascii"))
+            except (ValueError, UnicodeDecodeError):
+                block_number = 1
+        elif len(raw_data) >= 3:
+            # Old format: type(1) + number(2) + filesystem(1)
             requested_type = raw_data[0]
             block_number = struct.unpack(">H", raw_data[1:3])[0]
         else:
@@ -1905,44 +1920,27 @@ class Server:
             if area_key in self.memory_areas:
                 block_size = len(self.memory_areas[area_key])
 
-                # Build block info structure (simplified version)
-                # TS7BlockInfo structure:
-                # - BlkType (4 bytes)
-                # - BlkNumber (4 bytes)
-                # - BlkLang (4 bytes)
-                # - BlkFlags (4 bytes)
-                # - MC7Size (4 bytes) - block size
-                # - LoadSize (4 bytes)
-                # - LocalData (4 bytes)
-                # - SBBLength (4 bytes)
-                # - CheckSum (4 bytes)
-                # - Version (4 bytes)
-                # - CodeDate (char[11])
-                # - IntfDate (char[11])
-                # - Author (char[9])
-                # - Family (char[9])
-                # - Header (char[9])
-
-                data = struct.pack(
-                    ">IIIIIIIIII",
-                    requested_type,  # BlkType
-                    block_number,  # BlkNumber
-                    0,  # BlkLang (0 = undefined)
-                    0,  # BlkFlags
-                    block_size,  # MC7Size (use actual size)
-                    block_size,  # LoadSize
-                    0,  # LocalData
-                    0,  # SBBLength
-                    0,  # CheckSum
-                    1,  # Version (1.0)
-                )
-
-                # Add date and name fields (fixed size, padded with zeros)
-                data += b"\x00" * 11  # CodeDate
-                data += b"\x00" * 11  # IntfDate
-                data += b"SNAP7EMU\x00"  # Author (9 bytes)
-                data += b"EMULATOR\x00"  # Family (9 bytes)
-                data += b"DB\x00\x00\x00\x00\x00\x00\x00"  # Header (9 bytes)
+                # Build TResDataBlockInfo structure (78 bytes)
+                # Layout per Snap7 C s7_types.h
+                data = bytearray(78)
+                data[0] = 0x30  # Const
+                data[1] = requested_type  # BlkType
+                data[9] = 0  # BlkFlags
+                data[10] = 0  # BlkLang
+                data[11] = requested_type  # SubBlkType
+                struct.pack_into(">H", data, 12, block_number)  # BlkNumber
+                struct.pack_into(">I", data, 14, block_size)  # LoadSize
+                struct.pack_into(">H", data, 34, 0)  # SBBLength
+                struct.pack_into(">H", data, 38, 0)  # LocalData
+                struct.pack_into(">H", data, 40, block_size)  # MC7Size
+                # Author (8 bytes at offset 42)
+                data[42:50] = b"SNAP7EMU"
+                # Family (8 bytes at offset 50)
+                data[50:58] = b"EMULATOR"
+                # Header (8 bytes at offset 58)
+                data[58:60] = b"DB"
+                data[66] = 1  # Version
+                data = bytes(data)
 
                 logger.debug(f"Get block info for DB{block_number}: size={block_size}")
                 return self._build_userdata_success_response(request, userdata_params, data)
@@ -1966,18 +1964,21 @@ class Server:
             Error response PDU
         """
         # USER_DATA response format is different from standard response
-        # Parameter section: header + type/group + subfunction + sequence + error
+        # Parameter section (12-byte format per TS7Params7)
         param_data = struct.pack(
-            ">BBBBBBBBB",
+            ">BBBBBBBBBBBB",
             0x00,  # Reserved
             0x01,  # Parameter count
             0x12,  # Type/length header
-            0x04,  # Length
+            0x08,  # Length (8 bytes following)
             0x12,  # Method (response)
             0x84,  # Type (8=response) | Group (4=SZL, but used for error)
             0x01,  # Subfunction
             0x00,  # Sequence
-            0x00,  # Reserved
+            0x00,  # Data unit reference
+            0x00,  # Last data unit
+            0x00,  # Error code high
+            0x00,  # Error code low
         )
 
         # Data section: return code only (error code in transport format)
@@ -2012,18 +2013,21 @@ class Server:
         subfunction = userdata_params.get("subfunction", 0)
         seq = userdata_params.get("sequence", 0)
 
-        # Parameter section for success response
+        # Parameter section for success response (12-byte format per TS7Params7)
         param_data = struct.pack(
-            ">BBBBBBBBB",
+            ">BBBBBBBBBBBB",
             0x00,  # Reserved
             0x01,  # Parameter count
             0x12,  # Type/length header
-            0x04,  # Length
+            0x08,  # Length (8 bytes following)
             0x12,  # Method (response)
             0x80 | group,  # Type (8=response) | Group
             subfunction,  # Subfunction
             seq,  # Sequence
-            0x00,  # Reserved
+            0x00,  # Data unit reference
+            0x00,  # Last data unit
+            0x00,  # Error code high
+            0x00,  # Error code low
         )
 
         # Data section: return code (0xFF = success) + data

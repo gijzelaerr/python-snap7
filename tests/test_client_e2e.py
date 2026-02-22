@@ -76,21 +76,6 @@ DB_READ_ONLY = int(os.environ.get("PLC_DB_READ", "1"))
 DB_READ_WRITE = int(os.environ.get("PLC_DB_WRITE", "2"))
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    """Update module globals from pytest command line options."""
-    global PLC_IP, PLC_RACK, PLC_SLOT, PLC_PORT, DB_READ_ONLY, DB_READ_WRITE
-    if hasattr(config, "getoption"):
-        try:
-            PLC_IP = config.getoption("--plc-ip", default=PLC_IP)
-            PLC_RACK = config.getoption("--plc-rack", default=PLC_RACK)
-            PLC_SLOT = config.getoption("--plc-slot", default=PLC_SLOT)
-            PLC_PORT = config.getoption("--plc-port", default=PLC_PORT)
-            DB_READ_ONLY = config.getoption("--plc-db-read", default=DB_READ_ONLY)
-            DB_READ_WRITE = config.getoption("--plc-db-write", default=DB_READ_WRITE)
-        except ValueError:
-            pass  # Options not available yet
-
-
 # =============================================================================
 # DB Structure - Byte offsets for each variable
 # =============================================================================
@@ -527,7 +512,12 @@ class TestClientPLCInfo(unittest.TestCase):
 
     def test_get_cpu_info(self) -> None:
         """Test get_cpu_info() method."""
-        cpu_info = self.client.get_cpu_info()
+        try:
+            cpu_info = self.client.get_cpu_info()
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                pytest.skip(f"SZL not available on this PLC: {e}")
+            raise
         self.assertIsNotNone(cpu_info.ModuleTypeName)
 
     def test_get_cpu_state(self) -> None:
@@ -554,17 +544,32 @@ class TestClientPLCInfo(unittest.TestCase):
 
     def test_get_cp_info(self) -> None:
         """Test get_cp_info() method."""
-        cp_info = self.client.get_cp_info()
+        try:
+            cp_info = self.client.get_cp_info()
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                pytest.skip(f"SZL not available on this PLC: {e}")
+            raise
         self.assertGreater(cp_info.MaxPduLength, 0)
 
     def test_get_order_code(self) -> None:
         """Test get_order_code() method."""
-        order_code = self.client.get_order_code()
+        try:
+            order_code = self.client.get_order_code()
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                pytest.skip(f"SZL not available on this PLC: {e}")
+            raise
         self.assertIsNotNone(order_code.OrderCode)
 
     def test_get_protection(self) -> None:
         """Test get_protection() method."""
-        protection = self.client.get_protection()
+        try:
+            protection = self.client.get_protection()
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                pytest.skip(f"SZL not available on this PLC: {e}")
+            raise
         self.assertIsNotNone(protection)
 
     def test_get_exec_time(self) -> None:
@@ -636,13 +641,23 @@ class TestClientSZL(unittest.TestCase):
 
     def test_read_szl(self) -> None:
         """Test read_szl() method."""
-        # Read CPU identification (SZL 0x001C)
-        szl = self.client.read_szl(0x001C, 0)
+        try:
+            # Read CPU identification (SZL 0x001C)
+            szl = self.client.read_szl(0x001C, 0)
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                pytest.skip(f"SZL not available on this PLC: {e}")
+            raise
         self.assertIsNotNone(szl)
 
     def test_read_szl_list(self) -> None:
         """Test read_szl_list() method."""
-        szl_list = self.client.read_szl_list()
+        try:
+            szl_list = self.client.read_szl_list()
+        except Exception as e:
+            if "does not exist" in str(e).lower():
+                pytest.skip(f"SZL not available on this PLC: {e}")
+            raise
         self.assertIsInstance(szl_list, bytes)
         self.assertGreater(len(szl_list), 0)
 

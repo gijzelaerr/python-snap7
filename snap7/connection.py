@@ -235,8 +235,8 @@ class ISOTCPConnection:
         calling_tsap = struct.pack(">BBH", 0xC1, 2, self.local_tsap)
         # Called TSAP (remote)
         called_tsap = struct.pack(">BBH", 0xC2, 2, self.remote_tsap)
-        # PDU Size parameter
-        pdu_size_param = struct.pack(">BBH", 0xC0, 2, self.pdu_size)
+        # PDU Size parameter (ISO 8073 code: 0x0A = 1024 bytes)
+        pdu_size_param = struct.pack(">BBB", 0xC0, 1, 0x0A)
 
         parameters = calling_tsap + called_tsap + pdu_size_param
 
@@ -282,9 +282,14 @@ class ISOTCPConnection:
 
             param_data = params[offset + 2 : offset + 2 + param_len]
 
-            if param_code == 0xC0 and param_len == 2:
+            if param_code == 0xC0:
                 # PDU Size parameter
-                self.pdu_size = struct.unpack(">H", param_data)[0]
+                if param_len == 1:
+                    # ISO 8073 code: size = 2^code
+                    self.pdu_size = 1 << param_data[0]
+                elif param_len == 2:
+                    # Raw 2-byte value
+                    self.pdu_size = struct.unpack(">H", param_data)[0]
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
 
             offset += 2 + param_len

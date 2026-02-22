@@ -722,12 +722,13 @@ class S7Protocol:
             self._next_sequence() & 0xFF,  # Sequence number
         )
 
-        # Data section: block type
+        # Data section: block type (0x30 prefix + type per Snap7 C format)
         data_section = struct.pack(
-            ">BBHB",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
-            0x0001,  # Length (1 byte for block type)
+            ">BBHBB",
+            0xFF,  # Return value (success/request)
+            0x09,  # Transport size (TS_ResOctet)
+            0x0002,  # Length (2 bytes: 0x30 + block type)
+            0x30,  # Block type indicator
             block_type,  # Block type code
         )
 
@@ -813,12 +814,13 @@ class S7Protocol:
         if not raw_data:
             return result
 
-        # Parse block numbers (2 bytes each, big-endian)
+        # Parse block entries (4 bytes each per TDataFunGetBotItem:
+        # BlockNum(2) + Unknown(1) + BlockLang(1))
         offset = 0
-        while offset + 2 <= len(raw_data):
+        while offset + 4 <= len(raw_data):
             block_num = struct.unpack(">H", raw_data[offset : offset + 2])[0]
             result.append(block_num)
-            offset += 2
+            offset += 4
 
         return result
 
@@ -846,16 +848,16 @@ class S7Protocol:
             self._next_sequence() & 0xFF,  # Sequence number
         )
 
-        # Data section: block type (1) + block number (2) + filesystem (1)
+        # Data section: [0x30, type, 'A', ASCII_num(5)] per Snap7 C format
+        # Block number is 5-digit zero-padded ASCII (e.g., 1 -> "00001")
+        block_num_ascii = f"{block_num:05d}".encode("ascii")
+        data_payload = struct.pack(">BB", 0x30, block_type) + b"A" + block_num_ascii
         data_section = struct.pack(
-            ">BBHBHB",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
-            0x0004,  # Length (4 bytes)
-            block_type,  # Block type code
-            block_num,  # Block number
-            0x41,  # Filesystem (A = active)
-        )
+            ">BBH",
+            0xFF,  # Return value (success/request)
+            0x09,  # Transport size (TS_ResOctet)
+            len(data_payload),  # Length (8 bytes)
+        ) + data_payload
 
         # S7 header for USER_DATA
         header = struct.pack(
@@ -904,25 +906,26 @@ class S7Protocol:
         if len(raw_data) < 78:
             return result
 
-        # Parse block info structure
-        # Format from Snap7: various fixed-size fields
-        result["block_type"] = raw_data[0]
-        result["block_number"] = struct.unpack(">H", raw_data[1:3])[0]
-        result["block_lang"] = raw_data[3]
-        result["block_flags"] = raw_data[4]
-        result["mc7_size"] = struct.unpack(">H", raw_data[10:12])[0]
-        result["load_size"] = struct.unpack(">I", raw_data[6:10])[0]
-        result["local_data"] = struct.unpack(">H", raw_data[12:14])[0]
-        result["sbb_length"] = struct.unpack(">H", raw_data[14:16])[0]
-        result["checksum"] = struct.unpack(">H", raw_data[16:18])[0]
-        result["version"] = raw_data[18]
+        # Parse block info structure per TResDataBlockInfo layout
+        result["block_type"] = raw_data[1]
+        result["block_flags"] = raw_data[9]
+        result["block_lang"] = raw_data[10]
+        result["block_number"] = struct.unpack(">H", raw_data[12:14])[0]
+        result["load_size"] = struct.unpack(">I", raw_data[14:18])[0]
+        result["sbb_length"] = struct.unpack(">H", raw_data[34:36])[0]
+        result["local_data"] = struct.unpack(">H", raw_data[38:40])[0]
+        result["mc7_size"] = struct.unpack(">H", raw_data[40:42])[0]
+        result["version"] = raw_data[66]
+        result["checksum"] = struct.unpack(">H", raw_data[68:70])[0]
 
-        # Dates and strings
-        result["code_date"] = raw_data[20:30]
-        result["intf_date"] = raw_data[30:40]
-        result["author"] = raw_data[40:48]
-        result["family"] = raw_data[48:56]
-        result["header"] = raw_data[56:64]
+        # Dates (6 bytes each: ms(2) + days(2) + reserved(2))
+        result["code_date"] = raw_data[22:28]
+        result["intf_date"] = raw_data[28:34]
+
+        # Strings (8 bytes each)
+        result["author"] = raw_data[42:50]
+        result["family"] = raw_data[50:58]
+        result["header"] = raw_data[58:66]
 
         return result
 
@@ -950,11 +953,11 @@ class S7Protocol:
             self._next_sequence() & 0xFF,  # Sequence number
         )
 
-        # Data section: SZL ID and Index
+        # Data section: SZL ID and Index (RetVal=0xFF, TS=TS_ResOctet per TS7ReqSZLData)
         data_section = struct.pack(
             ">BBHHH",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
+            0xFF,  # Return value (success/request)
+            0x09,  # Transport size (TS_ResOctet)
             0x0004,  # Length (4 bytes for ID + Index)
             szl_id,  # SZL ID
             szl_index,  # SZL Index

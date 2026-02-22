@@ -231,8 +231,13 @@ class Client:
         Returns:
             Entire DB contents
         """
-        # Read a reasonable default size (max is 65535 due to address encoding)
-        return self.db_read(db_number, 0, 1024)
+        # Query actual DB size via get_block_info, fall back to 1024
+        try:
+            block_info = self.get_block_info(Block.DB, db_number)
+            size = block_info.MC7Size if block_info.MC7Size > 0 else 1024
+        except Exception:
+            size = 1024
+        return self.db_read(db_number, 0, size)
 
     def db_fill(self, db_number: int, filler: int) -> int:
         """
@@ -449,6 +454,13 @@ class Client:
         if response.get("error_code", 0) != 0:
             logger.warning(f"List blocks returned error code: {response['error_code']}")
 
+        # Check for errors in data section
+        data_info = response.get("data", {})
+        return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
+        if return_code != 0xFF:
+            desc = get_return_code_description(return_code)
+            raise S7ProtocolError(f"List blocks failed: {desc} (0x{return_code:02x})")
+
         # Parse block counts from response
         counts = self.protocol.parse_list_blocks_response(response)
 
@@ -506,6 +518,13 @@ class Client:
         # Check for errors
         if response.get("error_code", 0) != 0:
             logger.warning(f"List blocks of type returned error code: {response['error_code']}")
+
+        # Check for errors in data section
+        data_info = response.get("data", {})
+        return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
+        if return_code != 0xFF:
+            desc = get_return_code_description(return_code)
+            raise S7ProtocolError(f"List blocks of type failed: {desc} (0x{return_code:02x})")
 
         # Parse block numbers from response
         block_numbers = self.protocol.parse_list_blocks_of_type_response(response)
@@ -609,6 +628,13 @@ class Client:
         # Check for errors
         if response.get("error_code", 0) != 0:
             raise RuntimeError(f"Get block info failed with error: {response['error_code']}")
+
+        # Check for errors in data section
+        data_info = response.get("data", {})
+        return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
+        if return_code != 0xFF:
+            desc = get_return_code_description(return_code)
+            raise S7ProtocolError(f"Get block info failed: {desc} (0x{return_code:02x})")
 
         # Parse block info response
         info = self.protocol.parse_get_block_info_response(response)

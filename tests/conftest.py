@@ -62,6 +62,22 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Propagate CLI options to test_client_e2e module globals."""
+    config = session.config
+    try:
+        import tests.test_client_e2e as e2e
+
+        e2e.PLC_IP = str(config.getoption("--plc-ip"))
+        e2e.PLC_RACK = int(config.getoption("--plc-rack"))
+        e2e.PLC_SLOT = int(config.getoption("--plc-slot"))
+        e2e.PLC_PORT = int(config.getoption("--plc-port"))
+        e2e.DB_READ_ONLY = int(config.getoption("--plc-db-read"))
+        e2e.DB_READ_WRITE = int(config.getoption("--plc-db-write"))
+    except Exception:
+        pass  # Module may not be importable or options not available
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip e2e tests unless --e2e flag is provided."""
     if config.getoption("--e2e"):
