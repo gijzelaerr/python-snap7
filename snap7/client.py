@@ -231,12 +231,8 @@ class Client:
         Returns:
             Entire DB contents
         """
-        # Query actual DB size via get_block_info, fall back to 1024
-        try:
-            block_info = self.get_block_info(Block.DB, db_number)
-            size = block_info.MC7Size if block_info.MC7Size > 0 else 1024
-        except Exception:
-            size = 1024
+        block_info = self.get_block_info(Block.DB, db_number)
+        size = block_info.MC7Size if block_info.MC7Size > 0 else 65536
         return self.db_read(db_number, 0, size)
 
     def db_fill(self, db_number: int, filler: int) -> int:

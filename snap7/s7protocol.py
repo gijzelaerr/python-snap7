@@ -675,7 +675,7 @@ class S7Protocol:
             0x11,  # Method (0x11 = request)
             0x43,  # Type (4=request) | Group (3=grBlocksInfo)
             S7UserDataSubfunction.LIST_ALL,  # Subfunction (0x01 = list all)
-            self._next_sequence() & 0xFF,  # Sequence number (1 byte)
+            0x00,  # DataRef (0x00 for initial request)
         )
 
         # Data section: return code placeholder
@@ -719,17 +719,19 @@ class S7Protocol:
             0x11,  # Method (0x11 = request)
             0x43,  # Type (4=request) | Group (3=grBlocksInfo)
             S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE,  # Subfunction (0x02)
-            self._next_sequence() & 0xFF,  # Sequence number
+            0x00,  # DataRef (0x00 for initial request)
         )
 
         # Data section: block type (0x30 prefix + type per Snap7 C format)
         data_section = struct.pack(
-            ">BBHBB",
-            0xFF,  # Return value (success/request)
-            0x09,  # Transport size (TS_ResOctet)
-            0x0002,  # Length (2 bytes: 0x30 + block type)
+            ">BBHBBBB",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0004,  # Length (4 bytes)
             0x30,  # Block type indicator
             block_type,  # Block type code
+            0x0A,  # Trailing bytes per Snap7 C
+            0x00,
         )
 
         # S7 header for USER_DATA
@@ -845,7 +847,7 @@ class S7Protocol:
             0x11,  # Method (0x11 = request)
             0x43,  # Type (4=request) | Group (3=grBlocksInfo)
             S7UserDataSubfunction.BLOCK_INFO,  # Subfunction (0x03)
-            self._next_sequence() & 0xFF,  # Sequence number
+            0x00,  # DataRef (0x00 for initial request)
         )
 
         # Data section: [0x30, type, 'A', ASCII_num(5)] per Snap7 C format
@@ -855,9 +857,9 @@ class S7Protocol:
         data_section = (
             struct.pack(
                 ">BBH",
-                0xFF,  # Return value (success/request)
-                0x09,  # Transport size (TS_ResOctet)
-                len(data_payload),  # Length (8 bytes)
+                0x0A,  # Return value (request)
+                0x00,  # Transport size
+                len(data_payload),  # Length
             )
             + data_payload
         )
@@ -953,14 +955,14 @@ class S7Protocol:
             0x11,  # Method (0x11 = request)
             0x44,  # Type (4=request) | Group (4=grSZL)
             S7UserDataSubfunction.READ_SZL,  # Subfunction (0x01)
-            self._next_sequence() & 0xFF,  # Sequence number
+            0x00,  # DataRef (0x00 for initial request)
         )
 
-        # Data section: SZL ID and Index (RetVal=0xFF, TS=TS_ResOctet per TS7ReqSZLData)
+        # Data section: SZL ID and Index
         data_section = struct.pack(
             ">BBHHH",
-            0xFF,  # Return value (success/request)
-            0x09,  # Transport size (TS_ResOctet)
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
             0x0004,  # Length (4 bytes for ID + Index)
             szl_id,  # SZL ID
             szl_index,  # SZL Index
@@ -1025,7 +1027,7 @@ class S7Protocol:
             0x11,  # Method (0x11 = request)
             0x47,  # Type (4=request) | Group (7=grClock)
             S7UserDataSubfunction.GET_CLOCK,  # Subfunction (0x01)
-            self._next_sequence() & 0xFF,  # Sequence number
+            0x00,  # DataRef (0x00 for initial request)
         )
 
         # Data section: empty for get clock
@@ -1088,7 +1090,7 @@ class S7Protocol:
             0x11,  # Method (0x11 = request)
             0x47,  # Type (4=request) | Group (7=grClock)
             S7UserDataSubfunction.SET_CLOCK,  # Subfunction (0x02)
-            self._next_sequence() & 0xFF,  # Sequence number
+            0x00,  # DataRef (0x00 for initial request)
         )
 
         # Data section with BCD time

@@ -1,5 +1,6 @@
 """Pytest configuration for python-snap7 tests."""
 
+import sys
 import pytest
 
 
@@ -62,26 +63,22 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
-def pytest_sessionstart(session: pytest.Session) -> None:
-    """Propagate CLI options to test_client_e2e module globals."""
-    config = session.config
-    try:
-        import tests.test_client_e2e as e2e
-
-        e2e.PLC_IP = str(config.getoption("--plc-ip"))
-        e2e.PLC_RACK = int(config.getoption("--plc-rack"))
-        e2e.PLC_SLOT = int(config.getoption("--plc-slot"))
-        e2e.PLC_PORT = int(config.getoption("--plc-port"))
-        e2e.DB_READ_ONLY = int(config.getoption("--plc-db-read"))
-        e2e.DB_READ_WRITE = int(config.getoption("--plc-db-write"))
-    except Exception:
-        pass  # Module may not be importable or options not available
-
-
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Skip e2e tests unless --e2e flag is provided."""
+    """Propagate CLI options and skip e2e tests unless --e2e flag is provided."""
+    # Propagate CLI options to test_client_e2e module globals
+    for mod_name in ["tests.test_client_e2e", "test_client_e2e"]:
+        e2e = sys.modules.get(mod_name)
+        if e2e is not None:
+            e2e.PLC_IP = str(config.getoption("--plc-ip"))
+            e2e.PLC_RACK = int(config.getoption("--plc-rack"))
+            e2e.PLC_SLOT = int(config.getoption("--plc-slot"))
+            e2e.PLC_PORT = int(config.getoption("--plc-port"))
+            e2e.DB_READ_ONLY = int(config.getoption("--plc-db-read"))
+            e2e.DB_READ_WRITE = int(config.getoption("--plc-db-write"))
+            break
+
+    # Skip e2e tests if flag not provided
     if config.getoption("--e2e"):
-        # --e2e given: run e2e tests
         return
 
     skip_e2e = pytest.mark.skip(reason="Need --e2e option to run end-to-end tests")
