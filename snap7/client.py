@@ -477,6 +477,7 @@ class Client:
         List blocks of a specific type.
 
         Sends real S7 USER_DATA protocol request to server.
+        Supports multi-packet responses when the block list doesn't fit in one PDU.
 
         Args:
             block_type: Type of blocks to list
@@ -522,8 +523,43 @@ class Client:
             desc = get_return_code_description(return_code)
             raise S7ProtocolError(f"List blocks of type failed: {desc} (0x{return_code:02x})")
 
-        # Parse block numbers from response
-        block_numbers = self.protocol.parse_list_blocks_of_type_response(response)
+        # Accumulate raw data across fragments
+        accumulated_data = bytearray(data_info.get("data", b"") if isinstance(data_info, dict) else b"")
+
+        # Check for multi-packet response
+        params = response.get("parameters", {})
+        last_data_unit = params.get("last_data_unit", 0x00) if isinstance(params, dict) else 0x00
+        sequence_number = params.get("sequence_number", 0) if isinstance(params, dict) else 0
+        group = params.get("group", 0x03) if isinstance(params, dict) else 0x03
+        subfunction = params.get("subfunction", 0x02) if isinstance(params, dict) else 0x02
+
+        # Accumulate follow-up fragments
+        for _ in range(100):  # Safety limit
+            if last_data_unit == 0x00:
+                break
+
+            followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
+            conn.send_data(followup)
+
+            response_data = conn.receive_data()
+            response = self.protocol.parse_response(response_data)
+
+            # Check for errors
+            data_info = response.get("data", {})
+            return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
+            if return_code != 0xFF:
+                break
+
+            accumulated_data.extend(data_info.get("data", b"") if isinstance(data_info, dict) else b"")
+
+            # Update multi-packet state
+            params = response.get("parameters", {})
+            last_data_unit = params.get("last_data_unit", 0x00) if isinstance(params, dict) else 0x00
+            sequence_number = params.get("sequence_number", 0) if isinstance(params, dict) else 0
+
+        # Parse block numbers from accumulated data
+        combined_response: dict[str, Any] = {"data": {"data": bytes(accumulated_data)}}
+        block_numbers = self.protocol.parse_list_blocks_of_type_response(combined_response)
 
         # Limit to max_count
         return block_numbers[:max_count]
@@ -1298,6 +1334,7 @@ class Client:
         Read SZL (System Status List).
 
         Sends real S7 USER_DATA protocol request to server.
+        Supports multi-packet responses where SZL data spans multiple PDUs.
 
         Args:
             ssl_id: SZL ID
@@ -1330,18 +1367,50 @@ class Client:
             desc = get_return_code_description(return_code)
             raise RuntimeError(f"Read SZL failed: {desc} (0x{return_code:02x})")
 
-        # Parse SZL response
+        # Parse first fragment (includes SZL header)
         szl_result = self.protocol.parse_read_szl_response(response)
+        accumulated_data = bytearray(szl_result["data"])
+
+        # Check for multi-packet response
+        params = response.get("parameters", {})
+        last_data_unit = params.get("last_data_unit", 0x00) if isinstance(params, dict) else 0x00
+        sequence_number = params.get("sequence_number", 0) if isinstance(params, dict) else 0
+        group = params.get("group", 0x04) if isinstance(params, dict) else 0x04
+        subfunction = params.get("subfunction", 0x01) if isinstance(params, dict) else 0x01
+
+        # Accumulate follow-up fragments
+        for _ in range(100):  # Safety limit
+            if last_data_unit == 0x00:
+                break
+
+            followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
+            conn.send_data(followup)
+
+            response_data = conn.receive_data()
+            response = self.protocol.parse_response(response_data)
+
+            # Check for errors
+            data_info = response.get("data", {})
+            return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
+            if return_code != 0xFF:
+                break
+
+            # Parse follow-up fragment (no SZL header)
+            fragment = self.protocol.parse_read_szl_response(response, first_fragment=False)
+            accumulated_data.extend(fragment["data"])
+
+            # Update multi-packet state
+            params = response.get("parameters", {})
+            last_data_unit = params.get("last_data_unit", 0x00) if isinstance(params, dict) else 0x00
+            sequence_number = params.get("sequence_number", 0) if isinstance(params, dict) else 0
 
         # Build S7SZL structure
-        # S7SZLHeader only has LengthDR and NDR fields
         szl = S7SZL()
-        szl.Header.LengthDR = len(szl_result["data"])
+        szl.Header.LengthDR = len(accumulated_data)
         szl.Header.NDR = 1
 
         # Copy data to SZL.Data array
-        data = szl_result["data"]
-        for i, b in enumerate(data[: min(len(data), len(szl.Data))]):
+        for i, b in enumerate(accumulated_data[: min(len(accumulated_data), len(szl.Data))]):
             szl.Data[i] = b
 
         return szl

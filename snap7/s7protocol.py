@@ -981,12 +981,60 @@ class S7Protocol:
 
         return header + param_data + data_section
 
-    def parse_read_szl_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+    def build_userdata_followup_request(self, group: int, subfunction: int, sequence_number: int) -> bytes:
+        """
+        Build USERDATA follow-up request for multi-packet responses.
+
+        Args:
+            group: USERDATA group (e.g., 4 for SZL, 3 for block info)
+            subfunction: Subfunction code
+            sequence_number: Sequence number from the previous response
+
+        Returns:
+            Complete S7 PDU for follow-up request
+        """
+        # Parameter section: same as initial but with DataRef = sequence_number
+        type_group = 0x40 | (group & 0x0F)  # Type 4 (request) | group
+        param_data = struct.pack(
+            ">BBBBBBBB",
+            0x00,  # Reserved
+            0x01,  # Parameter count
+            0x12,  # Type/length header
+            0x04,  # Length of following data
+            0x11,  # Method (0x11 = request)
+            type_group,  # Type | Group
+            subfunction,  # Subfunction
+            sequence_number,  # DataRef from previous response
+        )
+
+        # Minimal data section for follow-up
+        data_section = struct.pack(
+            ">BBH",
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
+            0x0000,  # Length (0 bytes)
+        )
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.USERDATA,  # PDU type (0x07)
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            len(param_data),  # Parameter length
+            len(data_section),  # Data length
+        )
+
+        return header + param_data + data_section
+
+    def parse_read_szl_response(self, response: Dict[str, Any], first_fragment: bool = True) -> Dict[str, Any]:
         """
         Parse read SZL response.
 
         Args:
             response: Parsed S7 response
+            first_fragment: If True (default), parse SZL header (ID+Index).
+                If False, treat all data as raw payload (follow-up fragments).
 
         Returns:
             Dictionary with SZL ID, Index, and data
@@ -1000,13 +1048,17 @@ class S7Protocol:
         data_info = response.get("data", {})
         raw_data = data_info.get("data", b"")
 
-        if len(raw_data) < 4:
-            return result
+        if first_fragment:
+            if len(raw_data) < 4:
+                return result
 
-        # Parse SZL header: ID (2) + Index (2)
-        result["szl_id"] = struct.unpack(">H", raw_data[0:2])[0]
-        result["szl_index"] = struct.unpack(">H", raw_data[2:4])[0]
-        result["data"] = raw_data[4:]
+            # Parse SZL header: ID (2) + Index (2)
+            result["szl_id"] = struct.unpack(">H", raw_data[0:2])[0]
+            result["szl_index"] = struct.unpack(">H", raw_data[2:4])[0]
+            result["data"] = raw_data[4:]
+        else:
+            # Follow-up fragments don't include SZL header
+            result["data"] = raw_data
 
         return result
 
@@ -1266,6 +1318,11 @@ class S7Protocol:
         if len(param_data) < 1:
             return {}
 
+        # Detect USERDATA response parameters:
+        # byte 0 = 0x00 (reserved), len >= 12, byte 2 = 0x12, byte 4 = 0x12 (method=response)
+        if param_data[0] == 0x00 and len(param_data) >= 12 and param_data[2] == 0x12 and param_data[4] == 0x12:
+            return self._parse_userdata_response_params(param_data)
+
         function_code = param_data[0]
 
         if function_code == S7Function.READ_AREA:
@@ -1309,6 +1366,37 @@ class S7Protocol:
             "max_amq_caller": max_amq_caller,
             "max_amq_callee": max_amq_callee,
             "pdu_length": pdu_length,
+        }
+
+    def _parse_userdata_response_params(self, param_data: bytes) -> Dict[str, Any]:
+        """Parse USERDATA response parameter section (12 bytes).
+
+        Layout:
+            [0]    Reserved (0x00)
+            [1]    Parameter count (0x01)
+            [2]    Type header (0x12)
+            [3]    Length of following data (0x08 for response)
+            [4]    Method (0x12 = response)
+            [5]    Type (high nibble) | Group (low nibble)
+            [6]    Subfunction
+            [7]    Sequence number (used as DataRef in follow-up)
+            [8]    Data unit reference
+            [9]    Last data unit (0x00 = last, non-zero = more)
+            [10-11] Error code
+        """
+        type_group = param_data[5]
+        group = type_group & 0x0F
+        subfunction = param_data[6]
+        sequence_number = param_data[7]
+        last_data_unit = param_data[9]
+        error_code = struct.unpack(">H", param_data[10:12])[0]
+
+        return {
+            "group": group,
+            "subfunction": subfunction,
+            "sequence_number": sequence_number,
+            "last_data_unit": last_data_unit,
+            "error_code": error_code,
         }
 
     def _parse_data_section(self, data_section: bytes) -> Dict[str, Any]:
