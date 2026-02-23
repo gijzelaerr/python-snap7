@@ -39,6 +39,11 @@ class ISOTCPConnection:
     COTP_RJ = 0x50  # Reject
     COTP_ER = 0x70  # Error
 
+    # COTP parameter codes (ISO 8073)
+    COTP_PARAM_PDU_SIZE = 0xC0
+    COTP_PARAM_CALLING_TSAP = 0xC1
+    COTP_PARAM_CALLED_TSAP = 0xC2
+
     def __init__(self, host: str, port: int = 102, local_tsap: int = 0x0100, remote_tsap: int = 0x0102):
         """
         Initialize ISO TCP connection.
@@ -231,12 +236,13 @@ class ISOTCPConnection:
         )
 
         # Add TSAP parameters
+        tsap_length = 2  # TSAP values are 2 bytes (unsigned short)
         # Calling TSAP (local)
-        calling_tsap = struct.pack(">BBH", 0xC1, 2, self.local_tsap)
+        calling_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLING_TSAP, tsap_length, self.local_tsap)
         # Called TSAP (remote)
-        called_tsap = struct.pack(">BBH", 0xC2, 2, self.remote_tsap)
+        called_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLED_TSAP, tsap_length, self.remote_tsap)
         # PDU Size parameter (ISO 8073 code: 0x0A = 1024 bytes)
-        pdu_size_param = struct.pack(">BBB", 0xC0, 1, 0x0A)
+        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, 0x0A)
 
         parameters = calling_tsap + called_tsap + pdu_size_param
 
@@ -282,7 +288,7 @@ class ISOTCPConnection:
 
             param_data = params[offset + 2 : offset + 2 + param_len]
 
-            if param_code == 0xC0:
+            if param_code == self.COTP_PARAM_PDU_SIZE:
                 # PDU Size parameter
                 if param_len == 1:
                     # ISO 8073 code: size = 2^code
@@ -291,6 +297,8 @@ class ISOTCPConnection:
                     # Raw 2-byte value
                     self.pdu_size = struct.unpack(">H", param_data)[0]
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
+            else:
+                logger.debug(f"Unsupported COTP parameter: code={param_code:#04x}, length={param_len}")
 
             offset += 2 + param_len
 
