@@ -30,7 +30,7 @@ DB1 "Read_only" - Read-only data block with predefined values:
     dint2: DInt = 42
     char1: Char = 'F'
     char2: Char = '-'
-    bool0-bool7: Bool (packed in 1 byte)
+    bool0-bool7: Bool (packed in 1 byte, value: 0x01 i.e. bool0=True, bool1-7=False)
 
 DB2 "Data_block_2" - Read/write data block with same structure.
 """

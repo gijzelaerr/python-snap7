@@ -221,33 +221,47 @@ class Client:
         self.write_area(Area.DB, db_number, start, data)
         return 0
 
-    def db_get(self, db_number: int) -> bytearray:
+    def db_get(self, db_number: int, size: int = 0) -> bytearray:
         """
         Get entire DB.
 
+        Uses get_block_info() to determine the DB size automatically.
+        If the PLC does not support get_block_info(), pass the size
+        parameter explicitly.
+
         Args:
             db_number: DB number to read
+            size: DB size in bytes. If 0, the size is determined
+                automatically via get_block_info().
 
         Returns:
             Entire DB contents
         """
-        block_info = self.get_block_info(Block.DB, db_number)
-        size = block_info.MC7Size if block_info.MC7Size > 0 else 65536
+        if size <= 0:
+            block_info = self.get_block_info(Block.DB, db_number)
+            size = block_info.MC7Size if block_info.MC7Size > 0 else 65536
         return self.db_read(db_number, 0, size)
 
-    def db_fill(self, db_number: int, filler: int) -> int:
+    def db_fill(self, db_number: int, filler: int, size: int = 0) -> int:
         """
         Fill a DB with a filler byte.
+
+        Uses get_block_info() to determine the DB size automatically.
+        If the PLC does not support get_block_info(), pass the size
+        parameter explicitly.
 
         Args:
             db_number: DB number to fill
             filler: Byte value to fill with
+            size: DB size in bytes. If 0, the size is determined
+                automatically via get_block_info().
 
         Returns:
             0 on success
         """
-        # Read current DB to get size, then fill
-        size = 100  # Default size
+        if size <= 0:
+            block_info = self.get_block_info(Block.DB, db_number)
+            size = block_info.MC7Size if block_info.MC7Size > 0 else 65536
         data = bytearray([filler] * size)
         return self.db_write(db_number, 0, data)
 

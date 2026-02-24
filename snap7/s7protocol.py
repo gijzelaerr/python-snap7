@@ -725,8 +725,8 @@ class S7Protocol:
         # Data section: block type (0x30 prefix + type per Snap7 C format)
         data_section = struct.pack(
             ">BBHBBBB",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
+            0xFF,  # Return value (data OK)
+            0x09,  # Transport size (octet string)
             0x0004,  # Length (4 bytes)
             0x30,  # Block type indicator
             block_type,  # Block type code
@@ -857,8 +857,8 @@ class S7Protocol:
         data_section = (
             struct.pack(
                 ">BBH",
-                0x0A,  # Return value (request)
-                0x00,  # Transport size
+                0xFF,  # Return value (data OK)
+                0x09,  # Transport size (octet string)
                 len(data_payload),  # Length
             )
             + data_payload
@@ -961,8 +961,8 @@ class S7Protocol:
         # Data section: SZL ID and Index
         data_section = struct.pack(
             ">BBHHH",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
+            0xFF,  # Return value (data OK)
+            0x09,  # Transport size (octet string)
             0x0004,  # Length (4 bytes for ID + Index)
             szl_id,  # SZL ID
             szl_index,  # SZL Index
@@ -1149,8 +1149,8 @@ class S7Protocol:
         data_section = (
             struct.pack(
                 ">BBH",
-                0x0A,  # Return value (request)
-                0x00,  # Transport size
+                0xFF,  # Return value (data OK)
+                0x09,  # Transport size (octet string)
                 len(bcd_time),  # Length
             )
             + bcd_time
