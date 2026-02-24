@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-snap7"
-version = "2.0.2"
+version = "2.1.0"
 description = "Pure Python S7 communication library for Siemens PLCs"
 readme = "README.rst"
 authors = [
