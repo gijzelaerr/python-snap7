@@ -1,0 +1,160 @@
+// =============================================================================
+// python-snap7 e2e test data blocks
+//
+// Import this file into TIA Portal to create the two data blocks required
+// by tests/test_client_e2e.py.
+//
+// DB1 "Read_only"  — read-only test data with predefined values
+// DB2 "Data_block_2" — read-write test data (same layout, used for write tests)
+//
+// IMPORTANT for S7-1200/1500:
+//   Disable "Optimized block access" in each DB's properties so that byte
+//   offsets match the test expectations (standard/absolute addressing).
+//
+// IMPORTANT for S7-300/400 (Step 7 Classic):
+//   This file uses TIA Portal SCL syntax. For Step 7 Classic, create the
+//   DBs manually using the variable table below, or adapt the syntax.
+//
+// After importing, download the blocks to the PLC. For DB1, optionally
+// enable "Write protection in the device" in the DB properties.
+//
+// Byte layout (37 bytes total):
+//   Offset  Type   Name    Start value
+//   ------  -----  ------  -----------
+//    0.0    Int    int1    10
+//    2.0    Int    int2    255
+//    4.0    Real   float1  123.45
+//    8.0    Real   float2  543.21
+//   12.0    Byte   byte1   16#0F
+//   13.0    Byte   byte2   16#F0
+//   14.0    Word   word1   16#ABCD
+//   16.0    Word   word2   16#1234
+//   18.0    DWord  dword1  16#12345678
+//   22.0    DWord  dword2  16#89ABCDEF
+//   26.0    DInt   dint1   2147483647
+//   30.0    DInt   dint2   42
+//   34.0    Char   char1   'F'
+//   35.0    Char   char2   '-'
+//   36.0    Bool   bool0   TRUE
+//   36.1    Bool   bool1   FALSE
+//   36.2    Bool   bool2   FALSE
+//   36.3    Bool   bool3   FALSE
+//   36.4    Bool   bool4   FALSE
+//   36.5    Bool   bool5   FALSE
+//   36.6    Bool   bool6   FALSE
+//   36.7    Bool   bool7   FALSE
+// =============================================================================
+
+
+DATA_BLOCK "Read_only"
+{ S7_Optimized_Access := 'FALSE' }
+    VERSION : 0.1
+    NON_RETAIN
+
+    VAR
+        int1    : Int;
+        int2    : Int;
+        float1  : Real;
+        float2  : Real;
+        byte1   : Byte;
+        byte2   : Byte;
+        word1   : Word;
+        word2   : Word;
+        dword1  : DWord;
+        dword2  : DWord;
+        dint1   : DInt;
+        dint2   : DInt;
+        char1   : Char;
+        char2   : Char;
+        bool0   : Bool;
+        bool1   : Bool;
+        bool2   : Bool;
+        bool3   : Bool;
+        bool4   : Bool;
+        bool5   : Bool;
+        bool6   : Bool;
+        bool7   : Bool;
+    END_VAR
+
+BEGIN
+    int1    := 10;
+    int2    := 255;
+    float1  := 123.45;
+    float2  := 543.21;
+    byte1   := 16#0F;
+    byte2   := 16#F0;
+    word1   := 16#ABCD;
+    word2   := 16#1234;
+    dword1  := 16#12345678;
+    dword2  := 16#89ABCDEF;
+    dint1   := 2147483647;
+    dint2   := 42;
+    char1   := 'F';
+    char2   := '-';
+    bool0   := TRUE;
+    bool1   := FALSE;
+    bool2   := FALSE;
+    bool3   := FALSE;
+    bool4   := FALSE;
+    bool5   := FALSE;
+    bool6   := FALSE;
+    bool7   := FALSE;
+
+END_DATA_BLOCK
+
+
+DATA_BLOCK "Data_block_2"
+{ S7_Optimized_Access := 'FALSE' }
+    VERSION : 0.1
+    NON_RETAIN
+
+    VAR
+        int1    : Int;
+        int2    : Int;
+        float1  : Real;
+        float2  : Real;
+        byte1   : Byte;
+        byte2   : Byte;
+        word1   : Word;
+        word2   : Word;
+        dword1  : DWord;
+        dword2  : DWord;
+        dint1   : DInt;
+        dint2   : DInt;
+        char1   : Char;
+        char2   : Char;
+        bool0   : Bool;
+        bool1   : Bool;
+        bool2   : Bool;
+        bool3   : Bool;
+        bool4   : Bool;
+        bool5   : Bool;
+        bool6   : Bool;
+        bool7   : Bool;
+    END_VAR
+
+BEGIN
+    int1    := 10;
+    int2    := 255;
+    float1  := 123.45;
+    float2  := 543.21;
+    byte1   := 16#0F;
+    byte2   := 16#F0;
+    word1   := 16#ABCD;
+    word2   := 16#1234;
+    dword1  := 16#12345678;
+    dword2  := 16#89ABCDEF;
+    dint1   := 2147483647;
+    dint2   := 42;
+    char1   := 'F';
+    char2   := '-';
+    bool0   := TRUE;
+    bool1   := FALSE;
+    bool2   := FALSE;
+    bool3   := FALSE;
+    bool4   := FALSE;
+    bool5   := FALSE;
+    bool6   := FALSE;
+    bool7   := FALSE;
+
+END_DATA_BLOCK
