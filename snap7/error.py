@@ -1,19 +1,46 @@
 """
-Snap7 library error codes.
+S7 error handling and exception classes.
 
-we define all error codes here, but we don't use them (yet/anymore).
-The error code formatting of the snap7 library as already quite good,
-so we are using that now. But maybe we will use this in the future again.
+Maps S7 error codes to Python exceptions with meaningful messages.
 """
 
-from _ctypes import Array
-from ctypes import c_char, c_int32, c_int
+from typing import Optional, Callable, Any, Hashable
 from functools import cache
-from typing import Callable, Any, Hashable
 
-from .common import logger, load_library
-from .type import Context
 
+class S7Error(Exception):
+    """Base exception for all S7 protocol errors."""
+
+    def __init__(self, message: str, error_code: Optional[int] = None):
+        super().__init__(message)
+        self.error_code = error_code
+
+
+class S7ConnectionError(S7Error):
+    """Raised when connection to S7 device fails."""
+
+    pass
+
+
+class S7ProtocolError(S7Error):
+    """Raised when S7 protocol communication fails."""
+
+    pass
+
+
+class S7TimeoutError(S7Error):
+    """Raised when S7 operation times out."""
+
+    pass
+
+
+class S7AuthenticationError(S7Error):
+    """Raised when S7 authentication fails."""
+
+    pass
+
+
+# S7 client error codes
 s7_client_errors = {
     0x00100000: "errNegotiatingPDU",
     0x00200000: "errCliInvalidParams",
@@ -67,10 +94,6 @@ isotcp_errors = {
     0x00090000: "errIsoSendPacket",
     0x000A0000: "errIsoRecvPacket",
     0x000B0000: "errIsoInvalidParams",
-    0x000C0000: "errIsoResvd_1",
-    0x000D0000: "errIsoResvd_2",
-    0x000E0000: "errIsoResvd_3",
-    0x000F0000: "errIsoResvd_4",
 }
 
 tcp_errors = {
@@ -84,12 +107,6 @@ tcp_errors = {
     0x00000080: "evcClientDisconnected",
     0x00000100: "evcClientTerminated",
     0x00000200: "evcClientsDropped",
-    0x00000400: "evcReserved_00000400",
-    0x00000800: "evcReserved_00000800",
-    0x00001000: "evcReserved_00001000",
-    0x00002000: "evcReserved_00002000",
-    0x00004000: "evcReserved_00004000",
-    0x00008000: "evcReserved_00008000",
 }
 
 s7_server_errors = {
@@ -97,12 +114,13 @@ s7_server_errors = {
     0x00200000: "errSrvDBNullPointer",
     0x00300000: "errSrvAreaAlreadyExists",
     0x00400000: "errSrvUnknownArea",
-    0x00500000: "verrSrvInvalidParams",
+    0x00500000: "errSrvInvalidParams",
     0x00600000: "errSrvTooManyDB",
     0x00700000: "errSrvInvalidParamNumber",
     0x00800000: "errSrvCannotChangeParam",
 }
 
+# Combined error dictionaries
 client_errors = s7_client_errors.copy()
 client_errors.update(isotcp_errors)
 client_errors.update(tcp_errors)
@@ -111,9 +129,68 @@ server_errors = s7_server_errors.copy()
 server_errors.update(isotcp_errors)
 server_errors.update(tcp_errors)
 
+# All error codes combined
+S7_ERROR_CODES = {
+    0x00000000: "Success",
+    **s7_client_errors,
+    **isotcp_errors,
+    **s7_server_errors,
+}
 
-def error_wrap(context: Context) -> Callable[..., Callable[..., None]]:
-    """Parses a s7 error code returned the decorated function."""
+
+def get_error_message(error_code: int) -> str:
+    """Get human-readable error message for S7 error code."""
+    return S7_ERROR_CODES.get(error_code, f"Unknown error: {error_code:#08x}")
+
+
+@cache
+def error_text(error: int, context: str = "client") -> str:
+    """Returns a textual explanation of a given error number.
+
+    Args:
+        error: an error integer
+        context: context in which is called from, server, client or partner
+
+    Returns:
+        The error message as a string.
+    """
+    errors = {"client": client_errors, "server": server_errors, "partner": client_errors}
+    error_dict = errors.get(context, client_errors)
+    return error_dict.get(error, f"Unknown error: {error:#08x}")
+
+
+def check_error(code: int, context: str = "client") -> None:
+    """Check if the error code is set. If so, raise an appropriate exception.
+
+    Args:
+        code: error code number.
+        context: context in which is called.
+
+    Raises:
+        S7ConnectionError: for connection-related errors
+        S7TimeoutError: for timeout errors
+        S7ProtocolError: for protocol errors
+        RuntimeError: for other errors (backwards compatibility)
+    """
+    if code == 0:
+        return
+
+    message = error_text(code, context)
+
+    # Map to specific exception types based on error code patterns
+    if code in [0x00010000, 0x00020000]:  # ISO connect/disconnect errors
+        raise S7ConnectionError(message, code)
+    elif code == 0x02000000:  # Job timeout
+        raise S7TimeoutError(message, code)
+    elif code in isotcp_errors:
+        raise S7ConnectionError(message, code)
+    else:
+        # Use RuntimeError for backwards compatibility with existing code
+        raise RuntimeError(message)
+
+
+def error_wrap(context: str) -> Callable[..., Callable[..., None]]:
+    """Decorator that parses an S7 error code returned by the decorated function."""
 
     def middle(func: Callable[..., int]) -> Any:
         def inner(*args: tuple[Any, ...], **kwargs: dict[Hashable, Any]) -> None:
@@ -123,48 +200,3 @@ def error_wrap(context: Context) -> Callable[..., Callable[..., None]]:
         return inner
 
     return middle
-
-
-def check_error(code: int, context: Context = "client") -> None:
-    """Check if the error code is set. If so, a Python log message is generated
-        and an error is raised.
-
-    Args:
-        code: error code number.
-        context: context in which is called.
-
-    Raises:
-        RuntimeError: if the code exists and is different from 1.
-    """
-    if code and code != 1:
-        error = error_text(code, context)
-        logger.error(error)
-        raise RuntimeError(error)
-
-
-@cache
-def error_text(error: int, context: Context = "client") -> bytes:
-    """Returns a textual explanation of a given error number
-
-    Args:
-        error: an error integer
-        context: context in which is called from, server, client or partner
-
-    Returns:
-        The error.
-
-    Raises:
-        TypeError: if the context is not in `["client", "server", "partner"]`
-    """
-    logger.debug(f"error text for {hex(error)}")
-    len_ = 1024
-    text_type = c_char * len_
-    text = text_type()
-    library = load_library()
-    error_text_func: Callable[[c_int32, Array[c_char], c_int], int] = {
-        "client": library.Cli_ErrorText,
-        "server": library.Srv_ErrorText,
-        "partner": library.Par_ErrorText,
-    }[context]
-    error_text_func(c_int32(error), text, c_int(len_))
-    return text.value

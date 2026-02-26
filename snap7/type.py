@@ -338,7 +338,7 @@ class S7SZLHeader(Structure):
 class S7SZL(Structure):
     """See §33.1 of System Software for S7-300/400 System and Standard Functions"""
 
-    _fields_ = [("Header", S7SZLHeader), ("Data", c_byte * (0x4000 - 4))]
+    _fields_ = [("Header", S7SZLHeader), ("Data", c_ubyte * (0x4000 - 4))]
 
     def __str__(self) -> str:
         return f"<S7SZL Header: {self.S7SZHeader}, Data: {self.Data}>"
@@ -349,7 +349,7 @@ class S7SZLList(Structure):
 
 
 class S7OrderCode(Structure):
-    _fields_ = [("OrderCode", c_char * 21), ("V1", c_byte), ("V2", c_byte), ("V3", c_byte)]
+    _fields_ = [("OrderCode", c_char * 21), ("V1", c_ubyte), ("V2", c_ubyte), ("V3", c_ubyte)]
 
 
 class S7CpInfo(Structure):

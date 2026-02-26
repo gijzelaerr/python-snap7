@@ -9,6 +9,7 @@ from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
 from snap7 import Client, Row, DB
+from snap7.type import Area
 from util.db import print_row
 
 client = Client()
@@ -61,7 +62,8 @@ def set_row(x: int, row: Row) -> None:
     byte array representation of row in the PLC
     """
     row_size = 126
-    client.db_write(1, 4 + x * row_size, row_size, row._bytearray)
+    assert isinstance(row._bytearray, bytearray)
+    client.db_write(1, 4 + x * row_size, row._bytearray)
 
 
 def open_row(row: Row) -> None:
@@ -107,7 +109,7 @@ def open_and_close() -> None:
 
 def set_part_db(start: int, size: int, _bytearray: bytearray) -> None:
     data = _bytearray[start : start + size]
-    client.db_write(1, start, size, data)
+    client.db_write(1, start, data)
 
 
 # def write_data_db(dbnumber, all_data, size):
@@ -126,7 +128,7 @@ def open_and_close_db1() -> None:
         # set_part_db(4+x*126, 126, all_data)
 
     t = time.time()
-    client.write_area(1, all_data, 4 + 126 * 450)
+    client.write_area(Area.DB, 1, 4, all_data)
     print(f"opening all valves took: {time.time() - t}")
 
     print("sleep...")
@@ -138,7 +140,7 @@ def open_and_close_db1() -> None:
     print(time.time() - t)
 
     t = time.time()
-    client.write_area(1, all_data, 4 + 126 * 450)
+    client.write_area(Area.DB, 1, 4, all_data)
     print(f"closing all valves took: {time.time() - t}")
 
 

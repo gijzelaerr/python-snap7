@@ -1,12 +1,13 @@
 import logging
-from multiprocessing.context import Process
-import time
+import struct
 import pytest
 import unittest
 from typing import Optional
 
 import snap7.error
 import snap7.server
+from snap7.server import Server
+from snap7.type import SrvArea
 from snap7.util import get_bool, get_dint, get_dword, get_int, get_real, get_sint, get_string, get_usint, get_word
 from snap7.client import Client
 
@@ -19,24 +20,85 @@ rack = 1
 slot = 1
 
 
+def _init_standard_values(db_data: bytearray) -> None:
+    """Initialize standard test values in DB0 (same as mainloop with init_standard_values=True)."""
+    # test_read_booleans: offset 0, expects 0xAA (alternating False/True)
+    db_data[0] = 0xAA
+
+    # test_read_small_int: offset 10, expects -128, 0, 100, 127
+    db_data[10] = 0x80
+    db_data[11] = 0x00
+    db_data[12] = 100
+    db_data[13] = 127
+
+    # test_read_unsigned_small_int: offset 20
+    db_data[20] = 0
+    db_data[21] = 255
+
+    # test_read_int: offset 30
+    struct.pack_into(">h", db_data, 30, -32768)
+    struct.pack_into(">h", db_data, 32, -1234)
+    struct.pack_into(">h", db_data, 34, 0)
+    struct.pack_into(">h", db_data, 36, 1234)
+    struct.pack_into(">h", db_data, 38, 32767)
+
+    # test_read_double_int: offset 40
+    struct.pack_into(">i", db_data, 40, -2147483648)
+    struct.pack_into(">i", db_data, 44, -32768)
+    struct.pack_into(">i", db_data, 48, 0)
+    struct.pack_into(">i", db_data, 52, 32767)
+    struct.pack_into(">i", db_data, 56, 2147483647)
+
+    # test_read_real: offset 60
+    struct.pack_into(">f", db_data, 60, -3.402823e38)
+    struct.pack_into(">f", db_data, 64, -3.402823e12)
+    struct.pack_into(">f", db_data, 68, -175494351e-38)
+    struct.pack_into(">f", db_data, 72, -1.175494351e-12)
+    struct.pack_into(">f", db_data, 76, 0.0)
+    struct.pack_into(">f", db_data, 80, 1.175494351e-38)
+    struct.pack_into(">f", db_data, 84, 1.175494351e-12)
+    struct.pack_into(">f", db_data, 88, 3.402823466e12)
+    struct.pack_into(">f", db_data, 92, 3.402823466e38)
+
+    # test_read_string: offset 100
+    test_string = "the brown fox jumps over the lazy dog"
+    db_data[100] = 254
+    db_data[101] = len(test_string)
+    db_data[102 : 102 + len(test_string)] = test_string.encode("ascii")
+
+    # test_read_word: offset 400
+    struct.pack_into(">H", db_data, 400, 0x0000)
+    struct.pack_into(">H", db_data, 404, 0x1234)
+    struct.pack_into(">H", db_data, 408, 0xABCD)
+    struct.pack_into(">H", db_data, 412, 0xFFFF)
+
+    # test_read_double_word: offset 500
+    struct.pack_into(">I", db_data, 500, 0x00000000)
+    struct.pack_into(">I", db_data, 508, 0x12345678)
+    struct.pack_into(">I", db_data, 516, 0x1234ABCD)
+    struct.pack_into(">I", db_data, 524, 0xFFFFFFFF)
+
+
 @pytest.mark.mainloop
 class TestServer(unittest.TestCase):
-    process: Optional[Process] = None
+    server: Optional[Server] = None
     client: Client
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.process = Process(target=snap7.server.mainloop, args=[tcp_port, True])
-        cls.process.start()
-        time.sleep(2)  # wait for server to start
+        cls.server = Server()
+        # Create DB0 with standard test values
+        db_data = bytearray(600)
+        _init_standard_values(db_data)
+        cls.server.register_area(SrvArea.DB, 0, db_data)
+        cls.server.register_area(SrvArea.DB, 1, bytearray(600))
+        cls.server.start(tcp_port=tcp_port)
 
     @classmethod
     def tearDownClass(cls) -> None:
-        if cls.process:
-            cls.process.terminate()
-            cls.process.join(1)
-            if cls.process.is_alive():
-                cls.process.kill()
+        if cls.server:
+            cls.server.stop()
+            cls.server.destroy()
 
     def setUp(self) -> None:
         self.client: Client = snap7.client.Client()

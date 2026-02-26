@@ -1,11 +1,10 @@
 from ctypes import c_char
-import gc
 import logging
+import time
 
 import pytest
 import unittest
 from threading import Thread
-from unittest import mock
 
 from snap7.error import server_errors, error_text
 from snap7.server import Server
@@ -18,7 +17,7 @@ logging.basicConfig(level=logging.WARNING)
 class TestServer(unittest.TestCase):
     def setUp(self) -> None:
         self.server = Server()
-        self.server.start(tcp_port=1102)
+        self.server.start(tcp_port=12102)  # Use unique port for server tests
 
     def tearDown(self) -> None:
         self.server.stop()
@@ -95,13 +94,13 @@ class TestServer(unittest.TestCase):
         self.server.unregister_area(area_code, index)
 
     def test_events_callback(self) -> None:
-        def event_call_back(event: str) -> None:
+        def event_call_back(event: SrvEvent) -> None:
             logging.debug(event)
 
         self.server.set_events_callback(event_call_back)
 
     def test_read_events_callback(self) -> None:
-        def read_events_call_back(event: str) -> None:
+        def read_events_call_back(event: SrvEvent) -> None:
             logging.debug(event)
 
         self.server.set_read_events_callback(read_events_call_back)
@@ -122,7 +121,7 @@ class TestServer(unittest.TestCase):
 
     def test_get_param(self) -> None:
         # check the defaults
-        self.assertEqual(self.server.get_param(Parameter.LocalPort), 1102)
+        self.assertEqual(self.server.get_param(Parameter.LocalPort), 12102)
         self.assertEqual(self.server.get_param(Parameter.WorkInterval), 100)
         self.assertEqual(self.server.get_param(Parameter.MaxClients), 1024)
 
@@ -144,40 +143,98 @@ class TestServerBeforeStart(unittest.TestCase):
 
 
 @pytest.mark.server
-class TestLibraryIntegration(unittest.TestCase):
-    def setUp(self) -> None:
-        # Clear the cache on load_library to ensure mock is used
-        from snap7.common import load_library
+class TestServerRobustness(unittest.TestCase):
+    """Test server robustness and edge cases."""
 
-        load_library.cache_clear()
+    def test_multiple_server_instances(self) -> None:
+        """Test multiple server instances on different ports."""
+        from snap7.client import Client
 
-        # have load_library return another mock
-        self.mocklib = mock.MagicMock()
+        servers = []
+        clients = []
 
-        # have the Srv_Create of the mock return None
-        self.mocklib.Srv_Create.return_value = None
-        self.mocklib.Srv_Destroy.return_value = None
+        try:
+            # Start multiple servers
+            for i in range(3):
+                server = Server()
+                port = 12110 + i
 
-        # replace the function load_library with a mock
-        # Use patch.object for Python 3.11+ compatibility (avoids path resolution issues)
-        import snap7.server
+                # Register test area
+                data = (c_char * 100)()
+                data[0] = bytes([i + 1])  # Unique identifier
+                server.register_area(SrvArea.DB, 1, data)
 
-        self.loadlib_patch = mock.patch.object(snap7.server, "load_library", return_value=self.mocklib)
-        self.loadlib_func = self.loadlib_patch.start()
+                server.start(port)
+                servers.append((server, port))
+                time.sleep(0.1)
 
-    def tearDown(self) -> None:
-        # restore load_library
-        self.loadlib_patch.stop()
+            # Connect clients to each server
+            for i, (server, port) in enumerate(servers):
+                client = Client()
+                client.connect("127.0.0.1", 0, 1, port)
+                clients.append(client)
 
-    def test_create(self) -> None:
-        server = Server(log=False)
-        del server
-        gc.collect()
-        self.mocklib.Srv_Create.assert_called_once()
+                # Verify unique data
+                read_data = client.db_read(1, 0, 1)
+                self.assertEqual(read_data[0], i + 1)
 
-    def test_context_manager(self) -> None:
-        with Server(log=False) as _:
-            pass
+        finally:
+            # Clean up
+            for client in clients:
+                try:
+                    client.disconnect()
+                except Exception:
+                    pass
+
+            for server, port in servers:
+                try:
+                    server.stop()
+                    server.destroy()
+                except Exception:
+                    pass
+
+    def test_server_area_management(self) -> None:
+        """Test server area registration/unregistration."""
+        from snap7.client import Client
+
+        server = Server()
+        port = 12120
+
+        try:
+            # Test area registration
+            area1 = (c_char * 50)()
+            area2 = (c_char * 100)()
+
+            result1 = server.register_area(SrvArea.DB, 1, area1)
+            result2 = server.register_area(SrvArea.DB, 2, area2)
+            self.assertEqual(result1, 0)
+            self.assertEqual(result2, 0)
+
+            # Start server
+            server.start(port)
+            time.sleep(0.1)
+
+            # Test client access to both areas
+            client = Client()
+            client.connect("127.0.0.1", 0, 1, port)
+
+            data1 = client.db_read(1, 0, 4)
+            data2 = client.db_read(2, 0, 4)
+            self.assertEqual(len(data1), 4)
+            self.assertEqual(len(data2), 4)
+
+            # Test area unregistration
+            result3 = server.unregister_area(SrvArea.DB, 1)
+            self.assertEqual(result3, 0)
+
+            client.disconnect()
+
+        finally:
+            try:
+                server.stop()
+                server.destroy()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

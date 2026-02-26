@@ -1,109 +1,70 @@
-name: Publish distribution 📦 to Test PyPI
+name: Publish distribution 📦 to TestPyPI
 
 on:
   workflow_dispatch:
 
 jobs:
-  publish-to-testpypi:
+  build:
+    name: Build distribution 📦
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build
+        run: pip install build
+      - name: Build distribution
+        run: python -m build
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to TestPyPI 📦
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: testpypi
       url: https://test.pypi.org/p/python-snap7
-
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
-
-    name: Publish distribution 📦 to TestPyPI
-    runs-on: ubuntu-latest
+      id-token: write
     steps:
-    - name: "Download macOS artifacts"
-      uses: dawidd6/action-download-artifact@v6
-      with:
-        workflow: osx-build-test-amd64.yml
-        name: dist-osx-universal
-        path: dist
-    - name: "Download Linux/amd64 artifacts"
-      uses: dawidd6/action-download-artifact@v6
-      with:
-        workflow: linux-build-test-amd64.yml
-        name: dist-linux-amd64
-        path: dist
-    - name: "Download Linux/arm64 artifacts"
-      uses: dawidd6/action-download-artifact@v6
-      with:
-        workflow: linux-build-test-arm64.yml
-        name: dist-linux-arm64
-        path: dist
-    - name: "Download Windows artifacts"
-      uses: dawidd6/action-download-artifact@v6
-      with:
-        workflow: windows-build-test-amd64.yml
-        name: dist-windows-amd64
-        path: dist
-    - name: "Download source artifacts"
-      uses: dawidd6/action-download-artifact@v6
-      with:
-        workflow: source-build.yml
-        name: dist-source
-        path: dist
-    - name: Combine artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: dist-combined
-        path: dist
-    - name: show dist layout
-      run: find dist
-    - name: Publish distribution 📦 to TestPyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        repository-url: https://test.pypi.org/legacy/
-        verbose: true
-  test-pypi-packages:
-    runs-on: ${{ matrix.os }}
-    needs: publish-to-testpypi
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Show dist layout
+        run: ls -la dist/
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  test-published-package:
+    name: Test published package
+    needs: publish
     strategy:
       matrix:
-        os: ["ubuntu-24.04", "ubuntu-22.04", "macos-14", "macos-15"]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        python-version: ["3.10", "3.12", "3.14"]
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-
-      - name: install python-snap7
+      - name: Install and test python-snap7
         run: |
           uv venv
           uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
-
-  test-pypi-package-windows:
-    runs-on: ${{ matrix.os }}
-    needs: publish-to-testpypi
-    strategy:
-      matrix:
-        os: ["windows-2025", "windows-2022"]
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: install python-snap7
-        run: |
-          uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+          uv run python -c "import snap7; print('snap7 imported successfully')"
