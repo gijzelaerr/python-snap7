@@ -665,10 +665,12 @@ class Client:
 
         # Build and send get block info request
         request = self.protocol.build_get_block_info_request(type_code, db_number)
+        logger.debug("get_block_info request: %s", request.hex())
         conn.send_data(request)
 
         # Receive and parse response
         response_data = conn.receive_data()
+        logger.debug("get_block_info response: %s", response_data.hex())
         response = self.protocol.parse_response(response_data)
 
         # Check for errors

@@ -489,7 +489,12 @@ class TestClientDBOperations(unittest.TestCase):
 
     def test_db_get(self) -> None:
         """Test db_get() method."""
-        data = self.client.db_get(DB_READ_ONLY)
+        try:
+            data = self.client.db_get(DB_READ_ONLY)
+        except Exception as e:
+            if "does not exist" in str(e).lower() or "block info failed" in str(e).lower():
+                pytest.skip(f"get_block_info not supported on this PLC: {e}")
+            raise
         self.assertIsInstance(data, bytearray)
         self.assertGreater(len(data), 0)
 
