@@ -129,6 +129,7 @@ class ISOTCPConnection:
             self.socket.sendall(tpkt_frame)
             logger.debug(f"Sent {len(tpkt_frame)} bytes")
         except socket.error as e:
+            self.connected = False
             raise S7ConnectionError(f"Send failed: {e}")
 
     def receive_data(self) -> bytes:
@@ -162,8 +163,10 @@ class ISOTCPConnection:
             return self._parse_cotp_data(payload)
 
         except socket.timeout:
+            self.connected = False
             raise S7TimeoutError("Receive timeout")
         except socket.error as e:
+            self.connected = False
             raise S7ConnectionError(f"Receive failed: {e}")
 
     def _tcp_connect(self) -> None:
@@ -373,11 +376,14 @@ class ISOTCPConnection:
             try:
                 chunk = self.socket.recv(size - len(data))
                 if not chunk:
+                    self.connected = False
                     raise S7ConnectionError("Connection closed by peer")
                 data.extend(chunk)
             except socket.timeout:
+                self.connected = False
                 raise S7TimeoutError("Receive timeout")
             except socket.error as e:
+                self.connected = False
                 raise S7ConnectionError(f"Receive error: {e}")
 
         return bytes(data)
