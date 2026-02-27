@@ -7,16 +7,15 @@ in a thread pool executor via asyncio.to_thread().
 
 import asyncio
 from datetime import datetime
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
-from ctypes import Array, c_int
+from ctypes import Array
 
 from .client import Client
 from .type import (
     Area,
     Block,
     BlocksList,
-    CDataArrayType,
     Parameter,
     S7CpInfo,
     S7CpuInfo,
@@ -24,9 +23,7 @@ from .type import (
     S7OrderCode,
     S7Protection,
     S7SZL,
-    S7SZLList,
     TS7BlockInfo,
-    WordLen,
 )
 
 
