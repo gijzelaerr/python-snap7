@@ -155,7 +155,7 @@ def set_real(bytearray_: bytearray, byte_index: int, real: Union[bool, str, floa
     return bytearray_
 
 
-def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: int) -> None:
+def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: int) -> bytearray:
     """Set space-padded fixed-length string value
 
     Args:
@@ -192,8 +192,10 @@ def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: 
     for r in range(i + 1, max_length):
         bytearray_[byte_index + r] = ord(" ")
 
+    return bytearray_
 
-def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 254) -> None:
+
+def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 254) -> bytearray:
     """Set string value
 
     Args:
@@ -247,8 +249,10 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     for r in range(i + 1, bytearray_[byte_index] - 2):
         bytearray_[byte_index + 2 + r] = ord(" ")
 
+    return bytearray_
 
-def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> None:
+
+def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> bytearray:
     """Set a DWORD to the buffer.
 
     Notes:
@@ -268,9 +272,10 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> None:
     """
     dword = int(dword)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">I", dword)
+    return bytearray_
 
 
-def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> None:
+def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> bytearray:
     """Set value in bytearray to dint
 
     Notes:
@@ -291,9 +296,10 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> None:
     """
     dint = int(dint)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">i", dint)
+    return bytearray_
 
 
-def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> None:
+def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> bytearray:
     """Set value in bytearray to unsigned dint
 
     Notes:
@@ -314,6 +320,7 @@ def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> None:
     """
     udint = int(udint)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">I", udint)
+    return bytearray_
 
 
 def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytearray:
