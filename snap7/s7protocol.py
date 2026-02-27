@@ -11,7 +11,7 @@ from typing import List, Dict, Any
 from enum import IntEnum
 
 from .datatypes import S7Area, S7WordLen, S7DataTypes
-from .error import S7ProtocolError
+from .error import S7ProtocolError, S7StalePacketError, S7PacketLostError, get_protocol_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +116,23 @@ class S7Protocol:
         """Get next sequence number for S7 PDU."""
         self.sequence = (self.sequence + 1) & 0xFFFF
         return self.sequence
+
+    def validate_pdu_reference(self, response_sequence: int) -> None:
+        """Validate the PDU reference number from a response.
+
+        Compares the response sequence number against the expected (current) sequence.
+
+        Args:
+            response_sequence: Sequence number from the response PDU.
+
+        Raises:
+            S7StalePacketError: If response is older than expected (stale).
+            S7PacketLostError: If response is ahead of expected (packet loss).
+        """
+        if response_sequence < self.sequence:
+            raise S7StalePacketError(f"Stale packet: expected sequence {self.sequence}, got {response_sequence}")
+        elif response_sequence > self.sequence:
+            raise S7PacketLostError(f"Packet lost: expected sequence {self.sequence}, got {response_sequence}")
 
     def build_read_request(self, area: S7Area, db_number: int, start: int, word_len: S7WordLen, count: int) -> bytes:
         """
@@ -725,8 +742,8 @@ class S7Protocol:
         # Data section: block type (0x30 prefix + type per Snap7 C format)
         data_section = struct.pack(
             ">BBHBBBB",
-            0xFF,  # Return value (data OK)
-            0x09,  # Transport size (octet string)
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
             0x0004,  # Length (4 bytes)
             0x30,  # Block type indicator
             block_type,  # Block type code
@@ -857,8 +874,8 @@ class S7Protocol:
         data_section = (
             struct.pack(
                 ">BBH",
-                0xFF,  # Return value (data OK)
-                0x09,  # Transport size (octet string)
+                0x0A,  # Return value (request)
+                0x00,  # Transport size
                 len(data_payload),  # Length
             )
             + data_payload
@@ -961,8 +978,8 @@ class S7Protocol:
         # Data section: SZL ID and Index
         data_section = struct.pack(
             ">BBHHH",
-            0xFF,  # Return value (data OK)
-            0x09,  # Transport size (octet string)
+            0x0A,  # Return value (request)
+            0x00,  # Transport size
             0x0004,  # Length (4 bytes for ID + Index)
             szl_id,  # SZL ID
             szl_index,  # SZL Index
@@ -1149,8 +1166,8 @@ class S7Protocol:
         data_section = (
             struct.pack(
                 ">BBH",
-                0xFF,  # Return value (data OK)
-                0x09,  # Transport size (octet string)
+                0x0A,  # Return value (request)
+                0x00,  # Transport size
                 len(bcd_time),  # Length
             )
             + bcd_time
@@ -1285,13 +1302,21 @@ class S7Protocol:
         if pdu_type not in (S7PDUType.ACK, S7PDUType.ACK_DATA, S7PDUType.USERDATA):
             raise S7ProtocolError(f"Expected response PDU, got {pdu_type}")
 
+        combined_error = (error_class << 8) | error_code
+        if error_class != 0:
+            error_msg = get_protocol_error_message(combined_error)
+            raise S7ProtocolError(
+                f"S7 protocol error (class={error_class:#04x}, code={error_code:#04x}): {error_msg}",
+                error_code=combined_error,
+            )
+
         response = {
             "sequence": sequence,
             "param_length": param_len,
             "data_length": data_len,
             "parameters": None,
             "data": None,
-            "error_code": (error_class << 8) | error_code,
+            "error_code": combined_error,
         }
 
         # Parse parameters if present
@@ -1390,6 +1415,10 @@ class S7Protocol:
         sequence_number = param_data[7]
         last_data_unit = param_data[9]
         error_code = struct.unpack(">H", param_data[10:12])[0]
+
+        if error_code != 0:
+            error_msg = get_protocol_error_message(error_code)
+            logger.warning(f"USERDATA response error {error_code:#06x}: {error_msg}")
 
         return {
             "group": group,

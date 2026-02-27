@@ -1,7 +1,8 @@
-"""Tests for multi-packet USERDATA response support.
+"""Tests for S7 protocol behavior.
 
 Tests USERDATA response parameter parsing, follow-up request building,
-fragment-aware SZL parsing, and multi-packet accumulation in client methods.
+fragment-aware SZL parsing, multi-packet accumulation, protocol error codes,
+and TPDU size configuration.
 """
 
 import struct
@@ -10,6 +11,14 @@ from typing import Any, Dict
 import pytest
 
 from snap7.s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction
+from snap7.error import (
+    S7_PROTOCOL_ERROR_CODES,
+    S7ProtocolError,
+    S7StalePacketError,
+    S7PacketLostError,
+    get_protocol_error_message,
+)
+from snap7.connection import TPDUSize, ISOTCPConnection
 
 
 @pytest.mark.client
@@ -345,3 +354,90 @@ class TestMultiPacketSzlIntegration:
         szl = protocol.parse_read_szl_response(parsed, first_fragment=True)
         assert szl["szl_id"] == 0x001C
         assert szl["data"] == b"\xaa\xbb\xcc\xdd"
+
+
+@pytest.mark.client
+class TestProtocolErrorCodes:
+    """Test S7 protocol error code dictionary and exception hierarchy."""
+
+    def test_error_codes_count(self) -> None:
+        """S7_PROTOCOL_ERROR_CODES should have ~210 entries."""
+        assert len(S7_PROTOCOL_ERROR_CODES) > 200
+
+    def test_known_code_lookup(self) -> None:
+        assert get_protocol_error_message(0x0000) == "No error"
+        assert get_protocol_error_message(0x8104) == (
+            "This service is not implemented on the module or a frame error was reported"
+        )
+        assert "Illegal job number" in get_protocol_error_message(0xD001)
+
+    def test_unknown_code_lookup(self) -> None:
+        msg = get_protocol_error_message(0xFFFF)
+        assert "Unknown protocol error" in msg
+        assert "0xffff" in msg
+
+    def test_code_ranges_present(self) -> None:
+        """Verify codes from key ranges are included."""
+        assert 0x0110 in S7_PROTOCOL_ERROR_CODES  # block-related
+        assert 0x8100 in S7_PROTOCOL_ERROR_CODES  # service/protocol
+        assert 0xD001 in S7_PROTOCOL_ERROR_CODES  # USERDATA parameter
+        assert 0xD601 in S7_PROTOCOL_ERROR_CODES  # USERDATA parameter
+        assert 0xE201 in S7_PROTOCOL_ERROR_CODES  # sync
+
+    def test_exception_hierarchy(self) -> None:
+        """Stale/Lost exceptions inherit from S7ProtocolError."""
+        assert issubclass(S7StalePacketError, S7ProtocolError)
+        assert issubclass(S7PacketLostError, S7ProtocolError)
+
+    def test_parse_response_raises_on_error_class(self) -> None:
+        """parse_response should raise S7ProtocolError when error_class != 0."""
+        proto = S7Protocol()
+        pdu = struct.pack(
+            ">BBHHHHBB",
+            0x32,  # protocol ID
+            0x03,  # ACK_DATA
+            0x0000,  # reserved
+            0x0001,  # sequence
+            0x0000,  # param length
+            0x0000,  # data length
+            0x81,  # error class
+            0x04,  # error code
+        )
+        with pytest.raises(S7ProtocolError, match="protocol error"):
+            proto.parse_response(pdu)
+
+
+@pytest.mark.client
+class TestTPDUSize:
+    """Test TPDUSize enum and COTP negotiation."""
+
+    def test_enum_values(self) -> None:
+        assert int(TPDUSize.S_128) == 0x07
+        assert int(TPDUSize.S_256) == 0x08
+        assert int(TPDUSize.S_512) == 0x09
+        assert int(TPDUSize.S_1024) == 0x0A
+        assert int(TPDUSize.S_2048) == 0x0B
+        assert int(TPDUSize.S_4096) == 0x0C
+        assert int(TPDUSize.S_8192) == 0x0D
+
+    def test_actual_sizes(self) -> None:
+        """Verify 2^code gives correct byte sizes."""
+        assert 1 << TPDUSize.S_128 == 128
+        assert 1 << TPDUSize.S_1024 == 1024
+        assert 1 << TPDUSize.S_8192 == 8192
+
+    def test_default_tpdu_size(self) -> None:
+        """ISOTCPConnection should default to S_1024."""
+        conn = ISOTCPConnection("127.0.0.1")
+        assert conn.tpdu_size == TPDUSize.S_1024
+
+    def test_custom_tpdu_size(self) -> None:
+        """ISOTCPConnection should accept custom TPDU size."""
+        conn = ISOTCPConnection("127.0.0.1", tpdu_size=TPDUSize.S_4096)
+        assert conn.tpdu_size == TPDUSize.S_4096
+
+    def test_tpdu_size_in_cotp_cr(self) -> None:
+        """COTP CR PDU should contain the configured TPDU size."""
+        conn = ISOTCPConnection("127.0.0.1", tpdu_size=TPDUSize.S_2048)
+        cr_pdu = conn._build_cotp_cr()
+        assert cr_pdu[-3:] == bytes([0xC0, 0x01, TPDUSize.S_2048])

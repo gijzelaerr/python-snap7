@@ -14,6 +14,12 @@ def _assert_never(value: NoReturn) -> NoReturn:
     raise AssertionError(f"Unhandled value: {value!r}")
 
 
+def _validate_bit_addr(bit_addr: int) -> None:
+    """Validate that a bit address is in the valid range 0-7."""
+    if not 0 <= bit_addr <= 7:
+        raise ValueError(f"Bit address must be 0-7, got {bit_addr}")
+
+
 class S7Area(IntEnum):
     """S7 memory area identifiers."""
 
@@ -123,12 +129,12 @@ class S7DataTypes:
                 values.append(bool(byte_val))
                 offset += 1
 
-            elif word_len in [S7WordLen.BYTE, S7WordLen.CHAR]:
+            elif word_len == S7WordLen.BYTE or word_len == S7WordLen.CHAR:
                 # 8-bit values
                 values.append(data[offset])
                 offset += 1
 
-            elif word_len in [S7WordLen.WORD, S7WordLen.COUNTER, S7WordLen.TIMER]:
+            elif word_len == S7WordLen.WORD or word_len == S7WordLen.COUNTER or word_len == S7WordLen.TIMER:
                 # 16-bit unsigned values (big-endian)
                 value = struct.unpack(">H", data[offset : offset + 2])[0]
                 values.append(value)
@@ -158,6 +164,9 @@ class S7DataTypes:
                 values.append(value)
                 offset += 4
 
+            else:
+                _assert_never(word_len)
+
         return values
 
     @staticmethod
@@ -174,11 +183,11 @@ class S7DataTypes:
                 # Single bit to byte
                 data.append(0x01 if value else 0x00)
 
-            elif word_len in [S7WordLen.BYTE, S7WordLen.CHAR]:
+            elif word_len == S7WordLen.BYTE or word_len == S7WordLen.CHAR:
                 # 8-bit values
                 data.append(int(value) & 0xFF)
 
-            elif word_len in [S7WordLen.WORD, S7WordLen.COUNTER, S7WordLen.TIMER]:
+            elif word_len == S7WordLen.WORD or word_len == S7WordLen.COUNTER or word_len == S7WordLen.TIMER:
                 # 16-bit unsigned values (big-endian)
                 data.extend(struct.pack(">H", int(value) & 0xFFFF))
 
@@ -199,7 +208,7 @@ class S7DataTypes:
                 data.extend(struct.pack(">f", float(value)))
 
             else:
-                _assert_never(word_len)  # type: ignore[arg-type]
+                _assert_never(word_len)
 
         return bytes(data)
 
@@ -224,10 +233,8 @@ class S7DataTypes:
                 # Bit address: DBX10.5
                 if "." in addr_part:
                     byte_addr, bit_addr = addr_part[3:].split(".")
-                    bit_val = int(bit_addr)
-                    if not 0 <= bit_val <= 7:
-                        raise ValueError(f"Bit address must be 0-7, got {bit_val}")
-                    offset = int(byte_addr) * 8 + bit_val
+                    _validate_bit_addr(int(bit_addr))
+                    offset = int(byte_addr) * 8 + int(bit_addr)
                 else:
                     offset = int(addr_part[3:]) * 8
             elif addr_part.startswith("DBB"):
@@ -249,10 +256,8 @@ class S7DataTypes:
             if "." in address_str:
                 # Bit address: M10.5
                 byte_addr, bit_addr = address_str[1:].split(".")
-                bit_val = int(bit_addr)
-                if not 0 <= bit_val <= 7:
-                    raise ValueError(f"Bit address must be 0-7, got {bit_val}")
-                offset = int(byte_addr) * 8 + bit_val
+                _validate_bit_addr(int(bit_addr))
+                offset = int(byte_addr) * 8 + int(bit_addr)
             elif address_str.startswith("MW"):
                 # Word address: MW20
                 offset = int(address_str[2:])
@@ -270,10 +275,8 @@ class S7DataTypes:
             if "." in address_str:
                 # Bit address: I0.0
                 byte_addr, bit_addr = address_str[1:].split(".")
-                bit_val = int(bit_addr)
-                if not 0 <= bit_val <= 7:
-                    raise ValueError(f"Bit address must be 0-7, got {bit_val}")
-                offset = int(byte_addr) * 8 + bit_val
+                _validate_bit_addr(int(bit_addr))
+                offset = int(byte_addr) * 8 + int(bit_addr)
             elif address_str.startswith("IW"):
                 # Word address: IW10
                 offset = int(address_str[2:])
@@ -291,10 +294,8 @@ class S7DataTypes:
             if "." in address_str:
                 # Bit address: Q0.0
                 byte_addr, bit_addr = address_str[1:].split(".")
-                bit_val = int(bit_addr)
-                if not 0 <= bit_val <= 7:
-                    raise ValueError(f"Bit address must be 0-7, got {bit_val}")
-                offset = int(byte_addr) * 8 + bit_val
+                _validate_bit_addr(int(bit_addr))
+                offset = int(byte_addr) * 8 + int(bit_addr)
             elif address_str.startswith("QW"):
                 # Word address: QW10
                 offset = int(address_str[2:])
