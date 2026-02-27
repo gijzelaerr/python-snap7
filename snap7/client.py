@@ -265,7 +265,7 @@ class Client:
         data = bytearray([filler] * size)
         return self.db_write(db_number, 0, data)
 
-    def read_area(self, area: Area, db_number: int, start: int, size: int) -> bytearray:
+    def read_area(self, area: Area, db_number: int, start: int, size: int, word_len: Optional[WordLen] = None) -> bytearray:
         """
         Read data from memory area.
 
@@ -274,6 +274,8 @@ class Client:
             db_number: DB number (for DB area only)
             start: Start address
             size: Number of items to read (for TM/CT: timers/counters, for others: bytes)
+            word_len: Optional word length override. If None, defaults to area-based logic
+                (TIMER for TM, COUNTER for CT, BYTE for others).
 
         Returns:
             Data read from area
@@ -285,16 +287,18 @@ class Client:
         # Map area enum to native area
         s7_area = self._map_area(area)
 
-        # Determine word length based on area type
-        if area == Area.TM:
-            word_len = S7WordLen.TIMER
+        # Determine word length
+        if word_len is not None:
+            s7_word_len = S7WordLen(word_len)
+        elif area == Area.TM:
+            s7_word_len = S7WordLen.TIMER
         elif area == Area.CT:
-            word_len = S7WordLen.COUNTER
+            s7_word_len = S7WordLen.COUNTER
         else:
-            word_len = S7WordLen.BYTE
+            s7_word_len = S7WordLen.BYTE
 
         # Build and send read request
-        request = self.protocol.build_read_request(area=s7_area, db_number=db_number, start=start, word_len=word_len, count=size)
+        request = self.protocol.build_read_request(area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, count=size)
 
         conn.send_data(request)
 
@@ -303,12 +307,12 @@ class Client:
         response = self.protocol.parse_response(response_data)
 
         # Extract data from response - pass item count, not byte count
-        values = self.protocol.extract_read_data(response, word_len, size)
+        values = self.protocol.extract_read_data(response, s7_word_len, size)
 
         self._exec_time = int((time.time() - start_time) * 1000)
         return bytearray(values)
 
-    def write_area(self, area: Area, db_number: int, start: int, data: bytearray) -> int:
+    def write_area(self, area: Area, db_number: int, start: int, data: bytearray, word_len: Optional[WordLen] = None) -> int:
         """
         Write data to memory area.
 
@@ -317,6 +321,8 @@ class Client:
             db_number: DB number (for DB area only)
             start: Start address
             data: Data to write
+            word_len: Optional word length override. If None, defaults to area-based logic
+                (TIMER for TM, COUNTER for CT, BYTE for others).
 
         Returns:
             0 on success
@@ -328,17 +334,19 @@ class Client:
         # Map area enum to native area
         s7_area = self._map_area(area)
 
-        # Determine word length based on area type
-        if area == Area.TM:
-            word_len = S7WordLen.TIMER
+        # Determine word length
+        if word_len is not None:
+            s7_word_len = S7WordLen(word_len)
+        elif area == Area.TM:
+            s7_word_len = S7WordLen.TIMER
         elif area == Area.CT:
-            word_len = S7WordLen.COUNTER
+            s7_word_len = S7WordLen.COUNTER
         else:
-            word_len = S7WordLen.BYTE
+            s7_word_len = S7WordLen.BYTE
 
         # Build and send write request
         request = self.protocol.build_write_request(
-            area=s7_area, db_number=db_number, start=start, word_len=word_len, data=bytes(data)
+            area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, data=bytes(data)
         )
 
         conn.send_data(request)
