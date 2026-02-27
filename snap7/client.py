@@ -298,7 +298,9 @@ class Client:
             s7_word_len = S7WordLen.BYTE
 
         # Build and send read request
-        request = self.protocol.build_read_request(area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, count=size)
+        request = self.protocol.build_read_request(
+            area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, count=size
+        )
 
         conn.send_data(request)
 
