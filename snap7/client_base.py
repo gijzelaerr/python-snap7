@@ -43,7 +43,7 @@ class ClientMixin:
     connected: bool
     _exec_time: int
     _last_error: int
-    _params: dict
+    _params: dict[Parameter, int]
 
     def get_pdu_length(self) -> int:
         """Get negotiated PDU length.
@@ -196,7 +196,7 @@ class ClientMixin:
         if param == Parameter.SrcTSap:
             return self.local_tsap
 
-        return self._params.get(param, 0)
+        return int(self._params.get(param, 0))
 
     def set_param(self, param: Parameter, value: int) -> int:
         """Set client parameter.

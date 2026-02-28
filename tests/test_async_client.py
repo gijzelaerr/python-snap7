@@ -4,15 +4,15 @@ Uses the same Server fixture as test_client.py for integration tests.
 """
 
 import asyncio
-import struct
 import logging
+from collections.abc import Generator
 
 import pytest
 import pytest_asyncio
 
 from snap7.async_client import AsyncClient
 from snap7.server import Server
-from snap7.type import SrvArea, Area, Block, Parameter
+from snap7.type import SrvArea, Area, Parameter
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -24,7 +24,7 @@ slot = 1
 
 
 @pytest.fixture(scope="module")
-def server():
+def server() -> Generator[Server]:
     srv = Server()
     srv.register_area(SrvArea.DB, 0, bytearray(600))
     srv.register_area(SrvArea.DB, 1, bytearray(600))
@@ -45,10 +45,10 @@ def server():
 
 
 @pytest_asyncio.fixture
-async def client(server):
+async def client(server: Server) -> AsyncClient:
     c = AsyncClient()
     await c.connect(ip, rack, slot, tcpport)
-    yield c
+    yield c  # type: ignore[misc]
     await c.disconnect()
 
 
@@ -58,7 +58,7 @@ async def client(server):
 
 
 @pytest.mark.asyncio
-async def test_connect_disconnect(server):
+async def test_connect_disconnect(server: Server) -> None:
     c = AsyncClient()
     await c.connect(ip, rack, slot, tcpport)
     assert c.get_connected()
@@ -67,7 +67,7 @@ async def test_connect_disconnect(server):
 
 
 @pytest.mark.asyncio
-async def test_context_manager(server):
+async def test_context_manager(server: Server) -> None:
     async with AsyncClient() as c:
         await c.connect(ip, rack, slot, tcpport)
         assert c.get_connected()
@@ -80,7 +80,7 @@ async def test_context_manager(server):
 
 
 @pytest.mark.asyncio
-async def test_db_read(client):
+async def test_db_read(client: AsyncClient) -> None:
     data = bytearray(40)
     await client.db_write(db_number=1, start=0, data=data)
     result = await client.db_read(db_number=1, start=0, size=40)
@@ -88,7 +88,7 @@ async def test_db_read(client):
 
 
 @pytest.mark.asyncio
-async def test_db_write(client):
+async def test_db_write(client: AsyncClient) -> None:
     data = bytearray(b"\x01\x02\x03\x04")
     await client.db_write(db_number=1, start=0, data=data)
     result = await client.db_read(db_number=1, start=0, size=4)
@@ -96,7 +96,7 @@ async def test_db_write(client):
 
 
 @pytest.mark.asyncio
-async def test_db_get(client):
+async def test_db_get(client: AsyncClient) -> None:
     result = await client.db_get(db_number=1)
     assert isinstance(result, bytearray)
     assert len(result) > 0
@@ -108,15 +108,15 @@ async def test_db_get(client):
 
 
 @pytest.mark.asyncio
-async def test_read_write_area(client):
-    data = bytearray(b"\xAA\xBB\xCC\xDD")
+async def test_read_write_area(client: AsyncClient) -> None:
+    data = bytearray(b"\xaa\xbb\xcc\xdd")
     await client.write_area(Area.DB, 1, 0, data)
     result = await client.read_area(Area.DB, 1, 0, 4)
     assert result == data
 
 
 @pytest.mark.asyncio
-async def test_read_area_large(client):
+async def test_read_area_large(client: AsyncClient) -> None:
     """Test chunked read for data larger than PDU."""
     size = 500  # Exceeds typical single-PDU payload
     data = bytearray(range(256)) * 2  # 512 bytes of pattern
@@ -132,7 +132,7 @@ async def test_read_area_large(client):
 
 
 @pytest.mark.asyncio
-async def test_ab_read_write(client):
+async def test_ab_read_write(client: AsyncClient) -> None:
     data = bytearray(b"\x01\x02\x03\x04")
     await client.ab_write(0, data)
     result = await client.ab_read(0, 4)
@@ -140,7 +140,7 @@ async def test_ab_read_write(client):
 
 
 @pytest.mark.asyncio
-async def test_eb_read_write(client):
+async def test_eb_read_write(client: AsyncClient) -> None:
     data = bytearray(b"\x05\x06\x07\x08")
     await client.eb_write(0, 4, data)
     result = await client.eb_read(0, 4)
@@ -148,8 +148,8 @@ async def test_eb_read_write(client):
 
 
 @pytest.mark.asyncio
-async def test_mb_read_write(client):
-    data = bytearray(b"\x0A\x0B\x0C\x0D")
+async def test_mb_read_write(client: AsyncClient) -> None:
+    data = bytearray(b"\x0a\x0b\x0c\x0d")
     await client.mb_write(0, 4, data)
     result = await client.mb_read(0, 4)
     assert result == data
@@ -161,7 +161,7 @@ async def test_mb_read_write(client):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_reads(client):
+async def test_concurrent_reads(client: AsyncClient) -> None:
     """Verify asyncio.gather with multiple reads doesn't corrupt data.
 
     This is the critical test — it validates that the asyncio.Lock
@@ -169,7 +169,7 @@ async def test_concurrent_reads(client):
     """
     # Write known data
     data1 = bytearray(b"\x11\x22\x33\x44")
-    data2 = bytearray(b"\xAA\xBB\xCC\xDD")
+    data2 = bytearray(b"\xaa\xbb\xcc\xdd")
     await client.db_write(1, 0, data1)
     await client.db_write(1, 10, data2)
 
@@ -184,14 +184,14 @@ async def test_concurrent_reads(client):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_read_write(client):
+async def test_concurrent_read_write(client: AsyncClient) -> None:
     """Verify concurrent read and write don't interfere."""
-    write_data = bytearray(b"\xFF\xFE\xFD\xFC")
+    write_data = bytearray(b"\xff\xfe\xfd\xfc")
 
-    async def do_write():
+    async def do_write() -> None:
         await client.db_write(1, 20, write_data)
 
-    async def do_read():
+    async def do_read() -> bytearray:
         return await client.db_read(1, 0, 4)
 
     await asyncio.gather(do_write(), do_read())
@@ -202,7 +202,7 @@ async def test_concurrent_read_write(client):
 
 
 @pytest.mark.asyncio
-async def test_many_concurrent_reads(client):
+async def test_many_concurrent_reads(client: AsyncClient) -> None:
     """Stress test with many concurrent reads."""
     # Write test data
     for i in range(10):
@@ -222,7 +222,7 @@ async def test_many_concurrent_reads(client):
 
 
 @pytest.mark.asyncio
-async def test_read_multi_vars(client):
+async def test_read_multi_vars(client: AsyncClient) -> None:
     await client.db_write(1, 0, bytearray(b"\x01\x02\x03\x04"))
     await client.db_write(1, 4, bytearray(b"\x05\x06\x07\x08"))
 
@@ -237,16 +237,16 @@ async def test_read_multi_vars(client):
 
 
 @pytest.mark.asyncio
-async def test_write_multi_vars(client):
+async def test_write_multi_vars(client: AsyncClient) -> None:
     items = [
-        {"area": Area.DB, "db_number": 1, "start": 0, "data": bytearray(b"\xAA\xBB")},
-        {"area": Area.DB, "db_number": 1, "start": 2, "data": bytearray(b"\xCC\xDD")},
+        {"area": Area.DB, "db_number": 1, "start": 0, "data": bytearray(b"\xaa\xbb")},
+        {"area": Area.DB, "db_number": 1, "start": 2, "data": bytearray(b"\xcc\xdd")},
     ]
     result = await client.write_multi_vars(items)
     assert result == 0
 
     data = await client.db_read(1, 0, 4)
-    assert data == bytearray(b"\xAA\xBB\xCC\xDD")
+    assert data == bytearray(b"\xaa\xbb\xcc\xdd")
 
 
 # -------------------------------------------------------------------
@@ -254,18 +254,18 @@ async def test_write_multi_vars(client):
 # -------------------------------------------------------------------
 
 
-def test_get_pdu_length():
+def test_get_pdu_length() -> None:
     c = AsyncClient()
     assert c.get_pdu_length() == 480
 
 
-def test_error_text():
+def test_error_text() -> None:
     c = AsyncClient()
     assert c.error_text(0) == "OK"
     assert "Not connected" in c.error_text(0x0003)
 
 
-def test_set_clear_session_password():
+def test_set_clear_session_password() -> None:
     c = AsyncClient()
     assert c.session_password is None
     c.set_session_password("secret")
@@ -274,7 +274,7 @@ def test_set_clear_session_password():
     assert c.session_password is None
 
 
-def test_set_connection_params():
+def test_set_connection_params() -> None:
     c = AsyncClient()
     c.set_connection_params("10.0.0.1", 0x0100, 0x0200)
     assert c.host == "10.0.0.1"
@@ -282,20 +282,20 @@ def test_set_connection_params():
     assert c.remote_tsap == 0x0200
 
 
-def test_set_connection_type():
+def test_set_connection_type() -> None:
     c = AsyncClient()
     c.set_connection_type(2)
     assert c.connection_type == 2
 
 
-def test_get_set_param():
+def test_get_set_param() -> None:
     c = AsyncClient()
     c.set_param(Parameter.PDURequest, 960)
     assert c.get_param(Parameter.PDURequest) == 960
     assert c.pdu_length == 960
 
 
-def test_get_param_non_client_raises():
+def test_get_param_non_client_raises() -> None:
     c = AsyncClient()
     with pytest.raises(RuntimeError):
         c.get_param(Parameter.LocalPort)
@@ -307,23 +307,23 @@ def test_get_param_non_client_raises():
 
 
 @pytest.mark.asyncio
-async def test_list_blocks(client):
+async def test_list_blocks(client: AsyncClient) -> None:
     result = await client.list_blocks()
     assert hasattr(result, "DBCount")
 
 
 @pytest.mark.asyncio
-async def test_get_cpu_state(client):
+async def test_get_cpu_state(client: AsyncClient) -> None:
     state = await client.get_cpu_state()
     assert isinstance(state, str)
 
 
 @pytest.mark.asyncio
-async def test_get_cpu_info(client):
+async def test_get_cpu_info(client: AsyncClient) -> None:
     info = await client.get_cpu_info()
     assert hasattr(info, "ModuleTypeName")
 
 
 @pytest.mark.asyncio
-async def test_get_pdu_length_after_connect(client):
+async def test_get_pdu_length_after_connect(client: AsyncClient) -> None:
     assert client.get_pdu_length() > 0
