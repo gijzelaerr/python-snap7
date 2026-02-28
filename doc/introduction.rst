@@ -1,12 +1,12 @@
 Introduction
 ============
 
-python-snap7 is a Python wrapper for the
-`Snap7 library <https://snap7.sourceforge.net>`_. Snap7 is an open source,
-32/64 bit, multi-platform Ethernet communication suite for interfacing natively
-with Siemens S7 PLCs.
+python-snap7 is a pure Python S7 communication library for interfacing
+natively with Siemens S7 PLCs. The library implements the complete S7
+protocol stack including TPKT (RFC 1006), COTP (ISO 8073), and S7
+protocol layers.
 
-Python-snap7 is developed for snap7 1.4.2 and Python 3.10+. It is tested
-on Windows, macOS and Linux. Python versions below 3.10 are not supported.
+python-snap7 requires Python 3.10+ and runs on Windows, macOS and Linux
+without any native dependencies.
 
 The project development is centralized on `github <https://github.com/gijzelaerr/python-snap7>`_.

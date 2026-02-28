@@ -8,6 +8,20 @@ Python-snap7 is tested with Python 3.10+, on Windows, Linux and OS X.
 The full documentation is available on `Read The Docs <https://python-snap7.readthedocs.io/en/latest/>`_.
 
 
+Version 3.0 - Breaking Changes
+===============================
+
+Version 3.0 is a major release that rewrites python-snap7 as a pure Python
+implementation. The C snap7 library is no longer required.
+
+This release may contain breaking changes. If you experience issues, you can
+pin to the last pre-3.0 release::
+
+    $ pip install "python-snap7<3"
+
+The latest stable pre-3.0 release is version 2.1.0.
+
+
 Installation
 ============
 
