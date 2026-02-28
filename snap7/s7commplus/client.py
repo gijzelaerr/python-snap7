@@ -9,8 +9,7 @@ Supports all S7CommPlus protocol versions (V1/V2/V3/TLS). The protocol
 version is auto-detected from the PLC's CreateObject response during
 connection setup.
 
-Status: experimental scaffolding -- not yet functional.
-All methods raise NotImplementedError with guidance on what needs to be done.
+Status: V1 connection is functional. V2/V3/TLS authentication planned.
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
@@ -19,6 +18,8 @@ import logging
 from typing import Any, Optional
 
 from .connection import S7CommPlusConnection
+from .protocol import FunctionCode
+from .vlq import encode_uint32_vlq, decode_uint32_vlq
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +35,17 @@ class S7CommPlusClient:
 
     The protocol version is auto-detected during connection.
 
-    Example (future, once implemented)::
+    Example::
 
         client = S7CommPlusClient()
         client.connect("192.168.1.10")
-        value = client.read_variable("DB1.myVariable")
+
+        # Read raw bytes from DB1
+        data = client.db_read(1, 0, 4)
+
+        # Write raw bytes to DB1
+        client.db_write(1, 0, struct.pack(">f", 23.5))
+
         client.disconnect()
     """
 
@@ -49,12 +56,27 @@ class S7CommPlusClient:
     def connected(self) -> bool:
         return self._connection is not None and self._connection.connected
 
+    @property
+    def protocol_version(self) -> int:
+        """Protocol version negotiated with the PLC."""
+        if self._connection is None:
+            return 0
+        return self._connection.protocol_version
+
+    @property
+    def session_id(self) -> int:
+        """Session ID assigned by the PLC."""
+        if self._connection is None:
+            return 0
+        return self._connection.session_id
+
     def connect(
         self,
         host: str,
         port: int = 102,
         rack: int = 0,
         slot: int = 1,
+        use_tls: bool = False,
         tls_cert: Optional[str] = None,
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
@@ -66,12 +88,10 @@ class S7CommPlusClient:
             port: TCP port (default 102)
             rack: PLC rack number
             slot: PLC slot number
+            use_tls: Whether to attempt TLS (requires V3 PLC + certs)
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
-
-        Raises:
-            NotImplementedError: S7CommPlus connection is not yet implemented
         """
         local_tsap = 0x0100
         remote_tsap = 0x0100 | (rack << 5) | slot
@@ -84,6 +104,7 @@ class S7CommPlusClient:
         )
 
         self._connection.connect(
+            use_tls=use_tls,
             tls_cert=tls_cert,
             tls_key=tls_key,
             tls_ca=tls_ca,
@@ -95,158 +116,155 @@ class S7CommPlusClient:
             self._connection.disconnect()
             self._connection = None
 
+    # -- Data block read/write --
+
+    def db_read(self, db_number: int, start: int, size: int) -> bytes:
+        """Read raw bytes from a data block.
+
+        Args:
+            db_number: Data block number
+            start: Start byte offset
+            size: Number of bytes to read
+
+        Returns:
+            Raw bytes read from the data block
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        # Build GetMultiVariables request payload
+        object_id = 0x00010000 | (db_number & 0xFFFF)
+        payload = bytearray()
+        payload += encode_uint32_vlq(1)  # 1 item
+        payload += encode_uint32_vlq(object_id)
+        payload += encode_uint32_vlq(start)
+        payload += encode_uint32_vlq(size)
+
+        response = self._connection.send_request(
+            FunctionCode.GET_MULTI_VARIABLES, bytes(payload)
+        )
+
+        # Parse response
+        offset = 0
+        # Skip return code
+        _, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        # Item count
+        item_count, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        if item_count == 0:
+            return b""
+
+        # First item: status + data_length + data
+        status, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        data_length, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        if status != 0:
+            raise RuntimeError(f"Read failed with status {status}")
+
+        return response[offset : offset + data_length]
+
+    def db_write(self, db_number: int, start: int, data: bytes) -> None:
+        """Write raw bytes to a data block.
+
+        Args:
+            db_number: Data block number
+            start: Start byte offset
+            data: Bytes to write
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        object_id = 0x00010000 | (db_number & 0xFFFF)
+        payload = bytearray()
+        payload += encode_uint32_vlq(1)  # 1 item
+        payload += encode_uint32_vlq(object_id)
+        payload += encode_uint32_vlq(start)
+        payload += encode_uint32_vlq(len(data))
+        payload += data
+
+        response = self._connection.send_request(
+            FunctionCode.SET_MULTI_VARIABLES, bytes(payload)
+        )
+
+        # Parse response - check return code
+        offset = 0
+        return_code, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        if return_code != 0:
+            raise RuntimeError(f"Write failed with return code {return_code}")
+
+    def db_read_multi(
+        self, items: list[tuple[int, int, int]]
+    ) -> list[bytes]:
+        """Read multiple data block regions in a single request.
+
+        Args:
+            items: List of (db_number, start_offset, size) tuples
+
+        Returns:
+            List of raw bytes for each item
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = bytearray()
+        payload += encode_uint32_vlq(len(items))
+        for db_number, start, size in items:
+            object_id = 0x00010000 | (db_number & 0xFFFF)
+            payload += encode_uint32_vlq(object_id)
+            payload += encode_uint32_vlq(start)
+            payload += encode_uint32_vlq(size)
+
+        response = self._connection.send_request(
+            FunctionCode.GET_MULTI_VARIABLES, bytes(payload)
+        )
+
+        # Parse response
+        offset = 0
+        _, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        item_count, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+
+        results: list[bytes] = []
+        for _ in range(item_count):
+            status, consumed = decode_uint32_vlq(response, offset)
+            offset += consumed
+
+            data_length, consumed = decode_uint32_vlq(response, offset)
+            offset += consumed
+
+            if status == 0 and data_length > 0:
+                results.append(response[offset : offset + data_length])
+                offset += data_length
+            else:
+                results.append(b"")
+
+        return results
+
     # -- Explore (browse PLC object tree) --
 
-    def explore(self, object_id: int = 0) -> dict[str, Any]:
+    def explore(self) -> bytes:
         """Browse the PLC object tree.
 
-        The Explore function is used to discover the structure of data
-        blocks, variable names, types, and addresses in the PLC.
-
-        Args:
-            object_id: Root object ID to start exploring from.
-                       0 = root of the PLC object tree.
+        Returns the raw Explore response payload for parsing.
+        Full symbolic exploration will be implemented in a future version.
 
         Returns:
-            Dictionary describing the object tree structure.
-
-        Raises:
-            NotImplementedError: Not yet implemented
+            Raw response payload
         """
-        # TODO: Build ExploreRequest, send, parse ExploreResponse
-        # This is the key operation for discovering symbolic addresses.
-        raise NotImplementedError("explore() is not yet implemented")
+        if self._connection is None:
+            raise RuntimeError("Not connected")
 
-    # -- Variable read/write --
-
-    def read_variable(self, address: str) -> Any:
-        """Read a single PLC variable by symbolic address.
-
-        S7CommPlus supports symbolic access to variables in optimized
-        data blocks, e.g. "DB1.myStruct.myField".
-
-        Args:
-            address: Symbolic variable address
-
-        Returns:
-            Variable value (type depends on PLC variable type)
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        # TODO: Resolve symbolic address -> numeric address via Explore
-        # TODO: Build GetMultiVariables request
-        raise NotImplementedError("read_variable() is not yet implemented")
-
-    def write_variable(self, address: str, value: Any) -> None:
-        """Write a single PLC variable by symbolic address.
-
-        Args:
-            address: Symbolic variable address
-            value: Value to write
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        # TODO: Resolve address, build SetMultiVariables request
-        raise NotImplementedError("write_variable() is not yet implemented")
-
-    def read_variables(self, addresses: list[str]) -> dict[str, Any]:
-        """Read multiple PLC variables in a single request.
-
-        Args:
-            addresses: List of symbolic variable addresses
-
-        Returns:
-            Dictionary mapping address -> value
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        # TODO: Build GetMultiVariables with multiple items
-        raise NotImplementedError("read_variables() is not yet implemented")
-
-    def write_variables(self, values: dict[str, Any]) -> None:
-        """Write multiple PLC variables in a single request.
-
-        Args:
-            values: Dictionary mapping address -> value
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        # TODO: Build SetMultiVariables with multiple items
-        raise NotImplementedError("write_variables() is not yet implemented")
-
-    # -- PLC control --
-
-    def get_cpu_state(self) -> str:
-        """Get the current CPU operational state.
-
-        Returns:
-            CPU state string (e.g. "Run", "Stop")
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        raise NotImplementedError("get_cpu_state() is not yet implemented")
-
-    def plc_start(self) -> None:
-        """Start PLC execution.
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        raise NotImplementedError("plc_start() is not yet implemented")
-
-    def plc_stop(self) -> None:
-        """Stop PLC execution.
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        raise NotImplementedError("plc_stop() is not yet implemented")
-
-    # -- Block operations --
-
-    def list_blocks(self) -> dict[str, list[int]]:
-        """List all blocks in the PLC.
-
-        Returns:
-            Dictionary mapping block type -> list of block numbers
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        raise NotImplementedError("list_blocks() is not yet implemented")
-
-    def upload_block(self, block_type: str, block_number: int) -> bytes:
-        """Upload (read) a block from the PLC.
-
-        Args:
-            block_type: Block type ("OB", "FB", "FC", "DB")
-            block_number: Block number
-
-        Returns:
-            Block data
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        raise NotImplementedError("upload_block() is not yet implemented")
-
-    def download_block(self, block_type: str, block_number: int, data: bytes) -> None:
-        """Download (write) a block to the PLC.
-
-        Args:
-            block_type: Block type ("OB", "FB", "FC", "DB")
-            block_number: Block number
-            data: Block data to download
-
-        Raises:
-            NotImplementedError: Not yet implemented
-        """
-        raise NotImplementedError("download_block() is not yet implemented")
+        return self._connection.send_request(FunctionCode.EXPLORE, b"")
 
     # -- Context manager --
 

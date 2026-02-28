@@ -2,8 +2,6 @@
 
 import struct
 import time
-from collections.abc import Generator
-
 import pytest
 import asyncio
 
@@ -17,7 +15,7 @@ TEST_PORT = 11120
 
 
 @pytest.fixture()
-def server() -> Generator[S7CommPlusServer, None, None]:
+def server():
     """Create and start an S7CommPlus server with test data blocks."""
     srv = S7CommPlusServer()
 
@@ -89,10 +87,10 @@ class TestServer:
 
     def test_data_block_read_past_end(self) -> None:
         db = DataBlock(1, 4)
-        db.write(0, b"\xff\xff\xff\xff")
+        db.write(0, b"\xFF\xFF\xFF\xFF")
         # Read past end should pad with zeros
         data = db.read(2, 4)
-        assert data == b"\xff\xff\x00\x00"
+        assert data == b"\xFF\xFF\x00\x00"
 
     def test_unknown_variable_type(self) -> None:
         db = DataBlock(1, 100)
@@ -183,13 +181,11 @@ class TestClientServerIntegration:
         client = S7CommPlusClient()
         client.connect("127.0.0.1", port=TEST_PORT)
         try:
-            results = client.db_read_multi(
-                [
-                    (1, 0, 4),  # temperature from DB1
-                    (1, 4, 4),  # pressure from DB1
-                    (2, 0, 4),  # zeros from DB2
-                ]
-            )
+            results = client.db_read_multi([
+                (1, 0, 4),   # temperature from DB1
+                (1, 4, 4),   # pressure from DB1
+                (2, 0, 4),   # zeros from DB2
+            ])
             assert len(results) == 3
             temp = struct.unpack(">f", results[0])[0]
             assert abs(temp - 23.5) < 0.001
@@ -207,11 +203,13 @@ class TestClientServerIntegration:
         finally:
             client.disconnect()
 
-    def test_server_data_persists_across_clients(self, server: S7CommPlusServer) -> None:
+    def test_server_data_persists_across_clients(
+        self, server: S7CommPlusServer
+    ) -> None:
         # Client 1 writes
         c1 = S7CommPlusClient()
         c1.connect("127.0.0.1", port=TEST_PORT)
-        c1.db_write(2, 0, b"\xde\xad\xbe\xef")
+        c1.db_write(2, 0, b"\xDE\xAD\xBE\xEF")
         c1.disconnect()
 
         # Client 2 reads
@@ -220,9 +218,11 @@ class TestClientServerIntegration:
         data = c2.db_read(2, 0, 4)
         c2.disconnect()
 
-        assert data == b"\xde\xad\xbe\xef"
+        assert data == b"\xDE\xAD\xBE\xEF"
 
-    def test_multiple_concurrent_clients(self, server: S7CommPlusServer) -> None:
+    def test_multiple_concurrent_clients(
+        self, server: S7CommPlusServer
+    ) -> None:
         clients = []
         for _ in range(3):
             c = S7CommPlusClient()
@@ -273,12 +273,10 @@ class TestAsyncClientServerIntegration:
     async def test_multi_read(self, server: S7CommPlusServer) -> None:
         async with S7CommPlusAsyncClient() as client:
             await client.connect("127.0.0.1", port=TEST_PORT)
-            results = await client.db_read_multi(
-                [
-                    (1, 0, 4),
-                    (1, 10, 4),
-                ]
-            )
+            results = await client.db_read_multi([
+                (1, 0, 4),
+                (1, 10, 4),
+            ])
             assert len(results) == 2
             temp = struct.unpack(">f", results[0])[0]
             assert abs(temp - 23.5) < 0.1  # May be modified by earlier test
@@ -296,9 +294,13 @@ class TestAsyncClientServerIntegration:
 
             async def read_temp() -> float:
                 data = await client.db_read(1, 0, 4)
-                return float(struct.unpack(">f", data)[0])
+                return struct.unpack(">f", data)[0]
 
-            results = await asyncio.gather(read_temp(), read_temp(), read_temp())
+            # Fire multiple concurrent reads
+            results = await asyncio.gather(
+                read_temp(), read_temp(), read_temp()
+            )
+            # All should succeed (lock serializes them)
             assert len(results) == 3
             for r in results:
                 assert isinstance(r, float)
