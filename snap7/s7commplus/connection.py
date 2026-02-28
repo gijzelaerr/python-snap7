@@ -4,9 +4,9 @@ S7CommPlus connection management.
 Establishes an ISO-on-TCP connection to S7-1200/1500 PLCs using the
 S7CommPlus protocol, with support for all protocol versions:
 
-- V1: Early S7-1200 (FW >= V4.0). Trivial anti-replay (challenge + 0x80).
-- V2: Adds integrity checking and proprietary session authentication.
-- V3: Adds ECC-based key exchange.
+- V1: Early S7-1200 (FW >= V4.0). Simple session handshake.
+- V2: Adds integrity checking and session authentication.
+- V3: Adds public-key-based key exchange.
 - V3 + TLS: TIA Portal V17+. Standard TLS 1.3 with per-device certificates.
 
 The wire protocol (VLQ encoding, data types, function codes, object model) is
@@ -24,9 +24,9 @@ Connection sequence (all versions)::
 
 Version-specific authentication after step 4::
 
-    V1: session_response = challenge_byte + 0x80
-    V2: Proprietary HMAC-SHA256 / AES session key derivation
-    V3 (no TLS): ECC-based key exchange (requires product-family keys)
+    V1: Simple challenge-response handshake
+    V2: Session key derivation and integrity checking
+    V3 (no TLS): Public-key key exchange
     V3 (TLS): InitSsl request -> TLS 1.3 handshake over TPKT/COTP tunnel
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
