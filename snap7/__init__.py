@@ -8,7 +8,6 @@ Siemens S7 PLCs without requiring the native Snap7 C library.
 from importlib.metadata import version, PackageNotFoundError
 
 from .client import Client
-from .async_client import AsyncClient
 from .server import Server
 from .partner import Partner
 from .logo import Logo
@@ -17,7 +16,6 @@ from .type import Area, Block, WordLen, SrvEvent, SrvArea
 
 __all__ = [
     "Client",
-    "AsyncClient",
     "Server",
     "Partner",
     "Logo",
