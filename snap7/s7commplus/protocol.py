@@ -18,12 +18,12 @@ PROTOCOL_ID = 0x72
 class ProtocolVersion(IntEnum):
     """S7CommPlus protocol versions.
 
-    V1: Early S7-1200 FW V4.0 -- trivial anti-replay (challenge + 0x80)
-    V2: Adds integrity checking and proprietary session authentication
-    V3: Adds ECC-based key exchange (broken via CVE-2022-38465)
+    V1: Early S7-1200 FW V4.0 -- simple session handshake
+    V2: Adds integrity checking and session authentication
+    V3: Adds public-key-based key exchange
     TLS: TIA Portal V17+ -- standard TLS 1.3 with per-device certificates
 
-    For new implementations, only TLS (V3 + InitSsl) should be targeted.
+    For new implementations, TLS (V3 + InitSsl) is the recommended target.
     """
 
     V1 = 0x01

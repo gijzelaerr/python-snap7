@@ -7,9 +7,9 @@ engineering access (program download/upload, symbolic addressing, etc.).
 
 Supported PLC / firmware targets::
 
-    V1: S7-1200 FW V4.0+          (trivial anti-replay)
-    V2: S7-1200/1500 older FW      (proprietary session auth)
-    V3: S7-1200/1500 pre-TIA V17   (ECC key exchange)
+    V1: S7-1200 FW V4.0+          (simple session handshake)
+    V2: S7-1200/1500 older FW      (session authentication)
+    V3: S7-1200/1500 pre-TIA V17   (public-key key exchange)
     V3 + TLS: TIA Portal V17+      (TLS 1.3 with per-device certs)
 
 Protocol stack::
