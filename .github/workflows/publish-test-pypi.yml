@@ -7,6 +7,8 @@ jobs:
   build:
     name: Build distribution 📦
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -45,6 +47,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
 
   test-published-package:
     name: Test published package
@@ -52,7 +55,7 @@ jobs:
     strategy:
       matrix:
         os: ["ubuntu-24.04", "macos-14", "windows-2022"]
-        python-version: ["3.10", "3.12", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -68,5 +71,5 @@ jobs:
       - name: Install and test python-snap7
         run: |
           uv venv
-          uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+          uv pip install --index-strategy unsafe-best-match --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
           uv run python -c "import snap7; print('snap7 imported successfully')"
