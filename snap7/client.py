@@ -221,8 +221,14 @@ class Client:
         self.disconnect()
 
     def get_connected(self) -> bool:
-        """Check if client is connected to PLC."""
-        return self.connected and self.connection is not None and self.connection.connected
+        """Check if client is connected to PLC.
+
+        Performs an active check on the underlying TCP socket to detect
+        broken connections, rather than just checking a cached flag.
+        """
+        if not self.connected or self.connection is None:
+            return False
+        return self.connection.check_connection()
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """

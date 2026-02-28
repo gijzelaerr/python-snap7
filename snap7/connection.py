@@ -408,6 +408,34 @@ class ISOTCPConnection:
 
         return bytes(data)
 
+    def check_connection(self) -> bool:
+        """Check if the TCP connection is still alive.
+
+        Uses a non-blocking socket peek to detect broken connections.
+        """
+        if not self.connected or self.socket is None:
+            return False
+
+        try:
+            original_timeout = self.socket.gettimeout()
+            self.socket.settimeout(0)
+            try:
+                data = self.socket.recv(1, socket.MSG_PEEK)
+                if not data:
+                    self.connected = False
+                    return False
+                return True
+            except BlockingIOError:
+                # No data available but connection is still alive
+                return True
+            except (socket.error, OSError):
+                self.connected = False
+                return False
+            finally:
+                self.socket.settimeout(original_timeout)
+        except Exception:
+            return False
+
     def __enter__(self) -> "ISOTCPConnection":
         """Context manager entry."""
         return self
