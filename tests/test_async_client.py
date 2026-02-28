@@ -4,7 +4,6 @@ Uses the same Server fixture as test_client.py for integration tests.
 """
 
 import asyncio
-import struct
 import logging
 
 import pytest
@@ -12,7 +11,7 @@ import pytest_asyncio
 
 from snap7.async_client import AsyncClient
 from snap7.server import Server
-from snap7.type import SrvArea, Area, Block, Parameter
+from snap7.type import SrvArea, Area, Parameter
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -109,7 +108,7 @@ async def test_db_get(client):
 
 @pytest.mark.asyncio
 async def test_read_write_area(client):
-    data = bytearray(b"\xAA\xBB\xCC\xDD")
+    data = bytearray(b"\xaa\xbb\xcc\xdd")
     await client.write_area(Area.DB, 1, 0, data)
     result = await client.read_area(Area.DB, 1, 0, 4)
     assert result == data
@@ -149,7 +148,7 @@ async def test_eb_read_write(client):
 
 @pytest.mark.asyncio
 async def test_mb_read_write(client):
-    data = bytearray(b"\x0A\x0B\x0C\x0D")
+    data = bytearray(b"\x0a\x0b\x0c\x0d")
     await client.mb_write(0, 4, data)
     result = await client.mb_read(0, 4)
     assert result == data
@@ -169,7 +168,7 @@ async def test_concurrent_reads(client):
     """
     # Write known data
     data1 = bytearray(b"\x11\x22\x33\x44")
-    data2 = bytearray(b"\xAA\xBB\xCC\xDD")
+    data2 = bytearray(b"\xaa\xbb\xcc\xdd")
     await client.db_write(1, 0, data1)
     await client.db_write(1, 10, data2)
 
@@ -186,7 +185,7 @@ async def test_concurrent_reads(client):
 @pytest.mark.asyncio
 async def test_concurrent_read_write(client):
     """Verify concurrent read and write don't interfere."""
-    write_data = bytearray(b"\xFF\xFE\xFD\xFC")
+    write_data = bytearray(b"\xff\xfe\xfd\xfc")
 
     async def do_write():
         await client.db_write(1, 20, write_data)
@@ -239,14 +238,14 @@ async def test_read_multi_vars(client):
 @pytest.mark.asyncio
 async def test_write_multi_vars(client):
     items = [
-        {"area": Area.DB, "db_number": 1, "start": 0, "data": bytearray(b"\xAA\xBB")},
-        {"area": Area.DB, "db_number": 1, "start": 2, "data": bytearray(b"\xCC\xDD")},
+        {"area": Area.DB, "db_number": 1, "start": 0, "data": bytearray(b"\xaa\xbb")},
+        {"area": Area.DB, "db_number": 1, "start": 2, "data": bytearray(b"\xcc\xdd")},
     ]
     result = await client.write_multi_vars(items)
     assert result == 0
 
     data = await client.db_read(1, 0, 4)
-    assert data == bytearray(b"\xAA\xBB\xCC\xDD")
+    assert data == bytearray(b"\xaa\xbb\xcc\xdd")
 
 
 # -------------------------------------------------------------------
