@@ -6,6 +6,8 @@ on:
     branches: [master]
 permissions:
   contents: read
+  pages: write
+  id-token: write
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,5 +29,21 @@ jobs:
         run: |
           uv venv
           uv pip install ".[doc,cli]"
-      - name: Run doc
+      - name: Build documentation
         run: uv run sphinx-build -N -bhtml doc/ doc/_build -W
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: doc/_build
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
