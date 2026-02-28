@@ -235,89 +235,68 @@ class TestClientServerIntegration:
             c.disconnect()
 
 
+@pytest.mark.asyncio
 class TestAsyncClientServerIntegration:
     """Test async client against the server emulator."""
 
-    def test_connect_disconnect(self, server: S7CommPlusServer) -> None:
-        async def _test() -> None:
-            client = S7CommPlusAsyncClient()
+    async def test_connect_disconnect(self, server: S7CommPlusServer) -> None:
+        client = S7CommPlusAsyncClient()
+        await client.connect("127.0.0.1", port=TEST_PORT)
+        assert client.connected
+        assert client.session_id != 0
+        await client.disconnect()
+        assert not client.connected
+
+    async def test_async_context_manager(self, server: S7CommPlusServer) -> None:
+        async with S7CommPlusAsyncClient() as client:
             await client.connect("127.0.0.1", port=TEST_PORT)
             assert client.connected
-            assert client.session_id != 0
-            await client.disconnect()
-            assert not client.connected
+        assert not client.connected
 
-        asyncio.run(_test())
+    async def test_read_real(self, server: S7CommPlusServer) -> None:
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            data = await client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 23.5) < 0.001
 
-    def test_async_context_manager(self, server: S7CommPlusServer) -> None:
-        async def _test() -> None:
-            async with S7CommPlusAsyncClient() as client:
-                await client.connect("127.0.0.1", port=TEST_PORT)
-                assert client.connected
-            assert not client.connected
+    async def test_write_and_read_back(self, server: S7CommPlusServer) -> None:
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            await client.db_write(1, 0, struct.pack(">f", 77.7))
+            data = await client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 77.7) < 0.1
 
-        asyncio.run(_test())
+    async def test_multi_read(self, server: S7CommPlusServer) -> None:
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            results = await client.db_read_multi(
+                [
+                    (1, 0, 4),
+                    (1, 10, 4),
+                ]
+            )
+            assert len(results) == 2
+            temp = struct.unpack(">f", results[0])[0]
+            assert abs(temp - 23.5) < 0.1  # May be modified by earlier test
 
-    def test_read_real(self, server: S7CommPlusServer) -> None:
-        async def _test() -> None:
-            async with S7CommPlusAsyncClient() as client:
-                await client.connect("127.0.0.1", port=TEST_PORT)
-                data = await client.db_read(1, 0, 4)
-                value = struct.unpack(">f", data)[0]
-                assert abs(value - 23.5) < 0.001
+    async def test_explore(self, server: S7CommPlusServer) -> None:
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            response = await client.explore()
+            assert len(response) > 0
 
-        asyncio.run(_test())
-
-    def test_write_and_read_back(self, server: S7CommPlusServer) -> None:
-        async def _test() -> None:
-            async with S7CommPlusAsyncClient() as client:
-                await client.connect("127.0.0.1", port=TEST_PORT)
-                await client.db_write(1, 0, struct.pack(">f", 77.7))
-                data = await client.db_read(1, 0, 4)
-                value = struct.unpack(">f", data)[0]
-                assert abs(value - 77.7) < 0.1
-
-        asyncio.run(_test())
-
-    def test_multi_read(self, server: S7CommPlusServer) -> None:
-        async def _test() -> None:
-            async with S7CommPlusAsyncClient() as client:
-                await client.connect("127.0.0.1", port=TEST_PORT)
-                results = await client.db_read_multi(
-                    [
-                        (1, 0, 4),
-                        (1, 10, 4),
-                    ]
-                )
-                assert len(results) == 2
-                temp = struct.unpack(">f", results[0])[0]
-                assert abs(temp - 23.5) < 0.1  # May be modified by earlier test
-
-        asyncio.run(_test())
-
-    def test_explore(self, server: S7CommPlusServer) -> None:
-        async def _test() -> None:
-            async with S7CommPlusAsyncClient() as client:
-                await client.connect("127.0.0.1", port=TEST_PORT)
-                response = await client.explore()
-                assert len(response) > 0
-
-        asyncio.run(_test())
-
-    def test_concurrent_reads(self, server: S7CommPlusServer) -> None:
+    async def test_concurrent_reads(self, server: S7CommPlusServer) -> None:
         """Test that asyncio.Lock prevents interleaved requests."""
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
 
-        async def _test() -> None:
-            async with S7CommPlusAsyncClient() as client:
-                await client.connect("127.0.0.1", port=TEST_PORT)
+            async def read_temp() -> float:
+                data = await client.db_read(1, 0, 4)
+                return struct.unpack(">f", data)[0]
 
-                async def read_temp() -> float:
-                    data = await client.db_read(1, 0, 4)
-                    return struct.unpack(">f", data)[0]
-
-                results = await asyncio.gather(read_temp(), read_temp(), read_temp())
-                assert len(results) == 3
-                for r in results:
-                    assert isinstance(r, float)
-
-        asyncio.run(_test())
+            results = await asyncio.gather(read_temp(), read_temp(), read_temp())
+            assert len(results) == 3
+            for r in results:
+                assert isinstance(r, float)
