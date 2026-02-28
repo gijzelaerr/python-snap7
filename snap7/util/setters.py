@@ -1,6 +1,6 @@
 import re
 import struct
-from datetime import date
+from datetime import date, datetime, timedelta
 from typing import Union
 
 from .getters import get_bool
@@ -444,35 +444,31 @@ def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray
     return bytearray_
 
 
-def set_lword(bytearray_: bytearray, byte_index: int, lword: bytearray) -> bytearray:
+def set_lword(bytearray_: bytearray, byte_index: int, lword: int) -> bytearray:
     """Set the long word
-
-    THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
 
     Notes:
         Datatype `lword` (long word) consists in 8 bytes in the PLC.
-        Maximum value posible is bytearray(b"\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF")
-        Lowest value posible is bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00")
+        Maximum value is 18446744073709551615 (0xFFFFFFFFFFFFFFFF).
+        Minimum value is 0.
 
     Args:
-        bytearray_: buffer to read from.
-        byte_index: byte index from where to start reading.
-        lword: Value to write
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        lword: unsigned 64-bit value to write.
 
     Returns:
-        Bytearray conform value.
+        Buffer with the written value.
 
     Examples:
-        read lword value (here as example 0xAB\0xCD) from DB1.10 of a PLC
-        >>> data = set_lword(data, 0, bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD"))
-        bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
-        >>> from snap7 import Client
-        >>> Client().db_write(db_number=1, start=10, data=data)
+        >>> data = bytearray(8)
+        >>> set_lword(data, 0, 0xABCD)
+        >>> data
+        bytearray(b'\\x00\\x00\\x00\\x00\\x00\\x00\\xab\\xcd')
     """
-    #  data = bytearray_[byte_index:byte_index + 4]
-    #  dword = struct.unpack('8B', struct.pack('>Q', *data))[0]
-    #  return bytearray(dword)
-    raise NotImplementedError
+    lword = int(lword)
+    bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", lword)
+    return bytearray_
 
 
 def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
@@ -532,4 +528,203 @@ def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
         raise ValueError("date is higher than specification allows.")
     _days = (date_ - date(1990, 1, 1)).days
     bytearray_[byte_index : byte_index + 2] = struct.pack(">h", _days)
+    return bytearray_
+
+
+def set_wchar(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
+    """Set wchar value in a bytearray.
+
+    Notes:
+        Datatype `wchar` in the PLC is represented in 2 bytes as UTF-16-BE.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        chr_: single character to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(2)
+        >>> set_wchar(data, 0, 'C')
+        >>> data
+        bytearray(b'\\x00C')
+    """
+    if not isinstance(chr_, str):
+        raise TypeError(f"Value value:{chr_} is not from Type string")
+    if len(chr_) != 1:
+        raise ValueError(f"Expected single character, got length {len(chr_)}")
+    encoded = chr_.encode("utf-16-be")
+    bytearray_[byte_index : byte_index + 2] = encoded
+    return bytearray_
+
+
+def set_wstring(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 16382) -> None:
+    """Set wstring value
+
+    Notes:
+        Byte 0-1: max size (number of characters, 2-byte big-endian).
+        Byte 2-3: current length (number of characters, 2-byte big-endian).
+        Byte 4+: UTF-16-BE encoded characters (2 bytes each).
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index to start writing from.
+        value: string to write.
+        max_size: maximum number of characters allowed (default 16382).
+
+    Raises:
+        TypeError: if the value is not a string.
+        ValueError: if the string is too long or max_size exceeds 16382.
+
+    Examples:
+        >>> data = bytearray(26)
+        >>> set_wstring(data, 0, "hello", 10)
+    """
+    if not isinstance(value, str):
+        raise TypeError(f"Value value:{value} is not from Type string")
+
+    if max_size > 16382:
+        raise ValueError(f"max_size: {max_size} > max. allowed 16382 chars")
+
+    size = len(value)
+    if size > max_size:
+        raise ValueError(f"size {size} > max_size {max_size}")
+
+    # set max string size (2 bytes, big-endian)
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">H", max_size)
+
+    # set current length (2 bytes, big-endian)
+    bytearray_[byte_index + 2 : byte_index + 4] = struct.pack(">H", size)
+
+    # encode and write UTF-16-BE characters
+    encoded = value.encode("utf-16-be")
+    bytearray_[byte_index + 4 : byte_index + 4 + len(encoded)] = encoded
+
+
+def set_tod(bytearray_: bytearray, byte_index: int, tod: timedelta) -> bytearray:
+    """Set TIME_OF_DAY value in bytearray.
+
+    Notes:
+        Datatype `TIME_OF_DAY` is stored as milliseconds since midnight in 4 bytes.
+        Range: 0 to 86399999 ms (00:00:00.000 to 23:59:59.999).
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        tod: timedelta representing the time of day.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> data = bytearray(4)
+        >>> set_tod(data, 0, timedelta(hours=12, minutes=30, seconds=15, milliseconds=500))
+    """
+    if tod.days >= 1 or tod < timedelta(0):
+        raise ValueError("TIME_OF_DAY must be between 00:00:00.000 and 23:59:59.999")
+    ms = int(tod.total_seconds() * 1000)
+    bytearray_[byte_index : byte_index + 4] = ms.to_bytes(4, byteorder="big")
+    return bytearray_
+
+
+def set_dtl(bytearray_: bytearray, byte_index: int, dt_: datetime) -> bytearray:
+    """Set DTL (Date and Time Long) value in bytearray.
+
+    Notes:
+        Datatype `DTL` consists of 12 bytes in the PLC:
+        - Bytes 0-1: Year (uint16, big-endian)
+        - Byte 2: Month (1-12)
+        - Byte 3: Day (1-31)
+        - Byte 4: Weekday (1=Sunday, 7=Saturday)
+        - Byte 5: Hour (0-23)
+        - Byte 6: Minute (0-59)
+        - Byte 7: Second (0-59)
+        - Bytes 8-11: Nanoseconds (uint32, big-endian)
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        dt_: datetime object to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> from datetime import datetime
+        >>> data = bytearray(12)
+        >>> set_dtl(data, 0, datetime(2024, 3, 27, 14, 30, 0))
+    """
+    if dt_ > datetime(2554, 12, 31, 23, 59, 59):
+        raise ValueError("date_val is higher than specification allows.")
+
+    # Year as 2-byte big-endian
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">H", dt_.year)
+    bytearray_[byte_index + 2] = dt_.month
+    bytearray_[byte_index + 3] = dt_.day
+    # Weekday: isoweekday() returns 1=Monday..7=Sunday, S7 uses 1=Sunday..7=Saturday
+    bytearray_[byte_index + 4] = (dt_.isoweekday() % 7) + 1
+    bytearray_[byte_index + 5] = dt_.hour
+    bytearray_[byte_index + 6] = dt_.minute
+    bytearray_[byte_index + 7] = dt_.second
+    # Nanoseconds from microseconds
+    nanoseconds = dt_.microsecond * 1000
+    bytearray_[byte_index + 8 : byte_index + 12] = struct.pack(">I", nanoseconds)
+    return bytearray_
+
+
+def set_dt(bytearray_: bytearray, byte_index: int, dt_: datetime) -> bytearray:
+    """Set DATE_AND_TIME value in bytearray.
+
+    Notes:
+        Datatype `DATE_AND_TIME` consists of 8 bytes in BCD encoding:
+        - Byte 0: Year (BCD, 0-99, 90-99 = 1990-1999, 0-89 = 2000-2089)
+        - Byte 1: Month (BCD)
+        - Byte 2: Day (BCD)
+        - Byte 3: Hour (BCD)
+        - Byte 4: Minute (BCD)
+        - Byte 5: Second (BCD)
+        - Byte 6-7: Milliseconds (BCD) + weekday
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        dt_: datetime object to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> from datetime import datetime
+        >>> data = bytearray(8)
+        >>> set_dt(data, 0, datetime(2020, 7, 12, 17, 32, 2, 854000))
+    """
+
+    def byte_to_bcd(val: int) -> int:
+        return ((val // 10) << 4) | (val % 10)
+
+    year = dt_.year
+    if year < 1990 or year > 2089:
+        raise ValueError("DATE_AND_TIME year must be between 1990 and 2089")
+
+    year_bcd = year - 2000 if year >= 2000 else year - 1900
+    bytearray_[byte_index] = byte_to_bcd(year_bcd)
+    bytearray_[byte_index + 1] = byte_to_bcd(dt_.month)
+    bytearray_[byte_index + 2] = byte_to_bcd(dt_.day)
+    bytearray_[byte_index + 3] = byte_to_bcd(dt_.hour)
+    bytearray_[byte_index + 4] = byte_to_bcd(dt_.minute)
+    bytearray_[byte_index + 5] = byte_to_bcd(dt_.second)
+
+    # Milliseconds: 3 BCD digits in byte 6 and upper nibble of byte 7
+    ms = dt_.microsecond // 1000
+    ms_hundreds = ms // 100
+    ms_tens = (ms % 100) // 10
+    ms_ones = ms % 10
+    bytearray_[byte_index + 6] = byte_to_bcd(ms_hundreds * 10 + ms_tens)
+    # Lower nibble of byte 7: weekday (1=Sunday..7=Saturday)
+    weekday = (dt_.isoweekday() % 7) + 1
+    bytearray_[byte_index + 7] = (ms_ones << 4) | weekday
+
     return bytearray_
