@@ -197,6 +197,14 @@ pytest tests/
 - **Ruff**: Line length set to 130, targets Python 3.10+
 - **MyPy**: Strict mode enabled
 
+## Contribution Guidelines
+
+- **Small, focused PRs only**: Each pull request should address a single concern. Do not bundle unrelated changes together.
+- **Each PR should have a single purpose**: Whether it is a bug fix, a new feature, a refactor, or a documentation update, keep it to one thing per PR.
+- **Run the full test suite before submitting**: Run `make test` or `pytest` and ensure all tests pass.
+- **Ensure mypy and ruff pass**: Run `mypy snap7 tests example` and `ruff check snap7 tests example` with no errors before opening a PR.
+- **If using AI coding assistants**: Review the generated code carefully before submitting. AI-generated PRs that are large, unfocused, or not thoroughly reviewed are likely to be rejected.
+
 ## Library Architecture Notes
 
 ### Key Design Patterns
