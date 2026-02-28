@@ -70,5 +70,5 @@ jobs:
       - name: Install and test python-snap7
         run: |
           uv venv
-          uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+          uv pip install --index-strategy unsafe-best-match --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
           uv run python -c "import snap7; print('snap7 imported successfully')"
