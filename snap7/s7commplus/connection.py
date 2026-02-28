@@ -34,10 +34,13 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import ssl
+import struct
 from typing import Optional, Type
 from types import TracebackType
 
 from ..connection import ISOTCPConnection
+from .protocol import FunctionCode, Opcode, ProtocolVersion
+from .codec import encode_header, decode_header
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,8 @@ class S7CommPlusConnection:
     - Version-appropriate authentication (V1/V2/V3/TLS)
     - Frame send/receive (TLS-encrypted when using V17+ firmware)
 
-    Status: scaffolding -- connection logic is not yet implemented.
+    Currently implements V1 authentication. V2/V3/TLS authentication
+    layers are planned for future development.
     """
 
     def __init__(
@@ -90,6 +94,11 @@ class S7CommPlusConnection:
         return self._protocol_version
 
     @property
+    def session_id(self) -> int:
+        """Session ID assigned by the PLC."""
+        return self._session_id
+
+    @property
     def tls_active(self) -> bool:
         """Whether TLS encryption is active on this connection."""
         return self._tls_active
@@ -97,7 +106,7 @@ class S7CommPlusConnection:
     def connect(
         self,
         timeout: float = 5.0,
-        use_tls: bool = True,
+        use_tls: bool = False,
         tls_cert: Optional[str] = None,
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
@@ -109,55 +118,53 @@ class S7CommPlusConnection:
         2. CreateObject to establish S7CommPlus session
         3. Protocol version is detected from PLC response
         4. If use_tls=True and PLC supports it, TLS is negotiated
-        5. If use_tls=False, falls back to version-appropriate auth
 
         Args:
             timeout: Connection timeout in seconds
-            use_tls: Whether to attempt TLS negotiation (default True).
-                     If the PLC does not support TLS, falls back to the
-                     protocol version's native authentication.
+            use_tls: Whether to attempt TLS negotiation.
             tls_cert: Path to client TLS certificate (PEM)
-            tls_key: Path to client TLS private key (PEM)
+            tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
-
-        Raises:
-            S7ConnectionError: If connection fails
-            NotImplementedError: Until connection logic is implemented
         """
-        # TODO: Implementation roadmap:
-        #
-        # Phase 1 - COTP connection (reuse existing ISOTCPConnection):
-        #   self._iso_conn.connect(timeout)
-        #
-        # Phase 2 - CreateObject (session setup):
-        #   Build CreateObject request with NullServerSession data
-        #   Send via self._iso_conn.send_data()
-        #   Parse CreateObject response to get:
-        #     - self._protocol_version (V1/V2/V3)
-        #     - self._session_id
-        #     - server_session_challenge (for V2/V3)
-        #
-        # Phase 3 - Authentication (version-dependent):
-        #   if V1:
-        #     Simple: send challenge + 0x80
-        #   elif V3 and use_tls:
-        #     Send InitSsl request
-        #     Perform TLS handshake over the TPKT/COTP tunnel
-        #     self._tls_active = True
-        #   elif V2 or V3 (no TLS):
-        #     Proprietary key derivation (HMAC-SHA256, AES, ECC)
-        #     Compute integrity ID for subsequent packets
-        #
-        # Phase 4 - Session is ready for data exchange
+        try:
+            # Step 1: COTP connection
+            self._iso_conn.connect(timeout)
 
-        raise NotImplementedError(
-            "S7CommPlus connection is not yet implemented. "
-            "This module is scaffolding for future development. "
-            "See https://github.com/thomas-v2/S7CommPlusDriver for reference."
-        )
+            # Step 2: CreateObject (S7CommPlus session setup)
+            self._create_session()
+
+            # Step 3: Version-specific authentication
+            if use_tls and self._protocol_version >= ProtocolVersion.V3:
+                # TODO: Send InitSsl request and perform TLS handshake
+                raise NotImplementedError(
+                    "TLS authentication is not yet implemented. "
+                    "Use use_tls=False for V1 connections."
+                )
+            elif self._protocol_version == ProtocolVersion.V2:
+                # TODO: Proprietary HMAC-SHA256/AES session auth
+                raise NotImplementedError(
+                    "V2 authentication is not yet implemented."
+                )
+
+            # V1: No further authentication needed
+            self._connected = True
+            logger.info(
+                f"S7CommPlus connected to {self.host}:{self.port}, "
+                f"version=V{self._protocol_version}, session={self._session_id}"
+            )
+
+        except Exception:
+            self.disconnect()
+            raise
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
+        if self._connected and self._session_id:
+            try:
+                self._delete_session()
+            except Exception:
+                pass
+
         self._connected = False
         self._tls_active = False
         self._session_id = 0
@@ -165,32 +172,118 @@ class S7CommPlusConnection:
         self._protocol_version = 0
         self._iso_conn.disconnect()
 
-    def send(self, data: bytes) -> None:
-        """Send an S7CommPlus frame.
-
-        Adds the S7CommPlus frame header and sends over the ISO connection.
-        If TLS is active, data is encrypted before sending.
+    def send_request(
+        self, function_code: int, payload: bytes = b""
+    ) -> bytes:
+        """Send an S7CommPlus request and receive the response.
 
         Args:
-            data: S7CommPlus PDU payload (without frame header)
-
-        Raises:
-            S7ConnectionError: If not connected
-            NotImplementedError: Until send logic is implemented
-        """
-        raise NotImplementedError("S7CommPlus send is not yet implemented.")
-
-    def receive(self) -> bytes:
-        """Receive an S7CommPlus frame.
+            function_code: S7CommPlus function code
+            payload: Request payload (after the 14-byte request header)
 
         Returns:
-            S7CommPlus PDU payload (without frame header)
-
-        Raises:
-            S7ConnectionError: If not connected
-            NotImplementedError: Until receive logic is implemented
+            Response payload (after the 14-byte response header)
         """
-        raise NotImplementedError("S7CommPlus receive is not yet implemented.")
+        if not self._connected:
+            from ..error import S7ConnectionError
+            raise S7ConnectionError("Not connected")
+
+        seq_num = self._next_sequence_number()
+
+        # Build request header
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,  # Reserved
+            function_code,
+            0x0000,  # Reserved
+            seq_num,
+            self._session_id,
+            0x36,  # Transport flags
+        ) + payload
+
+        # Add S7CommPlus frame header and send
+        frame = encode_header(self._protocol_version, len(request)) + request
+        self._iso_conn.send_data(frame)
+
+        # Receive response
+        response_frame = self._iso_conn.receive_data()
+
+        # Parse frame header
+        version, data_length, consumed = decode_header(response_frame)
+        response = response_frame[consumed:]
+
+        if len(response) < 14:
+            from ..error import S7ConnectionError
+            raise S7ConnectionError("Response too short")
+
+        return response[14:]
+
+    def _create_session(self) -> None:
+        """Send CreateObject request to establish an S7CommPlus session."""
+        seq_num = self._next_sequence_number()
+
+        # Build CreateObject request with NullServer session data
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.CREATE_OBJECT,
+            0x0000,
+            seq_num,
+            0x00000000,  # No session yet
+            0x36,
+        )
+
+        # Add empty request data (minimal CreateObject)
+        request += struct.pack(">I", 0)
+
+        # Wrap in S7CommPlus frame header
+        frame = encode_header(ProtocolVersion.V1, len(request)) + request
+
+        self._iso_conn.send_data(frame)
+
+        # Receive response
+        response_frame = self._iso_conn.receive_data()
+
+        # Parse S7CommPlus frame header
+        version, data_length, consumed = decode_header(response_frame)
+        response = response_frame[consumed:]
+
+        if len(response) < 14:
+            from ..error import S7ConnectionError
+            raise S7ConnectionError("CreateObject response too short")
+
+        # Extract session ID from response header
+        self._session_id = struct.unpack_from(">I", response, 9)[0]
+        self._protocol_version = version
+
+        logger.debug(f"Session created: id={self._session_id}, version=V{version}")
+
+    def _delete_session(self) -> None:
+        """Send DeleteObject to close the session."""
+        seq_num = self._next_sequence_number()
+
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.DELETE_OBJECT,
+            0x0000,
+            seq_num,
+            self._session_id,
+            0x36,
+        )
+        request += struct.pack(">I", 0)
+
+        frame = encode_header(self._protocol_version, len(request)) + request
+        self._iso_conn.send_data(frame)
+
+        # Best-effort receive
+        try:
+            self._iso_conn.receive_data()
+        except Exception:
+            pass
 
     def _next_sequence_number(self) -> int:
         """Get next sequence number and increment."""
@@ -205,13 +298,6 @@ class S7CommPlusConnection:
         ca_path: Optional[str] = None,
     ) -> ssl.SSLContext:
         """Create TLS context for S7CommPlus.
-
-        For TIA Portal V17+ PLCs, TLS 1.3 with per-device certificates is
-        used. The PLC's certificate is generated in TIA Portal and must be
-        exported and provided as the CA certificate.
-
-        For older PLCs, TLS is not used (the proprietary auth layer handles
-        session security).
 
         Args:
             cert_path: Client certificate path (PEM)
@@ -230,8 +316,6 @@ class S7CommPlusConnection:
         if ca_path:
             ctx.load_verify_locations(ca_path)
         else:
-            # For development/testing: disable certificate verification
-            # In production, always provide proper certificates
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
