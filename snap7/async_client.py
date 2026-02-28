@@ -16,7 +16,7 @@ from datetime import datetime
 from .connection import TPDUSize
 from .s7protocol import S7Protocol, get_return_code_description
 from .datatypes import S7Area, S7WordLen
-from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
+from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 
 
 logger = logging.getLogger(__name__)
@@ -295,6 +295,7 @@ class AsyncClient:
         self.local_tsap = 0x0100
         self.remote_tsap = 0x0102
         self.connection_type = 1  # PG
+        self.session_password: Optional[str] = None
 
         self._exec_time = 0
         self._last_error = 0
@@ -324,8 +325,18 @@ class AsyncClient:
 
         The lock ensures that concurrent coroutines never interleave
         send/receive on the same TCP socket.
+
+        Unlike the sync client, we do NOT use protocol.validate_pdu_reference()
+        because the protocol's shared sequence counter can be incremented by
+        a concurrent coroutine between request building and lock acquisition.
+        Instead, we extract the expected sequence directly from the request
+        bytes (S7 header bytes 4-5).
         """
         conn = self._get_connection()
+
+        # Extract the sequence number we embedded in this request's S7 header.
+        # S7 header: 0x32 | pdu_type | reserved(2) | sequence(2) | ...
+        expected_seq = struct.unpack(">H", request[4:6])[0]
 
         async with self._lock:
             await conn.send_data(request)
@@ -334,14 +345,18 @@ class AsyncClient:
                 response_data = await conn.receive_data()
                 response = self.protocol.parse_response(response_data)
 
-                try:
-                    self.protocol.validate_pdu_reference(response["sequence"])
+                resp_seq = response.get("sequence", 0)
+                if resp_seq == expected_seq:
                     return response
-                except S7StalePacketError:
-                    if attempt < max_stale_retries:
-                        logger.warning(f"Stale packet (attempt {attempt + 1}/{max_stale_retries}), retrying receive")
-                        continue
-                    raise S7ProtocolError(f"Max stale packet retries ({max_stale_retries}) exceeded")
+
+                # Stale packet — response is for an older request
+                if attempt < max_stale_retries:
+                    logger.warning(
+                        f"Stale packet: expected seq {expected_seq}, got {resp_seq} "
+                        f"(attempt {attempt + 1}/{max_stale_retries}), retrying receive"
+                    )
+                    continue
+                raise S7ProtocolError(f"Max stale packet retries ({max_stale_retries}) exceeded")
 
         raise S7ProtocolError("Failed to receive valid response")  # Should not reach here
 
@@ -1214,6 +1229,54 @@ class AsyncClient:
     def get_last_error(self) -> int:
         """Get last error code."""
         return self._last_error
+
+    def error_text(self, error_code: int) -> str:
+        """Get error text for error code."""
+        error_texts = {
+            0: "OK",
+            0x0001: "Invalid resource",
+            0x0002: "Invalid handle",
+            0x0003: "Not connected",
+            0x0004: "Connection error",
+            0x0005: "Data error",
+            0x0006: "Timeout",
+            0x0007: "Function not supported",
+            0x0008: "Invalid PDU size",
+            0x0009: "Invalid PLC answer",
+            0x000A: "Invalid CPU state",
+            0x01E00000: "CPU : Invalid password",
+            0x00D00000: "CPU : Invalid value supplied",
+            0x02600000: "CLI : Cannot change this param now",
+        }
+        return error_texts.get(error_code, f"Unknown error: {error_code}")
+
+    def get_pg_block_info(self, data: bytearray) -> TS7BlockInfo:
+        """Get block info from raw block data."""
+        block_info = TS7BlockInfo()
+
+        if len(data) >= 36:
+            block_info.BlkType = data[5]
+            block_info.BlkNumber = struct.unpack(">H", data[6:8])[0]
+            block_info.BlkLang = data[4]
+            block_info.MC7Size = struct.unpack(">I", data[8:12])[0]
+            block_info.LoadSize = struct.unpack(">I", data[12:16])[0]
+            block_info.SBBLength = struct.unpack(">I", data[28:32])[0]
+            block_info.CheckSum = struct.unpack(">H", data[32:34])[0]
+            block_info.Version = data[34]
+            block_info.CodeDate = b"2019/06/27"
+            block_info.IntfDate = b"2019/06/27"
+
+        return block_info
+
+    def set_session_password(self, password: str) -> int:
+        """Set session password."""
+        self.session_password = password
+        return 0
+
+    def clear_session_password(self) -> int:
+        """Clear session password."""
+        self.session_password = None
+        return 0
 
     def set_connection_params(self, address: str, local_tsap: int, remote_tsap: int) -> None:
         """Set connection parameters."""
