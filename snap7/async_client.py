@@ -9,14 +9,27 @@ import asyncio
 import logging
 import struct
 import time
-from typing import List, Any, Optional, Tuple, Type, Union
+from typing import List, Any, Optional, Tuple, Type
 from types import TracebackType
 from datetime import datetime
 
 from .connection import TPDUSize
 from .s7protocol import S7Protocol, get_return_code_description
-from .datatypes import S7Area, S7WordLen
+from .datatypes import S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
+from .client_base import ClientMixin
+from .type import (
+    Area,
+    Block,
+    BlocksList,
+    S7CpuInfo,
+    TS7BlockInfo,
+    S7CpInfo,
+    S7OrderCode,
+    S7Protection,
+    S7SZL,
+    Parameter,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -250,22 +263,8 @@ class AsyncISOTCPConnection:
     ) -> None:
         await self.disconnect()
 
-from .type import (
-    Area,
-    Block,
-    BlocksList,
-    S7CpuInfo,
-    TS7BlockInfo,
-    S7CpInfo,
-    S7OrderCode,
-    S7Protection,
-    S7SZL,
-    WordLen,
-    Parameter,
-)
 
-
-class AsyncClient:
+class AsyncClient(ClientMixin):
     """
     Native async S7 client implementation.
 
@@ -1215,102 +1214,6 @@ class AsyncClient:
         return await self.write_area(Area.CT, 0, start, data)
 
     # ---------------------------------------------------------------
-    # Synchronous helpers (no I/O)
-    # ---------------------------------------------------------------
-
-    def get_pdu_length(self) -> int:
-        """Get negotiated PDU length."""
-        return self.pdu_length
-
-    def get_exec_time(self) -> int:
-        """Get last operation execution time in milliseconds."""
-        return self._exec_time
-
-    def get_last_error(self) -> int:
-        """Get last error code."""
-        return self._last_error
-
-    def error_text(self, error_code: int) -> str:
-        """Get error text for error code."""
-        error_texts = {
-            0: "OK",
-            0x0001: "Invalid resource",
-            0x0002: "Invalid handle",
-            0x0003: "Not connected",
-            0x0004: "Connection error",
-            0x0005: "Data error",
-            0x0006: "Timeout",
-            0x0007: "Function not supported",
-            0x0008: "Invalid PDU size",
-            0x0009: "Invalid PLC answer",
-            0x000A: "Invalid CPU state",
-            0x01E00000: "CPU : Invalid password",
-            0x00D00000: "CPU : Invalid value supplied",
-            0x02600000: "CLI : Cannot change this param now",
-        }
-        return error_texts.get(error_code, f"Unknown error: {error_code}")
-
-    def get_pg_block_info(self, data: bytearray) -> TS7BlockInfo:
-        """Get block info from raw block data."""
-        block_info = TS7BlockInfo()
-
-        if len(data) >= 36:
-            block_info.BlkType = data[5]
-            block_info.BlkNumber = struct.unpack(">H", data[6:8])[0]
-            block_info.BlkLang = data[4]
-            block_info.MC7Size = struct.unpack(">I", data[8:12])[0]
-            block_info.LoadSize = struct.unpack(">I", data[12:16])[0]
-            block_info.SBBLength = struct.unpack(">I", data[28:32])[0]
-            block_info.CheckSum = struct.unpack(">H", data[32:34])[0]
-            block_info.Version = data[34]
-            block_info.CodeDate = b"2019/06/27"
-            block_info.IntfDate = b"2019/06/27"
-
-        return block_info
-
-    def set_session_password(self, password: str) -> int:
-        """Set session password."""
-        self.session_password = password
-        return 0
-
-    def clear_session_password(self) -> int:
-        """Clear session password."""
-        self.session_password = None
-        return 0
-
-    def set_connection_params(self, address: str, local_tsap: int, remote_tsap: int) -> None:
-        """Set connection parameters."""
-        self.host = address
-        self.local_tsap = local_tsap
-        self.remote_tsap = remote_tsap
-
-    def set_connection_type(self, connection_type: int) -> None:
-        """Set connection type (1=PG, 2=OP, 3=S7Basic)."""
-        self.connection_type = connection_type
-
-    def get_param(self, param: Parameter) -> int:
-        """Get client parameter."""
-        non_client = [
-            Parameter.LocalPort, Parameter.WorkInterval, Parameter.MaxClients,
-            Parameter.BSendTimeout, Parameter.BRecvTimeout,
-            Parameter.RecoveryTime, Parameter.KeepAliveTime,
-        ]
-        if param in non_client:
-            raise RuntimeError(f"Parameter {param} not valid for client")
-        if param == Parameter.SrcTSap:
-            return self.local_tsap
-        return self._params.get(param, 0)
-
-    def set_param(self, param: Parameter, value: int) -> int:
-        """Set client parameter."""
-        if param == Parameter.RemotePort and self.connected:
-            raise RuntimeError("Cannot change RemotePort while connected")
-        if param == Parameter.PDURequest:
-            self.pdu_length = value
-        self._params[param] = value
-        return 0
-
-    # ---------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------
 
@@ -1327,24 +1230,6 @@ class AsyncClient:
                 self.pdu_length = params["pdu_length"]
                 self._params[Parameter.PDURequest] = self.pdu_length
                 logger.info(f"Negotiated PDU length: {self.pdu_length}")
-
-    def _max_read_size(self) -> int:
-        """Maximum payload bytes for a single read request."""
-        return self.pdu_length - 18
-
-    def _max_write_size(self) -> int:
-        """Maximum payload bytes for a single write request."""
-        return self.pdu_length - 35
-
-    def _map_area(self, area: Area) -> S7Area:
-        """Map library area enum to native S7 area."""
-        area_mapping = {
-            Area.PE: S7Area.PE, Area.PA: S7Area.PA, Area.MK: S7Area.MK,
-            Area.DB: S7Area.DB, Area.CT: S7Area.CT, Area.TM: S7Area.TM,
-        }
-        if area not in area_mapping:
-            raise S7ProtocolError(f"Unsupported area: {area}")
-        return area_mapping[area]
 
     # ---------------------------------------------------------------
     # Context manager
