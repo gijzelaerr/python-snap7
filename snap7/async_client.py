@@ -9,13 +9,246 @@ import asyncio
 import logging
 import struct
 import time
-from typing import List, Any, Optional, Tuple, Union
+from typing import List, Any, Optional, Tuple, Type, Union
+from types import TracebackType
 from datetime import datetime
 
-from .connection import AsyncISOTCPConnection
+from .connection import TPDUSize
 from .s7protocol import S7Protocol, get_return_code_description
 from .datatypes import S7Area, S7WordLen
-from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError
+from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
+
+
+logger = logging.getLogger(__name__)
+
+
+class AsyncISOTCPConnection:
+    """Async ISO on TCP connection using asyncio streams.
+
+    Mirrors ISOTCPConnection but uses asyncio.open_connection() instead of
+    blocking sockets for non-blocking I/O.
+    """
+
+    # COTP PDU types
+    COTP_CR = 0xE0  # Connection Request
+    COTP_CC = 0xD0  # Connection Confirm
+    COTP_DR = 0x80  # Disconnect Request
+    COTP_DT = 0xF0  # Data Transfer
+
+    # COTP parameter codes (ISO 8073)
+    COTP_PARAM_PDU_SIZE = 0xC0
+    COTP_PARAM_CALLING_TSAP = 0xC1
+    COTP_PARAM_CALLED_TSAP = 0xC2
+
+    def __init__(
+        self,
+        host: str,
+        port: int = 102,
+        local_tsap: int = 0x0100,
+        remote_tsap: int = 0x0102,
+        tpdu_size: TPDUSize = TPDUSize.S_1024,
+    ):
+        self.host = host
+        self.port = port
+        self.local_tsap = local_tsap
+        self.remote_tsap = remote_tsap
+        self.tpdu_size = tpdu_size
+        self.connected = False
+        self.pdu_size = 240
+        self.timeout = 5.0
+
+        self.src_ref = 0x0001
+        self.dst_ref = 0x0000
+
+        self._reader: Optional[asyncio.StreamReader] = None
+        self._writer: Optional[asyncio.StreamWriter] = None
+
+    async def connect(self, timeout: float = 5.0) -> None:
+        """Establish ISO on TCP connection."""
+        self.timeout = timeout
+
+        try:
+            self._reader, self._writer = await asyncio.wait_for(
+                asyncio.open_connection(self.host, self.port),
+                timeout=self.timeout,
+            )
+            logger.debug(f"TCP connected to {self.host}:{self.port}")
+
+            await self._iso_connect()
+
+            self.connected = True
+            logger.info(f"Connected to {self.host}:{self.port}, PDU size: {self.pdu_size}")
+
+        except Exception as e:
+            await self.disconnect()
+            if isinstance(e, (S7ConnectionError, S7TimeoutError)):
+                raise
+            elif isinstance(e, asyncio.TimeoutError):
+                raise S7TimeoutError(f"Connection timeout: {e}")
+            else:
+                raise S7ConnectionError(f"Connection failed: {e}")
+
+    async def disconnect(self) -> None:
+        """Disconnect from S7 device."""
+        if self._writer:
+            try:
+                if self.connected:
+                    dr_pdu = struct.pack(
+                        ">BBHHBB", 6, self.COTP_DR,
+                        self.dst_ref, self.src_ref, 0x00, 0x00,
+                    )
+                    self._writer.write(self._build_tpkt(dr_pdu))
+                    await self._writer.drain()
+                self._writer.close()
+                await self._writer.wait_closed()
+            except Exception:
+                pass
+            finally:
+                self._reader = None
+                self._writer = None
+                self.connected = False
+                logger.info(f"Disconnected from {self.host}:{self.port}")
+
+    async def send_data(self, data: bytes) -> None:
+        """Send data over ISO connection."""
+        if not self.connected or self._writer is None:
+            raise S7ConnectionError("Not connected")
+
+        cotp_header = struct.pack(">BBB", 2, self.COTP_DT, 0x80)
+        tpkt_frame = self._build_tpkt(cotp_header + data)
+
+        try:
+            self._writer.write(tpkt_frame)
+            await self._writer.drain()
+            logger.debug(f"Sent {len(tpkt_frame)} bytes")
+        except (OSError, ConnectionError) as e:
+            self.connected = False
+            raise S7ConnectionError(f"Send failed: {e}")
+
+    async def receive_data(self) -> bytes:
+        """Receive data from ISO connection."""
+        if not self.connected:
+            raise S7ConnectionError("Not connected")
+
+        try:
+            tpkt_header = await self._recv_exact(4)
+            version, reserved, length = struct.unpack(">BBH", tpkt_header)
+            if version != 3:
+                raise S7ConnectionError(f"Invalid TPKT version: {version}")
+
+            remaining = length - 4
+            if remaining <= 0:
+                raise S7ConnectionError("Invalid TPKT length")
+
+            payload = await self._recv_exact(remaining)
+
+            # Parse COTP DT header
+            if len(payload) < 3:
+                raise S7ConnectionError("Invalid COTP DT: too short")
+            pdu_len, pdu_type, eot_num = struct.unpack(">BBB", payload[:3])
+            if pdu_type != self.COTP_DT:
+                raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
+            return payload[3:]
+
+        except asyncio.TimeoutError:
+            self.connected = False
+            raise S7TimeoutError("Receive timeout")
+        except (OSError, ConnectionError) as e:
+            self.connected = False
+            raise S7ConnectionError(f"Receive failed: {e}")
+
+    async def _iso_connect(self) -> None:
+        """Establish ISO connection using COTP handshake."""
+        if self._writer is None or self._reader is None:
+            raise S7ConnectionError("Stream not initialized")
+
+        # Build and send COTP Connection Request
+        base_pdu = struct.pack(
+            ">BBHHB", 6, self.COTP_CR, 0x0000, self.src_ref, 0x00,
+        )
+        calling_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLING_TSAP, 2, self.local_tsap)
+        called_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLED_TSAP, 2, self.remote_tsap)
+        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
+        parameters = calling_tsap + called_tsap + pdu_size_param
+        total_length = 6 + len(parameters)
+        cr_pdu = struct.pack(">B", total_length) + base_pdu[1:] + parameters
+
+        self._writer.write(self._build_tpkt(cr_pdu))
+        await self._writer.drain()
+        logger.debug("Sent COTP Connection Request")
+
+        # Receive Connection Confirm
+        tpkt_header = await self._recv_exact(4)
+        version, reserved, length = struct.unpack(">BBH", tpkt_header)
+        if version != 3:
+            raise S7ConnectionError(f"Invalid TPKT version in response: {version}")
+
+        payload = await self._recv_exact(length - 4)
+        self._parse_cotp_cc(payload)
+        logger.debug("Received COTP Connection Confirm")
+
+    def _build_tpkt(self, payload: bytes) -> bytes:
+        """Build TPKT frame."""
+        length = len(payload) + 4
+        return struct.pack(">BBH", 3, 0, length) + payload
+
+    def _parse_cotp_cc(self, data: bytes) -> None:
+        """Parse COTP Connection Confirm PDU."""
+        if len(data) < 7:
+            raise S7ConnectionError("Invalid COTP CC: too short")
+
+        pdu_len, pdu_type, dst_ref, src_ref, class_opt = struct.unpack(">BBHHB", data[:7])
+        if pdu_type != self.COTP_CC:
+            raise S7ConnectionError(f"Expected COTP CC, got {pdu_type:#02x}")
+
+        self.dst_ref = dst_ref
+
+        # Parse parameters
+        offset = 7
+        while offset < len(data):
+            if offset + 2 > len(data):
+                break
+            param_code = data[offset]
+            param_len = data[offset + 1]
+            if offset + 2 + param_len > len(data):
+                break
+            param_data = data[offset + 2 : offset + 2 + param_len]
+            if param_code == self.COTP_PARAM_PDU_SIZE:
+                if param_len == 1:
+                    self.pdu_size = 1 << param_data[0]
+                elif param_len == 2:
+                    self.pdu_size = struct.unpack(">H", param_data)[0]
+                logger.debug(f"Negotiated PDU size: {self.pdu_size}")
+            offset += 2 + param_len
+
+    async def _recv_exact(self, size: int) -> bytes:
+        """Receive exactly size bytes."""
+        if self._reader is None:
+            raise S7ConnectionError("Stream not initialized")
+        try:
+            return await asyncio.wait_for(
+                self._reader.readexactly(size), timeout=self.timeout,
+            )
+        except asyncio.IncompleteReadError:
+            self.connected = False
+            raise S7ConnectionError("Connection closed by peer")
+        except asyncio.TimeoutError:
+            self.connected = False
+            raise S7TimeoutError("Receive timeout")
+        except (OSError, ConnectionError) as e:
+            self.connected = False
+            raise S7ConnectionError(f"Receive error: {e}")
+
+    async def __aenter__(self) -> "AsyncISOTCPConnection":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        await self.disconnect()
 
 from .type import (
     Area,
@@ -30,8 +263,6 @@ from .type import (
     WordLen,
     Parameter,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class AsyncClient:
