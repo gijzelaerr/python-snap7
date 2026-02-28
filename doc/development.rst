@@ -20,23 +20,43 @@ by following these steps:
  * Commit to your repository
  * Issue a github pull request.
 
-Also we try to be as much pep8 compatible as possible, where possible and
-reasonable.
+.. note::
+
+   Please keep pull requests **small and single-purpose**. Each PR should do one
+   thing well. Large, sweeping PRs -- especially AI-generated ones -- are hard to
+   review and likely to be rejected. If you have a large change in mind, break it
+   into multiple focused PRs that can be reviewed and merged independently.
+
+We use `ruff <https://docs.astral.sh/ruff/>`_ for linting and formatting, and
+`mypy <https://mypy-lang.org/>`_ with strict mode for type checking.
+`Pre-commit <https://pre-commit.com/>`_ hooks are configured to enforce code
+quality automatically. We use `uv <https://docs.astral.sh/uv/>`_ as our package
+manager.
 
 Test suite
 ----------
 
 python-snap7 comes with a test suite with close to 100% coverage. This test suite
-verifies that the code actually works and makes development much easier.  To run
+verifies that the code actually works and makes development much easier. To run
 all tests please run from the source::
 
     $ make test
 
-Note that some tests require to run as root, since snap7 needs to bind on a
-privileged TCP port.
+or directly with pytest::
 
-If the test complain about missing Python modules make sure the source directory
-is in your `PYTHONPATH` environment variable, or the python-snap7 module is
+    $ pytest
+
+Tests are organized with pytest markers so you can run specific subsets::
+
+    $ pytest -m client    # Client functionality tests
+    $ pytest -m server    # Server functionality tests
+    $ pytest -m util      # Utility function tests
+    $ pytest -m logo      # Logo PLC tests
+    $ pytest -m partner   # Partner connection tests
+    $ pytest -m mainloop  # Main loop tests
+
+If the tests complain about missing Python modules make sure the source directory
+is in your ``PYTHONPATH`` environment variable, or the python-snap7 module is
 installed.
 
 Tox
