@@ -1,5 +1,8 @@
 name: Publish distribution 📦 to PyPI
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
 
