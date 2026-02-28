@@ -18,12 +18,12 @@ PROTOCOL_ID = 0x72
 class ProtocolVersion(IntEnum):
     """S7CommPlus protocol versions.
 
-    V1: Early S7-1200 FW V4.0 -- simple session handshake
-    V2: Adds integrity checking and session authentication
-    V3: Adds public-key-based key exchange
+    V1: Early S7-1200 FW V4.0 -- trivial anti-replay (challenge + 0x80)
+    V2: Adds integrity checking and proprietary session authentication
+    V3: Adds ECC-based key exchange (broken via CVE-2022-38465)
     TLS: TIA Portal V17+ -- standard TLS 1.3 with per-device certificates
 
-    For new implementations, TLS (V3 + InitSsl) is the recommended target.
+    For new implementations, only TLS (V3 + InitSsl) should be targeted.
     """
 
     V1 = 0x01
@@ -86,29 +86,6 @@ class ElementID(IntEnum):
     VARNAME_LIST = 0xAC
 
 
-class ObjectId(IntEnum):
-    """Well-known object IDs used in session establishment.
-
-    Reference: thomas-v2/S7CommPlusDriver/Core/Ids.cs
-    """
-
-    NONE = 0
-    GET_NEW_RID_ON_SERVER = 211
-    CLASS_SUBSCRIPTIONS = 255
-    CLASS_SERVER_SESSION_CONTAINER = 284
-    OBJECT_SERVER_SESSION_CONTAINER = 285
-    CLASS_SERVER_SESSION = 287
-    OBJECT_NULL_SERVER_SESSION = 288
-    SERVER_SESSION_CLIENT_RID = 300
-    SERVER_SESSION_VERSION = 306
-
-
-# Default TSAP for S7CommPlus connections
-# The remote TSAP is the ASCII string "SIMATIC-ROOT-HMI" (16 bytes)
-S7COMMPLUS_LOCAL_TSAP = 0x0600
-S7COMMPLUS_REMOTE_TSAP = b"SIMATIC-ROOT-HMI"
-
-
 class DataType(IntEnum):
     """S7CommPlus wire data types.
 
@@ -142,33 +119,6 @@ class DataType(IntEnum):
     VARIANT = 0x16
     STRUCT = 0x17
     S7STRING = 0x19
-
-
-class Ids(IntEnum):
-    """Well-known IDs for S7CommPlus protocol structures.
-
-    Reference: thomas-v2/S7CommPlusDriver/Core/Ids.cs
-    """
-
-    # Data block access sub-areas
-    DB_VALUE_ACTUAL = 2550
-    CONTROLLER_AREA_VALUE_ACTUAL = 2551
-
-    # ObjectQualifier structure IDs
-    OBJECT_QUALIFIER = 1256
-    PARENT_RID = 1257
-    COMPOSITION_AID = 1258
-    KEY_QUALIFIER = 1259
-
-    # Native object RIDs for memory areas
-    NATIVE_THE_I_AREA_RID = 80
-    NATIVE_THE_Q_AREA_RID = 81
-    NATIVE_THE_M_AREA_RID = 82
-    NATIVE_THE_S7_COUNTERS_RID = 83
-    NATIVE_THE_S7_TIMERS_RID = 84
-
-    # DB AccessArea base (add DB number to get area ID)
-    DB_ACCESS_AREA_BASE = 0x8A0E0000
 
 
 class SoftDataType(IntEnum):
