@@ -11,6 +11,7 @@ Contents:
    development
 
    API/client
+   API/async_client
    API/server
    API/partner
    API/logo

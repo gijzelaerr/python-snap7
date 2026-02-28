@@ -107,8 +107,13 @@ class AsyncISOTCPConnection:
             try:
                 if self.connected:
                     dr_pdu = struct.pack(
-                        ">BBHHBB", 6, self.COTP_DR,
-                        self.dst_ref, self.src_ref, 0x00, 0x00,
+                        ">BBHHBB",
+                        6,
+                        self.COTP_DR,
+                        self.dst_ref,
+                        self.src_ref,
+                        0x00,
+                        0x00,
                     )
                     self._writer.write(self._build_tpkt(dr_pdu))
                     await self._writer.drain()
@@ -177,7 +182,12 @@ class AsyncISOTCPConnection:
 
         # Build and send COTP Connection Request
         base_pdu = struct.pack(
-            ">BBHHB", 6, self.COTP_CR, 0x0000, self.src_ref, 0x00,
+            ">BBHHB",
+            6,
+            self.COTP_CR,
+            0x0000,
+            self.src_ref,
+            0x00,
         )
         calling_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLING_TSAP, 2, self.local_tsap)
         called_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLED_TSAP, 2, self.remote_tsap)
@@ -240,7 +250,8 @@ class AsyncISOTCPConnection:
             raise S7ConnectionError("Stream not initialized")
         try:
             return await asyncio.wait_for(
-                self._reader.readexactly(size), timeout=self.timeout,
+                self._reader.readexactly(size),
+                timeout=self.timeout,
             )
         except asyncio.IncompleteReadError:
             self.connected = False
@@ -851,9 +862,12 @@ class AsyncClient(ClientMixin):
         data_section = struct.pack(">HH", len(data), 0x00FB) + bytes(data)
         header = struct.pack(
             ">BBHHHH",
-            0x32, 0x01, 0x0000,
+            0x32,
+            0x01,
+            0x0000,
             self.protocol._next_sequence(),
-            len(param_data), len(data_section),
+            len(param_data),
+            len(data_section),
         )
 
         async with self._lock:
@@ -865,9 +879,12 @@ class AsyncClient(ClientMixin):
         param_data = struct.pack(">B", 0x1C)
         header = struct.pack(
             ">BBHHHH",
-            0x32, 0x01, 0x0000,
+            0x32,
+            0x01,
+            0x0000,
             self.protocol._next_sequence(),
-            len(param_data), 0x0000,
+            len(param_data),
+            0x0000,
         )
 
         async with self._lock:
@@ -884,8 +901,13 @@ class AsyncClient(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
 
         block_type_map = {
-            Block.OB: 0x38, Block.DB: 0x41, Block.SDB: 0x42,
-            Block.FC: 0x43, Block.SFC: 0x44, Block.FB: 0x45, Block.SFB: 0x46,
+            Block.OB: 0x38,
+            Block.DB: 0x41,
+            Block.SDB: 0x42,
+            Block.FC: 0x43,
+            Block.SFC: 0x44,
+            Block.FB: 0x45,
+            Block.SFB: 0x46,
         }
         type_code = block_type_map.get(block_type, 0x41)
 
@@ -902,8 +924,13 @@ class AsyncClient(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
 
         block_type_map = {
-            Block.OB: 0x38, Block.DB: 0x41, Block.SDB: 0x42,
-            Block.FC: 0x43, Block.SFC: 0x44, Block.FB: 0x45, Block.SFB: 0x46,
+            Block.OB: 0x38,
+            Block.DB: 0x41,
+            Block.SDB: 0x42,
+            Block.FC: 0x43,
+            Block.SFC: 0x44,
+            Block.FB: 0x45,
+            Block.SFB: 0x46,
         }
         type_code = block_type_map.get(block_type, 0x41)
 
@@ -922,9 +949,15 @@ class AsyncClient(ClientMixin):
 
         block_header = struct.pack(
             ">BBHBBBBHH",
-            0x70, block_type.value, block_num,
-            0x00, 0x00, 0x00, 0x00,
-            len(block_data) + 14, len(block_data),
+            0x70,
+            block_type.value,
+            block_num,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            len(block_data) + 14,
+            len(block_data),
         )
         block_footer = b"\x00" * 4
         full_block = bytearray(block_header + block_data + block_footer)
@@ -1219,9 +1252,7 @@ class AsyncClient(ClientMixin):
 
     async def _setup_communication(self) -> None:
         """Setup communication and negotiate PDU length."""
-        request = self.protocol.build_setup_communication_request(
-            max_amq_caller=1, max_amq_callee=1, pdu_length=self.pdu_length
-        )
+        request = self.protocol.build_setup_communication_request(max_amq_caller=1, max_amq_callee=1, pdu_length=self.pdu_length)
         response = await self._send_receive(request)
 
         if response.get("parameters"):
