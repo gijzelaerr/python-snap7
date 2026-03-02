@@ -284,9 +284,9 @@ def encode_typed_value(datatype: int, value: Any) -> bytes:
     elif datatype == DataType.AID:
         return tag + encode_uint32_vlq(value)
     elif datatype == DataType.WSTRING:
-        encoded = value.encode("utf-8")
+        encoded: bytes = value.encode("utf-8")
         return tag + encode_uint32_vlq(len(encoded)) + encoded
     elif datatype == DataType.BLOB:
-        return tag + encode_uint32_vlq(len(value)) + value
+        return bytes(tag + encode_uint32_vlq(len(value)) + value)
     else:
         raise ValueError(f"Unsupported DataType for encoding: {datatype:#04x}")

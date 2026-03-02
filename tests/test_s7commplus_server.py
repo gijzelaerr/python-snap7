@@ -2,6 +2,8 @@
 
 import struct
 import time
+from collections.abc import Generator
+
 import pytest
 import asyncio
 
@@ -15,7 +17,7 @@ TEST_PORT = 11120
 
 
 @pytest.fixture()
-def server():
+def server() -> Generator[S7CommPlusServer, None, None]:
     """Create and start an S7CommPlus server with test data blocks."""
     srv = S7CommPlusServer()
 
@@ -294,7 +296,7 @@ class TestAsyncClientServerIntegration:
 
             async def read_temp() -> float:
                 data = await client.db_read(1, 0, 4)
-                return struct.unpack(">f", data)[0]
+                return float(struct.unpack(">f", data)[0])
 
             results = await asyncio.gather(read_temp(), read_temp(), read_temp())
             assert len(results) == 3

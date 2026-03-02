@@ -65,8 +65,13 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Propagate CLI options and skip e2e tests unless --e2e flag is provided."""
-    # Propagate CLI options to test_client_e2e module globals
-    for mod_name in ["tests.test_client_e2e", "test_client_e2e"]:
+    # Propagate CLI options to e2e test module globals
+    for mod_name in [
+        "tests.test_client_e2e",
+        "test_client_e2e",
+        "tests.test_s7commplus_e2e",
+        "test_s7commplus_e2e",
+    ]:
         e2e = sys.modules.get(mod_name)
         if e2e is not None:
             e2e.PLC_IP = str(config.getoption("--plc-ip"))
@@ -75,7 +80,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             e2e.PLC_PORT = int(config.getoption("--plc-port"))
             e2e.DB_READ_ONLY = int(config.getoption("--plc-db-read"))
             e2e.DB_READ_WRITE = int(config.getoption("--plc-db-write"))
-            break
 
     # Skip e2e tests if flag not provided
     if config.getoption("--e2e"):

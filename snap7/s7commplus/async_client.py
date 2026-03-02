@@ -89,8 +89,7 @@ class S7CommPlusAsyncClient:
 
             self._connected = True
             logger.info(
-                f"Async S7CommPlus connected to {host}:{port}, "
-                f"version=V{self._protocol_version}, session={self._session_id}"
+                f"Async S7CommPlus connected to {host}:{port}, version=V{self._protocol_version}, session={self._session_id}"
             )
         except Exception:
             await self.disconnect()
@@ -136,9 +135,7 @@ class S7CommPlusAsyncClient:
         payload += encode_uint32_vlq(start)
         payload += encode_uint32_vlq(size)
 
-        response = await self._send_request(
-            FunctionCode.GET_MULTI_VARIABLES, bytes(payload)
-        )
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
 
         offset = 0
         _, consumed = decode_uint32_vlq(response, offset)
@@ -175,18 +172,14 @@ class S7CommPlusAsyncClient:
         payload += encode_uint32_vlq(len(data))
         payload += data
 
-        response = await self._send_request(
-            FunctionCode.SET_MULTI_VARIABLES, bytes(payload)
-        )
+        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
 
         offset = 0
         return_code, consumed = decode_uint32_vlq(response, offset)
         if return_code != 0:
             raise RuntimeError(f"Write failed with return code {return_code}")
 
-    async def db_read_multi(
-        self, items: list[tuple[int, int, int]]
-    ) -> list[bytes]:
+    async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
 
         Args:
@@ -203,9 +196,7 @@ class S7CommPlusAsyncClient:
             payload += encode_uint32_vlq(start)
             payload += encode_uint32_vlq(size)
 
-        response = await self._send_request(
-            FunctionCode.GET_MULTI_VARIABLES, bytes(payload)
-        )
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
 
         offset = 0
         _, consumed = decode_uint32_vlq(response, offset)
@@ -245,16 +236,19 @@ class S7CommPlusAsyncClient:
 
             seq_num = self._next_sequence_number()
 
-            request = struct.pack(
-                ">BHHHHIB",
-                Opcode.REQUEST,
-                0x0000,
-                function_code,
-                0x0000,
-                seq_num,
-                self._session_id,
-                0x36,
-            ) + payload
+            request = (
+                struct.pack(
+                    ">BHHHHIB",
+                    Opcode.REQUEST,
+                    0x0000,
+                    function_code,
+                    0x0000,
+                    seq_num,
+                    self._session_id,
+                    0x36,
+                )
+                + payload
+            )
 
             frame = encode_header(self._protocol_version, len(request)) + request
             await self._send_cotp_dt(frame)
