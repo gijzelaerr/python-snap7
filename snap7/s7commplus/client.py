@@ -140,9 +140,7 @@ class S7CommPlusClient:
         payload += encode_uint32_vlq(start)
         payload += encode_uint32_vlq(size)
 
-        response = self._connection.send_request(
-            FunctionCode.GET_MULTI_VARIABLES, bytes(payload)
-        )
+        response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
 
         # Parse response
         offset = 0
@@ -188,9 +186,7 @@ class S7CommPlusClient:
         payload += encode_uint32_vlq(len(data))
         payload += data
 
-        response = self._connection.send_request(
-            FunctionCode.SET_MULTI_VARIABLES, bytes(payload)
-        )
+        response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
 
         # Parse response - check return code
         offset = 0
@@ -200,9 +196,7 @@ class S7CommPlusClient:
         if return_code != 0:
             raise RuntimeError(f"Write failed with return code {return_code}")
 
-    def db_read_multi(
-        self, items: list[tuple[int, int, int]]
-    ) -> list[bytes]:
+    def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
 
         Args:
@@ -222,9 +216,7 @@ class S7CommPlusClient:
             payload += encode_uint32_vlq(start)
             payload += encode_uint32_vlq(size)
 
-        response = self._connection.send_request(
-            FunctionCode.GET_MULTI_VARIABLES, bytes(payload)
-        )
+        response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
 
         # Parse response
         offset = 0

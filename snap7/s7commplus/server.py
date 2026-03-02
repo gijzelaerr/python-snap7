@@ -196,7 +196,7 @@ class S7CommPlusServer:
         self._client_threads: list[threading.Thread] = []
         self._running = False
         self._lock = threading.Lock()
-        self._event_callback: Optional[Callable] = None
+        self._event_callback: Optional[Callable[..., None]] = None
 
     @property
     def cpu_state(self) -> CPUState:
@@ -206,9 +206,7 @@ class S7CommPlusServer:
     def cpu_state(self, state: CPUState) -> None:
         self._cpu_state = state
 
-    def register_db(
-        self, db_number: int, variables: dict[str, tuple[str, int]], size: int = 1024
-    ) -> DataBlock:
+    def register_db(self, db_number: int, variables: dict[str, tuple[str, int]], size: int = 1024) -> DataBlock:
         """Register a data block with named variables.
 
         Args:
@@ -271,9 +269,7 @@ class S7CommPlusServer:
         self._server_socket.listen(5)
 
         self._running = True
-        self._server_thread = threading.Thread(
-            target=self._server_loop, daemon=True, name="s7commplus-server"
-        )
+        self._server_thread = threading.Thread(target=self._server_loop, daemon=True, name="s7commplus-server")
         self._server_thread.start()
         logger.info(f"S7CommPlus server started on {host}:{port}")
 
@@ -319,7 +315,7 @@ class S7CommPlusServer:
             except OSError:
                 break
 
-    def _handle_client(self, client_sock: socket.socket, address: tuple) -> None:
+    def _handle_client(self, client_sock: socket.socket, address: tuple[str, int]) -> None:
         """Handle a single client connection."""
         try:
             client_sock.settimeout(5.0)
@@ -545,9 +541,7 @@ class S7CommPlusServer:
         response += struct.pack(">I", 0)
         return bytes(response)
 
-    def _handle_explore(
-        self, seq_num: int, session_id: int, request_data: bytes
-    ) -> bytes:
+    def _handle_explore(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle Explore -- return the object tree (registered data blocks)."""
         response = bytearray()
         response += struct.pack(
@@ -597,9 +591,7 @@ class S7CommPlusServer:
         response += struct.pack(">I", 0)
         return bytes(response)
 
-    def _handle_get_multi_variables(
-        self, seq_num: int, session_id: int, request_data: bytes
-    ) -> bytes:
+    def _handle_get_multi_variables(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle GetMultiVariables -- read variables from data blocks."""
         response = bytearray()
         response += struct.pack(
@@ -653,9 +645,7 @@ class S7CommPlusServer:
         response += struct.pack(">I", 0)
         return bytes(response)
 
-    def _handle_set_multi_variables(
-        self, seq_num: int, session_id: int, request_data: bytes
-    ) -> bytes:
+    def _handle_set_multi_variables(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle SetMultiVariables -- write variables to data blocks."""
         response = bytearray()
         response += struct.pack(
@@ -707,9 +697,7 @@ class S7CommPlusServer:
         response += struct.pack(">I", 0)
         return bytes(response)
 
-    def _build_error_response(
-        self, seq_num: int, session_id: int, function_code: int
-    ) -> bytes:
+    def _build_error_response(self, seq_num: int, session_id: int, function_code: int) -> bytes:
         """Build a generic error response for unsupported function codes."""
         response = bytearray()
         response += struct.pack(

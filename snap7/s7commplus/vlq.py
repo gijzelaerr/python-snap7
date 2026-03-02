@@ -20,6 +20,7 @@ Encoding scheme:
 Reference: thomas-v2/S7CommPlusDriver/Core/S7p.cs
 """
 
+
 def encode_uint32_vlq(value: int) -> bytes:
     """Encode an unsigned 32-bit integer as VLQ.
 
