@@ -136,21 +136,15 @@ class S7CommPlusConnection:
             # Step 3: Version-specific authentication
             if use_tls and self._protocol_version >= ProtocolVersion.V3:
                 # TODO: Send InitSsl request and perform TLS handshake
-                raise NotImplementedError(
-                    "TLS authentication is not yet implemented. "
-                    "Use use_tls=False for V1 connections."
-                )
+                raise NotImplementedError("TLS authentication is not yet implemented. Use use_tls=False for V1 connections.")
             elif self._protocol_version == ProtocolVersion.V2:
                 # TODO: Proprietary HMAC-SHA256/AES session auth
-                raise NotImplementedError(
-                    "V2 authentication is not yet implemented."
-                )
+                raise NotImplementedError("V2 authentication is not yet implemented.")
 
             # V1: No further authentication needed
             self._connected = True
             logger.info(
-                f"S7CommPlus connected to {self.host}:{self.port}, "
-                f"version=V{self._protocol_version}, session={self._session_id}"
+                f"S7CommPlus connected to {self.host}:{self.port}, version=V{self._protocol_version}, session={self._session_id}"
             )
 
         except Exception:
@@ -172,9 +166,7 @@ class S7CommPlusConnection:
         self._protocol_version = 0
         self._iso_conn.disconnect()
 
-    def send_request(
-        self, function_code: int, payload: bytes = b""
-    ) -> bytes:
+    def send_request(self, function_code: int, payload: bytes = b"") -> bytes:
         """Send an S7CommPlus request and receive the response.
 
         Args:
@@ -186,21 +178,25 @@ class S7CommPlusConnection:
         """
         if not self._connected:
             from ..error import S7ConnectionError
+
             raise S7ConnectionError("Not connected")
 
         seq_num = self._next_sequence_number()
 
         # Build request header
-        request = struct.pack(
-            ">BHHHHIB",
-            Opcode.REQUEST,
-            0x0000,  # Reserved
-            function_code,
-            0x0000,  # Reserved
-            seq_num,
-            self._session_id,
-            0x36,  # Transport flags
-        ) + payload
+        request = (
+            struct.pack(
+                ">BHHHHIB",
+                Opcode.REQUEST,
+                0x0000,  # Reserved
+                function_code,
+                0x0000,  # Reserved
+                seq_num,
+                self._session_id,
+                0x36,  # Transport flags
+            )
+            + payload
+        )
 
         # Add S7CommPlus frame header and send
         frame = encode_header(self._protocol_version, len(request)) + request
@@ -215,6 +211,7 @@ class S7CommPlusConnection:
 
         if len(response) < 14:
             from ..error import S7ConnectionError
+
             raise S7ConnectionError("Response too short")
 
         return response[14:]
@@ -252,6 +249,7 @@ class S7CommPlusConnection:
 
         if len(response) < 14:
             from ..error import S7ConnectionError
+
             raise S7ConnectionError("CreateObject response too short")
 
         # Extract session ID from response header
