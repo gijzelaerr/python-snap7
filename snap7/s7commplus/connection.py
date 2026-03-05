@@ -15,19 +15,25 @@ the same across all versions -- only the session authentication layer differs.
 Connection sequence (all versions)::
 
     1. TCP connect to port 102
-    2. COTP Connection Request / Confirm (same as legacy S7comm)
-    3. S7CommPlus CreateObject request (NullServer session setup)
-    4. PLC responds with CreateObject response containing:
+    2. COTP Connection Request / Confirm
+       - Local TSAP: 0x0600
+       - Remote TSAP: "SIMATIC-ROOT-HMI" (16-byte ASCII string)
+    3. InitSSL request / response (unencrypted)
+    4. TLS activation (for V3/TLS PLCs)
+    5. S7CommPlus CreateObject request (NullServer session setup)
+       - SessionId = ObjectNullServerSession (288)
+       - Proper PObject tree with ServerSession class
+    6. PLC responds with CreateObject response containing:
        - Protocol version (V1/V2/V3)
        - Session ID
        - Server session challenge (V2/V3)
 
-Version-specific authentication after step 4::
+Version-specific authentication after step 6::
 
-    V1: Simple challenge-response handshake
+    V1: No further authentication needed
     V2: Session key derivation and integrity checking
     V3 (no TLS): Public-key key exchange
-    V3 (TLS): InitSsl request -> TLS 1.3 handshake over TPKT/COTP tunnel
+    V3 (TLS): TLS 1.3 handshake is already done in step 4
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
@@ -39,8 +45,18 @@ from typing import Optional, Type
 from types import TracebackType
 
 from ..connection import ISOTCPConnection
-from .protocol import FunctionCode, Opcode, ProtocolVersion
-from .codec import encode_header, decode_header
+from .protocol import (
+    FunctionCode,
+    Opcode,
+    ProtocolVersion,
+    ElementID,
+    ObjectId,
+    S7COMMPLUS_LOCAL_TSAP,
+    S7COMMPLUS_REMOTE_TSAP,
+)
+from .codec import encode_header, decode_header, encode_typed_value
+from .vlq import encode_uint32_vlq
+from .protocol import DataType
 
 logger = logging.getLogger(__name__)
 
@@ -62,19 +78,15 @@ class S7CommPlusConnection:
         self,
         host: str,
         port: int = 102,
-        local_tsap: int = 0x0100,
-        remote_tsap: int = 0x0102,
     ):
         self.host = host
         self.port = port
-        self.local_tsap = local_tsap
-        self.remote_tsap = remote_tsap
 
         self._iso_conn = ISOTCPConnection(
             host=host,
             port=port,
-            local_tsap=local_tsap,
-            remote_tsap=remote_tsap,
+            local_tsap=S7COMMPLUS_LOCAL_TSAP,
+            remote_tsap=S7COMMPLUS_REMOTE_TSAP,
         )
 
         self._ssl_context: Optional[ssl.SSLContext] = None
@@ -127,21 +139,31 @@ class S7CommPlusConnection:
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
         try:
-            # Step 1: COTP connection
+            # Step 1: COTP connection (same TSAP for all S7CommPlus versions)
             self._iso_conn.connect(timeout)
 
-            # Step 2: CreateObject (S7CommPlus session setup)
+            # Step 2: InitSSL handshake (required before CreateObject)
+            self._init_ssl()
+
+            # Step 3: TLS activation (required for modern firmware)
+            if use_tls:
+                # TODO: Perform TLS 1.3 handshake over the existing COTP connection
+                raise NotImplementedError("TLS activation is not yet implemented. Use use_tls=False for V1 connections.")
+
+            # Step 4: CreateObject (S7CommPlus session setup)
             self._create_session()
 
-            # Step 3: Version-specific authentication
-            if use_tls and self._protocol_version >= ProtocolVersion.V3:
-                # TODO: Send InitSsl request and perform TLS handshake
-                raise NotImplementedError("TLS authentication is not yet implemented. Use use_tls=False for V1 connections.")
+            # Step 5: Version-specific authentication
+            if self._protocol_version >= ProtocolVersion.V3:
+                if not use_tls:
+                    logger.warning(
+                        "PLC reports V3 protocol but TLS is not enabled. Connection may not work without use_tls=True."
+                    )
             elif self._protocol_version == ProtocolVersion.V2:
                 # TODO: Proprietary HMAC-SHA256/AES session auth
                 raise NotImplementedError("V2 authentication is not yet implemented.")
 
-            # V1: No further authentication needed
+            # V1: No further authentication needed after CreateObject
             self._connected = True
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, version=V{self._protocol_version}, session={self._session_id}"
@@ -198,16 +220,17 @@ class S7CommPlusConnection:
             + payload
         )
 
-        # Add S7CommPlus frame header and send
+        # Add S7CommPlus frame header and trailer, then send
         frame = encode_header(self._protocol_version, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
         self._iso_conn.send_data(frame)
 
         # Receive response
         response_frame = self._iso_conn.receive_data()
 
-        # Parse frame header
+        # Parse frame header, use data_length to exclude trailer
         version, data_length, consumed = decode_header(response_frame)
-        response = response_frame[consumed:]
+        response = response_frame[consumed : consumed + data_length]
 
         if len(response) < 14:
             from ..error import S7ConnectionError
@@ -216,11 +239,64 @@ class S7CommPlusConnection:
 
         return response[14:]
 
-    def _create_session(self) -> None:
-        """Send CreateObject request to establish an S7CommPlus session."""
+    def _init_ssl(self) -> None:
+        """Send InitSSL request to prepare the connection.
+
+        This is the first S7CommPlus message sent after COTP connect.
+        The PLC responds with an InitSSL response. For PLCs that support
+        TLS, the caller should then activate TLS before sending CreateObject.
+        For V1 PLCs without TLS, the response may indicate that TLS is
+        not supported, but the connection can continue without it.
+
+        Reference: thomas-v2/S7CommPlusDriver InitSslRequest
+        """
         seq_num = self._next_sequence_number()
 
-        # Build CreateObject request with NullServer session data
+        # InitSSL request: header + padding
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,  # Reserved
+            FunctionCode.INIT_SSL,
+            0x0000,  # Reserved
+            seq_num,
+            0x00000000,  # No session yet
+            0x30,  # Transport flags (0x30 for InitSSL)
+        )
+        # Trailing padding
+        request += struct.pack(">I", 0)
+
+        # Wrap in S7CommPlus frame header + trailer
+        frame = encode_header(ProtocolVersion.V1, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
+
+        self._iso_conn.send_data(frame)
+
+        # Receive InitSSL response
+        response_frame = self._iso_conn.receive_data()
+
+        # Parse S7CommPlus frame header
+        version, data_length, consumed = decode_header(response_frame)
+        response = response_frame[consumed:]
+
+        if len(response) < 14:
+            from ..error import S7ConnectionError
+
+            raise S7ConnectionError("InitSSL response too short")
+
+        logger.debug(f"InitSSL response received, version=V{version}")
+
+    def _create_session(self) -> None:
+        """Send CreateObject request to establish an S7CommPlus session.
+
+        Builds a NullServerSession CreateObject request matching the
+        structure expected by S7-1200/1500 PLCs:
+
+        Reference: thomas-v2/S7CommPlusDriver CreateObjectRequest.SetNullServerSessionData()
+        """
+        seq_num = self._next_sequence_number()
+
+        # Build CreateObject request header
         request = struct.pack(
             ">BHHHHIB",
             Opcode.REQUEST,
@@ -228,15 +304,54 @@ class S7CommPlusConnection:
             FunctionCode.CREATE_OBJECT,
             0x0000,
             seq_num,
-            0x00000000,  # No session yet
-            0x36,
+            ObjectId.OBJECT_NULL_SERVER_SESSION,  # SessionId = 288 for initial setup
+            0x36,  # Transport flags
         )
 
-        # Add empty request data (minimal CreateObject)
+        # RequestId: ObjectServerSessionContainer (285)
+        request += struct.pack(">I", ObjectId.OBJECT_SERVER_SESSION_CONTAINER)
+
+        # RequestValue: ValueUDInt(0) = DatatypeFlags(0x00) + Datatype.UDInt(0x04) + VLQ(0)
+        request += bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(0)
+
+        # Unknown padding (always 0)
         request += struct.pack(">I", 0)
 
-        # Wrap in S7CommPlus frame header
+        # RequestObject: PObject for NullServerSession
+        # StartOfObject
+        request += bytes([ElementID.START_OF_OBJECT])
+        # RelationId: GetNewRIDOnServer (211)
+        request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
+        # ClassId: ClassServerSession (287), VLQ encoded
+        request += encode_uint32_vlq(ObjectId.CLASS_SERVER_SESSION)
+        # ClassFlags: 0
+        request += encode_uint32_vlq(0)
+        # AttributeId: None (0)
+        request += encode_uint32_vlq(0)
+
+        # Attribute: ServerSessionClientRID (300) = RID 0x80c3c901
+        request += bytes([ElementID.ATTRIBUTE])
+        request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
+        request += encode_typed_value(DataType.RID, 0x80C3C901)
+
+        # Nested object: ClassSubscriptions
+        request += bytes([ElementID.START_OF_OBJECT])
+        request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
+        request += encode_uint32_vlq(ObjectId.CLASS_SUBSCRIPTIONS)
+        request += encode_uint32_vlq(0)  # ClassFlags
+        request += encode_uint32_vlq(0)  # AttributeId
+        request += bytes([ElementID.TERMINATING_OBJECT])
+
+        # End outer object
+        request += bytes([ElementID.TERMINATING_OBJECT])
+
+        # Trailing padding
+        request += struct.pack(">I", 0)
+
+        # Wrap in S7CommPlus frame header + trailer
         frame = encode_header(ProtocolVersion.V1, len(request)) + request
+        # S7CommPlus trailer (end-of-frame marker)
+        frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
 
         self._iso_conn.send_data(frame)
 
@@ -275,6 +390,7 @@ class S7CommPlusConnection:
         request += struct.pack(">I", 0)
 
         frame = encode_header(self._protocol_version, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
         self._iso_conn.send_data(frame)
 
         # Best-effort receive

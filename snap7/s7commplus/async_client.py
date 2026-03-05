@@ -17,8 +17,17 @@ import logging
 import struct
 from typing import Any, Optional
 
-from .protocol import FunctionCode, Opcode, ProtocolVersion
-from .codec import encode_header, decode_header
+from .protocol import (
+    DataType,
+    ElementID,
+    FunctionCode,
+    ObjectId,
+    Opcode,
+    ProtocolVersion,
+    S7COMMPLUS_LOCAL_TSAP,
+    S7COMMPLUS_REMOTE_TSAP,
+)
+from .codec import encode_header, decode_header, encode_typed_value
 from .vlq import encode_uint32_vlq, decode_uint32_vlq
 
 logger = logging.getLogger(__name__)
@@ -74,15 +83,15 @@ class S7CommPlusAsyncClient:
             rack: PLC rack number
             slot: PLC slot number
         """
-        local_tsap = 0x0100
-        remote_tsap = 0x0100 | (rack << 5) | slot
-
         # TCP connect
         self._reader, self._writer = await asyncio.open_connection(host, port)
 
         try:
-            # COTP handshake
-            await self._cotp_connect(local_tsap, remote_tsap)
+            # COTP handshake with S7CommPlus TSAP values
+            await self._cotp_connect(S7COMMPLUS_LOCAL_TSAP, S7COMMPLUS_REMOTE_TSAP)
+
+            # InitSSL handshake
+            await self._init_ssl()
 
             # S7CommPlus session setup
             await self._create_session()
@@ -251,19 +260,20 @@ class S7CommPlusAsyncClient:
             )
 
             frame = encode_header(self._protocol_version, len(request)) + request
+            frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
             await self._send_cotp_dt(frame)
 
             response_data = await self._recv_cotp_dt()
 
             version, data_length, consumed = decode_header(response_data)
-            response = response_data[consumed:]
+            response = response_data[consumed : consumed + data_length]
 
             if len(response) < 14:
                 raise RuntimeError("Response too short")
 
             return response[14:]
 
-    async def _cotp_connect(self, local_tsap: int, remote_tsap: int) -> None:
+    async def _cotp_connect(self, local_tsap: int, remote_tsap: bytes) -> None:
         """Perform COTP Connection Request / Confirm handshake."""
         if self._writer is None or self._reader is None:
             raise RuntimeError("Not connected")
@@ -271,7 +281,7 @@ class S7CommPlusAsyncClient:
         # Build COTP CR
         base_pdu = struct.pack(">BBHHB", 6, _COTP_CR, 0x0000, 0x0001, 0x00)
         calling_tsap = struct.pack(">BBH", 0xC1, 2, local_tsap)
-        called_tsap = struct.pack(">BBH", 0xC2, 2, remote_tsap)
+        called_tsap = struct.pack(">BB", 0xC2, len(remote_tsap)) + remote_tsap
         pdu_size_param = struct.pack(">BBB", 0xC0, 1, 0x0A)
 
         params = calling_tsap + called_tsap + pdu_size_param
@@ -290,10 +300,40 @@ class S7CommPlusAsyncClient:
         if len(payload) < 7 or payload[1] != _COTP_CC:
             raise RuntimeError(f"Expected COTP CC, got {payload[1]:#04x}")
 
+    async def _init_ssl(self) -> None:
+        """Send InitSSL request (required before CreateObject)."""
+        seq_num = self._next_sequence_number()
+
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.INIT_SSL,
+            0x0000,
+            seq_num,
+            0x00000000,
+            0x30,  # Transport flags for InitSSL
+        )
+        request += struct.pack(">I", 0)
+
+        frame = encode_header(ProtocolVersion.V1, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
+        await self._send_cotp_dt(frame)
+
+        response_data = await self._recv_cotp_dt()
+        version, data_length, consumed = decode_header(response_data)
+        response = response_data[consumed : consumed + data_length]
+
+        if len(response) < 14:
+            raise RuntimeError("InitSSL response too short")
+
+        logger.debug(f"InitSSL response received, version=V{version}")
+
     async def _create_session(self) -> None:
         """Send CreateObject to establish S7CommPlus session."""
         seq_num = self._next_sequence_number()
 
+        # Build CreateObject request header
         request = struct.pack(
             ">BHHHHIB",
             Opcode.REQUEST,
@@ -301,17 +341,50 @@ class S7CommPlusAsyncClient:
             FunctionCode.CREATE_OBJECT,
             0x0000,
             seq_num,
-            0x00000000,
+            ObjectId.OBJECT_NULL_SERVER_SESSION,  # SessionId = 288
             0x36,
         )
+
+        # RequestId: ObjectServerSessionContainer (285)
+        request += struct.pack(">I", ObjectId.OBJECT_SERVER_SESSION_CONTAINER)
+
+        # RequestValue: ValueUDInt(0)
+        request += bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(0)
+
+        # Unknown padding
         request += struct.pack(">I", 0)
 
+        # RequestObject: NullServerSession PObject
+        request += bytes([ElementID.START_OF_OBJECT])
+        request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
+        request += encode_uint32_vlq(ObjectId.CLASS_SERVER_SESSION)
+        request += encode_uint32_vlq(0)  # ClassFlags
+        request += encode_uint32_vlq(0)  # AttributeId
+
+        # Attribute: ServerSessionClientRID = 0x80c3c901
+        request += bytes([ElementID.ATTRIBUTE])
+        request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
+        request += encode_typed_value(DataType.RID, 0x80C3C901)
+
+        # Nested: ClassSubscriptions
+        request += bytes([ElementID.START_OF_OBJECT])
+        request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
+        request += encode_uint32_vlq(ObjectId.CLASS_SUBSCRIPTIONS)
+        request += encode_uint32_vlq(0)
+        request += encode_uint32_vlq(0)
+        request += bytes([ElementID.TERMINATING_OBJECT])
+
+        request += bytes([ElementID.TERMINATING_OBJECT])
+        request += struct.pack(">I", 0)
+
+        # Frame header + trailer
         frame = encode_header(ProtocolVersion.V1, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
         await self._send_cotp_dt(frame)
 
         response_data = await self._recv_cotp_dt()
         version, data_length, consumed = decode_header(response_data)
-        response = response_data[consumed:]
+        response = response_data[consumed : consumed + data_length]
 
         if len(response) < 14:
             raise RuntimeError("CreateObject response too short")
@@ -336,6 +409,7 @@ class S7CommPlusAsyncClient:
         request += struct.pack(">I", 0)
 
         frame = encode_header(self._protocol_version, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
         await self._send_cotp_dt(frame)
 
         try:

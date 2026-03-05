@@ -86,6 +86,28 @@ class ElementID(IntEnum):
     VARNAME_LIST = 0xAC
 
 
+class ObjectId(IntEnum):
+    """Well-known object IDs used in session establishment.
+
+    Reference: thomas-v2/S7CommPlusDriver/Core/Ids.cs
+    """
+
+    NONE = 0
+    GET_NEW_RID_ON_SERVER = 211
+    CLASS_SUBSCRIPTIONS = 255
+    CLASS_SERVER_SESSION_CONTAINER = 284
+    OBJECT_SERVER_SESSION_CONTAINER = 285
+    CLASS_SERVER_SESSION = 287
+    OBJECT_NULL_SERVER_SESSION = 288
+    SERVER_SESSION_CLIENT_RID = 300
+
+
+# Default TSAP for S7CommPlus connections
+# The remote TSAP is the ASCII string "SIMATIC-ROOT-HMI" (16 bytes)
+S7COMMPLUS_LOCAL_TSAP = 0x0600
+S7COMMPLUS_REMOTE_TSAP = b"SIMATIC-ROOT-HMI"
+
+
 class DataType(IntEnum):
     """S7CommPlus wire data types.
 

@@ -428,8 +428,9 @@ class S7CommPlusServer:
 
     def _send_s7commplus_frame(self, sock: socket.socket, data: bytes) -> None:
         """Send an S7CommPlus frame wrapped in TPKT/COTP."""
-        # S7CommPlus header (4 bytes) + data
+        # S7CommPlus header (4 bytes) + data + trailer (4 bytes)
         s7plus_frame = encode_header(self._protocol_version, len(data)) + data
+        s7plus_frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
 
         # COTP DT header
         cotp_dt = struct.pack(">BBB", 2, 0xF0, 0x80) + s7plus_frame
@@ -449,7 +450,8 @@ class S7CommPlusServer:
         except ValueError:
             return None
 
-        payload = data[consumed:]
+        # Use data_length to exclude any trailer
+        payload = data[consumed : consumed + data_length]
         if len(payload) < 14:
             return None
 
@@ -463,7 +465,9 @@ class S7CommPlusServer:
         req_session_id = struct.unpack_from(">I", payload, 9)[0]
         request_data = payload[14:]
 
-        if function_code == FunctionCode.CREATE_OBJECT:
+        if function_code == FunctionCode.INIT_SSL:
+            return self._handle_init_ssl(seq_num)
+        elif function_code == FunctionCode.CREATE_OBJECT:
             return self._handle_create_object(seq_num, request_data)
         elif function_code == FunctionCode.DELETE_OBJECT:
             return self._handle_delete_object(seq_num, req_session_id)
@@ -475,6 +479,23 @@ class S7CommPlusServer:
             return self._handle_set_multi_variables(seq_num, req_session_id, request_data)
         else:
             return self._build_error_response(seq_num, req_session_id, function_code)
+
+    def _handle_init_ssl(self, seq_num: int) -> bytes:
+        """Handle InitSSL -- respond to SSL initialization (V1 emulation, no real TLS)."""
+        response = bytearray()
+        response += struct.pack(
+            ">BHHHHIB",
+            Opcode.RESPONSE,
+            0x0000,
+            FunctionCode.INIT_SSL,
+            0x0000,
+            seq_num,
+            0x00000000,
+            0x00,  # Transport flags
+        )
+        response += encode_uint32_vlq(0)  # Return code: success
+        response += struct.pack(">I", 0)
+        return bytes(response)
 
     def _handle_create_object(self, seq_num: int, request_data: bytes) -> bytes:
         """Handle CreateObject -- establish a session."""
