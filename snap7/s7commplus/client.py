@@ -93,14 +93,9 @@ class S7CommPlusClient:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
-        local_tsap = 0x0100
-        remote_tsap = 0x0100 | (rack << 5) | slot
-
         self._connection = S7CommPlusConnection(
             host=host,
             port=port,
-            local_tsap=local_tsap,
-            remote_tsap=remote_tsap,
         )
 
         self._connection.connect(
