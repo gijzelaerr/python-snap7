@@ -40,6 +40,7 @@ access. Ensure data blocks have "Optimized block access" disabled in
 TIA Portal so that byte offsets match the layout above.
 """
 
+import logging
 import os
 import struct
 import unittest
@@ -47,6 +48,14 @@ import unittest
 import pytest
 
 from snap7.s7commplus.client import S7CommPlusClient
+
+# Enable DEBUG logging for all s7commplus modules so we get full hex dumps
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(name)s %(levelname)s %(message)s",
+)
+for _mod in ["snap7.s7commplus.client", "snap7.s7commplus.connection", "snap7.connection"]:
+    logging.getLogger(_mod).setLevel(logging.DEBUG)
 
 # =============================================================================
 # PLC Connection Configuration
@@ -408,3 +417,204 @@ class TestS7CommPlusExplore(unittest.TestCase):
             pytest.skip(f"Explore not supported: {e}")
         self.assertIsInstance(data, bytes)
         self.assertGreater(len(data), 0)
+
+
+@pytest.mark.e2e
+class TestS7CommPlusDiagnostics(unittest.TestCase):
+    """Diagnostic tests for debugging protocol issues against real PLCs.
+
+    These tests are designed to dump raw protocol data at every layer
+    to help diagnose why db_read/db_write fail against real hardware.
+    """
+
+    client: S7CommPlusClient
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.client = S7CommPlusClient()
+        cls.client.connect(PLC_IP, PLC_PORT, PLC_RACK, PLC_SLOT)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls.client:
+            cls.client.disconnect()
+
+    def test_diag_connection_info(self) -> None:
+        """Dump connection state after successful connect."""
+        print(f"\n{'='*60}")
+        print(f"DIAGNOSTIC: Connection Info")
+        print(f"  connected: {self.client.connected}")
+        print(f"  protocol_version: V{self.client.protocol_version}")
+        print(f"  session_id: 0x{self.client.session_id:08X} ({self.client.session_id})")
+        print(f"{'='*60}")
+        self.assertTrue(self.client.connected)
+
+    def test_diag_explore_raw(self) -> None:
+        """Explore and dump the raw response for analysis."""
+        print(f"\n{'='*60}")
+        print("DIAGNOSTIC: Explore raw response")
+        try:
+            data = self.client.explore()
+            print(f"  Length: {len(data)} bytes")
+            # Dump in 32-byte rows
+            for i in range(0, len(data), 32):
+                chunk = data[i : i + 32]
+                hex_str = chunk.hex(" ")
+                ascii_str = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
+                print(f"  {i:04x}: {hex_str:<96s} {ascii_str}")
+        except Exception as e:
+            print(f"  Explore failed: {e}")
+        print(f"{'='*60}")
+
+    def test_diag_db_read_single_byte(self) -> None:
+        """Try to read a single byte from DB1 offset 0 and dump everything."""
+        print(f"\n{'='*60}")
+        print("DIAGNOSTIC: db_read(DB1, offset=0, size=1)")
+        try:
+            data = self.client.db_read(DB_READ_ONLY, 0, 1)
+            print(f"  Success! Got {len(data)} bytes: {data.hex(' ')}")
+        except Exception as e:
+            print(f"  FAILED: {type(e).__name__}: {e}")
+        print(f"{'='*60}")
+
+    def test_diag_db_read_full_block(self) -> None:
+        """Try to read the full test DB and dump everything."""
+        print(f"\n{'='*60}")
+        print(f"DIAGNOSTIC: db_read(DB{DB_READ_ONLY}, offset=0, size={DB_SIZE})")
+        try:
+            data = self.client.db_read(DB_READ_ONLY, 0, DB_SIZE)
+            print(f"  Success! Got {len(data)} bytes:")
+            for i in range(0, len(data), 16):
+                chunk = data[i : i + 16]
+                print(f"    {i:04x}: {chunk.hex(' ')}")
+        except Exception as e:
+            print(f"  FAILED: {type(e).__name__}: {e}")
+        print(f"{'='*60}")
+
+    def test_diag_raw_get_multi_variables(self) -> None:
+        """Send a raw GetMultiVariables with different payload formats and dump responses.
+
+        This tries several payload encodings to see which ones the PLC accepts.
+        """
+        from snap7.s7commplus.protocol import FunctionCode
+        from snap7.s7commplus.vlq import encode_uint32_vlq
+
+        print(f"\n{'='*60}")
+        print("DIAGNOSTIC: Raw GetMultiVariables payload experiments")
+
+        assert self.client._connection is not None
+
+        # Experiment 1: Our current format (item_count + object_id + offset + size)
+        payloads = {
+            "current_format (count=1, obj=0x00010001, off=0, sz=2)": (
+                encode_uint32_vlq(1)
+                + encode_uint32_vlq(0x00010001)
+                + encode_uint32_vlq(0)
+                + encode_uint32_vlq(2)
+            ),
+            "empty_payload": b"",
+            "just_zero": encode_uint32_vlq(0),
+            "single_vlq_1": encode_uint32_vlq(1),
+        }
+
+        for label, payload in payloads.items():
+            print(f"\n  --- {label} ---")
+            print(f"  Payload ({len(payload)} bytes): {payload.hex(' ')}")
+            try:
+                response = self.client._connection.send_request(
+                    FunctionCode.GET_MULTI_VARIABLES, payload
+                )
+                print(f"  Response ({len(response)} bytes): {response.hex(' ')}")
+
+                # Try to parse return code
+                if len(response) > 0:
+                    from snap7.s7commplus.vlq import decode_uint32_vlq
+
+                    rc, consumed = decode_uint32_vlq(response, 0)
+                    print(f"  Return code (VLQ): {rc} (0x{rc:X})")
+                    remaining = response[consumed:]
+                    if remaining:
+                        print(f"  After return code ({len(remaining)} bytes): {remaining.hex(' ')}")
+            except Exception as e:
+                print(f"  EXCEPTION: {type(e).__name__}: {e}")
+
+        print(f"\n{'='*60}")
+
+    def test_diag_raw_set_variable(self) -> None:
+        """Try SetVariable (0x04F2) instead of SetMultiVariables to see if PLC responds differently."""
+        from snap7.s7commplus.protocol import FunctionCode
+        from snap7.s7commplus.vlq import encode_uint32_vlq
+
+        print(f"\n{'='*60}")
+        print("DIAGNOSTIC: Raw SetVariable / GetVariable experiments")
+
+        assert self.client._connection is not None
+
+        function_codes = {
+            "GET_VARIABLE (0x04FC)": FunctionCode.GET_VARIABLE,
+            "GET_MULTI_VARIABLES (0x054C)": FunctionCode.GET_MULTI_VARIABLES,
+            "SET_VARIABLE (0x04F2)": FunctionCode.SET_VARIABLE,
+        }
+
+        # Simple payload: just try empty or minimal
+        for label, fc in function_codes.items():
+            print(f"\n  --- {label} with empty payload ---")
+            try:
+                response = self.client._connection.send_request(fc, b"")
+                print(f"  Response ({len(response)} bytes): {response.hex(' ')}")
+            except Exception as e:
+                print(f"  EXCEPTION: {type(e).__name__}: {e}")
+
+        print(f"\n{'='*60}")
+
+    def test_diag_explore_then_read(self) -> None:
+        """Explore first to discover object IDs, then try reading using those IDs."""
+        from snap7.s7commplus.protocol import FunctionCode, ElementID
+        from snap7.s7commplus.vlq import encode_uint32_vlq, decode_uint32_vlq
+
+        print(f"\n{'='*60}")
+        print("DIAGNOSTIC: Explore -> extract object IDs -> try reading")
+
+        assert self.client._connection is not None
+
+        try:
+            explore_data = self.client._connection.send_request(FunctionCode.EXPLORE, b"")
+            print(f"  Explore response ({len(explore_data)} bytes)")
+
+            # Scan for StartOfObject markers and extract relation IDs
+            object_ids = []
+            i = 0
+            while i < len(explore_data):
+                if explore_data[i] == ElementID.START_OF_OBJECT:
+                    if i + 5 <= len(explore_data):
+                        rel_id = struct.unpack_from(">I", explore_data, i + 1)[0]
+                        object_ids.append(rel_id)
+                        print(f"    Found object at offset {i}: relation_id=0x{rel_id:08X}")
+                    i += 5
+                else:
+                    i += 1
+
+            # Try reading using each discovered object ID
+            for obj_id in object_ids[:5]:  # Limit to first 5
+                print(f"\n  --- Read using object_id=0x{obj_id:08X} ---")
+                payload = (
+                    encode_uint32_vlq(1)
+                    + encode_uint32_vlq(obj_id)
+                    + encode_uint32_vlq(0)
+                    + encode_uint32_vlq(4)
+                )
+                try:
+                    response = self.client._connection.send_request(
+                        FunctionCode.GET_MULTI_VARIABLES, payload
+                    )
+                    print(f"    Response ({len(response)} bytes): {response.hex(' ')}")
+                    if len(response) > 0:
+                        rc, consumed = decode_uint32_vlq(response, 0)
+                        print(f"    Return code: {rc} (0x{rc:X})")
+                except Exception as e:
+                    print(f"    EXCEPTION: {type(e).__name__}: {e}")
+
+        except Exception as e:
+            print(f"  Explore failed: {type(e).__name__}: {e}")
+
+        print(f"\n{'='*60}")
