@@ -28,7 +28,8 @@ from .protocol import (
     S7COMMPLUS_REMOTE_TSAP,
 )
 from .codec import encode_header, decode_header, encode_typed_value
-from .vlq import encode_uint32_vlq, decode_uint32_vlq
+from .vlq import encode_uint32_vlq
+from .client import _build_read_payload, _parse_read_response, _build_write_payload, _parse_write_response
 
 logger = logging.getLogger(__name__)
 
@@ -137,33 +138,15 @@ class S7CommPlusAsyncClient:
         Returns:
             Raw bytes read from the data block
         """
-        object_id = 0x00010000 | (db_number & 0xFFFF)
-        payload = bytearray()
-        payload += encode_uint32_vlq(1)
-        payload += encode_uint32_vlq(object_id)
-        payload += encode_uint32_vlq(start)
-        payload += encode_uint32_vlq(size)
+        payload = _build_read_payload([(db_number, start, size)])
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
 
-        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
-
-        offset = 0
-        _, consumed = decode_uint32_vlq(response, offset)
-        offset += consumed
-        item_count, consumed = decode_uint32_vlq(response, offset)
-        offset += consumed
-
-        if item_count == 0:
-            return b""
-
-        status, consumed = decode_uint32_vlq(response, offset)
-        offset += consumed
-        data_length, consumed = decode_uint32_vlq(response, offset)
-        offset += consumed
-
-        if status != 0:
-            raise RuntimeError(f"Read failed with status {status}")
-
-        return response[offset : offset + data_length]
+        results = _parse_read_response(response)
+        if not results:
+            raise RuntimeError("Read returned no data")
+        if results[0] is None:
+            raise RuntimeError("Read failed: PLC returned error for item")
+        return results[0]
 
     async def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block.
@@ -173,20 +156,9 @@ class S7CommPlusAsyncClient:
             start: Start byte offset
             data: Bytes to write
         """
-        object_id = 0x00010000 | (db_number & 0xFFFF)
-        payload = bytearray()
-        payload += encode_uint32_vlq(1)
-        payload += encode_uint32_vlq(object_id)
-        payload += encode_uint32_vlq(start)
-        payload += encode_uint32_vlq(len(data))
-        payload += data
-
-        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
-
-        offset = 0
-        return_code, consumed = decode_uint32_vlq(response, offset)
-        if return_code != 0:
-            raise RuntimeError(f"Write failed with return code {return_code}")
+        payload = _build_write_payload([(db_number, start, data)])
+        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
 
     async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
@@ -197,35 +169,11 @@ class S7CommPlusAsyncClient:
         Returns:
             List of raw bytes for each item
         """
-        payload = bytearray()
-        payload += encode_uint32_vlq(len(items))
-        for db_number, start, size in items:
-            object_id = 0x00010000 | (db_number & 0xFFFF)
-            payload += encode_uint32_vlq(object_id)
-            payload += encode_uint32_vlq(start)
-            payload += encode_uint32_vlq(size)
+        payload = _build_read_payload(items)
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
 
-        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
-
-        offset = 0
-        _, consumed = decode_uint32_vlq(response, offset)
-        offset += consumed
-        item_count, consumed = decode_uint32_vlq(response, offset)
-        offset += consumed
-
-        results: list[bytes] = []
-        for _ in range(item_count):
-            status, consumed = decode_uint32_vlq(response, offset)
-            offset += consumed
-            data_length, consumed = decode_uint32_vlq(response, offset)
-            offset += consumed
-            if status == 0 and data_length > 0:
-                results.append(response[offset : offset + data_length])
-                offset += data_length
-            else:
-                results.append(b"")
-
-        return results
+        results = _parse_read_response(response)
+        return [r if r is not None else b"" for r in results]
 
     async def explore(self) -> bytes:
         """Browse the PLC object tree.

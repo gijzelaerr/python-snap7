@@ -143,6 +143,33 @@ class DataType(IntEnum):
     S7STRING = 0x19
 
 
+class Ids(IntEnum):
+    """Well-known IDs for S7CommPlus protocol structures.
+
+    Reference: thomas-v2/S7CommPlusDriver/Core/Ids.cs
+    """
+
+    # Data block access sub-areas
+    DB_VALUE_ACTUAL = 2550
+    CONTROLLER_AREA_VALUE_ACTUAL = 2551
+
+    # ObjectQualifier structure IDs
+    OBJECT_QUALIFIER = 1256
+    PARENT_RID = 1257
+    COMPOSITION_AID = 1258
+    KEY_QUALIFIER = 1259
+
+    # Native object RIDs for memory areas
+    NATIVE_THE_I_AREA_RID = 80
+    NATIVE_THE_Q_AREA_RID = 81
+    NATIVE_THE_M_AREA_RID = 82
+    NATIVE_THE_S7_COUNTERS_RID = 83
+    NATIVE_THE_S7_TIMERS_RID = 84
+
+    # DB AccessArea base (add DB number to get area ID)
+    DB_ACCESS_AREA_BASE = 0x8A0E0000
+
+
 class SoftDataType(IntEnum):
     """PLC soft data types (used in variable metadata / tag descriptions).
 
