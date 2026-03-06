@@ -40,8 +40,14 @@ from .protocol import (
     ProtocolVersion,
     SoftDataType,
 )
-from .vlq import encode_uint32_vlq, decode_uint32_vlq
-from .codec import encode_header, decode_header, encode_typed_value
+from .vlq import encode_uint32_vlq, decode_uint32_vlq, encode_uint64_vlq
+from .codec import (
+    encode_header,
+    decode_header,
+    encode_typed_value,
+    encode_pvalue_blob,
+    decode_pvalue_to_bytes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -613,7 +619,14 @@ class S7CommPlusServer:
         return bytes(response)
 
     def _handle_get_multi_variables(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
-        """Handle GetMultiVariables -- read variables from data blocks."""
+        """Handle GetMultiVariables -- read variables from data blocks.
+
+        Parses the S7CommPlus request format with ItemAddress structures.
+        The server extracts db_number from AccessArea and byte offset/size
+        from the LID values.
+
+        Reference: thomas-v2/S7CommPlusDriver/Core/GetMultiVariablesRequest.cs
+        """
         response = bytearray()
         response += struct.pack(
             ">BHHHHIB",
@@ -625,49 +638,45 @@ class S7CommPlusServer:
             session_id,
             0x00,
         )
-        response += encode_uint32_vlq(0)  # Return code: success
 
-        # Parse request: expect object_id + variable addresses
-        offset = 0
-        items: list[tuple[int, int, int]] = []  # (db_num, byte_offset, byte_size)
+        # Parse request payload
+        items = _server_parse_read_request(request_data)
 
-        # Simple request format: VLQ item count, then for each item:
-        #   VLQ object_id, VLQ offset, VLQ size
-        if len(request_data) > 0:
-            count, consumed = decode_uint32_vlq(request_data, offset)
-            offset += consumed
+        # ReturnValue: success
+        response += encode_uint64_vlq(0)
 
-            for _ in range(count):
-                if offset >= len(request_data):
-                    break
-                obj_id, consumed = decode_uint32_vlq(request_data, offset)
-                offset += consumed
-                byte_offset, consumed = decode_uint32_vlq(request_data, offset)
-                offset += consumed
-                byte_size, consumed = decode_uint32_vlq(request_data, offset)
-                offset += consumed
-
-                db_num = obj_id & 0xFFFF
-                items.append((db_num, byte_offset, byte_size))
-
-        # Read data for each item
-        response += encode_uint32_vlq(len(items))
-        for db_num, byte_offset, byte_size in items:
+        # Value list: ItemNumber (1-based) + PValue, terminated by ItemNumber=0
+        for i, (db_num, byte_offset, byte_size) in enumerate(items, 1):
             db = self._data_blocks.get(db_num)
             if db is not None:
                 data = db.read(byte_offset, byte_size)
-                response += encode_uint32_vlq(0)  # Success
-                response += encode_uint32_vlq(len(data))
-                response += data
-            else:
-                response += encode_uint32_vlq(1)  # Error: not found
-                response += encode_uint32_vlq(0)
+                response += encode_uint32_vlq(i)  # ItemNumber
+                response += encode_pvalue_blob(data)  # Value as BLOB
+            # Errors handled in error list below
 
-        response += struct.pack(">I", 0)
+        # Terminate value list
+        response += encode_uint32_vlq(0)
+
+        # Error list
+        for i, (db_num, byte_offset, byte_size) in enumerate(items, 1):
+            db = self._data_blocks.get(db_num)
+            if db is None:
+                response += encode_uint32_vlq(i)  # ErrorItemNumber
+                response += encode_uint64_vlq(0x8104)  # Error: object not found
+
+        # Terminate error list
+        response += encode_uint32_vlq(0)
+
+        # IntegrityId
+        response += encode_uint32_vlq(0)
+
         return bytes(response)
 
     def _handle_set_multi_variables(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
-        """Handle SetMultiVariables -- write variables to data blocks."""
+        """Handle SetMultiVariables -- write variables to data blocks.
+
+        Reference: thomas-v2/S7CommPlusDriver/Core/SetMultiVariablesRequest.cs
+        """
         response = bytearray()
         response += struct.pack(
             ">BHHHHIB",
@@ -680,42 +689,32 @@ class S7CommPlusServer:
             0x00,
         )
 
-        # Parse request: VLQ item count, then for each item:
-        #   VLQ object_id, VLQ offset, VLQ data_length, data bytes
-        offset = 0
-        results: list[int] = []
+        # Parse request payload
+        items, values = _server_parse_write_request(request_data)
 
-        if len(request_data) > 0:
-            count, consumed = decode_uint32_vlq(request_data, offset)
-            offset += consumed
+        # Write data
+        errors: list[tuple[int, int]] = []
+        for i, ((db_num, byte_offset, _), data) in enumerate(zip(items, values), 1):
+            db = self._data_blocks.get(db_num)
+            if db is not None:
+                db.write(byte_offset, data)
+            else:
+                errors.append((i, 0x8104))  # Object not found
 
-            for _ in range(count):
-                if offset >= len(request_data):
-                    break
-                obj_id, consumed = decode_uint32_vlq(request_data, offset)
-                offset += consumed
-                byte_offset, consumed = decode_uint32_vlq(request_data, offset)
-                offset += consumed
-                data_len, consumed = decode_uint32_vlq(request_data, offset)
-                offset += consumed
+        # ReturnValue: success
+        response += encode_uint64_vlq(0)
 
-                data = request_data[offset : offset + data_len]
-                offset += data_len
+        # Error list
+        for err_item, err_code in errors:
+            response += encode_uint32_vlq(err_item)
+            response += encode_uint64_vlq(err_code)
 
-                db_num = obj_id & 0xFFFF
-                db = self._data_blocks.get(db_num)
-                if db is not None:
-                    db.write(byte_offset, data)
-                    results.append(0)  # Success
-                else:
-                    results.append(1)  # Error: not found
+        # Terminate error list
+        response += encode_uint32_vlq(0)
 
-        response += encode_uint32_vlq(0)  # Return code: success
-        response += encode_uint32_vlq(len(results))
-        for r in results:
-            response += encode_uint32_vlq(r)
+        # IntegrityId
+        response += encode_uint32_vlq(0)
 
-        response += struct.pack(">I", 0)
         return bytes(response)
 
     def _build_error_response(self, seq_num: int, session_id: int, function_code: int) -> bytes:
@@ -751,3 +750,153 @@ class S7CommPlusServer:
 
     def __exit__(self, *args: Any) -> None:
         self.stop()
+
+
+# -- Server-side request parsers --
+
+
+def _server_parse_read_request(request_data: bytes) -> list[tuple[int, int, int]]:
+    """Parse a GetMultiVariables request payload on the server side.
+
+    Extracts (db_number, byte_offset, byte_size) for each item from the
+    S7CommPlus ItemAddress format.
+
+    Returns:
+        List of (db_number, byte_offset, byte_size) tuples
+    """
+    if not request_data:
+        return []
+
+    offset = 0
+    items: list[tuple[int, int, int]] = []
+
+    # LinkId (UInt32 fixed)
+    if offset + 4 > len(request_data):
+        return []
+    offset += 4
+
+    # ItemCount (VLQ)
+    item_count, consumed = decode_uint32_vlq(request_data, offset)
+    offset += consumed
+
+    # FieldCount (VLQ)
+    _field_count, consumed = decode_uint32_vlq(request_data, offset)
+    offset += consumed
+
+    # Parse each ItemAddress
+    for _ in range(item_count):
+        if offset >= len(request_data):
+            break
+
+        # SymbolCrc
+        _symbol_crc, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # AccessArea
+        access_area, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # NumberOfLIDs
+        num_lids, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # AccessSubArea (first LID)
+        _access_sub_area, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # Additional LIDs
+        lids: list[int] = []
+        for _ in range(num_lids - 1):  # -1 because AccessSubArea counts as one
+            if offset >= len(request_data):
+                break
+            lid_val, consumed = decode_uint32_vlq(request_data, offset)
+            offset += consumed
+            lids.append(lid_val)
+
+        # Extract db_number from AccessArea
+        db_num = access_area & 0xFFFF
+
+        # Extract byte offset and size from LIDs
+        byte_offset = lids[0] if len(lids) > 0 else 0
+        byte_size = lids[1] if len(lids) > 1 else 1
+
+        items.append((db_num, byte_offset, byte_size))
+
+    return items
+
+
+def _server_parse_write_request(request_data: bytes) -> tuple[list[tuple[int, int, int]], list[bytes]]:
+    """Parse a SetMultiVariables request payload on the server side.
+
+    Returns:
+        Tuple of (items, values) where items is list of (db_number, byte_offset, byte_size)
+        and values is list of raw bytes to write
+    """
+    if not request_data:
+        return [], []
+
+    offset = 0
+
+    # InObjectId (UInt32 fixed)
+    if offset + 4 > len(request_data):
+        return [], []
+    offset += 4
+
+    # ItemCount (VLQ)
+    item_count, consumed = decode_uint32_vlq(request_data, offset)
+    offset += consumed
+
+    # FieldCount (VLQ)
+    _field_count, consumed = decode_uint32_vlq(request_data, offset)
+    offset += consumed
+
+    # Parse each ItemAddress
+    items: list[tuple[int, int, int]] = []
+    for _ in range(item_count):
+        if offset >= len(request_data):
+            break
+
+        # SymbolCrc
+        _symbol_crc, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # AccessArea
+        access_area, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # NumberOfLIDs
+        num_lids, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # AccessSubArea
+        _access_sub_area, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+
+        # Additional LIDs
+        lids: list[int] = []
+        for _ in range(num_lids - 1):
+            if offset >= len(request_data):
+                break
+            lid_val, consumed = decode_uint32_vlq(request_data, offset)
+            offset += consumed
+            lids.append(lid_val)
+
+        db_num = access_area & 0xFFFF
+        byte_offset = lids[0] if len(lids) > 0 else 0
+        byte_size = lids[1] if len(lids) > 1 else 1
+        items.append((db_num, byte_offset, byte_size))
+
+    # Parse value list: ItemNumber (VLQ, 1-based) + PValue
+    values: list[bytes] = []
+    for _ in range(item_count):
+        if offset >= len(request_data):
+            break
+        item_nr, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+        if item_nr == 0:
+            break
+        raw_bytes, consumed = decode_pvalue_to_bytes(request_data, offset)
+        offset += consumed
+        values.append(raw_bytes)
+
+    return items, values
