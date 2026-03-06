@@ -135,32 +135,53 @@ class S7CommPlusClient:
         payload += encode_uint32_vlq(start)
         payload += encode_uint32_vlq(size)
 
+        logger.debug(
+            f"db_read: db={db_number} start={start} size={size} "
+            f"object_id=0x{object_id:08X} payload={bytes(payload).hex(' ')}"
+        )
+
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
+
+        logger.debug(f"db_read: response ({len(response)} bytes): {response.hex(' ')}")
 
         # Parse response
         offset = 0
         # Skip return code
-        _, consumed = decode_uint32_vlq(response, offset)
+        return_code, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_read: return_code={return_code} (consumed {consumed} bytes)")
         offset += consumed
 
         # Item count
         item_count, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_read: item_count={item_count} (consumed {consumed} bytes)")
         offset += consumed
 
         if item_count == 0:
+            logger.debug("db_read: no items returned")
             return b""
 
         # First item: status + data_length + data
         status, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_read: item status={status} (consumed {consumed} bytes)")
         offset += consumed
 
         data_length, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_read: data_length={data_length} (consumed {consumed} bytes)")
         offset += consumed
 
         if status != 0:
+            logger.error(
+                f"db_read: FAILED status={status}, remaining bytes: {response[offset:].hex(' ')}"
+            )
             raise RuntimeError(f"Read failed with status {status}")
 
-        return response[offset : offset + data_length]
+        result = response[offset : offset + data_length]
+        logger.debug(f"db_read: result ({len(result)} bytes): {result.hex(' ')}")
+        remaining = response[offset + data_length :]
+        if remaining:
+            logger.debug(f"db_read: remaining after data ({len(remaining)} bytes): {remaining.hex(' ')}")
+
+        return result
 
     def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block.
@@ -181,14 +202,25 @@ class S7CommPlusClient:
         payload += encode_uint32_vlq(len(data))
         payload += data
 
+        logger.debug(
+            f"db_write: db={db_number} start={start} data_len={len(data)} "
+            f"object_id=0x{object_id:08X} data={data.hex(' ')} payload={bytes(payload).hex(' ')}"
+        )
+
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
+
+        logger.debug(f"db_write: response ({len(response)} bytes): {response.hex(' ')}")
 
         # Parse response - check return code
         offset = 0
         return_code, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_write: return_code={return_code} (consumed {consumed} bytes)")
         offset += consumed
 
         if return_code != 0:
+            logger.error(
+                f"db_write: FAILED return_code={return_code}, remaining: {response[offset:].hex(' ')}"
+            )
             raise RuntimeError(f"Write failed with return code {return_code}")
 
     def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
@@ -211,28 +243,39 @@ class S7CommPlusClient:
             payload += encode_uint32_vlq(start)
             payload += encode_uint32_vlq(size)
 
+        logger.debug(f"db_read_multi: {len(items)} items: {items} payload={bytes(payload).hex(' ')}")
+
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(payload))
+
+        logger.debug(f"db_read_multi: response ({len(response)} bytes): {response.hex(' ')}")
 
         # Parse response
         offset = 0
-        _, consumed = decode_uint32_vlq(response, offset)
+        return_code, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_read_multi: return_code={return_code} (consumed {consumed} bytes)")
         offset += consumed
 
         item_count, consumed = decode_uint32_vlq(response, offset)
+        logger.debug(f"db_read_multi: item_count={item_count} (consumed {consumed} bytes)")
         offset += consumed
 
         results: list[bytes] = []
-        for _ in range(item_count):
+        for i in range(item_count):
             status, consumed = decode_uint32_vlq(response, offset)
             offset += consumed
 
             data_length, consumed = decode_uint32_vlq(response, offset)
             offset += consumed
 
+            logger.debug(f"db_read_multi: item[{i}] status={status} data_length={data_length}")
+
             if status == 0 and data_length > 0:
-                results.append(response[offset : offset + data_length])
+                item_data = response[offset : offset + data_length]
+                logger.debug(f"db_read_multi: item[{i}] data: {item_data.hex(' ')}")
+                results.append(item_data)
                 offset += data_length
             else:
+                logger.debug(f"db_read_multi: item[{i}] empty/error")
                 results.append(b"")
 
         return results
@@ -251,7 +294,9 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        return self._connection.send_request(FunctionCode.EXPLORE, b"")
+        response = self._connection.send_request(FunctionCode.EXPLORE, b"")
+        logger.debug(f"explore: response ({len(response)} bytes): {response.hex(' ')}")
+        return response
 
     # -- Context manager --
 
