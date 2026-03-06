@@ -206,38 +206,67 @@ class S7CommPlusConnection:
         seq_num = self._next_sequence_number()
 
         # Build request header
-        request = (
-            struct.pack(
-                ">BHHHHIB",
-                Opcode.REQUEST,
-                0x0000,  # Reserved
-                function_code,
-                0x0000,  # Reserved
-                seq_num,
-                self._session_id,
-                0x36,  # Transport flags
-            )
-            + payload
+        request_header = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,  # Reserved
+            function_code,
+            0x0000,  # Reserved
+            seq_num,
+            self._session_id,
+            0x36,  # Transport flags
         )
+        request = request_header + payload
+
+        logger.debug(
+            f"=== SEND REQUEST === function_code=0x{function_code:04X} seq={seq_num} session=0x{self._session_id:08X}"
+        )
+        logger.debug(f"  Request header (14 bytes): {request_header.hex(' ')}")
+        logger.debug(f"  Request payload ({len(payload)} bytes): {payload.hex(' ')}")
 
         # Add S7CommPlus frame header and trailer, then send
         frame = encode_header(self._protocol_version, len(request)) + request
         frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
+
+        logger.debug(f"  Full frame ({len(frame)} bytes): {frame.hex(' ')}")
         self._iso_conn.send_data(frame)
 
         # Receive response
         response_frame = self._iso_conn.receive_data()
+        logger.debug(f"=== RECV RESPONSE === raw frame ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse frame header, use data_length to exclude trailer
         version, data_length, consumed = decode_header(response_frame)
+        logger.debug(f"  Frame header: version=V{version}, data_length={data_length}, header_size={consumed}")
+
         response = response_frame[consumed : consumed + data_length]
+        logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
         if len(response) < 14:
             from ..error import S7ConnectionError
 
             raise S7ConnectionError("Response too short")
 
-        return response[14:]
+        # Parse response header for debug
+        resp_opcode = response[0]
+        resp_func = struct.unpack_from(">H", response, 3)[0]
+        resp_seq = struct.unpack_from(">H", response, 7)[0]
+        resp_session = struct.unpack_from(">I", response, 9)[0]
+        resp_transport = response[13]
+        logger.debug(
+            f"  Response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
+            f"seq={resp_seq} session=0x{resp_session:08X} transport=0x{resp_transport:02X}"
+        )
+
+        resp_payload = response[14:]
+        logger.debug(f"  Response payload ({len(resp_payload)} bytes): {resp_payload.hex(' ')}")
+
+        # Check for trailer bytes after data_length
+        trailer = response_frame[consumed + data_length :]
+        if trailer:
+            logger.debug(f"  Trailer ({len(trailer)} bytes): {trailer.hex(' ')}")
+
+        return resp_payload
 
     def _init_ssl(self) -> None:
         """Send InitSSL request to prepare the connection.
@@ -270,10 +299,12 @@ class S7CommPlusConnection:
         frame = encode_header(ProtocolVersion.V1, len(request)) + request
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
 
+        logger.debug(f"=== InitSSL === sending ({len(frame)} bytes): {frame.hex(' ')}")
         self._iso_conn.send_data(frame)
 
         # Receive InitSSL response
         response_frame = self._iso_conn.receive_data()
+        logger.debug(f"=== InitSSL === received ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse S7CommPlus frame header
         version, data_length, consumed = decode_header(response_frame)
@@ -284,7 +315,8 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("InitSSL response too short")
 
-        logger.debug(f"InitSSL response received, version=V{version}")
+        logger.debug(f"InitSSL response: version=V{version}, data_length={data_length}")
+        logger.debug(f"InitSSL response body ({len(response)} bytes): {response.hex(' ')}")
 
     def _create_session(self) -> None:
         """Send CreateObject request to establish an S7CommPlus session.
@@ -353,14 +385,19 @@ class S7CommPlusConnection:
         # S7CommPlus trailer (end-of-frame marker)
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
 
+        logger.debug(f"=== CreateObject === sending ({len(frame)} bytes): {frame.hex(' ')}")
         self._iso_conn.send_data(frame)
 
         # Receive response
         response_frame = self._iso_conn.receive_data()
+        logger.debug(f"=== CreateObject === received ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse S7CommPlus frame header
         version, data_length, consumed = decode_header(response_frame)
         response = response_frame[consumed:]
+
+        logger.debug(f"CreateObject response: version=V{version}, data_length={data_length}")
+        logger.debug(f"CreateObject response body ({len(response)} bytes): {response.hex(' ')}")
 
         if len(response) < 14:
             from ..error import S7ConnectionError
@@ -371,7 +408,17 @@ class S7CommPlusConnection:
         self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
-        logger.debug(f"Session created: id={self._session_id}, version=V{version}")
+        # Parse and log the full response header
+        resp_opcode = response[0]
+        resp_func = struct.unpack_from(">H", response, 3)[0]
+        resp_seq = struct.unpack_from(">H", response, 7)[0]
+        resp_transport = response[13]
+        logger.debug(
+            f"CreateObject response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
+            f"seq={resp_seq} session=0x{self._session_id:08X} transport=0x{resp_transport:02X}"
+        )
+        logger.debug(f"CreateObject response payload: {response[14:].hex(' ')}")
+        logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
     def _delete_session(self) -> None:
         """Send DeleteObject to close the session."""

@@ -154,7 +154,7 @@ class ISOTCPConnection:
         # Send over TCP
         try:
             self.socket.sendall(tpkt_frame)
-            logger.debug(f"Sent {len(tpkt_frame)} bytes")
+            logger.debug(f"Sent {len(tpkt_frame)} bytes: {tpkt_frame.hex(' ')}")
         except socket.error as e:
             self.connected = False
             raise S7ConnectionError(f"Send failed: {e}")
@@ -187,6 +187,7 @@ class ISOTCPConnection:
             payload = self._recv_exact(remaining)
 
             # Parse COTP header and extract data
+            logger.debug(f"Received TPKT: version={version} length={length} payload ({len(payload)} bytes): {payload.hex(' ')}")
             return self._parse_cotp_data(payload)
 
         except socket.timeout:
