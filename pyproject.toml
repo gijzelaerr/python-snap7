@@ -32,7 +32,7 @@ Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-cov", "pytest-html", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
+test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-html", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 
@@ -57,6 +57,7 @@ markers =[
     "server",
     "util"
     ]
+asyncio_mode = "auto"
 
 [tool.mypy]
 ignore_missing_imports = true
