@@ -441,17 +441,17 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
     def test_diag_connection_info(self) -> None:
         """Dump connection state after successful connect."""
-        print(f"\n{'='*60}")
-        print(f"DIAGNOSTIC: Connection Info")
+        print(f"\n{'=' * 60}")
+        print("DIAGNOSTIC: Connection Info")
         print(f"  connected: {self.client.connected}")
         print(f"  protocol_version: V{self.client.protocol_version}")
         print(f"  session_id: 0x{self.client.session_id:08X} ({self.client.session_id})")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         self.assertTrue(self.client.connected)
 
     def test_diag_explore_raw(self) -> None:
         """Explore and dump the raw response for analysis."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Explore raw response")
         try:
             data = self.client.explore()
@@ -464,22 +464,22 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
                 print(f"  {i:04x}: {hex_str:<96s} {ascii_str}")
         except Exception as e:
             print(f"  Explore failed: {e}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def test_diag_db_read_single_byte(self) -> None:
         """Try to read a single byte from DB1 offset 0 and dump everything."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: db_read(DB1, offset=0, size=1)")
         try:
             data = self.client.db_read(DB_READ_ONLY, 0, 1)
             print(f"  Success! Got {len(data)} bytes: {data.hex(' ')}")
         except Exception as e:
             print(f"  FAILED: {type(e).__name__}: {e}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def test_diag_db_read_full_block(self) -> None:
         """Try to read the full test DB and dump everything."""
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"DIAGNOSTIC: db_read(DB{DB_READ_ONLY}, offset=0, size={DB_SIZE})")
         try:
             data = self.client.db_read(DB_READ_ONLY, 0, DB_SIZE)
@@ -489,7 +489,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
                 print(f"    {i:04x}: {chunk.hex(' ')}")
         except Exception as e:
             print(f"  FAILED: {type(e).__name__}: {e}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
     def test_diag_raw_get_multi_variables(self) -> None:
         """Send a raw GetMultiVariables with different payload formats and dump responses.
@@ -499,7 +499,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
         from snap7.s7commplus.protocol import FunctionCode
         from snap7.s7commplus.vlq import encode_uint32_vlq
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Raw GetMultiVariables payload experiments")
 
         assert self.client._connection is not None
@@ -507,10 +507,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
         # Experiment 1: Our current format (item_count + object_id + offset + size)
         payloads = {
             "current_format (count=1, obj=0x00010001, off=0, sz=2)": (
-                encode_uint32_vlq(1)
-                + encode_uint32_vlq(0x00010001)
-                + encode_uint32_vlq(0)
-                + encode_uint32_vlq(2)
+                encode_uint32_vlq(1) + encode_uint32_vlq(0x00010001) + encode_uint32_vlq(0) + encode_uint32_vlq(2)
             ),
             "empty_payload": b"",
             "just_zero": encode_uint32_vlq(0),
@@ -521,9 +518,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
             print(f"\n  --- {label} ---")
             print(f"  Payload ({len(payload)} bytes): {payload.hex(' ')}")
             try:
-                response = self.client._connection.send_request(
-                    FunctionCode.GET_MULTI_VARIABLES, payload
-                )
+                response = self.client._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
                 print(f"  Response ({len(response)} bytes): {response.hex(' ')}")
 
                 # Try to parse return code
@@ -538,14 +533,13 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
             except Exception as e:
                 print(f"  EXCEPTION: {type(e).__name__}: {e}")
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
 
     def test_diag_raw_set_variable(self) -> None:
         """Try SetVariable (0x04F2) instead of SetMultiVariables to see if PLC responds differently."""
         from snap7.s7commplus.protocol import FunctionCode
-        from snap7.s7commplus.vlq import encode_uint32_vlq
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Raw SetVariable / GetVariable experiments")
 
         assert self.client._connection is not None
@@ -565,14 +559,14 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
             except Exception as e:
                 print(f"  EXCEPTION: {type(e).__name__}: {e}")
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
 
     def test_diag_explore_then_read(self) -> None:
         """Explore first to discover object IDs, then try reading using those IDs."""
         from snap7.s7commplus.protocol import FunctionCode, ElementID
         from snap7.s7commplus.vlq import encode_uint32_vlq, decode_uint32_vlq
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Explore -> extract object IDs -> try reading")
 
         assert self.client._connection is not None
@@ -597,16 +591,9 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
             # Try reading using each discovered object ID
             for obj_id in object_ids[:5]:  # Limit to first 5
                 print(f"\n  --- Read using object_id=0x{obj_id:08X} ---")
-                payload = (
-                    encode_uint32_vlq(1)
-                    + encode_uint32_vlq(obj_id)
-                    + encode_uint32_vlq(0)
-                    + encode_uint32_vlq(4)
-                )
+                payload = encode_uint32_vlq(1) + encode_uint32_vlq(obj_id) + encode_uint32_vlq(0) + encode_uint32_vlq(4)
                 try:
-                    response = self.client._connection.send_request(
-                        FunctionCode.GET_MULTI_VARIABLES, payload
-                    )
+                    response = self.client._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
                     print(f"    Response ({len(response)} bytes): {response.hex(' ')}")
                     if len(response) > 0:
                         rc, consumed = decode_uint32_vlq(response, 0)
@@ -617,4 +604,4 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
         except Exception as e:
             print(f"  Explore failed: {type(e).__name__}: {e}")
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")

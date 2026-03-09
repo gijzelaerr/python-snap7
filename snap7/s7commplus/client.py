@@ -160,8 +160,7 @@ class S7CommPlusClient:
 
         payload = _build_write_payload([(db_number, start, data)])
         logger.debug(
-            f"db_write: db={db_number} start={start} data_len={len(data)} "
-            f"data={data.hex(' ')} payload={payload.hex(' ')}"
+            f"db_write: db={db_number} start={start} data_len={len(data)} data={data.hex(' ')} payload={payload.hex(' ')}"
         )
 
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
@@ -239,7 +238,7 @@ def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
         addr_bytes, field_count = encode_item_address(
             access_area=access_area,
             access_sub_area=Ids.DB_VALUE_ACTUAL,
-            lids=[start, size],
+            lids=[start + 1, size],  # LID byte offsets are 1-based in S7CommPlus
         )
         addresses.append(addr_bytes)
         total_field_count += field_count
@@ -338,7 +337,7 @@ def _build_write_payload(items: list[tuple[int, int, bytes]]) -> bytes:
         addr_bytes, field_count = encode_item_address(
             access_area=access_area,
             access_sub_area=Ids.DB_VALUE_ACTUAL,
-            lids=[start, len(data)],
+            lids=[start + 1, len(data)],  # LID byte offsets are 1-based in S7CommPlus
         )
         addresses.append(addr_bytes)
         total_field_count += field_count
