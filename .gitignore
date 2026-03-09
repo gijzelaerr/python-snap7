@@ -60,3 +60,5 @@ venv*/
 
 # DLL
 snap7.dll
+
+.claude/
