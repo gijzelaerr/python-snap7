@@ -218,9 +218,7 @@ class S7CommPlusConnection:
         )
         request = request_header + payload
 
-        logger.debug(
-            f"=== SEND REQUEST === function_code=0x{function_code:04X} seq={seq_num} session=0x{self._session_id:08X}"
-        )
+        logger.debug(f"=== SEND REQUEST === function_code=0x{function_code:04X} seq={seq_num} session=0x{self._session_id:08X}")
         logger.debug(f"  Request header (14 bytes): {request_header.hex(' ')}")
         logger.debug(f"  Request payload ({len(payload)} bytes): {payload.hex(' ')}")
 

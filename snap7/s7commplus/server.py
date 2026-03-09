@@ -816,8 +816,8 @@ def _server_parse_read_request(request_data: bytes) -> list[tuple[int, int, int]
         # Extract db_number from AccessArea
         db_num = access_area & 0xFFFF
 
-        # Extract byte offset and size from LIDs
-        byte_offset = lids[0] if len(lids) > 0 else 0
+        # Extract byte offset and size from LIDs (LID offsets are 1-based)
+        byte_offset = (lids[0] - 1) if len(lids) > 0 else 0
         byte_size = lids[1] if len(lids) > 1 else 1
 
         items.append((db_num, byte_offset, byte_size))
@@ -882,7 +882,7 @@ def _server_parse_write_request(request_data: bytes) -> tuple[list[tuple[int, in
             lids.append(lid_val)
 
         db_num = access_area & 0xFFFF
-        byte_offset = lids[0] if len(lids) > 0 else 0
+        byte_offset = (lids[0] - 1) if len(lids) > 0 else 0  # LID offsets are 1-based
         byte_size = lids[1] if len(lids) > 1 else 1
         items.append((db_num, byte_offset, byte_size))
 
