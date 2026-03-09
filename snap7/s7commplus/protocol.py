@@ -100,6 +100,7 @@ class ObjectId(IntEnum):
     CLASS_SERVER_SESSION = 287
     OBJECT_NULL_SERVER_SESSION = 288
     SERVER_SESSION_CLIENT_RID = 300
+    SERVER_SESSION_VERSION = 306
 
 
 # Default TSAP for S7CommPlus connections

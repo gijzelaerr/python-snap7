@@ -9,6 +9,11 @@ Supports all S7CommPlus protocol versions (V1/V2/V3/TLS). The protocol
 version is auto-detected from the PLC's CreateObject response during
 connection setup.
 
+When a PLC does not support S7CommPlus data operations (e.g. PLCs that
+accept S7CommPlus sessions but return ERROR2 for GetMultiVariables),
+the client transparently falls back to the legacy S7 protocol for
+data block read/write operations.
+
 Status: V1 connection is functional. V2/V3/TLS authentication planned.
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
@@ -42,6 +47,9 @@ class S7CommPlusClient:
 
     The protocol version is auto-detected during connection.
 
+    When the PLC does not support S7CommPlus data operations, the client
+    automatically falls back to legacy S7 protocol for db_read/db_write.
+
     Example::
 
         client = S7CommPlusClient()
@@ -58,9 +66,17 @@ class S7CommPlusClient:
 
     def __init__(self) -> None:
         self._connection: Optional[S7CommPlusConnection] = None
+        self._legacy_client: Optional[Any] = None
+        self._use_legacy_data: bool = False
+        self._host: str = ""
+        self._port: int = 102
+        self._rack: int = 0
+        self._slot: int = 1
 
     @property
     def connected(self) -> bool:
+        if self._use_legacy_data and self._legacy_client is not None:
+            return bool(self._legacy_client.connected)
         return self._connection is not None and self._connection.connected
 
     @property
@@ -77,6 +93,11 @@ class S7CommPlusClient:
             return 0
         return self._connection.session_id
 
+    @property
+    def using_legacy_fallback(self) -> bool:
+        """Whether the client is using legacy S7 protocol for data operations."""
+        return self._use_legacy_data
+
     def connect(
         self,
         host: str,
@@ -90,6 +111,9 @@ class S7CommPlusClient:
     ) -> None:
         """Connect to an S7-1200/1500 PLC using S7CommPlus.
 
+        If the PLC does not support S7CommPlus data operations, a secondary
+        legacy S7 connection is established transparently for data access.
+
         Args:
             host: PLC IP address or hostname
             port: TCP port (default 102)
@@ -100,6 +124,11 @@ class S7CommPlusClient:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
+        self._host = host
+        self._port = port
+        self._rack = rack
+        self._slot = slot
+
         self._connection = S7CommPlusConnection(
             host=host,
             port=port,
@@ -112,8 +141,63 @@ class S7CommPlusClient:
             tls_ca=tls_ca,
         )
 
+        # Probe S7CommPlus data operations with a minimal request
+        if not self._probe_s7commplus_data():
+            logger.info("S7CommPlus data operations not supported, falling back to legacy S7 protocol")
+            self._setup_legacy_fallback()
+
+    def _probe_s7commplus_data(self) -> bool:
+        """Test if the PLC supports S7CommPlus data operations.
+
+        Sends a minimal GetMultiVariables request with zero items. If the PLC
+        responds with ERROR2 or a non-zero return code, data operations are
+        not supported.
+
+        Returns:
+            True if S7CommPlus data operations work.
+        """
+        if self._connection is None:
+            return False
+
+        try:
+            # Send a minimal GetMultiVariables with 0 items
+            payload = struct.pack(">I", 0) + encode_uint32_vlq(0) + encode_uint32_vlq(0)
+            payload += encode_object_qualifier()
+            payload += struct.pack(">I", 0)
+
+            response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+
+            # Check if we got a valid response (return value = 0)
+            if len(response) < 1:
+                return False
+            return_value, _ = decode_uint64_vlq(response, 0)
+            if return_value != 0:
+                logger.debug(f"S7CommPlus probe: PLC returned error {return_value}")
+                return False
+            return True
+        except Exception as e:
+            logger.debug(f"S7CommPlus probe failed: {e}")
+            return False
+
+    def _setup_legacy_fallback(self) -> None:
+        """Establish a secondary legacy S7 connection for data operations."""
+        from ..client import Client
+
+        self._legacy_client = Client()
+        self._legacy_client.connect(self._host, self._rack, self._slot, self._port)
+        self._use_legacy_data = True
+        logger.info(f"Legacy S7 fallback connected to {self._host}:{self._port}")
+
     def disconnect(self) -> None:
         """Disconnect from PLC."""
+        if self._legacy_client is not None:
+            try:
+                self._legacy_client.disconnect()
+            except Exception:
+                pass
+            self._legacy_client = None
+            self._use_legacy_data = False
+
         if self._connection:
             self._connection.disconnect()
             self._connection = None
@@ -123,6 +207,9 @@ class S7CommPlusClient:
     def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block.
 
+        Uses S7CommPlus protocol when supported, otherwise falls back to
+        legacy S7 protocol transparently.
+
         Args:
             db_number: Data block number
             start: Start byte offset
@@ -131,6 +218,9 @@ class S7CommPlusClient:
         Returns:
             Raw bytes read from the data block
         """
+        if self._use_legacy_data and self._legacy_client is not None:
+            return bytes(self._legacy_client.db_read(db_number, start, size))
+
         if self._connection is None:
             raise RuntimeError("Not connected")
 
@@ -150,11 +240,18 @@ class S7CommPlusClient:
     def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block.
 
+        Uses S7CommPlus protocol when supported, otherwise falls back to
+        legacy S7 protocol transparently.
+
         Args:
             db_number: Data block number
             start: Start byte offset
             data: Bytes to write
         """
+        if self._use_legacy_data and self._legacy_client is not None:
+            self._legacy_client.db_write(db_number, start, bytearray(data))
+            return
+
         if self._connection is None:
             raise RuntimeError("Not connected")
 
@@ -171,12 +268,22 @@ class S7CommPlusClient:
     def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
 
+        Uses S7CommPlus protocol when supported, otherwise falls back to
+        legacy S7 protocol (individual reads) transparently.
+
         Args:
             items: List of (db_number, start_offset, size) tuples
 
         Returns:
             List of raw bytes for each item
         """
+        if self._use_legacy_data and self._legacy_client is not None:
+            results = []
+            for db_number, start, size in items:
+                data = self._legacy_client.db_read(db_number, start, size)
+                results.append(bytes(data))
+            return results
+
         if self._connection is None:
             raise RuntimeError("Not connected")
 
@@ -186,8 +293,8 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         logger.debug(f"db_read_multi: response ({len(response)} bytes): {response.hex(' ')}")
 
-        results = _parse_read_response(response)
-        return [r if r is not None else b"" for r in results]
+        parsed = _parse_read_response(response)
+        return [r if r is not None else b"" for r in parsed]
 
     # -- Explore (browse PLC object tree) --
 
