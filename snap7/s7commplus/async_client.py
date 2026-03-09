@@ -4,6 +4,10 @@ Async S7CommPlus client for S7-1200/1500 PLCs.
 Provides the same API as S7CommPlusClient but using asyncio for
 non-blocking I/O. Uses asyncio.Lock for concurrent safety.
 
+When a PLC does not support S7CommPlus data operations, the client
+transparently falls back to the legacy S7 protocol for data block
+read/write operations (using synchronous calls in an executor).
+
 Example::
 
     async with S7CommPlusAsyncClient() as client:
@@ -27,8 +31,8 @@ from .protocol import (
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
 )
-from .codec import encode_header, decode_header, encode_typed_value
-from .vlq import encode_uint32_vlq
+from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
+from .vlq import encode_uint32_vlq, decode_uint64_vlq
 from .client import _build_read_payload, _parse_read_response, _build_write_payload, _parse_write_response
 
 logger = logging.getLogger(__name__)
@@ -46,6 +50,9 @@ class S7CommPlusAsyncClient:
 
     Uses asyncio for all I/O operations and asyncio.Lock for
     concurrent safety when shared between multiple coroutines.
+
+    When the PLC does not support S7CommPlus data operations, the client
+    automatically falls back to legacy S7 protocol for db_read/db_write.
     """
 
     def __init__(self) -> None:
@@ -56,9 +63,17 @@ class S7CommPlusAsyncClient:
         self._protocol_version: int = 0
         self._connected = False
         self._lock = asyncio.Lock()
+        self._legacy_client: Optional[Any] = None
+        self._use_legacy_data: bool = False
+        self._host: str = ""
+        self._port: int = 102
+        self._rack: int = 0
+        self._slot: int = 1
 
     @property
     def connected(self) -> bool:
+        if self._use_legacy_data and self._legacy_client is not None:
+            return bool(self._legacy_client.connected)
         return self._connected
 
     @property
@@ -69,6 +84,11 @@ class S7CommPlusAsyncClient:
     def session_id(self) -> int:
         return self._session_id
 
+    @property
+    def using_legacy_fallback(self) -> bool:
+        """Whether the client is using legacy S7 protocol for data operations."""
+        return self._use_legacy_data
+
     async def connect(
         self,
         host: str,
@@ -78,12 +98,20 @@ class S7CommPlusAsyncClient:
     ) -> None:
         """Connect to an S7-1200/1500 PLC.
 
+        If the PLC does not support S7CommPlus data operations, a secondary
+        legacy S7 connection is established transparently for data access.
+
         Args:
             host: PLC IP address or hostname
             port: TCP port (default 102)
             rack: PLC rack number
             slot: PLC slot number
         """
+        self._host = host
+        self._port = port
+        self._rack = rack
+        self._slot = slot
+
         # TCP connect
         self._reader, self._writer = await asyncio.open_connection(host, port)
 
@@ -101,12 +129,56 @@ class S7CommPlusAsyncClient:
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, version=V{self._protocol_version}, session={self._session_id}"
             )
+
+            # Probe S7CommPlus data operations
+            if not await self._probe_s7commplus_data():
+                logger.info("S7CommPlus data operations not supported, falling back to legacy S7 protocol")
+                await self._setup_legacy_fallback()
+
         except Exception:
             await self.disconnect()
             raise
 
+    async def _probe_s7commplus_data(self) -> bool:
+        """Test if the PLC supports S7CommPlus data operations."""
+        try:
+            payload = struct.pack(">I", 0) + encode_uint32_vlq(0) + encode_uint32_vlq(0)
+            payload += encode_object_qualifier()
+            payload += struct.pack(">I", 0)
+
+            response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+            if len(response) < 1:
+                return False
+            return_value, _ = decode_uint64_vlq(response, 0)
+            if return_value != 0:
+                logger.debug(f"S7CommPlus probe: PLC returned error {return_value}")
+                return False
+            return True
+        except Exception as e:
+            logger.debug(f"S7CommPlus probe failed: {e}")
+            return False
+
+    async def _setup_legacy_fallback(self) -> None:
+        """Establish a secondary legacy S7 connection for data operations."""
+        from ..client import Client
+
+        loop = asyncio.get_event_loop()
+        client = Client()
+        await loop.run_in_executor(None, lambda: client.connect(self._host, self._rack, self._slot, self._port))
+        self._legacy_client = client
+        self._use_legacy_data = True
+        logger.info(f"Legacy S7 fallback connected to {self._host}:{self._port}")
+
     async def disconnect(self) -> None:
         """Disconnect from PLC."""
+        if self._legacy_client is not None:
+            try:
+                self._legacy_client.disconnect()
+            except Exception:
+                pass
+            self._legacy_client = None
+            self._use_legacy_data = False
+
         if self._connected and self._session_id:
             try:
                 await self._delete_session()
@@ -138,6 +210,12 @@ class S7CommPlusAsyncClient:
         Returns:
             Raw bytes read from the data block
         """
+        if self._use_legacy_data and self._legacy_client is not None:
+            client = self._legacy_client
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(None, lambda: client.db_read(db_number, start, size))
+            return bytes(data)
+
         payload = _build_read_payload([(db_number, start, size)])
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
 
@@ -156,6 +234,12 @@ class S7CommPlusAsyncClient:
             start: Start byte offset
             data: Bytes to write
         """
+        if self._use_legacy_data and self._legacy_client is not None:
+            client = self._legacy_client
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: client.db_write(db_number, start, bytearray(data)))
+            return
+
         payload = _build_write_payload([(db_number, start, data)])
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
@@ -169,11 +253,24 @@ class S7CommPlusAsyncClient:
         Returns:
             List of raw bytes for each item
         """
+        if self._use_legacy_data and self._legacy_client is not None:
+            client = self._legacy_client
+            loop = asyncio.get_event_loop()
+            multi_results: list[bytes] = []
+            for db_number, start, size in items:
+
+                def _read(db: int = db_number, s: int = start, sz: int = size) -> bytearray:
+                    return bytearray(client.db_read(db, s, sz))
+
+                data = await loop.run_in_executor(None, _read)
+                multi_results.append(bytes(data))
+            return multi_results
+
         payload = _build_read_payload(items)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
 
-        results = _parse_read_response(response)
-        return [r if r is not None else b"" for r in results]
+        parsed = _parse_read_response(response)
+        return [r if r is not None else b"" for r in parsed]
 
     async def explore(self) -> bytes:
         """Browse the PLC object tree.

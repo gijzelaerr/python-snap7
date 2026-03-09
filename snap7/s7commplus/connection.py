@@ -54,11 +54,25 @@ from .protocol import (
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
 )
-from .codec import encode_header, decode_header, encode_typed_value
-from .vlq import encode_uint32_vlq
+from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
+from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
 logger = logging.getLogger(__name__)
+
+
+def _element_size(datatype: int) -> int:
+    """Return the fixed byte size for an array element, or 0 for variable-length."""
+    if datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
+        return 1
+    elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
+        return 2
+    elif datatype in (DataType.REAL, DataType.RID):
+        return 4
+    elif datatype in (DataType.LREAL, DataType.TIMESTAMP):
+        return 8
+    else:
+        return 0
 
 
 class S7CommPlusConnection:
@@ -95,6 +109,7 @@ class S7CommPlusConnection:
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
         self._connected = False
+        self._server_session_version: Optional[int] = None
 
     @property
     def connected(self) -> bool:
@@ -153,7 +168,13 @@ class S7CommPlusConnection:
             # Step 4: CreateObject (S7CommPlus session setup)
             self._create_session()
 
-            # Step 5: Version-specific authentication
+            # Step 5: Session setup - echo ServerSessionVersion back to PLC
+            if self._server_session_version is not None:
+                self._setup_session()
+            else:
+                logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
+
+            # Step 6: Version-specific authentication
             if self._protocol_version >= ProtocolVersion.V3:
                 if not use_tls:
                     logger.warning(
@@ -186,6 +207,7 @@ class S7CommPlusConnection:
         self._session_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
+        self._server_session_version = None
         self._iso_conn.disconnect()
 
     def send_request(self, function_code: int, payload: bytes = b"") -> bytes:
@@ -417,6 +439,235 @@ class S7CommPlusConnection:
         )
         logger.debug(f"CreateObject response payload: {response[14:].hex(' ')}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
+
+        # Parse response payload to extract ServerSessionVersion
+        self._parse_create_object_response(response[14:])
+
+    def _parse_create_object_response(self, payload: bytes) -> None:
+        """Parse CreateObject response payload to extract ServerSessionVersion.
+
+        The response contains a PObject tree with attributes. We scan for
+        attribute 306 (ServerSessionVersion) which must be echoed back to
+        complete the session handshake.
+
+        Args:
+            payload: Response payload after the 14-byte response header
+        """
+        offset = 0
+        while offset < len(payload):
+            tag = payload[offset]
+
+            if tag == ElementID.ATTRIBUTE:
+                offset += 1
+                if offset >= len(payload):
+                    break
+                attr_id, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed
+
+                if attr_id == ObjectId.SERVER_SESSION_VERSION:
+                    # Next bytes are the typed value: flags + datatype + VLQ value
+                    if offset + 2 > len(payload):
+                        break
+                    _flags = payload[offset]
+                    datatype = payload[offset + 1]
+                    offset += 2
+                    if datatype == DataType.UDINT:
+                        value, consumed = decode_uint32_vlq(payload, offset)
+                        offset += consumed
+                        self._server_session_version = value
+                        logger.info(f"ServerSessionVersion = {value}")
+                        return
+                    elif datatype == DataType.DWORD:
+                        value, consumed = decode_uint32_vlq(payload, offset)
+                        offset += consumed
+                        self._server_session_version = value
+                        logger.info(f"ServerSessionVersion = {value}")
+                        return
+                    else:
+                        # Skip unknown type - try to continue scanning
+                        logger.debug(f"ServerSessionVersion has unexpected type {datatype:#04x}")
+                else:
+                    # Skip this attribute's value - we don't parse it, just advance
+                    # Try to skip the typed value (flags + datatype + value)
+                    if offset + 2 > len(payload):
+                        break
+                    _flags = payload[offset]
+                    datatype = payload[offset + 1]
+                    offset += 2
+                    offset = self._skip_typed_value(payload, offset, datatype, _flags)
+
+            elif tag == ElementID.START_OF_OBJECT:
+                offset += 1
+                # Skip RelationId (4 bytes fixed) + ClassId (VLQ) + ClassFlags (VLQ) + AttributeId (VLQ)
+                if offset + 4 > len(payload):
+                    break
+                offset += 4  # RelationId
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed  # ClassId
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed  # ClassFlags
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed  # AttributeId
+
+            elif tag == ElementID.TERMINATING_OBJECT:
+                offset += 1
+
+            elif tag == 0x00:
+                # Null terminator / padding
+                offset += 1
+
+            else:
+                # Unknown tag - try to skip
+                offset += 1
+
+        logger.debug("ServerSessionVersion not found in CreateObject response")
+
+    def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
+        """Skip over a typed value in the PObject tree.
+
+        Best-effort: advances offset past common value types.
+        Returns new offset.
+        """
+        is_array = bool(flags & 0x10)
+
+        if is_array:
+            if offset >= len(data):
+                return offset
+            count, consumed = decode_uint32_vlq(data, offset)
+            offset += consumed
+            # For fixed-size types, skip count * size
+            elem_size = _element_size(datatype)
+            if elem_size > 0:
+                offset += count * elem_size
+            else:
+                # Variable-length: skip each VLQ element
+                for _ in range(count):
+                    if offset >= len(data):
+                        break
+                    _, consumed = decode_uint32_vlq(data, offset)
+                    offset += consumed
+            return offset
+
+        if datatype == DataType.NULL:
+            return offset
+        elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
+            return offset + 1
+        elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
+            return offset + 2
+        elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
+            _, consumed = decode_uint32_vlq(data, offset)
+            return offset + consumed
+        elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
+            _, consumed = decode_uint64_vlq(data, offset)
+            return offset + consumed
+        elif datatype == DataType.REAL:
+            return offset + 4
+        elif datatype == DataType.LREAL:
+            return offset + 8
+        elif datatype == DataType.TIMESTAMP:
+            return offset + 8
+        elif datatype == DataType.TIMESPAN:
+            _, consumed = decode_uint64_vlq(data, offset)  # int64 VLQ
+            return offset + consumed
+        elif datatype == DataType.RID:
+            return offset + 4
+        elif datatype in (DataType.BLOB, DataType.WSTRING):
+            length, consumed = decode_uint32_vlq(data, offset)
+            return offset + consumed + length
+        elif datatype == DataType.STRUCT:
+            count, consumed = decode_uint32_vlq(data, offset)
+            offset += consumed
+            for _ in range(count):
+                if offset + 2 > len(data):
+                    break
+                sub_flags = data[offset]
+                sub_type = data[offset + 1]
+                offset += 2
+                offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
+            return offset
+        else:
+            # Unknown type - can't skip reliably
+            return offset
+
+    def _setup_session(self) -> None:
+        """Send SetMultiVariables to echo ServerSessionVersion back to the PLC.
+
+        This completes the session handshake by writing the ServerSessionVersion
+        attribute back to the session object. Without this step, the PLC rejects
+        all subsequent data operations with ERROR2 (0x05A9).
+
+        Reference: thomas-v2/S7CommPlusDriver SetSessionSetupData
+        """
+        if self._server_session_version is None:
+            return
+
+        seq_num = self._next_sequence_number()
+
+        # Build SetMultiVariables request
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.SET_MULTI_VARIABLES,
+            0x0000,
+            seq_num,
+            self._session_id,
+            0x36,  # Transport flags
+        )
+
+        payload = bytearray()
+        # InObjectId = session ID (tells PLC which object we're writing to)
+        payload += struct.pack(">I", self._session_id)
+        # Item count = 1
+        payload += encode_uint32_vlq(1)
+        # Total address field count = 1 (just the attribute ID)
+        payload += encode_uint32_vlq(1)
+        # Address: attribute ID = ServerSessionVersion (306) as VLQ
+        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        # Value: ItemNumber = 1 (VLQ)
+        payload += encode_uint32_vlq(1)
+        # PValue: flags=0x00, type=UDInt, VLQ-encoded value
+        payload += bytes([0x00, DataType.UDINT])
+        payload += encode_uint32_vlq(self._server_session_version)
+        # Fill byte
+        payload += bytes([0x00])
+        # ObjectQualifier
+        payload += encode_object_qualifier()
+        # Trailing padding
+        payload += struct.pack(">I", 0)
+
+        request += bytes(payload)
+
+        # Wrap in S7CommPlus frame
+        frame = encode_header(self._protocol_version, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
+
+        logger.debug(f"=== SetupSession === sending ({len(frame)} bytes): {frame.hex(' ')}")
+        self._iso_conn.send_data(frame)
+
+        # Receive response
+        response_frame = self._iso_conn.receive_data()
+        logger.debug(f"=== SetupSession === received ({len(response_frame)} bytes): {response_frame.hex(' ')}")
+
+        version, data_length, consumed = decode_header(response_frame)
+        response = response_frame[consumed : consumed + data_length]
+
+        if len(response) < 14:
+            from ..error import S7ConnectionError
+
+            raise S7ConnectionError("SetupSession response too short")
+
+        resp_func = struct.unpack_from(">H", response, 3)[0]
+        logger.debug(f"SetupSession response: function=0x{resp_func:04X}")
+
+        # Parse return value from payload
+        resp_payload = response[14:]
+        if len(resp_payload) >= 1:
+            return_value, _ = decode_uint64_vlq(resp_payload, 0)
+            if return_value != 0:
+                logger.warning(f"SetupSession: PLC returned error {return_value}")
+            else:
+                logger.info("Session setup completed successfully")
 
     def _delete_session(self) -> None:
         """Send DeleteObject to close the session."""
