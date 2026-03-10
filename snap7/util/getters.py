@@ -515,15 +515,13 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
     return float(struct.unpack_from(">d", bytearray_, offset=byte_index)[0])
 
 
-def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
+def get_lword(bytearray_: bytearray, byte_index: int) -> int:
     """Get the long word
-
-    THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
 
     Notes:
         Datatype `lword` (long word) consists in 8 bytes in the PLC.
-        Maximum value posible is bytearray(b"\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF\\xFF")
-        Lowest value posible is bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00")
+        Maximum value is 18446744073709551615 (0xFFFFFFFFFFFFFFFF).
+        Minimum value is 0.
 
     Args:
         bytearray_: buffer to read from.
@@ -533,15 +531,13 @@ def get_lword(bytearray_: bytearray, byte_index: int) -> bytearray:
         Value read.
 
     Examples:
-        read lword value (here as example 0xAB\0xCD) from DB1.10 of a PLC
-        >>> from snap7 import Client
-        >>> data = Client().db_read(db_number=1, start=10, size=8)
+        >>> data = bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
         >>> get_lword(data, 0)
-            bytearray(b"\\x00\\x00\\x00\\x00\\x00\\x00\\xAB\\xCD")
+        43981
     """
-    data = bytearray_[byte_index : byte_index + 4]
-    dword = struct.unpack(">Q", struct.pack("8B", *data))[0]
-    return bytearray(dword)
+    data = bytearray_[byte_index : byte_index + 8]
+    lword: int = struct.unpack(">Q", struct.pack("8B", *data))[0]
+    return lword
 
 
 def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
@@ -591,16 +587,72 @@ def get_date(bytearray_: bytearray, byte_index: int = 0) -> date:
     return date_val
 
 
-def get_ltime(bytearray_: bytearray, byte_index: int) -> str:
-    raise NotImplementedError
+def get_ltime(bytearray_: bytearray, byte_index: int) -> timedelta:
+    """Get LTIME value from bytearray.
+
+    Notes:
+        Datatype `LTIME` consists of 8 bytes (64-bit signed integer) representing
+        nanoseconds. Used in S7-1500 PLCs.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        timedelta value.
+
+    Examples:
+        >>> data = bytearray(8)
+        >>> data[:] = b'\\x00\\x00\\x00\\x00\\x3b\\x9a\\xca\\x00'  # 1 second in nanoseconds
+        >>> get_ltime(data, 0)
+        datetime.timedelta(seconds=1)
+    """
+    raw = bytearray_[byte_index : byte_index + 8]
+    nanoseconds: int = struct.unpack(">q", struct.pack("8B", *raw))[0]
+    return timedelta(microseconds=nanoseconds // 1000)
 
 
-def get_ltod(bytearray_: bytearray, byte_index: int) -> str:
-    raise NotImplementedError
+def get_ltod(bytearray_: bytearray, byte_index: int) -> timedelta:
+    """Get LTOD (Long Time of Day) value from bytearray.
+
+    Notes:
+        Datatype `LTOD` consists of 8 bytes (64-bit unsigned integer) representing
+        nanoseconds since midnight. Used in S7-1500 PLCs.
+        Range: 0 to 86399999999999 ns.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        timedelta value representing time of day.
+    """
+    raw = bytearray_[byte_index : byte_index + 8]
+    nanoseconds: int = struct.unpack(">Q", struct.pack("8B", *raw))[0]
+    result = timedelta(microseconds=nanoseconds // 1000)
+    if result.days >= 1:
+        raise ValueError("LTOD value exceeds 24 hours")
+    return result
 
 
-def get_ldt(bytearray_: bytearray, byte_index: int) -> str:
-    raise NotImplementedError
+def get_ldt(bytearray_: bytearray, byte_index: int) -> datetime:
+    """Get LDT (Long Date and Time) value from bytearray.
+
+    Notes:
+        Datatype `LDT` consists of 8 bytes (64-bit unsigned integer) representing
+        nanoseconds since 1970-01-01 00:00:00 UTC. Used in S7-1500 PLCs.
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        datetime value.
+    """
+    raw = bytearray_[byte_index : byte_index + 8]
+    nanoseconds: int = struct.unpack(">Q", struct.pack("8B", *raw))[0]
+    epoch = datetime(1970, 1, 1)
+    return epoch + timedelta(microseconds=nanoseconds // 1000)
 
 
 def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
@@ -662,7 +714,7 @@ def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
         'C'
     """
     if bytearray_[byte_index] == 0:
-        return chr(bytearray_[1])
+        return chr(bytearray_[byte_index + 1])
     return bytearray_[byte_index : byte_index + 2].decode("utf-16-be")
 
 
