@@ -182,14 +182,12 @@ def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: 
     if size > max_length:
         raise ValueError(f"size {size} > max_length {max_length} {value}")
 
-    i = 0
-
-    # fill array which chr integers
+    # fill array with chr integers
     for i, c in enumerate(value):
         bytearray_[byte_index + i] = ord(c)
 
     # fill the rest with empty space
-    for r in range(i + 1, max_length):
+    for r in range(len(value), max_length):
         bytearray_[byte_index + r] = ord(" ")
 
     return bytearray_
@@ -239,14 +237,12 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     # set len count on first position
     bytearray_[byte_index + 1] = len(value)
 
-    i = 0
-
-    # fill array which chr integers
+    # fill array with chr integers
     for i, c in enumerate(value):
         bytearray_[byte_index + 2 + i] = ord(c)
 
     # fill the rest with empty space
-    for r in range(i + 1, bytearray_[byte_index] - 2):
+    for r in range(len(value), bytearray_[byte_index]):
         bytearray_[byte_index + 2 + r] = ord(" ")
 
     return bytearray_
