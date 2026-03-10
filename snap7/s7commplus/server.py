@@ -258,7 +258,7 @@ class S7CommPlusServer:
         """Get a registered data block."""
         return self._data_blocks.get(db_number)
 
-    def start(self, host: str = "0.0.0.0", port: int = 11020) -> None:
+    def start(self, host: str = "127.0.0.1", port: int = 11020) -> None:
         """Start the server.
 
         Args:
