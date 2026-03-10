@@ -269,8 +269,9 @@ class Client:
         Get entire DB.
 
         Uses get_block_info() to determine the DB size automatically.
-        If the PLC does not support get_block_info(), pass the size
-        parameter explicitly.
+        If the PLC does not support get_block_info() or reports an
+        incorrect size (common on S7-1200/1500), pass the size parameter
+        explicitly.
 
         Args:
             db_number: DB number to read
@@ -283,15 +284,23 @@ class Client:
         if size <= 0:
             block_info = self.get_block_info(Block.DB, db_number)
             size = block_info.MC7Size if block_info.MC7Size > 0 else 65536
-        return self.db_read(db_number, 0, size)
+        try:
+            return self.db_read(db_number, 0, size)
+        except S7Error:
+            raise S7Error(
+                f"db_get failed for DB{db_number} with auto-detected size {size}. "
+                f"Some PLCs (e.g. S7-1200) report incorrect MC7Size in block info. "
+                f"Try passing the actual DB size explicitly: client.db_get({db_number}, size=<actual_size>)"
+            )
 
     def db_fill(self, db_number: int, filler: int, size: int = 0) -> int:
         """
         Fill a DB with a filler byte.
 
         Uses get_block_info() to determine the DB size automatically.
-        If the PLC does not support get_block_info(), pass the size
-        parameter explicitly.
+        If the PLC does not support get_block_info() or reports an
+        incorrect size (common on S7-1200/1500), pass the size parameter
+        explicitly.
 
         Args:
             db_number: DB number to fill
@@ -306,7 +315,14 @@ class Client:
             block_info = self.get_block_info(Block.DB, db_number)
             size = block_info.MC7Size if block_info.MC7Size > 0 else 65536
         data = bytearray([filler] * size)
-        return self.db_write(db_number, 0, data)
+        try:
+            return self.db_write(db_number, 0, data)
+        except S7Error:
+            raise S7Error(
+                f"db_fill failed for DB{db_number} with auto-detected size {size}. "
+                f"Some PLCs (e.g. S7-1200) report incorrect MC7Size in block info. "
+                f"Try passing the actual DB size explicitly: client.db_fill({db_number}, {filler}, size=<actual_size>)"
+            )
 
     def read_area(self, area: Area, db_number: int, start: int, size: int, word_len: Optional[WordLen] = None) -> bytearray:
         """
