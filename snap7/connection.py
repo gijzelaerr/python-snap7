@@ -8,10 +8,27 @@ Transport Protocol) layers for S7 communication.
 import socket
 import struct
 import logging
+from enum import IntEnum
 from typing import Optional, Type
 from types import TracebackType
 
 from .error import S7ConnectionError, S7TimeoutError
+
+
+class TPDUSize(IntEnum):
+    """TPDU sizes per ISO 8073 / RFC 905.
+
+    The value is the exponent: actual size = 2^value bytes.
+    """
+
+    S_128 = 0x07
+    S_256 = 0x08
+    S_512 = 0x09
+    S_1024 = 0x0A
+    S_2048 = 0x0B
+    S_4096 = 0x0C
+    S_8192 = 0x0D
+
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +61,14 @@ class ISOTCPConnection:
     COTP_PARAM_CALLING_TSAP = 0xC1
     COTP_PARAM_CALLED_TSAP = 0xC2
 
-    def __init__(self, host: str, port: int = 102, local_tsap: int = 0x0100, remote_tsap: int = 0x0102):
+    def __init__(
+        self,
+        host: str,
+        port: int = 102,
+        local_tsap: int = 0x0100,
+        remote_tsap: int = 0x0102,
+        tpdu_size: TPDUSize = TPDUSize.S_1024,
+    ):
         """
         Initialize ISO TCP connection.
 
@@ -53,11 +77,13 @@ class ISOTCPConnection:
             port: TCP port (default 102 for S7)
             local_tsap: Local Transport Service Access Point
             remote_tsap: Remote Transport Service Access Point
+            tpdu_size: TPDU size to request during COTP negotiation
         """
         self.host = host
         self.port = port
         self.local_tsap = local_tsap
         self.remote_tsap = remote_tsap
+        self.tpdu_size = tpdu_size
         self.socket: Optional[socket.socket] = None
         self.connected = False
         self.pdu_size = 240  # Default PDU size, negotiated during connection
@@ -129,6 +155,7 @@ class ISOTCPConnection:
             self.socket.sendall(tpkt_frame)
             logger.debug(f"Sent {len(tpkt_frame)} bytes")
         except socket.error as e:
+            self.connected = False
             raise S7ConnectionError(f"Send failed: {e}")
 
     def receive_data(self) -> bytes:
@@ -162,8 +189,10 @@ class ISOTCPConnection:
             return self._parse_cotp_data(payload)
 
         except socket.timeout:
+            self.connected = False
             raise S7TimeoutError("Receive timeout")
         except socket.error as e:
+            self.connected = False
             raise S7ConnectionError(f"Receive failed: {e}")
 
     def _tcp_connect(self) -> None:
@@ -241,8 +270,8 @@ class ISOTCPConnection:
         calling_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLING_TSAP, tsap_length, self.local_tsap)
         # Called TSAP (remote)
         called_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLED_TSAP, tsap_length, self.remote_tsap)
-        # PDU Size parameter (ISO 8073 code: 0x0A = 1024 bytes)
-        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, 0x0A)
+        # PDU Size parameter (ISO 8073 code, e.g. 0x0A = 1024 bytes)
+        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
 
         parameters = calling_tsap + called_tsap + pdu_size_param
 
@@ -373,14 +402,45 @@ class ISOTCPConnection:
             try:
                 chunk = self.socket.recv(size - len(data))
                 if not chunk:
+                    self.connected = False
                     raise S7ConnectionError("Connection closed by peer")
                 data.extend(chunk)
             except socket.timeout:
+                self.connected = False
                 raise S7TimeoutError("Receive timeout")
             except socket.error as e:
+                self.connected = False
                 raise S7ConnectionError(f"Receive error: {e}")
 
         return bytes(data)
+
+    def check_connection(self) -> bool:
+        """Check if the TCP connection is still alive.
+
+        Uses a non-blocking socket peek to detect broken connections.
+        """
+        if not self.connected or self.socket is None:
+            return False
+
+        try:
+            original_timeout = self.socket.gettimeout()
+            self.socket.settimeout(0)
+            try:
+                data = self.socket.recv(1, socket.MSG_PEEK)
+                if not data:
+                    self.connected = False
+                    return False
+                return True
+            except BlockingIOError:
+                # No data available but connection is still alive
+                return True
+            except (socket.error, OSError):
+                self.connected = False
+                return False
+            finally:
+                self.socket.settimeout(original_timeout)
+        except Exception:
+            return False
 
     def __enter__(self) -> "ISOTCPConnection":
         """Context manager entry."""

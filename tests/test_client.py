@@ -1,7 +1,8 @@
 import logging
 import struct
 import time
-from typing import Tuple
+from typing import Any, Tuple
+from unittest.mock import MagicMock
 
 import pytest
 import unittest
@@ -21,7 +22,8 @@ from datetime import datetime, timedelta, timezone
 from typing import cast as typing_cast
 
 from snap7.util import get_real, get_int, set_int
-from snap7.error import check_error
+from snap7.error import check_error, S7ProtocolError, S7StalePacketError, S7PacketLostError
+from snap7.s7protocol import S7Protocol
 from snap7.server import Server
 from snap7.client import Client
 from snap7.type import SrvArea
@@ -955,6 +957,245 @@ class TestClientBeforeConnect(unittest.TestCase):
         )
         for param, value in values:
             self.client.set_param(param, value)
+
+
+@pytest.mark.client
+class TestStalePacketDetection:
+    """Test stale packet detection and retry in _send_receive."""
+
+    def test_validate_matching_sequence(self) -> None:
+        proto = S7Protocol()
+        proto.sequence = 5
+        proto.validate_pdu_reference(5)
+
+    def test_validate_stale_raises(self) -> None:
+        proto = S7Protocol()
+        proto.sequence = 10
+        with pytest.raises(S7StalePacketError, match="Stale packet"):
+            proto.validate_pdu_reference(8)
+
+    def test_validate_lost_raises(self) -> None:
+        proto = S7Protocol()
+        proto.sequence = 5
+        with pytest.raises(S7PacketLostError, match="Packet lost"):
+            proto.validate_pdu_reference(7)
+
+    def test_send_receive_retries_on_stale(self) -> None:
+        """_send_receive should retry receive when a stale packet is detected."""
+        client = Client()
+        client.connected = True
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+        client.protocol.sequence = 1
+
+        def make_response(seq: int) -> bytes:
+            return struct.pack(
+                ">BBHHHHBB",
+                0x32,
+                0x03,
+                0x0000,
+                seq,
+                0x0000,
+                0x0000,
+                0x00,
+                0x00,
+            )
+
+        stale_response = make_response(0)
+        good_response = make_response(1)
+        mock_conn.receive_data.side_effect = [stale_response, good_response]
+
+        result = client._send_receive(b"\x00", max_stale_retries=3)
+        assert result["sequence"] == 1
+        assert mock_conn.receive_data.call_count == 2
+
+    def test_send_receive_exhausts_retries(self) -> None:
+        """_send_receive should raise after exhausting stale retries."""
+        client = Client()
+        client.connected = True
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+        client.protocol.sequence = 5
+
+        stale = struct.pack(
+            ">BBHHHHBB",
+            0x32,
+            0x03,
+            0x0000,
+            1,
+            0x0000,
+            0x0000,
+            0x00,
+            0x00,
+        )
+        mock_conn.receive_data.return_value = stale
+
+        with pytest.raises(S7ProtocolError, match="Max stale packet retries"):
+            client._send_receive(b"\x00", max_stale_retries=2)
+
+        assert mock_conn.receive_data.call_count == 3
+
+
+@pytest.mark.client
+class TestPDUSplitting:
+    """Test automatic PDU splitting for large read/write requests."""
+
+    def test_max_read_size(self) -> None:
+        client = Client()
+        client.pdu_length = 480
+        assert client._max_read_size() == 480 - 18
+
+    def test_max_write_size(self) -> None:
+        client = Client()
+        client.pdu_length = 480
+        assert client._max_write_size() == 480 - 35
+
+    def test_read_area_splits_large_request(self) -> None:
+        """read_area should make multiple requests when size > max_read_size."""
+        client = Client()
+        client.connected = True
+        client.pdu_length = 50  # Very small - max_read_size = 32
+
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+
+        call_count = 0
+
+        def mock_send_receive(request: bytes, max_stale_retries: int = 3) -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            count = struct.unpack(">H", request[16:18])[0]
+            fake_data = bytes(range(count))
+            return {
+                "sequence": client.protocol.sequence,
+                "param_length": 2,
+                "data_length": count + 4,
+                "parameters": {"function_code": 0x04, "item_count": 1},
+                "data": {"return_code": 0xFF, "transport_size": 0x04, "data_length": count * 8, "data": fake_data},
+                "error_code": 0,
+            }
+
+        client._send_receive = mock_send_receive
+
+        result = client.read_area(Area.DB, 1, 0, 64)
+        assert len(result) == 64
+        assert call_count == 2  # 32 + 32
+
+    def test_write_area_splits_large_request(self) -> None:
+        """write_area should make multiple requests when data > max_write_size."""
+        client = Client()
+        client.connected = True
+        client.pdu_length = 50  # Very small - max_write_size = 15
+
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+
+        call_count = 0
+
+        def mock_send_receive(request: bytes, max_stale_retries: int = 3) -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            return {
+                "sequence": client.protocol.sequence,
+                "param_length": 2,
+                "data_length": 1,
+                "parameters": {"function_code": 0x05, "item_count": 1},
+                "data": {"return_code": 0xFF},
+                "error_code": 0,
+            }
+
+        client._send_receive = mock_send_receive
+
+        data = bytearray(30)
+        result = client.write_area(Area.DB, 1, 0, data)
+        assert result == 0
+        assert call_count == 2  # 15 + 15
+
+    def test_small_request_no_split(self) -> None:
+        """Requests within PDU size should not be split."""
+        client = Client()
+        client.connected = True
+        client.pdu_length = 480  # max_read_size = 462
+
+        call_count = 0
+
+        def mock_send_receive(request: bytes, max_stale_retries: int = 3) -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            count = 10
+            fake_data = bytes(count)
+            return {
+                "sequence": client.protocol.sequence,
+                "param_length": 2,
+                "data_length": count + 4,
+                "parameters": {"function_code": 0x04, "item_count": 1},
+                "data": {"return_code": 0xFF, "transport_size": 0x04, "data_length": count * 8, "data": fake_data},
+                "error_code": 0,
+            }
+
+        client._send_receive = mock_send_receive
+
+        result = client.read_area(Area.DB, 1, 0, 10)
+        assert len(result) == 10
+        assert call_count == 1
+
+
+@pytest.mark.client
+class TestMaxVars:
+    """Test MAX_VARS limit on multi-read/multi-write requests."""
+
+    def test_max_vars_constant(self) -> None:
+        assert Client.MAX_VARS == 20
+
+    def test_read_multi_vars_rejects_too_many(self) -> None:
+        client = Client()
+        client.connected = True
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+
+        items = [{"area": Area.DB, "db_number": 1, "start": i, "size": 1} for i in range(21)]
+        with pytest.raises(ValueError, match="Too many items.*21.*MAX_VARS.*20"):
+            client.read_multi_vars(items)
+
+    def test_write_multi_vars_rejects_too_many(self) -> None:
+        client = Client()
+        client.connected = True
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+
+        items = [{"area": Area.DB, "db_number": 1, "start": i, "data": bytearray(1)} for i in range(21)]
+        with pytest.raises(ValueError, match="Too many items.*21.*MAX_VARS.*20"):
+            client.write_multi_vars(items)
+
+    def test_read_multi_vars_accepts_max(self) -> None:
+        """20 items (the limit) should not raise."""
+        client = Client()
+        client.connected = True
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+        client.read_area = MagicMock(return_value=bytearray(1))
+
+        items = [{"area": Area.DB, "db_number": 1, "start": i, "size": 1} for i in range(20)]
+        result_code, results = client.read_multi_vars(items)
+        assert result_code == 0
+        assert len(results) == 20
+
+    def test_write_multi_vars_accepts_max(self) -> None:
+        """20 items (the limit) should not raise."""
+        client = Client()
+        client.connected = True
+        mock_conn = MagicMock()
+        client.connection = mock_conn
+        client.write_area = MagicMock(return_value=0)
+
+        items = [{"area": Area.DB, "db_number": 1, "start": i, "data": bytearray(1)} for i in range(20)]
+        result = client.write_multi_vars(items)
+        assert result == 0
+
+    def test_empty_items_accepted(self) -> None:
+        client = Client()
+        result_code, _ = client.read_multi_vars([])
+        assert result_code == 0
 
 
 if __name__ == "__main__":

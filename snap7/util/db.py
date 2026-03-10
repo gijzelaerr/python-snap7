@@ -86,7 +86,7 @@ example::
 
 import re
 from logging import getLogger
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Any, Optional, Union, Iterator, Tuple, Dict, Callable
 
 from snap7 import Client
@@ -96,6 +96,7 @@ from snap7.util import (
     set_bool,
     set_fstring,
     set_string,
+    set_wstring,
     set_real,
     set_dword,
     set_udint,
@@ -105,11 +106,15 @@ from snap7.util import (
     set_word,
     set_byte,
     set_char,
+    set_wchar,
     set_usint,
     set_sint,
     set_time,
     set_lreal,
     set_date,
+    set_tod,
+    set_dtl,
+    set_dt,
     get_bool,
     get_fstring,
     get_string,
@@ -672,6 +677,14 @@ class Row:
             set_string(bytearray_, byte_index, value, max_size_int)
             return None
 
+        if type_.startswith("WSTRING") and isinstance(value, str):
+            max_size = re.search(r"\d+", type_)
+            if max_size is None:
+                raise ValueError("Max size could not be determinate. re.search() returned None")
+            max_size_int = int(max_size.group(0))
+            set_wstring(bytearray_, byte_index, value, max_size_int)
+            return None
+
         if type_ == "REAL":
             return set_real(bytearray_, byte_index, value)
 
@@ -680,6 +693,9 @@ class Row:
 
         if type_ == "CHAR" and isinstance(value, str):
             return set_char(bytearray_, byte_index, value)
+
+        if type_ == "WCHAR" and isinstance(value, str):
+            return set_wchar(bytearray_, byte_index, value)
 
         if isinstance(value, int):
             type_to_func = {
@@ -701,6 +717,15 @@ class Row:
 
         if type_ == "DATE" and isinstance(value, date):
             return set_date(bytearray_, byte_index, value)
+
+        if type_ in ("TIME_OF_DAY", "TOD") and isinstance(value, timedelta):
+            return set_tod(bytearray_, byte_index, value)
+
+        if type_ == "DTL" and isinstance(value, datetime):
+            return set_dtl(bytearray_, byte_index, value)
+
+        if type_ == "DATE_AND_TIME" and isinstance(value, datetime):
+            return set_dt(bytearray_, byte_index, value)
 
         raise ValueError
 

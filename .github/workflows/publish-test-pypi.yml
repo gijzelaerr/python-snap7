@@ -7,11 +7,13 @@ jobs:
   build:
     name: Build distribution 📦
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install build
@@ -19,7 +21,7 @@ jobs:
       - name: Build distribution
         run: python -m build
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -35,7 +37,7 @@ jobs:
       id-token: write
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -45,6 +47,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
 
   test-published-package:
     name: Test published package
@@ -52,19 +55,21 @@ jobs:
     strategy:
       matrix:
         os: ["ubuntu-24.04", "macos-14", "windows-2022"]
-        python-version: ["3.10", "3.12", "3.14"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Install and test python-snap7
         run: |
           uv venv
-          uv pip install --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
+          uv pip install --index-strategy unsafe-best-match --extra-index-url https://test.pypi.org/simple/ python-snap7[test]
           uv run python -c "import snap7; print('snap7 imported successfully')"

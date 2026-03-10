@@ -627,5 +627,179 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row["testDate"], datetime.date(day=28, month=3, year=2024))
 
 
+@pytest.mark.util
+class TestNewSetters(unittest.TestCase):
+    """Tests for the newly added setter functions."""
+
+    def test_set_wstring(self) -> None:
+        from snap7.util import set_wstring, get_wstring
+
+        data = bytearray(30)
+        set_wstring(data, 0, "hello", 10)
+        self.assertEqual(get_wstring(data, 0), "hello")
+
+    def test_set_wstring_unicode(self) -> None:
+        from snap7.util import set_wstring, get_wstring
+
+        data = bytearray(30)
+        set_wstring(data, 0, "ΩstÄ", 10)
+        self.assertEqual(get_wstring(data, 0), "ΩstÄ")
+
+    def test_set_wstring_too_long(self) -> None:
+        from snap7.util import set_wstring
+
+        data = bytearray(30)
+        with self.assertRaises(ValueError):
+            set_wstring(data, 0, "toolong", 3)
+
+    def test_set_wchar(self) -> None:
+        from snap7.util import set_wchar
+
+        from snap7.util.getters import get_wchar
+
+        data = bytearray(2)
+        set_wchar(data, 0, "C")
+        self.assertEqual(get_wchar(data, 0), "C")
+
+    def test_set_wchar_unicode(self) -> None:
+        from snap7.util import set_wchar
+
+        from snap7.util.getters import get_wchar
+
+        data = bytearray(2)
+        set_wchar(data, 0, "Ω")
+        self.assertEqual(get_wchar(data, 0), "Ω")
+
+    def test_set_lword(self) -> None:
+        from snap7.util import set_lword, get_lword
+
+        data = bytearray(8)
+        set_lword(data, 0, 0xABCD)
+        self.assertEqual(get_lword(data, 0), 0xABCD)
+
+    def test_set_lword_max(self) -> None:
+        from snap7.util import set_lword, get_lword
+
+        data = bytearray(8)
+        set_lword(data, 0, 0xFFFFFFFFFFFFFFFF)
+        self.assertEqual(get_lword(data, 0), 0xFFFFFFFFFFFFFFFF)
+
+    def test_set_tod(self) -> None:
+        from snap7.util import set_tod
+
+        from snap7.util.getters import get_tod
+
+        data = bytearray(4)
+        tod = datetime.timedelta(hours=12, minutes=34, seconds=56)
+        set_tod(data, 0, tod)
+        self.assertEqual(get_tod(data, 0), tod)
+
+    def test_set_tod_out_of_range(self) -> None:
+        from snap7.util import set_tod
+
+        data = bytearray(4)
+        with self.assertRaises(ValueError):
+            set_tod(data, 0, datetime.timedelta(days=1))
+
+    def test_set_dtl(self) -> None:
+        from snap7.util import set_dtl
+
+        from snap7.util.getters import get_dtl
+
+        data = bytearray(12)
+        dt = datetime.datetime(2024, 3, 27, 14, 30, 0)
+        set_dtl(data, 0, dt)
+        result = get_dtl(data, 0)
+        self.assertEqual(result.year, dt.year)
+        self.assertEqual(result.month, dt.month)
+        self.assertEqual(result.day, dt.day)
+        self.assertEqual(result.hour, dt.hour)
+        self.assertEqual(result.minute, dt.minute)
+        self.assertEqual(result.second, dt.second)
+
+    def test_set_dt_roundtrip(self) -> None:
+        from snap7.util import set_dt
+
+        from snap7.util.getters import get_date_time_object
+
+        data = bytearray(8)
+        dt = datetime.datetime(2020, 7, 12, 17, 32, 2, 854000)
+        set_dt(data, 0, dt)
+        result = get_date_time_object(data, 0)
+        self.assertEqual(result, dt)
+
+    def test_set_dt_year_range(self) -> None:
+        from snap7.util import set_dt
+
+        data = bytearray(8)
+        with self.assertRaises(ValueError):
+            set_dt(data, 0, datetime.datetime(1989, 1, 1))
+        with self.assertRaises(ValueError):
+            set_dt(data, 0, datetime.datetime(2090, 1, 1))
+
+    def test_get_ltime(self) -> None:
+        from snap7.util.getters import get_ltime
+
+        data = bytearray(8)
+        # 1 second = 1_000_000_000 nanoseconds
+        struct.pack_into(">q", data, 0, 1_000_000_000)
+        result = get_ltime(data, 0)
+        self.assertEqual(result, datetime.timedelta(seconds=1))
+
+    def test_get_ltod(self) -> None:
+        from snap7.util.getters import get_ltod
+
+        data = bytearray(8)
+        # 12 hours in nanoseconds
+        ns = 12 * 3600 * 1_000_000_000
+        struct.pack_into(">Q", data, 0, ns)
+        result = get_ltod(data, 0)
+        self.assertEqual(result, datetime.timedelta(hours=12))
+
+    def test_get_ldt(self) -> None:
+        from snap7.util.getters import get_ldt
+
+        data = bytearray(8)
+        # 2020-01-01 00:00:00 UTC in nanoseconds since epoch
+        dt = datetime.datetime(2020, 1, 1)
+        epoch = datetime.datetime(1970, 1, 1)
+        ns = int((dt - epoch).total_seconds() * 1_000_000_000)
+        struct.pack_into(">Q", data, 0, ns)
+        result = get_ldt(data, 0)
+        self.assertEqual(result, dt)
+
+    def test_set_wstring_in_row(self) -> None:
+        test_array = bytearray(_bytearray)
+        row = Row(test_array, test_spec, layout_offset=4)
+        row["testWstring"] = "abcd"
+        self.assertEqual(row["testWstring"], "abcd")
+
+    def test_set_wchar_in_row(self) -> None:
+        test_array = bytearray(_bytearray)
+        row = Row(test_array, test_spec, layout_offset=4)
+        row["testWchar"] = "B"
+        self.assertEqual(row["testWchar"], "B")
+
+    def test_set_tod_in_row(self) -> None:
+        test_array = bytearray(_bytearray)
+        row = Row(test_array, test_spec, layout_offset=4)
+        tod = datetime.timedelta(hours=1, minutes=2, seconds=3)
+        row["testTod"] = tod
+        self.assertEqual(row["testTod"], tod)
+
+    def test_set_dtl_in_row(self) -> None:
+        test_array = bytearray(_bytearray)
+        row = Row(test_array, test_spec, layout_offset=4)
+        dt = datetime.datetime(2024, 6, 15, 10, 20, 30)
+        row["testDtl"] = dt
+        result = row["testDtl"]
+        self.assertEqual(result.year, 2024)
+        self.assertEqual(result.month, 6)
+        self.assertEqual(result.day, 15)
+        self.assertEqual(result.hour, 10)
+        self.assertEqual(result.minute, 20)
+        self.assertEqual(result.second, 30)
+
+
 if __name__ == "__main__":
     unittest.main()
