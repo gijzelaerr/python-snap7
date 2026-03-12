@@ -492,8 +492,9 @@ class TestClientDBOperations(unittest.TestCase):
         try:
             data = self.client.db_get(DB_READ_ONLY)
         except Exception as e:
-            if "does not exist" in str(e).lower() or "block info failed" in str(e).lower():
-                pytest.skip(f"get_block_info not supported on this PLC: {e}")
+            err_msg = str(e).lower()
+            if "does not exist" in err_msg or "block info failed" in err_msg or "auto-detected size" in err_msg:
+                pytest.skip(f"db_get with auto-detect not supported on this PLC: {e}")
             raise
         self.assertIsInstance(data, bytearray)
         self.assertGreater(len(data), 0)
