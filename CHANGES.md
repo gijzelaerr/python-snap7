@@ -5,18 +5,24 @@ CHANGES
 -----
 
 Major release: python-snap7 is now a pure Python S7 communication library.
+This version completely breaks with the previous approach of wrapping the C snap7
+shared library. The entire S7 protocol stack is now implemented in pure Python,
+greatly improving portability and making it easier to install and extend.
 
 * **Breaking**: The C snap7 library is no longer required or used
 * Complete rewrite of the S7 protocol stack in pure Python
 * Native Python implementation of TPKT (RFC 1006) and COTP (ISO 8073) layers
 * Native S7 protocol PDU encoding/decoding
 * Pure Python server implementation for testing and simulation
-* No platform-specific binary dependencies
+* No platform-specific binary dependencies — works on any platform that runs Python
 * Improved error handling and connection management
 * Full type annotations with mypy strict mode
 * CLI interface for running an S7 server emulator (`pip install "python-snap7[cli]"`)
 
-If you experience issues with 3.0, pin to the last pre-3.0 release:
+If you experience issues with 3.0, please report them on the
+[issue tracker](https://github.com/gijzelaerr/python-snap7/issues) with a clear
+description and the version you are using. As a workaround, pin to the last
+pre-3.0 release:
 
     $ pip install "python-snap7<3"
 
