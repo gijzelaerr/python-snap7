@@ -26,6 +26,22 @@ pre-3.0 release:
 
     $ pip install "python-snap7<3"
 
+### Thanks
+
+Special thanks to the following people for testing, reporting issues, and providing
+feedback during the 3.0 development:
+
+* [@lupaulus](https://github.com/lupaulus) — extensive testing and bug reports
+* [@spreeker](https://github.com/spreeker) — testing and feedback
+* [@nikteliy](https://github.com/nikteliy) — review and feedback on the rewrite
+* [@amorelettronico](https://github.com/amorelettronico) — testing
+* [@razour08](https://github.com/razour08) — testing
+* [@core-engineering](https://github.com/core-engineering) — bug reports (#553)
+* [@AndreasScharf](https://github.com/AndreasScharf) — bug reports (#572)
+* [@Robatronic](https://github.com/Robatronic) — bug reports (#574)
+* [@hirotasoshu](https://github.com/hirotasoshu) — feedback (#545)
+* [@PoitrasJ](https://github.com/PoitrasJ) — bug reports (#479)
+
 1.2
 ---
 
