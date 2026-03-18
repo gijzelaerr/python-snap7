@@ -1,6 +1,16 @@
 CHANGES
 =======
 
+2.1.1
+-----
+
+* Fix Read the Docs build configuration
+
+2.1.0
+-----
+
+* See https://github.com/gijzelaerr/python-snap7/releases/tag/2.1.0
+
 1.2
 ---
 
