@@ -3,6 +3,10 @@ About
 
 Python-snap7 is a pure Python S7 communication library for interfacing with Siemens S7 PLCs.
 
+The name "python-snap7" is historical — the library originally started as a Python wrapper
+around the `Snap7 <http://snap7.sourceforge.net/>`_ C library. As of version 3.0, the C
+library is no longer used, but the name is kept for backwards compatibility.
+
 Python-snap7 is tested with Python 3.10+, on Windows, Linux and OS X.
 
 The full documentation is available on `Read The Docs <https://python-snap7.readthedocs.io/en/latest/>`_.

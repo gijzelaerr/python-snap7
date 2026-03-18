@@ -6,6 +6,11 @@ natively with Siemens S7 PLCs. The library implements the complete S7
 protocol stack including TPKT (RFC 1006), COTP (ISO 8073), and S7
 protocol layers.
 
+The name "python-snap7" is historical: the library originally started as a
+Python wrapper around the `Snap7 <http://snap7.sourceforge.net/>`_ C library.
+As of version 3.0, the C library is no longer used, but the name is kept for
+backwards compatibility.
+
 python-snap7 requires Python 3.10+ and runs on Windows, macOS and Linux
 without any native dependencies.
 
