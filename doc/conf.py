@@ -11,6 +11,7 @@
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -18,7 +19,13 @@ from pathlib import Path
 # sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, str(Path("..").resolve()))
 
-import snap7  # noqa: E402
+# Mock the snap7 C library loading for Read the Docs builds where the native
+# library is not available.
+try:
+    import snap7  # noqa: E402
+except (RuntimeError, OSError):
+    snap7 = MagicMock()  # type: ignore[misc]
+    snap7.__version__ = "2.1.0"
 
 # -- General configuration -----------------------------------------------------
 
@@ -28,6 +35,10 @@ import snap7  # noqa: E402
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = ["sphinx.ext.autodoc", "sphinx.ext.coverage", "sphinx.ext.viewcode", "sphinx.ext.napoleon"]
+
+# Mock modules that depend on the native snap7 C library, so autodoc works
+# on Read the Docs where the library is not available.
+autodoc_mock_imports = ["snap7.common", "snap7.protocol"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -93,7 +104,7 @@ pygments_style = "sphinx"
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "default"
+html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
