@@ -104,18 +104,13 @@ def identify(ip: str, mac: str) -> Device:
     )
 
 
-def main() -> None:
-    """CLI entry point for snap7-scan."""
-    try:
-        import click
-    except ImportError:
-        print("CLI dependencies not installed. Try: pip install python-snap7[cli]")
-        raise
+try:
+    import click
 
     @click.command()
     @click.argument("ip")
     @click.option("--timeout", type=float, default=5.0, help="Discovery timeout in seconds.")
-    def scan(ip: str, timeout: float) -> None:
+    def discover_command(ip: str, timeout: float) -> None:
         """Discover PROFINET devices on the network.
 
         IP is the address of the local network interface to use for discovery.
@@ -138,7 +133,13 @@ def main() -> None:
         for device in devices:
             click.echo(f"  {device.name:<30s} {device.ip:<16s} {device.mac}")
 
-    scan()
+except ImportError:
+    pass
+
+
+def main() -> None:
+    """Standalone CLI entry point for discovery."""
+    discover_command()
 
 
 if __name__ == "__main__":
