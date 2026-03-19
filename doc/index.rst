@@ -8,6 +8,8 @@ Contents:
 
    introduction
    installation
+   examples
+   troubleshooting
    development
 
    API/client
