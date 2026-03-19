@@ -430,7 +430,7 @@ class AsyncClient(ClientMixin):
 
     def get_connected(self) -> bool:
         """Check if client is connected."""
-        return self.connected and self.connection is not None
+        return self.connected and self.connection is not None and self.connection.connected
 
     # ---------------------------------------------------------------
     # DB helpers
