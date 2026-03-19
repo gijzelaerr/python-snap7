@@ -1542,6 +1542,225 @@ class Client:
             raise ValueError(f"Data length {len(data)} doesn't match size {size * 2}")
         return self.write_area(Area.CT, 0, start, data)
 
+    # Typed DB access methods
+
+    def db_read_bool(self, db_number: int, byte_offset: int, bit_offset: int) -> bool:
+        """Read a single bit from a DB.
+
+        Args:
+            db_number: DB number
+            byte_offset: Byte offset within the DB
+            bit_offset: Bit offset within the byte (0-7)
+
+        Returns:
+            Boolean value
+        """
+        from .util import get_bool
+
+        data = self.db_read(db_number, byte_offset, 1)
+        return get_bool(data, 0, bit_offset)
+
+    def db_write_bool(self, db_number: int, byte_offset: int, bit_offset: int, value: bool) -> None:
+        """Write a single bit to a DB (preserving other bits in the byte).
+
+        Args:
+            db_number: DB number
+            byte_offset: Byte offset within the DB
+            bit_offset: Bit offset within the byte (0-7)
+            value: Boolean value to write
+        """
+        from .util import set_bool
+
+        data = self.db_read(db_number, byte_offset, 1)
+        set_bool(data, 0, bit_offset, value)
+        self.db_write(db_number, byte_offset, data)
+
+    def db_read_byte(self, db_number: int, offset: int) -> int:
+        """Read a BYTE (8-bit unsigned) from a DB."""
+        data = self.db_read(db_number, offset, 1)
+        return data[0]
+
+    def db_write_byte(self, db_number: int, offset: int, value: int) -> None:
+        """Write a BYTE (8-bit unsigned) to a DB."""
+        from .util import set_byte
+
+        data = bytearray(1)
+        set_byte(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_int(self, db_number: int, offset: int) -> int:
+        """Read an INT (16-bit signed) from a DB."""
+        from .util import get_int
+
+        data = self.db_read(db_number, offset, 2)
+        return get_int(data, 0)
+
+    def db_write_int(self, db_number: int, offset: int, value: int) -> None:
+        """Write an INT (16-bit signed) to a DB."""
+        from .util import set_int
+
+        data = bytearray(2)
+        set_int(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_uint(self, db_number: int, offset: int) -> int:
+        """Read a UINT (16-bit unsigned) from a DB."""
+        from .util import get_uint
+
+        data = self.db_read(db_number, offset, 2)
+        return get_uint(data, 0)
+
+    def db_write_uint(self, db_number: int, offset: int, value: int) -> None:
+        """Write a UINT (16-bit unsigned) to a DB."""
+        from .util import set_uint
+
+        data = bytearray(2)
+        set_uint(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_word(self, db_number: int, offset: int) -> int:
+        """Read a WORD (16-bit unsigned) from a DB."""
+        data = self.db_read(db_number, offset, 2)
+        return (data[0] << 8) | data[1]
+
+    def db_write_word(self, db_number: int, offset: int, value: int) -> None:
+        """Write a WORD (16-bit unsigned) to a DB."""
+        from .util import set_word
+
+        data = bytearray(2)
+        set_word(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_dint(self, db_number: int, offset: int) -> int:
+        """Read a DINT (32-bit signed) from a DB."""
+        from .util import get_dint
+
+        data = self.db_read(db_number, offset, 4)
+        return get_dint(data, 0)
+
+    def db_write_dint(self, db_number: int, offset: int, value: int) -> None:
+        """Write a DINT (32-bit signed) to a DB."""
+        from .util import set_dint
+
+        data = bytearray(4)
+        set_dint(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_udint(self, db_number: int, offset: int) -> int:
+        """Read a UDINT (32-bit unsigned) from a DB."""
+        from .util import get_udint
+
+        data = self.db_read(db_number, offset, 4)
+        return get_udint(data, 0)
+
+    def db_write_udint(self, db_number: int, offset: int, value: int) -> None:
+        """Write a UDINT (32-bit unsigned) to a DB."""
+        from .util import set_udint
+
+        data = bytearray(4)
+        set_udint(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_dword(self, db_number: int, offset: int) -> int:
+        """Read a DWORD (32-bit unsigned) from a DB."""
+        from .util import get_dword
+
+        data = self.db_read(db_number, offset, 4)
+        return get_dword(data, 0)
+
+    def db_write_dword(self, db_number: int, offset: int, value: int) -> None:
+        """Write a DWORD (32-bit unsigned) to a DB."""
+        from .util import set_dword
+
+        data = bytearray(4)
+        set_dword(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_real(self, db_number: int, offset: int) -> float:
+        """Read a REAL (32-bit float) from a DB."""
+        from .util import get_real
+
+        data = self.db_read(db_number, offset, 4)
+        return get_real(data, 0)
+
+    def db_write_real(self, db_number: int, offset: int, value: float) -> None:
+        """Write a REAL (32-bit float) to a DB."""
+        from .util import set_real
+
+        data = bytearray(4)
+        set_real(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_lreal(self, db_number: int, offset: int) -> float:
+        """Read a LREAL (64-bit float) from a DB."""
+        from .util import get_lreal
+
+        data = self.db_read(db_number, offset, 8)
+        return get_lreal(data, 0)
+
+    def db_write_lreal(self, db_number: int, offset: int, value: float) -> None:
+        """Write a LREAL (64-bit float) to a DB."""
+        from .util import set_lreal
+
+        data = bytearray(8)
+        set_lreal(data, 0, value)
+        self.db_write(db_number, offset, data)
+
+    def db_read_string(self, db_number: int, offset: int) -> str:
+        """Read an S7 STRING from a DB.
+
+        Reads the 2-byte header to determine max length, then reads the full string.
+        """
+        from .util import get_string
+
+        header = self.db_read(db_number, offset, 2)
+        max_len = header[0]
+        data = self.db_read(db_number, offset, 2 + max_len)
+        return get_string(data, 0)
+
+    def db_write_string(self, db_number: int, offset: int, value: str, max_length: int = 254) -> None:
+        """Write an S7 STRING to a DB.
+
+        Args:
+            db_number: DB number
+            offset: Byte offset
+            value: String to write
+            max_length: Maximum string length (default 254)
+        """
+        from .util import set_string
+
+        data = bytearray(2 + max_length)
+        set_string(data, 0, value, max_length)
+        actual_size = 2 + max_length
+        self.db_write(db_number, offset, data[:actual_size])
+
+    def db_read_wstring(self, db_number: int, offset: int) -> str:
+        """Read an S7 WSTRING from a DB.
+
+        Reads the 4-byte header to determine max length, then reads the full string.
+        """
+        from .util import get_wstring
+
+        header = self.db_read(db_number, offset, 4)
+        max_len = (header[0] << 8) | header[1]
+        data = self.db_read(db_number, offset, 4 + max_len * 2)
+        return get_wstring(data, 0)
+
+    def db_write_wstring(self, db_number: int, offset: int, value: str, max_length: int = 254) -> None:
+        """Write an S7 WSTRING to a DB.
+
+        Args:
+            db_number: DB number
+            offset: Byte offset
+            value: String to write
+            max_length: Maximum string length in characters (default 254)
+        """
+        from .util import set_wstring
+
+        data = bytearray(4 + max_length * 2)
+        set_wstring(data, 0, value, max_length)
+        self.db_write(db_number, offset, data)
+
     # Async methods
 
     def as_ab_read(self, start: int, size: int, data: CDataArrayType) -> int:
