@@ -234,19 +234,22 @@ def test_string_roundtrip(value: str) -> None:
     assert get_string(data, 0) == value
 
 
-@given(st.text(min_size=0, max_size=20))
+@given(st.text(alphabet=st.characters(max_codepoint=0xFFFF, blacklist_categories=["Cs"]), min_size=0, max_size=20))
 def test_wstring_roundtrip(value: str) -> None:
-    # Avoid surrogates which can't be encoded in UTF-16-BE
-    assume(all(not (0xD800 <= ord(c) <= 0xDFFF) for c in value))
-    # Known bug: characters outside the BMP (codepoint > 0xFFFF) encode as 4 bytes
-    # in UTF-16-BE (surrogate pairs) but get_wstring/set_wstring use character count
-    # instead of UTF-16 code unit count, so supplementary characters are truncated.
-    assume(all(ord(c) <= 0xFFFF for c in value))
     max_size = 50
     buf_size = 4 + max_size * 2
     data = bytearray(buf_size)
     set_wstring(data, 0, value, max_size)
     assert get_wstring(data, 0) == value
+
+
+@given(st.text(min_size=1, max_size=5))
+def test_wstring_rejects_supplementary_characters(value: str) -> None:
+    """Characters outside BMP should be rejected, matching PLC behavior."""
+    assume(any(ord(c) > 0xFFFF for c in value))
+    data = bytearray(100)
+    with pytest.raises(ValueError, match="Basic Multilingual Plane"):
+        set_wstring(data, 0, value, 50)
 
 
 # ---------------------------------------------------------------------------
