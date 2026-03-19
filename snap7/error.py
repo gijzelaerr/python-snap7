@@ -5,7 +5,8 @@ Maps S7 error codes to Python exceptions with meaningful messages.
 """
 
 from typing import Optional, Callable, Any, Hashable
-from functools import cache
+
+from .compat import cache
 
 
 class S7Error(Exception):
