@@ -45,7 +45,7 @@ class TestCLI(unittest.TestCase):
     def test_help(self) -> None:
         result = self.runner.invoke(main, ["--help"])
         assert result.exit_code == 0
-        assert "python-snap7" in result.output
+        assert "s7" in result.output
 
     def test_version(self) -> None:
         result = self.runner.invoke(main, ["--version"])

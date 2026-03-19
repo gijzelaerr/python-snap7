@@ -126,7 +126,7 @@ def _format_hex(data: bytearray) -> str:
 @click.version_option(__version__)
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug output.")
 def main(verbose: bool) -> None:
-    """python-snap7: CLI tools for Siemens S7 PLC communication."""
+    """s7: CLI tools for Siemens S7 PLC communication."""
     if verbose:
         logging.basicConfig(format="[%(levelname)s]: %(message)s", level=logging.DEBUG)
     else:
@@ -367,6 +367,15 @@ def info(host: str, rack: int, slot: int, port: int) -> None:
         sys.exit(1)
     finally:
         client.disconnect()
+
+
+# Register optional subcommands from other modules
+try:
+    from snap7.discovery import discover_command
+
+    main.add_command(discover_command, "discover")
+except ImportError:
+    pass
 
 
 if __name__ == "__main__":
