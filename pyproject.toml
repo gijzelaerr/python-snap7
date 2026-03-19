@@ -35,6 +35,7 @@ Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-html", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
+discovery = ["pnio-dcp"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed"]
@@ -45,6 +46,7 @@ include = ["snap7*"]
 [project.scripts]
 snap7-server = "snap7.server:mainloop"
 s7 = "snap7.cli:main"
+snap7-scan = "snap7.discovery:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
