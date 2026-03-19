@@ -311,10 +311,7 @@ class ISOTCPConnection:
             subnet_param = struct.pack(">BBH", self.COTP_PARAM_SUBNET_ID, 2, self._subnet_id)
             routing_tsap_param = struct.pack(">BBH", self.COTP_PARAM_ROUTING_TSAP, 2, self._routing_tsap)
             parameters += subnet_param + routing_tsap_param
-            logger.debug(
-                f"COTP CR with routing: subnet={self._subnet_id:#06x}, "
-                f"routing_tsap={self._routing_tsap:#06x}"
-            )
+            logger.debug(f"COTP CR with routing: subnet={self._subnet_id:#06x}, routing_tsap={self._routing_tsap:#06x}")
 
         # Update PDU length to include parameters
         total_length = 6 + len(parameters)
