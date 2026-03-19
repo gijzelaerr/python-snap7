@@ -3,11 +3,13 @@
 import unittest
 
 import pytest
-from click.testing import CliRunner
 
-from snap7.cli import main
-from snap7.server import Server
-from snap7.type import SrvArea
+click = pytest.importorskip("click")
+from click.testing import CliRunner  # noqa: E402
+
+from snap7.cli import main  # noqa: E402
+from snap7.server import Server  # noqa: E402
+from snap7.type import SrvArea  # noqa: E402
 
 ip = "127.0.0.1"
 tcpport = 1102
