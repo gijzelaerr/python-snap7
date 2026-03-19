@@ -7,7 +7,7 @@ Handles S7 PDU encoding/decoding and protocol operations.
 import struct
 import logging
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from enum import IntEnum
 
 from .datatypes import S7Area, S7WordLen, S7DataTypes
@@ -172,6 +172,101 @@ class S7Protocol:
         parameters += address_spec[1:]  # Skip first byte (already included as 0x12)
 
         return header + parameters
+
+    def build_multi_read_request(self, items: List[Tuple[int, int, int, int]]) -> bytes:
+        """Build S7 multi-variable read request PDU.
+
+        Encodes multiple address specifications into a single READ_AREA request
+        so the PLC can return all data in one response.
+
+        Args:
+            items: List of (area, db_number, start_offset, byte_length) tuples.
+
+        Returns:
+            Complete S7 PDU.
+        """
+        item_count = len(items)
+
+        # Build N * 12-byte address specifications
+        addr_specs = b""
+        for area_code, db_number, start_offset, byte_length in items:
+            addr_spec = S7DataTypes.encode_address(S7Area(area_code), db_number, start_offset, S7WordLen.BYTE, byte_length)
+            addr_specs += addr_spec
+
+        # Parameter: function_code(1) + item_count(1) + N * address_spec(12)
+        param_data = struct.pack(">BB", S7Function.READ_AREA, item_count) + addr_specs
+        param_len = len(param_data)
+
+        # S7 Header (12 bytes)
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,  # Protocol ID
+            S7PDUType.REQUEST,  # PDU type
+            0x0000,  # Reserved
+            self._next_sequence(),  # Sequence
+            param_len,  # Parameter length
+            0x0000,  # Data length (no data for read)
+        )
+
+        return header + param_data
+
+    def extract_multi_read_data(self, response: Dict[str, Any], block_count: int) -> List[bytearray]:
+        """Extract per-block data from a multi-variable read response.
+
+        Parses the raw data section which contains N items, each with:
+          - return_code (1 byte)
+          - transport_size (1 byte)
+          - bit_length (2 bytes, big-endian)
+          - data (bit_length / 8 bytes)
+          - fill byte (1 byte if byte_length is odd and not the last item)
+
+        Args:
+            response: Parsed S7 response from :meth:`parse_response`.
+            block_count: Expected number of data items.
+
+        Returns:
+            List of bytearrays, one per block.
+
+        Raises:
+            S7ProtocolError: If any item has a non-success return code.
+        """
+        raw = response.get("raw_data", b"")
+        if not raw:
+            raise S7ProtocolError("No raw data in multi-read response")
+
+        results: List[bytearray] = []
+        offset = 0
+
+        for i in range(block_count):
+            if offset + 4 > len(raw):
+                raise S7ProtocolError(f"Multi-read response truncated at item {i}")
+
+            return_code = raw[offset]
+            transport_size = raw[offset + 1]
+            bit_length = struct.unpack(">H", raw[offset + 2 : offset + 4])[0]
+            offset += 4
+
+            if return_code != 0xFF:
+                desc = get_return_code_description(return_code)
+                raise S7ProtocolError(f"Multi-read item {i} failed: {desc} (0x{return_code:02x})")
+
+            # Transport size 0x04 means bit length, others mean byte length
+            if transport_size == 0x04:
+                byte_length = bit_length // 8
+            else:
+                byte_length = bit_length
+
+            if offset + byte_length > len(raw):
+                raise S7ProtocolError(f"Multi-read data truncated at item {i}")
+
+            results.append(bytearray(raw[offset : offset + byte_length]))
+            offset += byte_length
+
+            # Fill byte for even alignment (not after the last item)
+            if i < block_count - 1 and byte_length % 2 != 0:
+                offset += 1
+
+        return results
 
     def build_write_request(self, area: S7Area, db_number: int, start: int, word_len: S7WordLen, data: bytes) -> bytes:
         """
@@ -1335,6 +1430,7 @@ class S7Protocol:
 
             data_section = pdu[offset : offset + data_len]
             response["data"] = self._parse_data_section(data_section)
+            response["raw_data"] = data_section
 
         return response
 
