@@ -1,3 +1,6 @@
+.. image:: https://codecov.io/gh/gijzelaerr/python-snap7/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/gijzelaerr/python-snap7
+
 About
 =====
 

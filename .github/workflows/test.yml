@@ -33,9 +33,9 @@ jobs:
           uv pip install ".[test]"
       - name: Run pytest
         run: uv run pytest --cov=snap7 --cov-report=xml --cov-report=term
-      - name: Upload coverage report
+      - name: Upload coverage to Codecov
         if: matrix.python-version == '3.13' && matrix.runs-on == 'ubuntu-24.04'
-        uses: actions/upload-artifact@v7
+        uses: codecov/codecov-action@v5
         with:
-          name: coverage-report
-          path: coverage.xml
+          files: coverage.xml
+          fail_ci_if_error: true
