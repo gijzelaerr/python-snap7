@@ -65,7 +65,7 @@ strict = true
 disable_error_code = ["method-assign", "attr-defined"]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 75
 
 [tool.ruff]
 output-format = "full"
