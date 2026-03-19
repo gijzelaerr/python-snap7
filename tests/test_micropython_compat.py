@@ -68,12 +68,12 @@ class TestProtocolEncodingDecoding:
         """S7 PDU header can be built with struct.pack."""
         header = struct.pack(
             ">BBHHHH",
-            0x32,   # Protocol ID
-            0x01,   # PDU type (request)
-            0x0000, # Reserved
-            0x0001, # Sequence
-            0x000E, # Param length
-            0x0000, # Data length
+            0x32,  # Protocol ID
+            0x01,  # PDU type (request)
+            0x0000,  # Reserved
+            0x0001,  # Sequence
+            0x000E,  # Param length
+            0x0000,  # Data length
         )
         # BBHHHH = 1+1+2+2+2+2 = 10 bytes (request header without error fields)
         assert len(header) == 10
@@ -251,21 +251,21 @@ class TestS7ProtocolBuild:
         params = struct.pack(
             ">BBHHH",
             S7Function.SETUP_COMMUNICATION,
-            0x00,   # reserved
-            1,      # max_amq_caller
-            1,      # max_amq_callee
-            480,    # pdu_length
+            0x00,  # reserved
+            1,  # max_amq_caller
+            1,  # max_amq_callee
+            480,  # pdu_length
         )
         header = struct.pack(
             ">BBHHHHBB",
             0x32,
             S7PDUType.ACK_DATA,
             0x0000,
-            0x0001,         # sequence
-            len(params),    # param_len
-            0,              # data_len
-            0,              # error_class
-            0,              # error_code
+            0x0001,  # sequence
+            len(params),  # param_len
+            0,  # data_len
+            0,  # error_class
+            0,  # error_code
         )
         pdu = header + params
 
