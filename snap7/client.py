@@ -404,6 +404,76 @@ class Client(ClientMixin):
 
         return self
 
+    def connect_routed(
+        self,
+        host: str,
+        router_rack: int,
+        router_slot: int,
+        subnet: int,
+        dest_rack: int,
+        dest_slot: int,
+        port: int = 102,
+        timeout: float = 5.0,
+    ) -> "Client":
+        """Connect to an S7 PLC via a routing gateway on another subnet.
+
+        The gateway PLC (identified by *host*, *router_rack*, *router_slot*)
+        forwards the connection to the target PLC (identified by *subnet*,
+        *dest_rack*, *dest_slot*) through S7 routing parameters embedded in
+        the COTP Connection Request.
+
+        Args:
+            host: IP address of the routing gateway PLC
+            router_rack: Rack number of the gateway PLC
+            router_slot: Slot number of the gateway PLC
+            subnet: Subnet ID of the target network (0x0000-0xFFFF)
+            dest_rack: Rack number of the destination PLC
+            dest_slot: Slot number of the destination PLC
+            port: TCP port (default 102)
+            timeout: Connection timeout in seconds
+
+        Returns:
+            Self for method chaining
+        """
+        self.host = host
+        self.port = port
+        self.rack = router_rack
+        self.slot = router_slot
+        self._params[Parameter.RemotePort] = port
+
+        # Remote TSAP targets the gateway rack/slot
+        self.remote_tsap = 0x0100 | (router_rack << 5) | router_slot
+
+        try:
+            start_time = time.time()
+
+            self.connection = ISOTCPConnection(
+                host=host,
+                port=port,
+                local_tsap=self.local_tsap,
+                remote_tsap=self.remote_tsap,
+            )
+            self.connection.set_routing(subnet, dest_rack, dest_slot)
+            self.connection.connect(timeout=timeout)
+
+            # Setup communication and negotiate PDU length
+            self._setup_communication()
+
+            self.connected = True
+            self._exec_time = int((time.time() - start_time) * 1000)
+            logger.info(
+                f"Connected (routed) to {host}:{port} via rack {router_rack} slot {router_slot}, "
+                f"subnet {subnet:#06x} -> rack {dest_rack} slot {dest_slot}"
+            )
+        except Exception as e:
+            self.disconnect()
+            if isinstance(e, S7Error):
+                raise
+            else:
+                raise S7ConnectionError(f"Routed connection failed: {e}")
+
+        return self
+
     def disconnect(self) -> int:
         """Disconnect from S7 PLC.
 
