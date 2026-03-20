@@ -188,13 +188,14 @@ class S7Protocol:
         item_count = len(items)
 
         # Build N * 12-byte address specifications
-        addr_specs = b""
+        addr_spec_parts: list[bytes] = []
         for area_code, db_number, start_offset, byte_length in items:
-            addr_spec = S7DataTypes.encode_address(S7Area(area_code), db_number, start_offset, S7WordLen.BYTE, byte_length)
-            addr_specs += addr_spec
+            addr_spec_parts.append(
+                S7DataTypes.encode_address(S7Area(area_code), db_number, start_offset, S7WordLen.BYTE, byte_length)
+            )
 
         # Parameter: function_code(1) + item_count(1) + N * address_spec(12)
-        param_data = struct.pack(">BB", S7Function.READ_AREA, item_count) + addr_specs
+        param_data = struct.pack(">BB", S7Function.READ_AREA, item_count) + b"".join(addr_spec_parts)
         param_len = len(param_data)
 
         # S7 Header (12 bytes)
