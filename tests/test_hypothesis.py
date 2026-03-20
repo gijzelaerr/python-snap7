@@ -302,24 +302,12 @@ def test_dt_roundtrip(value: datetime) -> None:
     )
 )
 def test_dtl_roundtrip(value: datetime) -> None:
-    # DTL stores nanoseconds derived from microseconds, but get_dtl reads
-    # byte 8 as raw microsecond value. Truncate to match.
-    # set_dtl writes microsecond * 1000 as nanoseconds (4 bytes big-endian)
-    # get_dtl reads byte 8 as int — this is the first byte of the 4-byte nanosecond field
-    nanoseconds = value.microsecond * 1000
-    ns_bytes = struct.pack(">I", nanoseconds)
-    expected_microsecond = ns_bytes[0]  # get_dtl reads only byte_index+8
-
+    # DTL stores nanoseconds (microsecond * 1000), so the roundtrip
+    # preserves microsecond precision exactly.
     data = bytearray(12)
     set_dtl(data, 0, value)
     result = get_dtl(data, 0)
-    assert result.year == value.year
-    assert result.month == value.month
-    assert result.day == value.day
-    assert result.hour == value.hour
-    assert result.minute == value.minute
-    assert result.second == value.second
-    assert result.microsecond == expected_microsecond
+    assert result == value
 
 
 # ---------------------------------------------------------------------------
@@ -530,7 +518,7 @@ def test_pdu_parse_no_crash(data: bytes) -> None:
     proto = S7Protocol()
     try:
         proto.parse_response(data)
-    except (S7ProtocolError, struct.error, ValueError, IndexError, KeyError):
+    except (S7ProtocolError, struct.error, ValueError, IndexError):
         pass  # Expected for malformed data
 
 
