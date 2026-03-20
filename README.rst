@@ -1,3 +1,21 @@
+.. image:: https://img.shields.io/pypi/v/python-snap7.svg
+   :target: https://pypi.org/project/python-snap7/
+
+.. image:: https://img.shields.io/pypi/pyversions/python-snap7.svg
+   :target: https://pypi.org/project/python-snap7/
+
+.. image:: https://img.shields.io/github/license/gijzelaerr/python-snap7.svg
+   :target: https://github.com/gijzelaerr/python-snap7/blob/master/LICENSE
+
+.. image:: https://github.com/gijzelaerr/python-snap7/actions/workflows/test.yml/badge.svg
+   :target: https://github.com/gijzelaerr/python-snap7/actions/workflows/test.yml
+
+.. image:: https://readthedocs.org/projects/python-snap7/badge/
+   :target: https://python-snap7.readthedocs.io/en/latest/
+
+.. image:: https://codecov.io/gh/gijzelaerr/python-snap7/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/gijzelaerr/python-snap7
+
 About
 =====
 

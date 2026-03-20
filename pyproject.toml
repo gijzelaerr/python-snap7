@@ -64,6 +64,9 @@ strict = true
 # https://github.com/python/mypy/issues/2427#issuecomment-1419206807
 disable_error_code = ["method-assign", "attr-defined"]
 
+[tool.coverage.report]
+fail_under = 75
+
 [tool.ruff]
 output-format = "full"
 line-length = 130
