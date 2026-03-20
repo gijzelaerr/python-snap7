@@ -57,6 +57,7 @@ markers =[
     "server",
     "util"
     ]
+asyncio_mode = "auto"
 
 [tool.mypy]
 ignore_missing_imports = true
