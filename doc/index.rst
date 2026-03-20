@@ -1,17 +1,42 @@
 Welcome to python-snap7's documentation!
 ========================================
 
-Contents:
-
 .. toctree::
    :maxdepth: 2
+   :caption: Getting Started
 
    introduction
    installation
    plc-support
-   examples
-   troubleshooting
+
+.. toctree::
+   :maxdepth: 2
+   :caption: User Guide
+
+   connecting
+   reading-writing
+   multi-variable
+   server
+   tia-portal-config
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Troubleshooting
+
+   error-reference
+   connection-issues
+   thread-safety
+   limitations
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Development
+
    development
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
 
    API/client
    API/async_client
@@ -24,7 +49,6 @@ Contents:
    API/connection
    API/s7protocol
    API/datatypes
-
 
 
 Indices and tables
