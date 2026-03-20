@@ -4,6 +4,7 @@ Pure Python S7 client implementation.
 Drop-in replacement for the ctypes-based client with native Python implementation.
 """
 
+import copy
 import logging
 import struct
 import time
@@ -38,6 +39,8 @@ from .type import (
     Parameter,
     CDataArrayType,
 )
+
+_VALID_AREA_VALUES: frozenset[int] = frozenset(a.value for a in Area)
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +116,7 @@ class Client(ClientMixin):
         # Multi-read optimizer state
         self._opt_plan: Optional[_OptimizationPlan] = None
         self.multi_read_max_gap: int = 5
+        self.use_optimizer: bool = True
 
         # Async operation state
         self._async_pending = False
@@ -224,6 +228,7 @@ class Client(ClientMixin):
             self.connection = None
 
         self.connected = False
+        self._opt_plan = None
         logger.info(f"Disconnected from {self.host}:{self.port}")
         return 0
 
@@ -503,8 +508,8 @@ class Client(ClientMixin):
         # Dict list path -- use optimizer for 2+ items
         dict_items = cast(List[dict[str, Any]], items)
 
-        if len(dict_items) <= 1:
-            # Single item: no optimization needed
+        if len(dict_items) <= 1 or not self.use_optimizer:
+            # Single item or optimizer disabled: no optimization needed
             results: list[bytearray] = []
             for dict_item in dict_items:
                 area = dict_item["area"]
@@ -555,15 +560,18 @@ class Client(ClientMixin):
             packets = packetize(blocks, self.pdu_length)
             self._opt_plan = _OptimizationPlan(cache_key, packets, read_items)
 
+        # Deep-copy blocks from cached packets so we don't mutate cached state
+        working_packets = copy.deepcopy(packets)
+
         # Execute each packet
-        for packet in packets:
+        for packet in working_packets:
             block_specs = [(blk.area, blk.db_number, blk.start_offset, blk.byte_length) for blk in packet.blocks]
 
             if len(block_specs) == 1:
                 # Single block: use regular read to avoid multi-read overhead
                 blk = packet.blocks[0]
                 data = self.read_area(
-                    Area(blk.area) if blk.area in {a.value for a in Area} else Area.DB,
+                    Area(blk.area) if blk.area in _VALID_AREA_VALUES else Area.DB,
                     blk.db_number,
                     blk.start_offset,
                     blk.byte_length,
@@ -578,12 +586,8 @@ class Client(ClientMixin):
                     blk.buffer = buf
 
         # Extract per-item results in original order
-        results = extract_results(packets, len(dict_items))
+        results = extract_results(working_packets, len(dict_items))
         return (0, results)
-
-    def _map_area_int(self, area_int: int) -> S7Area:
-        """Map integer area value to S7Area enum."""
-        return S7Area(area_int)
 
     def write_multi_vars(self, items: Union[List[dict[str, Any]], List[S7DataItem]]) -> int:
         """
