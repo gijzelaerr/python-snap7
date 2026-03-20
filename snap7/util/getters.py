@@ -1,12 +1,16 @@
 import struct
 from datetime import timedelta, datetime, date
-from typing import NoReturn
+from typing import NoReturn, Union
 from logging import getLogger
+
+#: Buffer types accepted by getter functions.
+#: Both :class:`bytearray` and :class:`memoryview` are supported.
+Buffer = Union[bytearray, memoryview]
 
 logger = getLogger(__name__)
 
 
-def get_bool(bytearray_: bytearray, byte_index: int, bool_index: int) -> bool:
+def get_bool(bytearray_: Buffer, byte_index: int, bool_index: int) -> bool:
     """Get the boolean value from location in bytearray
 
     Args:
@@ -28,7 +32,7 @@ def get_bool(bytearray_: bytearray, byte_index: int, bool_index: int) -> bool:
     return current_value == index_value
 
 
-def get_byte(bytearray_: bytearray, byte_index: int) -> bytes:
+def get_byte(bytearray_: Buffer, byte_index: int) -> bytes:
     """Get byte value from bytearray.
 
     Notes:
@@ -48,7 +52,7 @@ def get_byte(bytearray_: bytearray, byte_index: int) -> bytes:
     return value
 
 
-def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
+def get_word(bytearray_: Buffer, byte_index: int) -> bytearray:
     """Get word value from bytearray.
 
     Notes:
@@ -73,7 +77,7 @@ def get_word(bytearray_: bytearray, byte_index: int) -> bytearray:
     return value
 
 
-def get_int(bytearray_: bytearray, byte_index: int) -> int:
+def get_int(bytearray_: Buffer, byte_index: int) -> int:
     """Get int value from bytearray.
 
     Notes:
@@ -98,7 +102,7 @@ def get_int(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
-def get_uint(bytearray_: bytearray, byte_index: int) -> int:
+def get_uint(bytearray_: Buffer, byte_index: int) -> int:
     """Get unsigned int value from bytearray.
 
     Notes:
@@ -121,7 +125,7 @@ def get_uint(bytearray_: bytearray, byte_index: int) -> int:
     return int(get_word(bytearray_, byte_index))
 
 
-def get_real(bytearray_: bytearray, byte_index: int) -> float:
+def get_real(bytearray_: Buffer, byte_index: int) -> float:
     """Get real value.
 
     Notes:
@@ -145,7 +149,7 @@ def get_real(bytearray_: bytearray, byte_index: int) -> float:
     return real
 
 
-def get_fstring(bytearray_: bytearray, byte_index: int, max_length: int, remove_padding: bool = True) -> str:
+def get_fstring(bytearray_: Buffer, byte_index: int, max_length: int, remove_padding: bool = True) -> str:
     """Parse space-padded fixed-length string from bytearray
 
     Notes:
@@ -176,7 +180,7 @@ def get_fstring(bytearray_: bytearray, byte_index: int, max_length: int, remove_
         return string
 
 
-def get_string(bytearray_: bytearray, byte_index: int) -> str:
+def get_string(bytearray_: Buffer, byte_index: int) -> str:
     """Parse string from bytearray
 
     Notes:
@@ -210,7 +214,7 @@ def get_string(bytearray_: bytearray, byte_index: int) -> str:
     return "".join(data)
 
 
-def get_dword(bytearray_: bytearray, byte_index: int) -> int:
+def get_dword(bytearray_: Buffer, byte_index: int) -> int:
     """Gets the dword from the buffer.
 
     Notes:
@@ -235,7 +239,7 @@ def get_dword(bytearray_: bytearray, byte_index: int) -> int:
     return dword
 
 
-def get_dint(bytearray_: bytearray, byte_index: int) -> int:
+def get_dint(bytearray_: Buffer, byte_index: int) -> int:
     """Get dint value from bytearray.
 
     Notes:
@@ -262,7 +266,7 @@ def get_dint(bytearray_: bytearray, byte_index: int) -> int:
     return dint
 
 
-def get_udint(bytearray_: bytearray, byte_index: int) -> int:
+def get_udint(bytearray_: Buffer, byte_index: int) -> int:
     """Get unsigned dint value from bytearray.
 
     Notes:
@@ -289,7 +293,7 @@ def get_udint(bytearray_: bytearray, byte_index: int) -> int:
     return dint
 
 
-def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
+def get_s5time(bytearray_: Buffer, byte_index: int) -> str:
     micro_to_milli = 1000
     data_bytearray = bytearray_[byte_index : byte_index + 2]
     s5time_data_int_like = list(data_bytearray.hex())
@@ -315,7 +319,7 @@ def get_s5time(bytearray_: bytearray, byte_index: int) -> str:
     return "".join(str(s5time))
 
 
-def get_dt(bytearray_: bytearray, byte_index: int) -> str:
+def get_dt(bytearray_: Buffer, byte_index: int) -> str:
     """Get  DATE_AND_TIME Value from bytearray as ISO 8601 formatted Date String
     Notes:
         Datatype `DATE_AND_TIME` consists in 8 bytes in the PLC.
@@ -331,7 +335,7 @@ def get_dt(bytearray_: bytearray, byte_index: int) -> str:
     return get_date_time_object(bytearray_, byte_index).isoformat(timespec="microseconds")
 
 
-def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
+def get_date_time_object(bytearray_: Buffer, byte_index: int) -> datetime:
     """Get  DATE_AND_TIME Value from bytearray as python datetime object
     Notes:
         Datatype `DATE_AND_TIME` consists in 8 bytes in the PLC.
@@ -364,7 +368,7 @@ def get_date_time_object(bytearray_: bytearray, byte_index: int) -> datetime:
     return datetime(year, month, day, hour, min_, sec, microsec)
 
 
-def get_time(bytearray_: bytearray, byte_index: int) -> str:
+def get_time(bytearray_: Buffer, byte_index: int) -> str:
     """Get time value from bytearray.
 
     Notes:
@@ -408,7 +412,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     return time_str
 
 
-def get_usint(bytearray_: bytearray, byte_index: int) -> int:
+def get_usint(bytearray_: Buffer, byte_index: int) -> int:
     """Get the unsigned small int from the bytearray
 
     Notes:
@@ -434,7 +438,7 @@ def get_usint(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
-def get_sint(bytearray_: bytearray, byte_index: int) -> int:
+def get_sint(bytearray_: Buffer, byte_index: int) -> int:
     """Get the small int
 
     Notes:
@@ -460,7 +464,7 @@ def get_sint(bytearray_: bytearray, byte_index: int) -> int:
     return value
 
 
-def get_lint(bytearray_: bytearray, byte_index: int) -> int:
+def get_lint(bytearray_: Buffer, byte_index: int) -> int:
     """Get the long int
 
     THIS VALUE IS NEITHER TESTED NOR VERIFIED BY A REAL PLC AT THE MOMENT
@@ -490,7 +494,7 @@ def get_lint(bytearray_: bytearray, byte_index: int) -> int:
     return int(lint)
 
 
-def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
+def get_lreal(bytearray_: Buffer, byte_index: int) -> float:
     """Get the long real
 
     Datatype `lreal` (long real) consists in 8 bytes in the PLC.
@@ -515,7 +519,7 @@ def get_lreal(bytearray_: bytearray, byte_index: int) -> float:
     return float(struct.unpack_from(">d", bytearray_, offset=byte_index)[0])
 
 
-def get_lword(bytearray_: bytearray, byte_index: int) -> int:
+def get_lword(bytearray_: Buffer, byte_index: int) -> int:
     """Get the long word
 
     Notes:
@@ -540,7 +544,7 @@ def get_lword(bytearray_: bytearray, byte_index: int) -> int:
     return lword
 
 
-def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
+def get_ulint(bytearray_: Buffer, byte_index: int) -> int:
     """Get ulint value from bytearray.
 
     Notes:
@@ -565,7 +569,7 @@ def get_ulint(bytearray_: bytearray, byte_index: int) -> int:
     return lint
 
 
-def get_tod(bytearray_: bytearray, byte_index: int) -> timedelta:
+def get_tod(bytearray_: Buffer, byte_index: int) -> timedelta:
     len_bytearray_ = len(bytearray_)
     byte_range = byte_index + 4
     if len_bytearray_ < byte_range:
@@ -576,7 +580,7 @@ def get_tod(bytearray_: bytearray, byte_index: int) -> timedelta:
     return time_val
 
 
-def get_date(bytearray_: bytearray, byte_index: int = 0) -> date:
+def get_date(bytearray_: Buffer, byte_index: int = 0) -> date:
     len_bytearray_ = len(bytearray_)
     byte_range = byte_index + 2
     if len_bytearray_ < byte_range:
@@ -587,7 +591,7 @@ def get_date(bytearray_: bytearray, byte_index: int = 0) -> date:
     return date_val
 
 
-def get_ltime(bytearray_: bytearray, byte_index: int) -> timedelta:
+def get_ltime(bytearray_: Buffer, byte_index: int) -> timedelta:
     """Get LTIME value from bytearray.
 
     Notes:
@@ -612,7 +616,7 @@ def get_ltime(bytearray_: bytearray, byte_index: int) -> timedelta:
     return timedelta(microseconds=nanoseconds // 1000)
 
 
-def get_ltod(bytearray_: bytearray, byte_index: int) -> timedelta:
+def get_ltod(bytearray_: Buffer, byte_index: int) -> timedelta:
     """Get LTOD (Long Time of Day) value from bytearray.
 
     Notes:
@@ -635,7 +639,7 @@ def get_ltod(bytearray_: bytearray, byte_index: int) -> timedelta:
     return result
 
 
-def get_ldt(bytearray_: bytearray, byte_index: int) -> datetime:
+def get_ldt(bytearray_: Buffer, byte_index: int) -> datetime:
     """Get LDT (Long Date and Time) value from bytearray.
 
     Notes:
@@ -655,7 +659,7 @@ def get_ldt(bytearray_: bytearray, byte_index: int) -> datetime:
     return epoch + timedelta(microseconds=nanoseconds // 1000)
 
 
-def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
+def get_dtl(bytearray_: Buffer, byte_index: int) -> datetime:
     time_to_datetime = datetime(
         year=int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big"),
         month=int(bytearray_[byte_index + 2]),
@@ -670,7 +674,7 @@ def get_dtl(bytearray_: bytearray, byte_index: int) -> datetime:
     return time_to_datetime
 
 
-def get_char(bytearray_: bytearray, byte_index: int) -> str:
+def get_char(bytearray_: Buffer, byte_index: int) -> str:
     """Get char value from bytearray.
 
     Notes:
@@ -694,7 +698,7 @@ def get_char(bytearray_: bytearray, byte_index: int) -> str:
     return char
 
 
-def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
+def get_wchar(bytearray_: Buffer, byte_index: int) -> str:
     """Get wchar value from bytearray.
 
     Datatype `wchar` in the PLC is represented in 2 bytes. It has to be in utf-16-be format.
@@ -715,10 +719,10 @@ def get_wchar(bytearray_: bytearray, byte_index: int) -> str:
     """
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[byte_index + 1])
-    return bytearray_[byte_index : byte_index + 2].decode("utf-16-be")
+    return bytes(bytearray_[byte_index : byte_index + 2]).decode("utf-16-be")
 
 
-def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
+def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
     """Parse wstring from bytearray
 
     Notes:
@@ -759,8 +763,8 @@ def get_wstring(bytearray_: bytearray, byte_index: int) -> str:
             f"expected or is larger than 16382. Bytearray doesn't seem to be a valid string."
         )
 
-    return bytearray_[wstring_start : wstring_start + wstr_symbols_amount].decode("utf-16-be")
+    return bytes(bytearray_[wstring_start : wstring_start + wstr_symbols_amount]).decode("utf-16-be")
 
 
-def get_array(bytearray_: bytearray, byte_index: int) -> NoReturn:
+def get_array(bytearray_: Buffer, byte_index: int) -> NoReturn:
     raise NotImplementedError
