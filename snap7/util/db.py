@@ -635,7 +635,9 @@ class Row:
                 return type_to_func[type_](bytearray_, byte_index)
         raise ValueError
 
-    def set_value(self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]) -> Optional[bytearray]:
+    def set_value(
+        self, byte_index: Union[str, int], type_: str, value: Union[bool, str, float]
+    ) -> Optional[Union[bytearray, memoryview]]:
         """Sets the value for a specific type in the specified byte index.
 
         Args:
