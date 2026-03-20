@@ -1,7 +1,10 @@
 """Tests for snap7.server.__main__ — CLI entrypoint."""
 
-from click.testing import CliRunner
-from snap7.server.__main__ import main
+import pytest
+
+click = pytest.importorskip("click")
+from click.testing import CliRunner  # noqa: E402
+from snap7.server.__main__ import main  # noqa: E402
 
 
 class TestServerCLI:
