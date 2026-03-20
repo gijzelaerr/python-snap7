@@ -74,6 +74,65 @@ from snap7.util import (
 
 logger = getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Module-level getter/setter dispatch maps (built once, not per call)
+# ---------------------------------------------------------------------------
+
+_GETTER_MAP: Dict[str, Any] = {
+    "BYTE": get_byte,
+    "SINT": get_sint,
+    "USINT": get_usint,
+    "CHAR": get_char,
+    "INT": get_int,
+    "UINT": get_uint,
+    # NOTE: get_word is annotated as returning bytearray but actually returns
+    # int at runtime (struct.unpack(">H", ...) -> int).  It behaves correctly.
+    "WORD": get_word,
+    "DATE": get_date,
+    "DINT": get_dint,
+    "UDINT": get_udint,
+    "DWORD": get_dword,
+    "REAL": get_real,
+    "TIME": get_time,
+    "TOD": get_tod,
+    "TIME_OF_DAY": get_tod,
+    "DATE_AND_TIME": get_dt,
+    "DT": get_dt,
+    "LREAL": get_lreal,
+    "LWORD": get_lword,
+    "WCHAR": get_wchar,
+    "DTL": get_dtl,
+}
+
+# Setters that cast value to int before calling
+_INT_SETTER_MAP: Dict[str, Any] = {
+    "BYTE": set_byte,
+    "SINT": set_sint,
+    "USINT": set_usint,
+    "INT": set_int,
+    "UINT": set_uint,
+    "WORD": set_word,
+    "DINT": set_dint,
+    "UDINT": set_udint,
+    "DWORD": set_dword,
+}
+
+# Setters that pass value through without casting
+_SIMPLE_SETTER_MAP: Dict[str, Any] = {
+    "REAL": set_real,
+    "LREAL": set_lreal,
+    "CHAR": set_char,
+    "WCHAR": set_wchar,
+    "TIME": set_time,
+    "DATE": set_date,
+    "TOD": set_tod,
+    "TIME_OF_DAY": set_tod,
+    "DATE_AND_TIME": set_dt,
+    "DT": set_dt,
+    "DTL": set_dtl,
+    "LWORD": set_lword,
+}
+
 # Mapping from S7 type name to the number of bytes needed to read
 _TYPE_SIZE: Dict[str, int] = {
     "BOOL": 1,
@@ -102,6 +161,25 @@ _TYPE_SIZE: Dict[str, int] = {
 
 # Regex to extract STRING[n] or WSTRING[n] with size parameter
 _STRING_RE = re.compile(r"^(STRING|WSTRING|FSTRING)\[(\d+)]$", re.IGNORECASE)
+
+
+def _read_source(source: Union[str, Path]) -> str:
+    """Resolve *source* to text content.
+
+    If *source* is a :class:`~pathlib.Path` it is always read as a file.
+    If it is a string that contains a newline character it is treated as
+    inline content (CSV / JSON).  Otherwise the string is checked as a
+    file path and read if it exists; if not it is returned verbatim.
+    """
+    if isinstance(source, Path):
+        return source.read_text()
+    s = str(source)
+    if "\n" in s:
+        return s
+    path = Path(s)
+    if path.exists():
+        return path.read_text()
+    return s
 
 
 @dataclass(frozen=True)
@@ -199,16 +277,13 @@ class SymbolTable:
         An optional ``bit`` column overrides the bit index parsed from the offset.
 
         Args:
-            source: path to a CSV file, or a CSV-formatted string.
+            source: path to a CSV file, or a CSV-formatted string.  Strings
+                that contain newlines are always treated as inline CSV content.
 
         Returns:
             A new :class:`SymbolTable`.
         """
-        path = Path(source)
-        if path.exists():
-            text = path.read_text()
-        else:
-            text = str(source)
+        text = _read_source(source)
 
         reader = csv.DictReader(io.StringIO(text))
         tags: Dict[str, Dict[str, Any]] = {}
@@ -232,16 +307,13 @@ class SymbolTable:
         each with keys ``db``, ``offset``, ``type``, and optionally ``bit``.
 
         Args:
-            source: path to a JSON file, or a JSON-formatted string.
+            source: path to a JSON file, or a JSON-formatted string.  Strings
+                that contain newlines are always treated as inline JSON content.
 
         Returns:
             A new :class:`SymbolTable`.
         """
-        path = Path(source)
-        if path.exists():
-            text = path.read_text()
-        else:
-            text = str(source)
+        text = _read_source(source)
 
         data: Dict[str, Dict[str, Any]] = json.loads(text)
         return cls(data)
@@ -321,7 +393,10 @@ class SymbolTable:
         client.db_write(addr.db, addr.byte_offset, data)
 
     def read_many(self, client: Client, tags: list[str]) -> Dict[str, ValueType]:
-        """Read multiple tags, grouping reads by DB where possible.
+        """Read multiple tags individually and return them as a dictionary.
+
+        This is a convenience method that reads each tag one at a time via
+        :meth:`read`.  It does **not** batch or group reads.
 
         Args:
             client: a connected :class:`~snap7.client.Client`.
@@ -361,32 +436,8 @@ class SymbolTable:
             elif kind == "WSTRING":
                 return get_wstring(data, offset)
 
-        _getter_map: Dict[str, Any] = {
-            "BYTE": get_byte,
-            "SINT": get_sint,
-            "USINT": get_usint,
-            "CHAR": get_char,
-            "INT": get_int,
-            "UINT": get_uint,
-            "WORD": get_word,
-            "DATE": get_date,
-            "DINT": get_dint,
-            "UDINT": get_udint,
-            "DWORD": get_dword,
-            "REAL": get_real,
-            "TIME": get_time,
-            "TOD": get_tod,
-            "TIME_OF_DAY": get_tod,
-            "DATE_AND_TIME": get_dt,
-            "DT": get_dt,
-            "LREAL": get_lreal,
-            "LWORD": get_lword,
-            "WCHAR": get_wchar,
-            "DTL": get_dtl,
-        }
-
-        if upper in _getter_map:
-            return _getter_map[upper](data, offset)  # type: ignore[no-any-return]
+        if upper in _GETTER_MAP:
+            return _GETTER_MAP[upper](data, offset)  # type: ignore[no-any-return]
 
         raise ValueError(f"Unsupported S7 type for reading: {addr.type}")
 
@@ -416,39 +467,12 @@ class SymbolTable:
                 set_wstring(data, offset, str(value), length)
                 return
 
-        _int_setter_map: Dict[str, Any] = {
-            "BYTE": set_byte,
-            "SINT": set_sint,
-            "USINT": set_usint,
-            "INT": set_int,
-            "UINT": set_uint,
-            "WORD": set_word,
-            "DINT": set_dint,
-            "UDINT": set_udint,
-            "DWORD": set_dword,
-            "LWORD": set_lword,
-        }
-
-        if upper in _int_setter_map:
-            _int_setter_map[upper](data, offset, int(value))
+        if upper in _INT_SETTER_MAP:
+            _INT_SETTER_MAP[upper](data, offset, int(value))
             return
 
-        _simple_setter_map: Dict[str, Any] = {
-            "REAL": set_real,
-            "LREAL": set_lreal,
-            "CHAR": set_char,
-            "WCHAR": set_wchar,
-            "TIME": set_time,
-            "DATE": set_date,
-            "TOD": set_tod,
-            "TIME_OF_DAY": set_tod,
-            "DATE_AND_TIME": set_dt,
-            "DT": set_dt,
-            "DTL": set_dtl,
-        }
-
-        if upper in _simple_setter_map:
-            _simple_setter_map[upper](data, offset, value)
+        if upper in _SIMPLE_SETTER_MAP:
+            _SIMPLE_SETTER_MAP[upper](data, offset, value)
             return
 
         raise ValueError(f"Unsupported S7 type for writing: {addr.type}")
