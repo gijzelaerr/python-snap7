@@ -56,7 +56,8 @@ markers =[
     "mainloop",
     "partner",
     "server",
-    "util"
+    "util",
+    "conformance: protocol conformance tests"
     ]
 asyncio_mode = "auto"
 
