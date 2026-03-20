@@ -101,12 +101,8 @@ Enabling PUT/GET Access
 -----------------------
 
 For S7-1200 and S7-1500 PLCs, classic S7 protocol access requires the
-**PUT/GET** option to be enabled:
-
-1. Open TIA Portal and go to the PLC properties.
-2. Navigate to **Protection & Security** → **Connection mechanisms**.
-3. Check **Permit access with PUT/GET communication from remote partner**.
-4. Download the configuration to the PLC.
+**PUT/GET** option to be enabled. See :doc:`tia-portal-config` for
+step-by-step instructions.
 
 .. warning::
 
