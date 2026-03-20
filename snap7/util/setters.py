@@ -534,7 +534,7 @@ def set_date(bytearray_: Buffer, byte_index: int, date_: date) -> Buffer:
     elif date_ > date(2168, 12, 31):
         raise ValueError("date is higher than specification allows.")
     _days = (date_ - date(1990, 1, 1)).days
-    bytearray_[byte_index : byte_index + 2] = struct.pack(">h", _days)
+    bytearray_[byte_index : byte_index + 2] = struct.pack(">H", _days)
     return bytearray_
 
 
@@ -595,6 +595,12 @@ def set_wstring(bytearray_: Buffer, byte_index: int, value: str, max_size: int =
     if max_size > 16382:
         raise ValueError(f"max_size: {max_size} > max. allowed 16382 chars")
 
+    if any(ord(c) > 0xFFFF for c in value):
+        raise ValueError(
+            "Value contains characters outside the Basic Multilingual Plane (codepoint > U+FFFF), "
+            "which are not supported by the PLC WSTRING type."
+        )
+
     size = len(value)
     if size > max_size:
         raise ValueError(f"size {size} > max_size {max_size}")
@@ -632,7 +638,7 @@ def set_tod(bytearray_: Buffer, byte_index: int, tod: timedelta) -> Buffer:
     """
     if tod.days >= 1 or tod < timedelta(0):
         raise ValueError("TIME_OF_DAY must be between 00:00:00.000 and 23:59:59.999")
-    ms = int(tod.total_seconds() * 1000)
+    ms = (tod.days * 86400 + tod.seconds) * 1000 + tod.microseconds // 1000
     bytearray_[byte_index : byte_index + 4] = ms.to_bytes(4, byteorder="big")
     return bytearray_
 
