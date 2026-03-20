@@ -44,6 +44,7 @@ include = ["snap7*"]
 
 [project.scripts]
 snap7-server = "snap7.server:mainloop"
+s7 = "snap7.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
