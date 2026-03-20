@@ -1,6 +1,8 @@
 """Tests for snap7.s7protocol — response parsers with crafted PDUs, error paths."""
 
 import struct
+from typing import Any
+
 import pytest
 from datetime import datetime
 
@@ -227,7 +229,7 @@ class TestParseStartUploadResponse:
         assert result["block_length"] == 0
 
     def test_no_raw_parameters(self) -> None:
-        response = {}
+        response: dict[str, Any] = {}
         result = self.proto.parse_start_upload_response(response)
         assert result["upload_id"] == 0
 
@@ -259,7 +261,7 @@ class TestParseUploadResponse:
         assert result == b""
 
     def test_no_data_key(self) -> None:
-        response = {}
+        response: dict[str, Any] = {}
         result = self.proto.parse_upload_response(response)
         assert result == b""
 
@@ -287,7 +289,7 @@ class TestParseListBlocksResponse:
         assert result["DBCount"] == 0
 
     def test_no_data(self) -> None:
-        response = {}
+        response: dict[str, Any] = {}
         result = self.proto.parse_list_blocks_response(response)
         assert all(v == 0 for v in result.values())
 
@@ -315,7 +317,7 @@ class TestParseListBlocksOfTypeResponse:
         assert result == []
 
     def test_no_data(self) -> None:
-        response = {}
+        response: dict[str, Any] = {}
         result = self.proto.parse_list_blocks_of_type_response(response)
         assert result == []
 
@@ -353,7 +355,7 @@ class TestParseGetBlockInfoResponse:
         assert result["version"] == 0x03
 
     def test_no_data(self) -> None:
-        response = {}
+        response: dict[str, Any] = {}
         result = self.proto.parse_get_block_info_response(response)
         assert result["block_type"] == 0
 
@@ -383,7 +385,7 @@ class TestParseReadSZLResponse:
         assert result["szl_id"] == 0
 
     def test_empty_data(self) -> None:
-        response = {}
+        response: dict[str, Any] = {}
         result = self.proto.parse_read_szl_response(response)
         assert result["data"] == b""
 

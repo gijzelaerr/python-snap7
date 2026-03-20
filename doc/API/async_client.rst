@@ -1,6 +1,12 @@
 AsyncClient
 ===========
 
+.. warning::
+
+   The ``AsyncClient`` is **experimental**. The API may change in future
+   releases. If you encounter problems, please `open an issue
+   <https://github.com/gijzelaerr/python-snap7/issues>`_.
+
 The :class:`~snap7.async_client.AsyncClient` provides a native ``asyncio``
 interface for communicating with Siemens S7 PLCs.  It has feature parity with
 the synchronous :class:`~snap7.client.Client` and is safe for concurrent use
