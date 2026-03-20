@@ -229,22 +229,107 @@ class TestProtocolVersionV2:
         assert ProtocolVersion.V2 < ProtocolVersion.V3
 
 
-class TestNewResponseNotImplemented:
-    """Test that build_new_response raises NotImplementedError without cryptography."""
+class TestBuildNewResponse:
+    """Test AES-256-CBC legitimation response building."""
 
-    def test_new_response_requires_cryptography(self) -> None:
+    def test_new_response_returns_bytes(self) -> None:
         from snap7.s7commplus.legitimation import build_new_response
 
-        # This may or may not raise depending on whether cryptography is installed
-        # We test the function signature is correct
-        try:
-            result = build_new_response(
-                password="test",
-                challenge=b"\x00" * 16,
-                oms_secret=b"\x00" * 32,
-            )
-            # If cryptography is installed, result should be bytes
-            assert isinstance(result, bytes)
-        except NotImplementedError:
-            # Expected when cryptography is not installed
-            pass
+        result = build_new_response(
+            password="test",
+            challenge=b"\x00" * 16,
+            oms_secret=b"\x00" * 32,
+        )
+        assert isinstance(result, bytes)
+
+    def test_new_response_is_aes_block_aligned(self) -> None:
+        from snap7.s7commplus.legitimation import build_new_response
+
+        result = build_new_response(
+            password="test",
+            challenge=b"\x00" * 16,
+            oms_secret=b"\x00" * 32,
+        )
+        # AES-CBC output is always a multiple of 16 bytes
+        assert len(result) % 16 == 0
+
+    def test_new_response_different_passwords_differ(self) -> None:
+        from snap7.s7commplus.legitimation import build_new_response
+
+        challenge = b"\xab" * 16
+        oms = b"\xcd" * 32
+        r1 = build_new_response("password1", challenge, oms)
+        r2 = build_new_response("password2", challenge, oms)
+        assert r1 != r2
+
+    def test_new_response_different_secrets_differ(self) -> None:
+        from snap7.s7commplus.legitimation import build_new_response
+
+        challenge = b"\xab" * 16
+        r1 = build_new_response("test", challenge, b"\x00" * 32)
+        r2 = build_new_response("test", challenge, b"\x01" * 32)
+        assert r1 != r2
+
+    def test_new_response_with_username(self) -> None:
+        from snap7.s7commplus.legitimation import build_new_response
+
+        result = build_new_response(
+            password="test",
+            challenge=b"\x00" * 16,
+            oms_secret=b"\x00" * 32,
+            username="admin",
+        )
+        assert isinstance(result, bytes)
+        assert len(result) % 16 == 0
+
+    def test_new_response_decryptable(self) -> None:
+        """Verify the response can be decrypted back to the original payload."""
+        from snap7.s7commplus.legitimation import (
+            build_new_response,
+            derive_legitimation_key,
+            _build_legitimation_payload,
+        )
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        from cryptography.hazmat.primitives import padding
+
+        challenge = b"\x12\x34\x56\x78" * 4  # 16-byte IV
+        oms_secret = b"\xaa\xbb\xcc\xdd" * 8  # 32 bytes
+
+        encrypted = build_new_response("mypassword", challenge, oms_secret)
+
+        # Decrypt
+        key = derive_legitimation_key(oms_secret)
+        iv = challenge[:16]
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        decryptor = cipher.decryptor()
+        padded = decryptor.update(encrypted) + decryptor.finalize()
+
+        # Remove PKCS7 padding
+        unpadder = padding.PKCS7(128).unpadder()
+        plaintext = unpadder.update(padded) + unpadder.finalize()
+
+        # Should match the payload
+        expected = _build_legitimation_payload("mypassword")
+        assert plaintext == expected
+
+
+class TestAuthenticate:
+    """Test connection.authenticate() preconditions."""
+
+    def test_authenticate_requires_connection(self) -> None:
+        import pytest
+        from snap7.error import S7ConnectionError
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        with pytest.raises(S7ConnectionError, match="Not connected"):
+            conn.authenticate("password")
+
+    def test_authenticate_requires_tls(self) -> None:
+        import pytest
+        from snap7.error import S7ConnectionError
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._tls_active = False
+        with pytest.raises(S7ConnectionError, match="requires TLS"):
+            conn.authenticate("password")

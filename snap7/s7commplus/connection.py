@@ -230,6 +230,176 @@ class S7CommPlusConnection:
             self.disconnect()
             raise
 
+    def authenticate(self, password: str, username: str = "") -> None:
+        """Perform PLC password authentication (legitimation).
+
+        Must be called after connect() and before data operations on
+        password-protected PLCs. Requires TLS to be active (V2+).
+
+        The method auto-detects legacy vs new legitimation based on
+        the PLC's firmware version (stored in ServerSessionVersion).
+
+        Args:
+            password: PLC password
+            username: Username for new-style auth (optional)
+
+        Raises:
+            S7ConnectionError: If not connected, TLS not active, or auth fails
+        """
+        if not self._connected:
+            from ..error import S7ConnectionError
+
+            raise S7ConnectionError("Not connected")
+
+        if not self._tls_active or self._oms_secret is None:
+            from ..error import S7ConnectionError
+
+            raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
+
+        # Step 1: Get challenge from PLC via GetVarSubStreamed
+        challenge = self._get_legitimation_challenge()
+        logger.info(f"Received legitimation challenge ({len(challenge)} bytes)")
+
+        # Step 2: Build response (auto-detect legacy vs new)
+        from .legitimation import build_legacy_response, build_new_response
+
+        if username:
+            # New-style auth with username always uses AES-256-CBC
+            response_data = build_new_response(password, challenge, self._oms_secret, username)
+            self._send_legitimation_new(response_data)
+        else:
+            # Try new-style first, fall back to legacy SHA-1 XOR
+            try:
+                response_data = build_new_response(password, challenge, self._oms_secret, "")
+                self._send_legitimation_new(response_data)
+            except NotImplementedError:
+                # cryptography package not available, use legacy
+                response_data = build_legacy_response(password, challenge)
+                self._send_legitimation_legacy(response_data)
+
+        logger.info("PLC legitimation completed successfully")
+
+    def _get_legitimation_challenge(self) -> bytes:
+        """Request legitimation challenge from PLC.
+
+        Sends GetVarSubStreamed with address ServerSessionRequest (303).
+
+        Returns:
+            Challenge bytes from PLC (typically 20 bytes)
+        """
+        from .protocol import LegitimationId
+
+        # Build GetVarSubStreamed request
+        payload = bytearray()
+        # InObjectId = session ID
+        payload += struct.pack(">I", self._session_id)
+        # Item count = 1
+        payload += encode_uint32_vlq(1)
+        # Address field count = 1
+        payload += encode_uint32_vlq(1)
+        # Address = ServerSessionRequest (303)
+        payload += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
+        # Trailing padding
+        payload += struct.pack(">I", 0)
+
+        resp_payload = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, bytes(payload))
+
+        # Parse response: return value + value list
+        offset = 0
+        return_value, consumed = decode_uint64_vlq(resp_payload, offset)
+        offset += consumed
+
+        if return_value != 0:
+            from ..error import S7ConnectionError
+
+            raise S7ConnectionError(f"GetVarSubStreamed for challenge failed: return_value={return_value}")
+
+        # Value is a USIntArray (BLOB) - read flags + type + length + data
+        if offset + 2 > len(resp_payload):
+            from ..error import S7ConnectionError
+
+            raise S7ConnectionError("Challenge response too short")
+
+        _flags = resp_payload[offset]
+        datatype = resp_payload[offset + 1]
+        offset += 2
+
+        from .protocol import DataType
+
+        if datatype == DataType.BLOB:
+            length, consumed = decode_uint32_vlq(resp_payload, offset)
+            offset += consumed
+            return bytes(resp_payload[offset : offset + length])
+        else:
+            # Try reading as array of USINT
+            count, consumed = decode_uint32_vlq(resp_payload, offset)
+            offset += consumed
+            return bytes(resp_payload[offset : offset + count])
+
+    def _send_legitimation_new(self, encrypted_response: bytes) -> None:
+        """Send new-style legitimation response (AES-256-CBC encrypted).
+
+        Uses SetVariable with address Legitimate (1846).
+        """
+        from .protocol import LegitimationId, DataType
+
+        payload = bytearray()
+        # InObjectId = session ID
+        payload += struct.pack(">I", self._session_id)
+        # Address field count = 1
+        payload += encode_uint32_vlq(1)
+        # Address = Legitimate (1846)
+        payload += encode_uint32_vlq(LegitimationId.LEGITIMATE)
+        # Value: BLOB(0, encrypted_response)
+        payload += bytes([0x00, DataType.BLOB])
+        payload += encode_uint32_vlq(len(encrypted_response))
+        payload += encrypted_response
+        # Trailing padding
+        payload += struct.pack(">I", 0)
+
+        resp_payload = self.send_request(FunctionCode.SET_VARIABLE, bytes(payload))
+
+        # Check return value
+        if len(resp_payload) >= 1:
+            return_value, _ = decode_uint64_vlq(resp_payload, 0)
+            if return_value < 0:
+                from ..error import S7ConnectionError
+
+                raise S7ConnectionError(f"Legitimation rejected by PLC: return_value={return_value}")
+            logger.debug(f"New legitimation return_value={return_value}")
+
+    def _send_legitimation_legacy(self, response: bytes) -> None:
+        """Send legacy legitimation response (SHA-1 XOR).
+
+        Uses SetVariable with address ServerSessionResponse (304).
+        """
+        from .protocol import LegitimationId, DataType
+
+        payload = bytearray()
+        # InObjectId = session ID
+        payload += struct.pack(">I", self._session_id)
+        # Address field count = 1
+        payload += encode_uint32_vlq(1)
+        # Address = ServerSessionResponse (304)
+        payload += encode_uint32_vlq(LegitimationId.SERVER_SESSION_RESPONSE)
+        # Value: array of USINT (the XOR'd response bytes)
+        payload += bytes([0x10, DataType.USINT])  # flags=0x10 (array)
+        payload += encode_uint32_vlq(len(response))
+        payload += response
+        # Trailing padding
+        payload += struct.pack(">I", 0)
+
+        resp_payload = self.send_request(FunctionCode.SET_VARIABLE, bytes(payload))
+
+        # Check return value
+        if len(resp_payload) >= 1:
+            return_value, _ = decode_uint64_vlq(resp_payload, 0)
+            if return_value < 0:
+                from ..error import S7ConnectionError
+
+                raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
+            logger.debug(f"Legacy legitimation return_value={return_value}")
+
     def disconnect(self) -> None:
         """Disconnect from PLC."""
         if self._connected and self._session_id:

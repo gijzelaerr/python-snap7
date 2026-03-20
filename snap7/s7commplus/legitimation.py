@@ -72,7 +72,7 @@ def build_new_response(
         from cryptography.hazmat.primitives import padding
     except ImportError:
         raise NotImplementedError(
-            "AES-256-CBC legitimation requires the 'cryptography' package. Install with: pip install cryptography"
+            "AES-256-CBC legitimation requires the 'cryptography' package. Install with: pip install python-snap7[s7commplus]"
         )
 
     key = derive_legitimation_key(oms_secret)

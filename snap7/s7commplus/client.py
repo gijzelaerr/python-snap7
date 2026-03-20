@@ -144,13 +144,9 @@ class S7CommPlusClient:
         )
 
         # Handle legitimation for password-protected PLCs
-        if password is not None and self._connection.tls_active and self._connection.oms_secret is not None:
+        if password is not None and self._connection.tls_active:
             logger.info("Performing PLC legitimation (password authentication)")
-            # Legitimation requires the cryptography package for new-style auth
-            # For now, raise NotImplementedError - callers should catch this
-            raise NotImplementedError(
-                "PLC password legitimation is not yet implemented. Connection works without password for unprotected PLCs."
-            )
+            self._connection.authenticate(password)
 
         # Probe S7CommPlus data operations with a minimal request
         if not self._probe_s7commplus_data():
