@@ -8,6 +8,9 @@ Contents:
 
    introduction
    installation
+   plc-support
+   examples
+   troubleshooting
    development
 
    API/client
