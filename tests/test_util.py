@@ -1133,9 +1133,7 @@ class TestDBWithIdField:
         # Set different ID values for each row
         struct.pack_into(">h", test_array, 0, 10)  # row 0, ID at offset 0 (spec offset 4, layout_offset 4)
         struct.pack_into(">h", test_array, len(_db_bytearray), 20)  # row 1
-        db = DB(
-            1, test_array, _db_test_spec, row_size=len(_db_bytearray), size=2, id_field="ID", layout_offset=4, db_offset=0
-        )
+        db = DB(1, test_array, _db_test_spec, row_size=len(_db_bytearray), size=2, id_field="ID", layout_offset=4, db_offset=0)
         assert "10" in db
         assert "20" in db
 
@@ -1168,9 +1166,7 @@ class TestDBReadWrite:
 
     def test_read_non_db_area(self) -> None:
         test_array = bytearray(_db_bytearray)
-        db = DB(
-            0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK
-        )
+        db = DB(0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK)
         mock_client = MagicMock()
         mock_client.read_area.return_value = bytearray(len(_db_bytearray))
         db.read(mock_client)
@@ -1193,9 +1189,7 @@ class TestDBReadWrite:
 
     def test_write_non_db_area(self) -> None:
         test_array = bytearray(_db_bytearray)
-        db = DB(
-            0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK
-        )
+        db = DB(0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK)
         mock_client = MagicMock()
         db.write(mock_client)
         mock_client.write_area.assert_called_once()
@@ -1210,9 +1204,7 @@ class TestDBReadWrite:
 
     def test_write_with_row_offset(self) -> None:
         test_array = bytearray(_db_bytearray * 2)
-        db = DB(
-            1, test_array, _db_test_spec, row_size=len(_db_bytearray), size=2, layout_offset=4, db_offset=0, row_offset=4
-        )
+        db = DB(1, test_array, _db_test_spec, row_size=len(_db_bytearray), size=2, layout_offset=4, db_offset=0, row_offset=4)
         mock_client = MagicMock()
         db.write(mock_client)
         # Should write each row individually via Row.write()
@@ -1261,9 +1253,7 @@ class TestRowReadWrite:
 
     def test_row_write_non_db_area(self) -> None:
         test_array = bytearray(_db_bytearray)
-        db = DB(
-            0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK
-        )
+        db = DB(0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK)
         row = db["0"]
         assert row is not None
         mock_client = MagicMock()
@@ -1299,9 +1289,7 @@ class TestRowReadWrite:
 
     def test_row_read_non_db_area(self) -> None:
         test_array = bytearray(_db_bytearray)
-        db = DB(
-            0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK
-        )
+        db = DB(0, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, area=Area.MK)
         row = db["0"]
         assert row is not None
         mock_client = MagicMock()
@@ -1477,9 +1465,7 @@ class TestRowWriteWithRowOffset:
 
     def test_write_with_row_offset(self) -> None:
         test_array = bytearray(_db_bytearray)
-        db = DB(
-            1, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, row_offset=10
-        )
+        db = DB(1, test_array, _db_test_spec, row_size=len(_db_bytearray), size=1, layout_offset=4, db_offset=0, row_offset=10)
         row = db["0"]
         assert row is not None
         mock_client = MagicMock()
