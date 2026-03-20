@@ -5,8 +5,12 @@ from typing import Union
 
 from .getters import get_bool
 
+#: Buffer types accepted by setter functions.
+#: Both :class:`bytearray` and writable :class:`memoryview` are supported.
+Buffer = Union[bytearray, memoryview]
 
-def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: bool) -> bytearray:
+
+def set_bool(bytearray_: Buffer, byte_index: int, bool_index: int, value: bool) -> Buffer:
     """Set boolean value on location in bytearray.
 
     Args:
@@ -40,7 +44,7 @@ def set_bool(bytearray_: bytearray, byte_index: int, bool_index: int, value: boo
     return bytearray_
 
 
-def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_byte(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     """Set value in bytearray to byte
 
     Args:
@@ -61,7 +65,7 @@ def set_byte(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_word(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_word(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     """Set value in bytearray to word
 
     Notes:
@@ -80,7 +84,7 @@ def set_word(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_int(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_int(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     """Set value in bytearray to int
 
     Notes:
@@ -105,7 +109,7 @@ def set_int(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_uint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_uint(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     """Set value in bytearray to unsigned int
 
     Notes:
@@ -131,7 +135,7 @@ def set_uint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_real(bytearray_: bytearray, byte_index: int, real: Union[bool, str, float, int]) -> bytearray:
+def set_real(bytearray_: Buffer, byte_index: int, real: Union[bool, str, float, int]) -> Buffer:
     """Set Real value
 
     Notes:
@@ -155,7 +159,7 @@ def set_real(bytearray_: bytearray, byte_index: int, real: Union[bool, str, floa
     return bytearray_
 
 
-def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: int) -> bytearray:
+def set_fstring(bytearray_: Buffer, byte_index: int, value: str, max_length: int) -> Buffer:
     """Set space-padded fixed-length string value
 
     Args:
@@ -193,7 +197,7 @@ def set_fstring(bytearray_: bytearray, byte_index: int, value: str, max_length: 
     return bytearray_
 
 
-def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 254) -> bytearray:
+def set_string(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 254) -> Buffer:
     """Set string value
 
     Args:
@@ -248,7 +252,7 @@ def set_string(bytearray_: bytearray, byte_index: int, value: str, max_size: int
     return bytearray_
 
 
-def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> bytearray:
+def set_dword(bytearray_: Buffer, byte_index: int, dword: int) -> Buffer:
     """Set a DWORD to the buffer.
 
     Notes:
@@ -271,7 +275,7 @@ def set_dword(bytearray_: bytearray, byte_index: int, dword: int) -> bytearray:
     return bytearray_
 
 
-def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> bytearray:
+def set_dint(bytearray_: Buffer, byte_index: int, dint: int) -> Buffer:
     """Set value in bytearray to dint
 
     Notes:
@@ -295,7 +299,7 @@ def set_dint(bytearray_: bytearray, byte_index: int, dint: int) -> bytearray:
     return bytearray_
 
 
-def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> bytearray:
+def set_udint(bytearray_: Buffer, byte_index: int, udint: int) -> Buffer:
     """Set value in bytearray to unsigned dint
 
     Notes:
@@ -319,7 +323,7 @@ def set_udint(bytearray_: bytearray, byte_index: int, udint: int) -> bytearray:
     return bytearray_
 
 
-def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytearray:
+def set_time(bytearray_: Buffer, byte_index: int, time_string: str) -> Buffer:
     """Set value in bytearray to time
 
     Notes:
@@ -366,7 +370,7 @@ def set_time(bytearray_: bytearray, byte_index: int, time_string: str) -> bytear
         raise ValueError("time value out of range, please check the value interval")
 
 
-def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_usint(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     """Set unsigned small int
 
     Notes:
@@ -392,7 +396,7 @@ def set_usint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_sint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
+def set_sint(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     """Set small int to the buffer.
 
     Notes:
@@ -418,7 +422,7 @@ def set_sint(bytearray_: bytearray, byte_index: int, _int: int) -> bytearray:
     return bytearray_
 
 
-def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray:
+def set_lreal(bytearray_: Buffer, byte_index: int, lreal: float) -> Buffer:
     """Set the long real
 
     Notes:
@@ -447,7 +451,7 @@ def set_lreal(bytearray_: bytearray, byte_index: int, lreal: float) -> bytearray
     return bytearray_
 
 
-def set_lword(bytearray_: bytearray, byte_index: int, lword: int) -> bytearray:
+def set_lword(bytearray_: Buffer, byte_index: int, lword: int) -> Buffer:
     """Set the long word
 
     Notes:
@@ -474,7 +478,7 @@ def set_lword(bytearray_: bytearray, byte_index: int, lword: int) -> bytearray:
     return bytearray_
 
 
-def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
+def set_char(bytearray_: Buffer, byte_index: int, chr_: str) -> Buffer:
     """Set char value in a bytearray.
 
     Notes:
@@ -510,7 +514,7 @@ def set_char(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
         raise ValueError(f"chr_ : {chr_} contains ascii value > 255, which is not compatible with PLC Type CHAR.")
 
 
-def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
+def set_date(bytearray_: Buffer, byte_index: int, date_: date) -> Buffer:
     """Set value in bytearray to date
     Notes:
         Datatype `date` consists in the number of days elapsed from 1990-01-01.
@@ -534,7 +538,7 @@ def set_date(bytearray_: bytearray, byte_index: int, date_: date) -> bytearray:
     return bytearray_
 
 
-def set_wchar(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
+def set_wchar(bytearray_: Buffer, byte_index: int, chr_: str) -> Buffer:
     """Set wchar value in a bytearray.
 
     Notes:
@@ -563,7 +567,7 @@ def set_wchar(bytearray_: bytearray, byte_index: int, chr_: str) -> bytearray:
     return bytearray_
 
 
-def set_wstring(bytearray_: bytearray, byte_index: int, value: str, max_size: int = 16382) -> None:
+def set_wstring(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 16382) -> None:
     """Set wstring value
 
     Notes:
@@ -606,7 +610,7 @@ def set_wstring(bytearray_: bytearray, byte_index: int, value: str, max_size: in
     bytearray_[byte_index + 4 : byte_index + 4 + len(encoded)] = encoded
 
 
-def set_tod(bytearray_: bytearray, byte_index: int, tod: timedelta) -> bytearray:
+def set_tod(bytearray_: Buffer, byte_index: int, tod: timedelta) -> Buffer:
     """Set TIME_OF_DAY value in bytearray.
 
     Notes:
@@ -633,7 +637,7 @@ def set_tod(bytearray_: bytearray, byte_index: int, tod: timedelta) -> bytearray
     return bytearray_
 
 
-def set_dtl(bytearray_: bytearray, byte_index: int, dt_: datetime) -> bytearray:
+def set_dtl(bytearray_: Buffer, byte_index: int, dt_: datetime) -> Buffer:
     """Set DTL (Date and Time Long) value in bytearray.
 
     Notes:
@@ -678,7 +682,7 @@ def set_dtl(bytearray_: bytearray, byte_index: int, dt_: datetime) -> bytearray:
     return bytearray_
 
 
-def set_dt(bytearray_: bytearray, byte_index: int, dt_: datetime) -> bytearray:
+def set_dt(bytearray_: Buffer, byte_index: int, dt_: datetime) -> Buffer:
     """Set DATE_AND_TIME value in bytearray.
 
     Notes:

@@ -801,5 +801,140 @@ class TestNewSetters(unittest.TestCase):
         self.assertEqual(result.second, 30)
 
 
+class TestMemoryviewCompat(unittest.TestCase):
+    """Test that setter and getter functions work with memoryview buffers."""
+
+    def test_set_bool_memoryview(self) -> None:
+        from snap7.util.setters import set_bool
+
+        buf = bytearray(1)
+        mv = memoryview(buf)
+        set_bool(mv, 0, 0, True)
+        self.assertEqual(buf[0], 1)
+
+    def test_set_byte_memoryview(self) -> None:
+        buf = bytearray(1)
+        mv = memoryview(buf)
+        set_byte(mv, 0, 42)
+        self.assertEqual(buf[0], 42)
+
+    def test_set_int_memoryview(self) -> None:
+        buf = bytearray(2)
+        mv = memoryview(buf)
+        set_int(mv, 0, -1234)
+        self.assertEqual(struct.unpack(">h", buf)[0], -1234)
+
+    def test_set_word_memoryview(self) -> None:
+        from snap7.util.setters import set_word
+
+        buf = bytearray(2)
+        mv = memoryview(buf)
+        set_word(mv, 0, 65535)
+        self.assertEqual(struct.unpack(">H", buf)[0], 65535)
+
+    def test_set_real_memoryview(self) -> None:
+        from snap7.util.setters import set_real
+
+        buf = bytearray(4)
+        mv = memoryview(buf)
+        set_real(mv, 0, 123.456)
+        val = struct.unpack(">f", buf)[0]
+        self.assertAlmostEqual(val, 123.456, places=2)
+
+    def test_set_dword_memoryview(self) -> None:
+        from snap7.util.setters import set_dword
+
+        buf = bytearray(4)
+        mv = memoryview(buf)
+        set_dword(mv, 0, 0xDEADBEEF)
+        self.assertEqual(struct.unpack(">I", buf)[0], 0xDEADBEEF)
+
+    def test_set_dint_memoryview(self) -> None:
+        from snap7.util.setters import set_dint
+
+        buf = bytearray(4)
+        mv = memoryview(buf)
+        set_dint(mv, 0, -100000)
+        self.assertEqual(struct.unpack(">i", buf)[0], -100000)
+
+    def test_set_usint_memoryview(self) -> None:
+        from snap7.util.setters import set_usint
+
+        buf = bytearray(1)
+        mv = memoryview(buf)
+        set_usint(mv, 0, 200)
+        self.assertEqual(buf[0], 200)
+
+    def test_set_sint_memoryview(self) -> None:
+        from snap7.util.setters import set_sint
+
+        buf = bytearray(1)
+        mv = memoryview(buf)
+        set_sint(mv, 0, -50)
+        self.assertEqual(struct.unpack(">b", buf)[0], -50)
+
+    def test_set_lreal_memoryview(self) -> None:
+        from snap7.util.setters import set_lreal
+
+        buf = bytearray(8)
+        mv = memoryview(buf)
+        set_lreal(mv, 0, 3.14159265358979)
+        val = struct.unpack(">d", buf)[0]
+        self.assertAlmostEqual(val, 3.14159265358979, places=10)
+
+    def test_set_string_memoryview(self) -> None:
+        from snap7.util.setters import set_string
+
+        buf = bytearray(20)
+        mv = memoryview(buf)
+        set_string(mv, 0, "hello", 10)
+        self.assertEqual(buf[1], 5)  # length byte
+
+    def test_set_fstring_memoryview(self) -> None:
+        buf = bytearray(10)
+        mv = memoryview(buf)
+        set_fstring(mv, 0, "hi", 5)
+        self.assertEqual(chr(buf[0]), "h")
+        self.assertEqual(chr(buf[1]), "i")
+
+    def test_set_char_memoryview(self) -> None:
+        from snap7.util.setters import set_char
+
+        buf = bytearray(1)
+        mv = memoryview(buf)
+        set_char(mv, 0, "A")
+        self.assertEqual(buf[0], ord("A"))
+
+    def test_set_date_memoryview(self) -> None:
+        from snap7.util.setters import set_date
+
+        buf = bytearray(2)
+        mv = memoryview(buf)
+        set_date(mv, 0, datetime.date(2024, 3, 27))
+        self.assertEqual(buf, bytearray(b"\x30\xd8"))
+
+    def test_set_udint_memoryview(self) -> None:
+        from snap7.util.setters import set_udint
+
+        buf = bytearray(4)
+        mv = memoryview(buf)
+        set_udint(mv, 0, 4294967295)
+        self.assertEqual(struct.unpack(">I", buf)[0], 4294967295)
+
+    def test_set_uint_memoryview(self) -> None:
+        from snap7.util.setters import set_uint
+
+        buf = bytearray(2)
+        mv = memoryview(buf)
+        set_uint(mv, 0, 12345)
+        self.assertEqual(struct.unpack(">H", buf)[0], 12345)
+
+    def test_set_time_memoryview(self) -> None:
+        buf = bytearray(4)
+        mv = memoryview(buf)
+        set_time(mv, 0, "1:2:3:4.567")
+        self.assertNotEqual(buf, bytearray(4))
+
+
 if __name__ == "__main__":
     unittest.main()
