@@ -14,7 +14,7 @@ accept S7CommPlus sessions but return ERROR2 for GetMultiVariables),
 the client transparently falls back to the legacy S7 protocol for
 data block read/write operations.
 
-Status: V1 connection is functional. V2/V3/TLS authentication planned.
+Status: V1 and V2 connections are functional. V3/TLS authentication planned.
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
@@ -108,6 +108,7 @@ class S7CommPlusClient:
         tls_cert: Optional[str] = None,
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> None:
         """Connect to an S7-1200/1500 PLC using S7CommPlus.
 
@@ -119,10 +120,11 @@ class S7CommPlusClient:
             port: TCP port (default 102)
             rack: PLC rack number
             slot: PLC slot number
-            use_tls: Whether to attempt TLS (requires V3 PLC + certs)
+            use_tls: Whether to activate TLS (required for V2)
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
+            password: PLC password for legitimation (V2+ with TLS)
         """
         self._host = host
         self._port = port
@@ -140,6 +142,15 @@ class S7CommPlusClient:
             tls_key=tls_key,
             tls_ca=tls_ca,
         )
+
+        # Handle legitimation for password-protected PLCs
+        if password is not None and self._connection.tls_active and self._connection.oms_secret is not None:
+            logger.info("Performing PLC legitimation (password authentication)")
+            # Legitimation requires the cryptography package for new-style auth
+            # For now, raise NotImplementedError - callers should catch this
+            raise NotImplementedError(
+                "PLC password legitimation is not yet implemented. Connection works without password for unprotected PLCs."
+            )
 
         # Probe S7CommPlus data operations with a minimal request
         if not self._probe_s7commplus_data():

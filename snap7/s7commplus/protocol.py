@@ -171,6 +171,30 @@ class Ids(IntEnum):
     DB_ACCESS_AREA_BASE = 0x8A0E0000
 
 
+# Function codes that use the READ IntegrityId counter (V2+)
+READ_FUNCTION_CODES: frozenset[int] = frozenset(
+    {
+        FunctionCode.GET_MULTI_VARIABLES,
+        FunctionCode.EXPLORE,
+        FunctionCode.GET_VAR_SUBSTREAMED,
+        FunctionCode.GET_LINK,
+        FunctionCode.GET_VARIABLE,
+        FunctionCode.GET_VARIABLES_ADDRESS,
+    }
+)
+
+
+class LegitimationId(IntEnum):
+    """Legitimation IDs used in password authentication (V2+).
+
+    Reference: thomas-v2/S7CommPlusDriver
+    """
+
+    SERVER_SESSION_REQUEST = 303
+    SERVER_SESSION_RESPONSE = 304
+    LEGITIMATE = 1846
+
+
 class SoftDataType(IntEnum):
     """PLC soft data types (used in variable metadata / tag descriptions).
 

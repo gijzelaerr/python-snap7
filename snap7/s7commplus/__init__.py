@@ -29,7 +29,7 @@ Protocol stack::
 The wire protocol (VLQ encoding, data types, function codes, object model)
 is the same across all versions -- only the session authentication differs.
 
-Status: experimental scaffolding -- not yet functional.
+Status: V1 connection functional, V2 (TLS + IntegrityId) scaffolding complete.
 
 Reference implementation:
     https://github.com/thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)

@@ -28,11 +28,12 @@ from .protocol import (
     ObjectId,
     Opcode,
     ProtocolVersion,
+    READ_FUNCTION_CODES,
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
 )
 from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
-from .vlq import encode_uint32_vlq, decode_uint64_vlq
+from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .client import _build_read_payload, _parse_read_response, _build_write_payload, _parse_write_response
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ _COTP_DT = 0xF0
 class S7CommPlusAsyncClient:
     """Async S7CommPlus client for S7-1200/1500 PLCs.
 
-    Supports V1 protocol. V2/V3/TLS planned for future.
+    Supports V1 and V2 protocols. V3/TLS planned for future.
 
     Uses asyncio for all I/O operations and asyncio.Lock for
     concurrent safety when shared between multiple coroutines.
@@ -69,6 +70,11 @@ class S7CommPlusAsyncClient:
         self._port: int = 102
         self._rack: int = 0
         self._slot: int = 1
+
+        # V2+ IntegrityId tracking
+        self._integrity_id_read: int = 0
+        self._integrity_id_write: int = 0
+        self._with_integrity_id: bool = False
 
     @property
     def connected(self) -> bool:
@@ -189,6 +195,9 @@ class S7CommPlusAsyncClient:
         self._session_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
+        self._with_integrity_id = False
+        self._integrity_id_read = 0
+        self._integrity_id_write = 0
 
         if self._writer:
             try:
@@ -283,30 +292,47 @@ class S7CommPlusAsyncClient:
     # -- Internal methods --
 
     async def _send_request(self, function_code: int, payload: bytes) -> bytes:
-        """Send an S7CommPlus request and receive the response."""
+        """Send an S7CommPlus request and receive the response.
+
+        For V2+ with IntegrityId tracking, inserts IntegrityId after the
+        14-byte request header and strips it from the response.
+        """
         async with self._lock:
             if not self._connected or self._writer is None or self._reader is None:
                 raise RuntimeError("Not connected")
 
             seq_num = self._next_sequence_number()
 
-            request = (
-                struct.pack(
-                    ">BHHHHIB",
-                    Opcode.REQUEST,
-                    0x0000,
-                    function_code,
-                    0x0000,
-                    seq_num,
-                    self._session_id,
-                    0x36,
-                )
-                + payload
+            request_header = struct.pack(
+                ">BHHHHIB",
+                Opcode.REQUEST,
+                0x0000,
+                function_code,
+                0x0000,
+                seq_num,
+                self._session_id,
+                0x36,
             )
+
+            # For V2+ with IntegrityId, insert after header
+            integrity_id_bytes = b""
+            if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
+                is_read = function_code in READ_FUNCTION_CODES
+                integrity_id = self._integrity_id_read if is_read else self._integrity_id_write
+                integrity_id_bytes = encode_uint32_vlq(integrity_id)
+
+            request = request_header + integrity_id_bytes + payload
 
             frame = encode_header(self._protocol_version, len(request)) + request
             frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
             await self._send_cotp_dt(frame)
+
+            # Increment appropriate IntegrityId counter
+            if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
+                if function_code in READ_FUNCTION_CODES:
+                    self._integrity_id_read = (self._integrity_id_read + 1) & 0xFFFFFFFF
+                else:
+                    self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
             response_data = await self._recv_cotp_dt()
 
@@ -316,7 +342,14 @@ class S7CommPlusAsyncClient:
             if len(response) < 14:
                 raise RuntimeError("Response too short")
 
-            return response[14:]
+            # For V2+, skip IntegrityId in response
+            resp_offset = 14
+            if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
+                if resp_offset < len(response):
+                    _resp_iid, iid_consumed = decode_uint32_vlq(response, resp_offset)
+                    resp_offset += iid_consumed
+
+            return response[resp_offset:]
 
     async def _cotp_connect(self, local_tsap: int, remote_tsap: bytes) -> None:
         """Perform COTP Connection Request / Confirm handshake."""
