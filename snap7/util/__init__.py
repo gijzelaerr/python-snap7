@@ -52,6 +52,8 @@ from .getters import (
     get_char,
     get_wchar,
     get_dtl,
+    get_lint,
+    get_ulint,
 )
 
 __all__ = [
@@ -82,6 +84,8 @@ __all__ = [
     "get_fstring",
     "get_string",
     "get_wstring",
+    "get_lint",
+    "get_ulint",
     "set_real",
     "set_dword",
     "set_date",
