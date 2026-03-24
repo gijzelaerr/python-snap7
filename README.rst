@@ -13,9 +13,6 @@
 .. image:: https://readthedocs.org/projects/python-snap7/badge/
    :target: https://python-snap7.readthedocs.io/en/latest/
 
-.. image:: https://codecov.io/gh/gijzelaerr/python-snap7/branch/master/graph/badge.svg
-   :target: https://codecov.io/gh/gijzelaerr/python-snap7
-
 About
 =====
 
