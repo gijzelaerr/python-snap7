@@ -13,9 +13,9 @@ class TestTPDUSize:
     """Test TPDUSize enum values."""
 
     def test_sizes(self) -> None:
-        assert TPDUSize.S_128 == 0x07
-        assert TPDUSize.S_1024 == 0x0A
-        assert TPDUSize.S_8192 == 0x0D
+        assert TPDUSize.S_128.value == 0x07
+        assert TPDUSize.S_1024.value == 0x0A
+        assert TPDUSize.S_8192.value == 0x0D
 
 
 class TestISOTCPConnectionInit:

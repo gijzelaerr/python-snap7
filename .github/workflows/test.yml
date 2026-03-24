@@ -32,10 +32,4 @@ jobs:
           uv venv --python python${{ matrix.python-version }}
           uv pip install ".[test]"
       - name: Run pytest
-        run: uv run pytest --cov=snap7 --cov-report=xml --cov-report=term
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.13' && matrix.runs-on == 'ubuntu-24.04'
-        uses: codecov/codecov-action@v5
-        with:
-          files: coverage.xml
-          fail_ci_if_error: false
+        run: uv run pytest --cov=snap7 --cov-report=term

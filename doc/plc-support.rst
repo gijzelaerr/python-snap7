@@ -51,22 +51,22 @@ Supported PLCs
      - PUT/GET only
      - Yes
      - No
-     - **Full**
-     - Enable PUT/GET access in TIA Portal.
+     - **Full** (experimental S7CommPlus)
+     - S7CommPlus V1 session + legacy S7 fallback for data.
    * - S7-1500 (FW 2.x)
      - ~2016
      - PUT/GET only
      - No
      - V2
      - **PUT/GET only**
-     - S7CommPlus V2 is encrypted; not supported by any open-source library.
+     - S7CommPlus V2 support is in development.
    * - S7-1500 (FW 3.x+)
      - ~2022
      - PUT/GET only
      - No
      - V3
      - **PUT/GET only**
-     - S7CommPlus V3 uses TLS; not supported by any open-source library.
+     - S7CommPlus V3 uses proprietary crypto; not yet supported.
    * - S7-1500R/H
      - ~2019
      - No
@@ -101,12 +101,8 @@ Enabling PUT/GET Access
 -----------------------
 
 For S7-1200 and S7-1500 PLCs, classic S7 protocol access requires the
-**PUT/GET** option to be enabled:
-
-1. Open TIA Portal and go to the PLC properties.
-2. Navigate to **Protection & Security** → **Connection mechanisms**.
-3. Check **Permit access with PUT/GET communication from remote partner**.
-4. Download the configuration to the PLC.
+**PUT/GET** option to be enabled. See :doc:`tia-portal-config` for
+step-by-step instructions.
 
 .. warning::
 

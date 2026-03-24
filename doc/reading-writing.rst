@@ -1,77 +1,10 @@
-Examples & Cookbook
-===================
+Reading & Writing Data
+======================
 
-This page provides practical examples for common python-snap7 tasks. All code
-assumes you have already installed python-snap7:
+This page covers address mapping, data type conversions, memory area access,
+and analog I/O — everything you need for reading from and writing to a PLC.
 
-.. code-block:: bash
-
-   pip install python-snap7
-
-
-Connecting to Different PLC Models
------------------------------------
-
-Rack/Slot Reference
-^^^^^^^^^^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 10 10 60
-
-   * - PLC Model
-     - Rack
-     - Slot
-     - Notes
-   * - S7-300
-     - 0
-     - 2
-     -
-   * - S7-400
-     - 0
-     - 3
-     - May vary with multi-rack configurations
-   * - S7-1200
-     - 0
-     - 1
-     - PUT/GET access must be enabled in TIA Portal
-   * - S7-1500
-     - 0
-     - 1
-     - PUT/GET access must be enabled in TIA Portal
-   * - S7-200 / Logo
-     - --
-     - --
-     - Use ``set_connection_params`` with TSAP addressing
-
-.. warning::
-
-   S7-1200 and S7-1500 PLCs ship with PUT/GET communication disabled by
-   default. Enable it in TIA Portal under the CPU properties before
-   connecting.
-
-S7-300
-^^^^^^
-
-.. code-block:: python
-
-   import snap7
-
-   client = snap7.Client()
-   client.connect("192.168.1.10", 0, 2)
-
-S7-400
-^^^^^^
-
-.. code-block:: python
-
-   import snap7
-
-   client = snap7.Client()
-   client.connect("192.168.1.10", 0, 3)
-
-S7-1200 / S7-1500
-^^^^^^^^^^^^^^^^^^
+All examples assume you have a connected client:
 
 .. code-block:: python
 
@@ -80,30 +13,13 @@ S7-1200 / S7-1500
    client = snap7.Client()
    client.connect("192.168.1.10", 0, 1)
 
-S7-200 / Logo (TSAP Connection)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   import snap7
-
-   client = snap7.Client()
-   client.set_connection_params("192.168.1.10", 0x1000, 0x2000)
-   client.connect("192.168.1.10", 0, 0)
-
-Using a Non-Standard Port
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   import snap7
-
-   client = snap7.Client()
-   client.connect("192.168.1.10", 0, 1, tcp_port=1102)
+.. contents:: On this page
+   :local:
+   :depth: 2
 
 
-Address Mapping Guide
----------------------
+Address Mapping
+---------------
 
 PLC addresses in Siemens TIA Portal / STEP 7 map to python-snap7 API calls
 as follows.
@@ -155,8 +71,8 @@ as follows.
    You read from PLC offset 10, but ``data[0]`` *is* byte 10 from the PLC.
 
 
-Data Types Cookbook
--------------------
+Data Types
+----------
 
 Each example below shows a complete read and write cycle.
 
@@ -168,11 +84,6 @@ bit to the PLC; you must read the enclosing byte, change the bit, then write
 the whole byte back.
 
 .. code-block:: python
-
-   import snap7
-
-   client = snap7.Client()
-   client.connect("192.168.1.10", 0, 1)
 
    # Read DB1.DBX0.3 (bit 3 of byte 0)
    data = client.db_read(1, 0, 1)
@@ -418,7 +329,7 @@ Counters (C)
 
 
 Analog I/O
------------
+----------
 
 Analog inputs are typically 16-bit integers in the peripheral input area
 (``Area.PE``). The raw value from the PLC needs to be scaled to engineering
@@ -467,163 +378,3 @@ Writing Analog Outputs
 
    The standard scaling factor 27648 applies to most Siemens analog I/O
    modules. Check your module documentation for the actual range.
-
-
-Multi-Variable Read
--------------------
-
-The ``read_multi_vars`` method reads multiple variables in a single PDU
-request, which is significantly faster than individual reads.
-
-.. code-block:: python
-
-   import snap7
-   from snap7.type import Area, WordLen, S7DataItem
-   from ctypes import c_uint8, cast, POINTER
-
-   client = snap7.Client()
-   client.connect("192.168.1.10", 0, 1)
-
-   # Prepare items to read
-   items = []
-
-   # Item 1: 4 bytes from DB1, offset 0
-   item1 = S7DataItem()
-   item1.Area = Area.DB
-   item1.WordLen = WordLen.Byte
-   item1.DBNumber = 1
-   item1.Start = 0
-   item1.Amount = 4
-   buffer1 = (c_uint8 * 4)()
-   item1.pData = cast(buffer1, POINTER(c_uint8))
-   items.append(item1)
-
-   # Item 2: 2 bytes from DB2, offset 10
-   item2 = S7DataItem()
-   item2.Area = Area.DB
-   item2.WordLen = WordLen.Byte
-   item2.DBNumber = 2
-   item2.Start = 10
-   item2.Amount = 2
-   buffer2 = (c_uint8 * 2)()
-   item2.pData = cast(buffer2, POINTER(c_uint8))
-   items.append(item2)
-
-   # Execute the multi-read
-   result, data_items = client.read_multi_vars(items)
-
-   # Access the returned data
-   value1 = bytearray(buffer1)
-   value2 = bytearray(buffer2)
-
-.. warning::
-
-   The S7 protocol limits multi-variable reads to **20 items** per request.
-   If you need more, split them across multiple calls.
-
-
-Server Setup for Testing
--------------------------
-
-The built-in server lets you test your client code without a physical PLC.
-
-Basic Server Example
-^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   from snap7.server import Server
-   from snap7.type import SrvArea
-   from ctypes import c_char
-
-   # Create and configure the server
-   server = Server()
-
-   # Register a data block (DB1) with 100 bytes
-   db_size = 100
-   db_data = bytearray(db_size)
-   db_array = (c_char * db_size).from_buffer(db_data)
-   server.register_area(SrvArea.DB, 1, db_array)
-
-   # Start the server on a non-privileged port
-   server.start(tcp_port=1102)
-
-Client-Server Round Trip
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   import snap7
-   from snap7.server import Server
-   from snap7.type import SrvArea
-   from ctypes import c_char
-
-   # --- Server setup ---
-   server = Server()
-   db_size = 100
-   db_data = bytearray(db_size)
-   db_array = (c_char * db_size).from_buffer(db_data)
-   server.register_area(SrvArea.DB, 1, db_array)
-   server.start(tcp_port=1102)
-
-   # --- Client connection ---
-   client = snap7.Client()
-   client.connect("127.0.0.1", 0, 1, tcp_port=1102)
-
-   # Write data
-   client.db_write(1, 0, bytearray([0x01, 0x02, 0x03, 0x04]))
-
-   # Read it back
-   data = client.db_read(1, 0, 4)
-   print(f"Read back: {list(data)}")  # [1, 2, 3, 4]
-
-   # Clean up
-   client.disconnect()
-   server.stop()
-
-Registering Multiple Areas
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: python
-
-   from snap7.server import Server
-   from snap7.type import SrvArea
-   from ctypes import c_char
-
-   server = Server()
-
-   # Register DB1
-   db1_data = bytearray(100)
-   db1 = (c_char * 100).from_buffer(db1_data)
-   server.register_area(SrvArea.DB, 1, db1)
-
-   # Register DB2
-   db2_data = bytearray(200)
-   db2 = (c_char * 200).from_buffer(db2_data)
-   server.register_area(SrvArea.DB, 2, db2)
-
-   # Register merker area (256 bytes)
-   mk_data = bytearray(256)
-   mk = (c_char * 256).from_buffer(mk_data)
-   server.register_area(SrvArea.MK, 0, mk)
-
-   server.start(tcp_port=1102)
-
-.. note::
-
-   Use a port number above 1024 (e.g., 1102) to avoid requiring root/admin
-   privileges. Port 102 is the standard S7 port but is in the privileged
-   range.
-
-Using the Mainloop Helper
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For quick testing, the ``mainloop`` function starts a server with common
-data blocks pre-registered:
-
-.. code-block:: python
-
-   from snap7.server import mainloop
-
-   # Blocks the current thread
-   mainloop(tcp_port=1102)

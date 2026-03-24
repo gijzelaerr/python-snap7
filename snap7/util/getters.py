@@ -1,6 +1,6 @@
 import struct
 from datetime import timedelta, datetime, date
-from typing import NoReturn, Union
+from typing import Union
 from logging import getLogger
 
 #: Buffer types accepted by getter functions.
@@ -486,7 +486,7 @@ def get_lint(bytearray_: Buffer, byte_index: int) -> int:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_lint(data, 0)
-            12345
+        12345
     """
 
     raw_lint = bytearray_[byte_index : byte_index + 8]
@@ -562,7 +562,7 @@ def get_ulint(bytearray_: Buffer, byte_index: int) -> int:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_ulint(data, 0)
-            12345
+        12345
     """
     raw_ulint = bytearray_[byte_index : byte_index + 8]
     lint: int = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
@@ -660,6 +660,29 @@ def get_ldt(bytearray_: Buffer, byte_index: int) -> datetime:
 
 
 def get_dtl(bytearray_: Buffer, byte_index: int) -> datetime:
+    """Get DTL (Date and Time Long) value from bytearray.
+
+    Notes:
+        Datatype ``DTL`` consists of 12 bytes in the PLC:
+        - Bytes 0-1: Year (uint16, big-endian)
+        - Byte 2: Month (1-12)
+        - Byte 3: Day (1-31)
+        - Byte 4: Weekday (1=Sunday, 7=Saturday)
+        - Byte 5: Hour (0-23)
+        - Byte 6: Minute (0-59)
+        - Byte 7: Second (0-59)
+        - Bytes 8-11: Nanoseconds (uint32, big-endian)
+
+    Args:
+        bytearray_: buffer to read from.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        datetime value (microsecond precision; sub-microsecond nanoseconds are truncated).
+    """
+    nanoseconds = struct.unpack(">I", bytearray_[byte_index + 8 : byte_index + 12])[0]
+    microsecond = nanoseconds // 1000
+
     time_to_datetime = datetime(
         year=int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big"),
         month=int(bytearray_[byte_index + 2]),
@@ -667,8 +690,8 @@ def get_dtl(bytearray_: Buffer, byte_index: int) -> datetime:
         hour=int(bytearray_[byte_index + 5]),
         minute=int(bytearray_[byte_index + 6]),
         second=int(bytearray_[byte_index + 7]),
-        microsecond=int(bytearray_[byte_index + 8]),
-    )  # --- ? noch nicht genau genug
+        microsecond=microsecond,
+    )
     if time_to_datetime > datetime(2554, 12, 31, 23, 59, 59):
         raise ValueError("date_val is higher than specification allows.")
     return time_to_datetime
@@ -764,7 +787,3 @@ def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
         )
 
     return bytes(bytearray_[wstring_start : wstring_start + wstr_symbols_amount]).decode("utf-16-be")
-
-
-def get_array(bytearray_: Buffer, byte_index: int) -> NoReturn:
-    raise NotImplementedError
