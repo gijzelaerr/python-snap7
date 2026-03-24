@@ -1013,7 +1013,11 @@ class S7CommPlusConnection:
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
-        ctx.set_ciphers("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
+
+        # TLS 1.3 ciphersuites are configured differently from TLS 1.2
+        if hasattr(ctx, "set_ciphersuites"):
+            ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
+        # If set_ciphersuites not available, TLS 1.3 uses its mandatory defaults
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)
