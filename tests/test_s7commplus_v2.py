@@ -6,6 +6,7 @@ and V2 connection behavior.
 
 import hashlib
 
+import pytest
 
 from snap7.s7commplus.protocol import (
     FunctionCode,
@@ -229,6 +230,15 @@ class TestProtocolVersionV2:
         assert ProtocolVersion.V2 < ProtocolVersion.V3
 
 
+try:
+    import cryptography  # noqa: F401
+
+    _has_cryptography = True
+except ImportError:
+    _has_cryptography = False
+
+
+@pytest.mark.skipif(not _has_cryptography, reason="requires cryptography package")
 class TestBuildNewResponse:
     """Test AES-256-CBC legitimation response building."""
 

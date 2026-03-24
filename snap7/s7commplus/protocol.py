@@ -195,7 +195,6 @@ class LegitimationId(IntEnum):
     LEGITIMATE = 1846
 
 
-
 class SoftDataType(IntEnum):
     """PLC soft data types (used in variable metadata / tag descriptions).
 
