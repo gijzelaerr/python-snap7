@@ -8,11 +8,9 @@ Handles the S7CommPlus protocol including:
 - Explore (browse registered data blocks and variables)
 - GetMultiVariables / SetMultiVariables (read/write by address)
 - Internal PLC memory model with thread-safe access
+- V2 protocol emulation with TLS and IntegrityId tracking
 
-This server does NOT implement TLS or the proprietary authentication
-layers (V2/V3 crypto). It emulates a V1 PLC for testing purposes,
-which is sufficient for validating protocol framing, data encoding,
-and client logic.
+Supports both V1 (no TLS) and V2 (TLS + IntegrityId) emulation.
 
 Usage::
 
@@ -20,13 +18,14 @@ Usage::
     server.register_db(1, {"temperature": ("Real", 0), "pressure": ("Real", 4)})
     server.start(port=11020)
 
-    # ... run tests against localhost:11020 ...
-
-    server.stop()
+    # V2 server with TLS:
+    server = S7CommPlusServer(protocol_version=ProtocolVersion.V2)
+    server.start(port=11020, use_tls=True, tls_cert="cert.pem", tls_key="key.pem")
 """
 
 import logging
 import socket
+import ssl
 import struct
 import threading
 from enum import IntEnum
@@ -38,6 +37,7 @@ from .protocol import (
     FunctionCode,
     Opcode,
     ProtocolVersion,
+    READ_FUNCTION_CODES,
     SoftDataType,
 )
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, encode_uint64_vlq
@@ -186,15 +186,16 @@ class S7CommPlusServer:
 
     Emulates an S7-1200/1500 PLC with:
     - Internal data block storage with named variables
-    - S7CommPlus protocol handling (V1 level)
+    - S7CommPlus protocol handling (V1 and V2)
+    - V2 TLS support with IntegrityId tracking
     - Multi-client support (threaded)
     - CPU state management
     """
 
-    def __init__(self) -> None:
+    def __init__(self, protocol_version: int = ProtocolVersion.V1) -> None:
         self._data_blocks: dict[int, DataBlock] = {}
         self._cpu_state = CPUState.RUN
-        self._protocol_version = ProtocolVersion.V1
+        self._protocol_version = protocol_version
         self._next_session_id = 1
 
         self._server_socket: Optional[socket.socket] = None
@@ -203,6 +204,10 @@ class S7CommPlusServer:
         self._running = False
         self._lock = threading.Lock()
         self._event_callback: Optional[Callable[..., None]] = None
+
+        # TLS configuration (V2)
+        self._ssl_context: Optional[ssl.SSLContext] = None
+        self._use_tls: bool = False
 
     @property
     def cpu_state(self) -> CPUState:
@@ -258,15 +263,40 @@ class S7CommPlusServer:
         """Get a registered data block."""
         return self._data_blocks.get(db_number)
 
-    def start(self, host: str = "127.0.0.1", port: int = 11020) -> None:
+    def start(
+        self,
+        host: str = "0.0.0.0",
+        port: int = 11020,
+        use_tls: bool = False,
+        tls_cert: Optional[str] = None,
+        tls_key: Optional[str] = None,
+        tls_ca: Optional[str] = None,
+    ) -> None:
         """Start the server.
 
         Args:
             host: Bind address
             port: TCP port to listen on
+            use_tls: Whether to wrap client sockets with TLS after InitSSL
+            tls_cert: Path to server TLS certificate (PEM)
+            tls_key: Path to server private key (PEM)
+            tls_ca: Path to CA certificate for client verification (PEM)
         """
         if self._running:
             raise RuntimeError("Server is already running")
+
+        self._use_tls = use_tls
+        if use_tls:
+            if not tls_cert or not tls_key:
+                raise ValueError("TLS requires tls_cert and tls_key")
+            self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            self._ssl_context.minimum_version = ssl.TLSVersion.TLSv1_3
+            self._ssl_context.load_cert_chain(tls_cert, tls_key)
+            if tls_ca:
+                self._ssl_context.load_verify_locations(tls_ca)
+                self._ssl_context.verify_mode = ssl.CERT_REQUIRED
+            else:
+                self._ssl_context.verify_mode = ssl.CERT_NONE
 
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -277,7 +307,7 @@ class S7CommPlusServer:
         self._running = True
         self._server_thread = threading.Thread(target=self._server_loop, daemon=True, name="s7commplus-server")
         self._server_thread.start()
-        logger.info(f"S7CommPlus server started on {host}:{port}")
+        logger.info(f"S7CommPlus server started on {host}:{port} (TLS={use_tls}, V{self._protocol_version})")
 
     def stop(self) -> None:
         """Stop the server."""
@@ -332,6 +362,10 @@ class S7CommPlusServer:
 
             # Step 2: S7CommPlus session
             session_id = 0
+            tls_activated = False
+            # Per-client IntegrityId tracking (V2+)
+            integrity_id_read = 0
+            integrity_id_write = 0
 
             while self._running:
                 try:
@@ -341,15 +375,52 @@ class S7CommPlusServer:
                         break
 
                     # Process the S7CommPlus request
-                    response = self._process_request(data, session_id)
+                    response = self._process_request(data, session_id, integrity_id_read, integrity_id_write)
 
                     if response is not None:
                         # Check if session ID was assigned
                         if session_id == 0 and len(response) >= 14:
-                            # Extract session ID from response for tracking
                             session_id = struct.unpack_from(">I", response, 9)[0]
 
                         self._send_s7commplus_frame(client_sock, response)
+
+                    # After InitSSL response, activate TLS if configured
+                    if (
+                        not tls_activated
+                        and self._use_tls
+                        and self._ssl_context is not None
+                        and data is not None
+                        and len(data) >= 8
+                    ):
+                        # Check if this was an InitSSL request
+                        try:
+                            _, _, hdr_consumed = decode_header(data)
+                            payload = data[hdr_consumed:]
+                            if len(payload) >= 14:
+                                func_code = struct.unpack_from(">H", payload, 3)[0]
+                                if func_code == FunctionCode.INIT_SSL:
+                                    client_sock = self._ssl_context.wrap_socket(client_sock, server_side=True)
+                                    tls_activated = True
+                                    logger.debug(f"TLS activated for client {address}")
+                        except (ValueError, struct.error):
+                            pass
+
+                    # Update IntegrityId counters based on function code (V2+)
+                    if self._protocol_version >= ProtocolVersion.V2 and session_id != 0:
+                        try:
+                            _, _, hdr_consumed = decode_header(data)
+                            payload = data[hdr_consumed:]
+                            if len(payload) >= 14:
+                                func_code = struct.unpack_from(">H", payload, 3)[0]
+                                if func_code in READ_FUNCTION_CODES:
+                                    integrity_id_read = (integrity_id_read + 1) & 0xFFFFFFFF
+                                elif func_code not in (
+                                    FunctionCode.INIT_SSL,
+                                    FunctionCode.CREATE_OBJECT,
+                                ):
+                                    integrity_id_write = (integrity_id_write + 1) & 0xFFFFFFFF
+                        except (ValueError, struct.error):
+                            pass
 
                 except socket.timeout:
                     continue
@@ -445,7 +516,13 @@ class S7CommPlusServer:
         tpkt = struct.pack(">BBH", 3, 0, 4 + len(cotp_dt)) + cotp_dt
         sock.sendall(tpkt)
 
-    def _process_request(self, data: bytes, session_id: int) -> Optional[bytes]:
+    def _process_request(
+        self,
+        data: bytes,
+        session_id: int,
+        integrity_id_read: int = 0,
+        integrity_id_write: int = 0,
+    ) -> Optional[bytes]:
         """Process an S7CommPlus request and return a response."""
         if len(data) < 4:
             return None
@@ -469,7 +546,19 @@ class S7CommPlusServer:
         function_code = struct.unpack_from(">H", payload, 3)[0]
         seq_num = struct.unpack_from(">H", payload, 7)[0]
         req_session_id = struct.unpack_from(">I", payload, 9)[0]
-        request_data = payload[14:]
+
+        # For V2+, skip IntegrityId after the 14-byte header
+        request_offset = 14
+        if (
+            self._protocol_version >= ProtocolVersion.V2
+            and session_id != 0
+            and function_code not in (FunctionCode.INIT_SSL, FunctionCode.CREATE_OBJECT)
+        ):
+            if request_offset < len(payload):
+                _req_iid, iid_consumed = decode_uint32_vlq(payload, request_offset)
+                request_offset += iid_consumed
+
+        request_data = payload[request_offset:]
 
         if function_code == FunctionCode.INIT_SSL:
             return self._handle_init_ssl(seq_num)
@@ -485,6 +574,40 @@ class S7CommPlusServer:
             return self._handle_set_multi_variables(seq_num, req_session_id, request_data)
         else:
             return self._build_error_response(seq_num, req_session_id, function_code)
+
+    def _build_response_header(
+        self,
+        function_code: int,
+        seq_num: int,
+        session_id: int,
+        include_integrity_id: bool = False,
+        integrity_id: int = 0,
+    ) -> bytes:
+        """Build a 14-byte response header, optionally with IntegrityId (V2+).
+
+        Args:
+            function_code: Response function code
+            seq_num: Sequence number echoed from request
+            session_id: Session ID
+            include_integrity_id: If True, append VLQ IntegrityId after header
+            integrity_id: IntegrityId value to include
+
+        Returns:
+            Response header bytes (14 bytes, or 14+VLQ for V2+)
+        """
+        header = struct.pack(
+            ">BHHHHIB",
+            Opcode.RESPONSE,
+            0x0000,
+            function_code,
+            0x0000,
+            seq_num,
+            session_id,
+            0x00,
+        )
+        if include_integrity_id:
+            header += encode_uint32_vlq(integrity_id)
+        return header
 
     def _handle_init_ssl(self, seq_num: int) -> bytes:
         """Handle InitSSL -- respond to SSL initialization (V1 emulation, no real TLS)."""
@@ -543,6 +666,14 @@ class S7CommPlusServer:
         response += bytes([ElementID.ATTRIBUTE])
         response += encode_uint32_vlq(0x0132)  # Protocol version attribute
         response += encode_typed_value(DataType.USINT, self._protocol_version)
+
+        # ServerSessionVersion attribute (306) - required for session setup handshake
+        from .protocol import ObjectId
+
+        response += bytes([ElementID.ATTRIBUTE])
+        response += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        response += bytes([0x00])  # flags
+        response += encode_typed_value(DataType.UDINT, self._protocol_version)
 
         response += bytes([ElementID.TERMINATING_OBJECT])
 
