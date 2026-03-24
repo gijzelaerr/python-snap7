@@ -1,6 +1,6 @@
 import struct
 from datetime import timedelta, datetime, date
-from typing import NoReturn, Union
+from typing import Union
 from logging import getLogger
 
 #: Buffer types accepted by getter functions.
@@ -486,7 +486,7 @@ def get_lint(bytearray_: Buffer, byte_index: int) -> int:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_lint(data, 0)
-            12345
+        12345
     """
 
     raw_lint = bytearray_[byte_index : byte_index + 8]
@@ -562,7 +562,7 @@ def get_ulint(bytearray_: Buffer, byte_index: int) -> int:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_ulint(data, 0)
-            12345
+        12345
     """
     raw_ulint = bytearray_[byte_index : byte_index + 8]
     lint: int = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
@@ -787,7 +787,3 @@ def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
         )
 
     return bytes(bytearray_[wstring_start : wstring_start + wstr_symbols_amount]).decode("utf-16-be")
-
-
-def get_array(bytearray_: Buffer, byte_index: int) -> NoReturn:
-    raise NotImplementedError
