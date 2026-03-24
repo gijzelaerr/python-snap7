@@ -54,6 +54,7 @@ from .getters import (
     get_dtl,
     get_lint,
     get_ulint,
+    get_date_time_object,
 )
 
 __all__ = [
@@ -86,6 +87,7 @@ __all__ = [
     "get_wstring",
     "get_lint",
     "get_ulint",
+    "get_date_time_object",
     "set_real",
     "set_dword",
     "set_date",

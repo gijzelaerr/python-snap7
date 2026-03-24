@@ -1,6 +1,6 @@
 import struct
 from datetime import timedelta, datetime, date
-from typing import NoReturn, Union
+from typing import Union
 from logging import getLogger
 
 #: Buffer types accepted by getter functions.
@@ -787,7 +787,3 @@ def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
         )
 
     return bytes(bytearray_[wstring_start : wstring_start + wstr_symbols_amount]).decode("utf-16-be")
-
-
-def get_array(bytearray_: Buffer, byte_index: int) -> NoReturn:
-    raise NotImplementedError
