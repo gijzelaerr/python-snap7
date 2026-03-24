@@ -8,7 +8,6 @@ Covers:
 """
 
 import struct
-import threading
 import time
 import unittest
 from collections.abc import Generator
