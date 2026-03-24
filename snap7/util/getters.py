@@ -486,7 +486,7 @@ def get_lint(bytearray_: Buffer, byte_index: int) -> int:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_lint(data, 0)
-            12345
+        12345
     """
 
     raw_lint = bytearray_[byte_index : byte_index + 8]
@@ -562,7 +562,7 @@ def get_ulint(bytearray_: Buffer, byte_index: int) -> int:
         >>> from snap7 import Client
         >>> data = Client().db_read(db_number=1, start=10, size=8)
         >>> get_ulint(data, 0)
-            12345
+        12345
     """
     raw_ulint = bytearray_[byte_index : byte_index + 8]
     lint: int = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
