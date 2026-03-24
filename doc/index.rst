@@ -17,6 +17,7 @@ Welcome to python-snap7's documentation!
    reading-writing
    multi-variable
    server
+   cli
    tia-portal-config
 
 .. toctree::
@@ -49,6 +50,7 @@ Welcome to python-snap7's documentation!
    API/connection
    API/s7protocol
    API/datatypes
+   API/discovery
 
 
 Indices and tables
