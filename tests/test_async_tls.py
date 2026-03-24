@@ -32,9 +32,11 @@ def _generate_self_signed_cert() -> tuple[str, str]:
         pytest.skip("cryptography package required for TLS tests")
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
+        ]
+    )
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -55,11 +57,13 @@ def _generate_self_signed_cert() -> tuple[str, str]:
     cert_file.close()
 
     key_file = tempfile.NamedTemporaryFile(suffix=".pem", delete=False)
-    key_file.write(key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.TraditionalOpenSSL,
-        serialization.NoEncryption(),
-    ))
+    key_file.write(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption(),
+        )
+    )
     key_file.close()
 
     return cert_file.name, key_file.name

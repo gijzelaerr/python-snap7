@@ -179,9 +179,7 @@ class S7CommPlusAsyncClient:
                 if not self._tls_active:
                     from ..error import S7ConnectionError
 
-                    raise S7ConnectionError(
-                        "PLC reports V2 protocol but TLS is not active. V2 requires TLS. Use use_tls=True."
-                    )
+                    raise S7ConnectionError("PLC reports V2 protocol but TLS is not active. V2 requires TLS. Use use_tls=True.")
                 # Enable IntegrityId tracking for V2+
                 self._with_integrity_id = True
                 self._integrity_id_read = 0
