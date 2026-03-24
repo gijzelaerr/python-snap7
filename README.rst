@@ -13,9 +13,6 @@
 .. image:: https://readthedocs.org/projects/python-snap7/badge/
    :target: https://python-snap7.readthedocs.io/en/latest/
 
-.. image:: https://codecov.io/gh/gijzelaerr/python-snap7/branch/master/graph/badge.svg
-   :target: https://codecov.io/gh/gijzelaerr/python-snap7
-
 About
 =====
 
@@ -68,20 +65,3 @@ Install using pip::
    $ pip install python-snap7
 
 No native libraries or platform-specific dependencies are required — python-snap7 is a pure Python package that works on all platforms.
-
-
-Async support
-=============
-
-An ``AsyncClient`` is available for use with ``asyncio``::
-
-   import asyncio
-   import snap7
-
-   async def main():
-       async with snap7.AsyncClient() as client:
-           await client.connect("192.168.1.10", 0, 1)
-           data = await client.db_read(1, 0, 4)
-           print(data)
-
-   asyncio.run(main())

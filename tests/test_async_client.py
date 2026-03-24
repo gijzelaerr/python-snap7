@@ -5,7 +5,7 @@ Uses the same Server fixture as test_client.py for integration tests.
 
 import asyncio
 import logging
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 
 import pytest
 import pytest_asyncio
@@ -45,10 +45,10 @@ def server() -> Generator[Server]:
 
 
 @pytest_asyncio.fixture
-async def client(server: Server) -> AsyncClient:
+async def client(server: Server) -> AsyncGenerator[AsyncClient]:
     c = AsyncClient()
     await c.connect(ip, rack, slot, tcpport)
-    yield c  # type: ignore[misc]
+    yield c
     await c.disconnect()
 
 

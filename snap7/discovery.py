@@ -114,8 +114,8 @@ try:
         """Discover PROFINET devices on the network.
 
         IP is the address of the local network interface to use for discovery.
+        Requires pnio-dcp: pip install python-snap7[discovery]
         """
-        logging.basicConfig(format="[%(levelname)s]: %(message)s", level=logging.INFO)
         try:
             devices = discover(ip, timeout)
         except ImportError as e:
@@ -135,12 +135,3 @@ try:
 
 except ImportError:
     pass
-
-
-def main() -> None:
-    """Standalone CLI entry point for discovery."""
-    discover_command()
-
-
-if __name__ == "__main__":
-    main()

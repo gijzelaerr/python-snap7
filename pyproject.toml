@@ -32,7 +32,8 @@ Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-html", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
+test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-html", "hypothesis", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
+s7commplus = ["cryptography"]
 cli = ["rich", "click" ]
 doc = ["sphinx", "sphinx_rtd_theme"]
 discovery = ["pnio-dcp"]
@@ -53,6 +54,7 @@ markers =[
     "client",
     "common",
     "e2e: end-to-end tests requiring a real PLC connection",
+    "hypothesis: property-based tests using Hypothesis",
     "logo",
     "mainloop",
     "partner",
