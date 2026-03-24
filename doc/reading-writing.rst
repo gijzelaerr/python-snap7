@@ -175,6 +175,36 @@ DWORD (4 bytes, unsigned 0--4294967295)
    snap7.util.set_dword(data, 0, 3000000000)
    client.db_write(1, 40, data)
 
+LINT (8 bytes, signed -9223372036854775808 to 9223372036854775807)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   # Read 8 bytes from DB1 at offset 60
+   data = client.db_read(1, 60, 8)
+   value = snap7.util.get_lint(data, 0)
+   print(f"LINT = {value}")
+
+   # Write (no set_lint helper -- use struct directly)
+   import struct
+   data = bytearray(struct.pack(">q", 123456789012345))
+   client.db_write(1, 60, data)
+
+ULINT (8 bytes, unsigned 0--18446744073709551615)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   # Read 8 bytes from DB1 at offset 68
+   data = client.db_read(1, 68, 8)
+   value = snap7.util.get_ulint(data, 0)
+   print(f"ULINT = {value}")
+
+   # Write (no set_ulint helper -- use struct directly)
+   import struct
+   data = bytearray(struct.pack(">Q", 9876543210))
+   client.db_write(1, 68, data)
+
 REAL (4 bytes, IEEE 754 float)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
