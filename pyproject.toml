@@ -40,9 +40,10 @@ discovery = ["pnio-dcp"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed"]
+s7 = ["py.typed"]
 
 [tool.setuptools.packages.find]
-include = ["snap7*"]
+include = ["snap7*", "s7*"]
 
 [project.scripts]
 snap7-server = "snap7.server:mainloop"
