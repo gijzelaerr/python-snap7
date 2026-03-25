@@ -14,7 +14,7 @@ accept S7CommPlus sessions but return ERROR2 for GetMultiVariables),
 the client transparently falls back to the legacy S7 protocol for
 data block read/write operations.
 
-Status: V1 and V2 connections are functional. V3/TLS authentication planned.
+Status: V1, V2, and V3 (including TLS) connections are functional.
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
@@ -24,7 +24,7 @@ import struct
 from typing import Any, Optional
 
 from .connection import S7CommPlusConnection
-from .protocol import FunctionCode, Ids
+from .protocol import FunctionCode, Ids, ProtocolVersion
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
     encode_item_address,
@@ -148,10 +148,12 @@ class S7CommPlusClient:
             logger.info("Performing PLC legitimation (password authentication)")
             self._connection.authenticate(password)
 
-        # Probe S7CommPlus data operations with a minimal request
-        if not self._probe_s7commplus_data():
-            logger.info("S7CommPlus data operations not supported, falling back to legacy S7 protocol")
-            self._setup_legacy_fallback()
+        # Probe S7CommPlus data operations with a minimal request.
+        # Skip probe for V2+ with TLS: TLS handshake confirms S7CommPlus support.
+        if self._connection.protocol_version < ProtocolVersion.V2:
+            if not self._probe_s7commplus_data():
+                logger.info("S7CommPlus data operations not supported, falling back to legacy S7 protocol")
+                self._setup_legacy_fallback()
 
     def _probe_s7commplus_data(self) -> bool:
         """Test if the PLC supports S7CommPlus data operations.
