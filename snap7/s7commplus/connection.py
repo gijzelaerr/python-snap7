@@ -85,7 +85,8 @@ class S7CommPlusConnection:
     - Version-appropriate authentication (V1/V2/V3/TLS)
     - Frame send/receive (TLS-encrypted when using V17+ firmware)
 
-    Supports V1, V2, and V3 (including TLS) authentication.
+    Currently implements V1 authentication. V2/V3/TLS authentication
+    layers are planned for future development.
     """
 
     def __init__(
@@ -201,19 +202,21 @@ class S7CommPlusConnection:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
 
             # Step 6: Version-specific post-setup
-            if self._protocol_version >= ProtocolVersion.V2:
+            if self._protocol_version >= ProtocolVersion.V3:
+                if not use_tls:
+                    logger.warning(
+                        "PLC reports V3 protocol but TLS is not enabled. Connection may not work without use_tls=True."
+                    )
+            elif self._protocol_version == ProtocolVersion.V2:
                 if not self._tls_active:
                     from ..error import S7ConnectionError
 
-                    raise S7ConnectionError(
-                        f"PLC reports V{self._protocol_version} protocol but TLS is not active. "
-                        "V2/V3 requires TLS. Use use_tls=True."
-                    )
+                    raise S7ConnectionError("PLC reports V2 protocol but TLS is not active. V2 requires TLS. Use use_tls=True.")
                 # Enable IntegrityId tracking for V2+
                 self._with_integrity_id = True
                 self._integrity_id_read = 0
                 self._integrity_id_write = 0
-                logger.info(f"V{self._protocol_version} IntegrityId tracking enabled")
+                logger.info("V2 IntegrityId tracking enabled")
 
             # V1: No further authentication needed after CreateObject
             self._connected = True
@@ -248,7 +251,7 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("Not connected")
 
-        if not self._tls_active:
+        if not self._tls_active or self._oms_secret is None:
             from ..error import S7ConnectionError
 
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
@@ -260,11 +263,11 @@ class S7CommPlusConnection:
         # Step 2: Build response (auto-detect legacy vs new)
         from .legitimation import build_legacy_response, build_new_response
 
-        if username and self._oms_secret is not None:
+        if username:
             # New-style auth with username always uses AES-256-CBC
             response_data = build_new_response(password, challenge, self._oms_secret, username)
             self._send_legitimation_new(response_data)
-        elif self._oms_secret is not None:
+        else:
             # Try new-style first, fall back to legacy SHA-1 XOR
             try:
                 response_data = build_new_response(password, challenge, self._oms_secret, "")
@@ -273,12 +276,6 @@ class S7CommPlusConnection:
                 # cryptography package not available, use legacy
                 response_data = build_legacy_response(password, challenge)
                 self._send_legitimation_legacy(response_data)
-        else:
-            # No OMS secret available (export_keying_material not supported),
-            # fall back to legacy SHA-1 XOR authentication
-            logger.info("OMS secret not available, using legacy legitimation")
-            response_data = build_legacy_response(password, challenge)
-            self._send_legitimation_legacy(response_data)
 
         logger.info("PLC legitimation completed successfully")
 
@@ -1016,13 +1013,7 @@ class S7CommPlusConnection:
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
-        # TLS 1.3 cipher suites are auto-negotiated on modern OpenSSL;
-        # set_ciphers() only controls TLS 1.2 and below. We try to set
-        # preferred ciphers but ignore failures (e.g. OpenSSL 3.x).
-        try:
-            ctx.set_ciphers("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
-        except ssl.SSLError:
-            pass
+        ctx.set_ciphers("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)

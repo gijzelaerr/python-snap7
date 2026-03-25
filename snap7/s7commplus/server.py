@@ -10,7 +10,7 @@ Handles the S7CommPlus protocol including:
 - Internal PLC memory model with thread-safe access
 - V2 protocol emulation with TLS and IntegrityId tracking
 
-Supports V1 (no TLS), V2 (TLS + IntegrityId), and V3 (TLS + IntegrityId) emulation.
+Supports both V1 (no TLS) and V2 (TLS + IntegrityId) emulation.
 
 Usage::
 
@@ -186,21 +186,17 @@ class S7CommPlusServer:
 
     Emulates an S7-1200/1500 PLC with:
     - Internal data block storage with named variables
-    - S7CommPlus protocol handling (V1, V2, V3)
-    - V2/V3 TLS support with IntegrityId tracking
-    - Legitimation (password authentication) emulation
+    - S7CommPlus protocol handling (V1 and V2)
+    - V2 TLS support with IntegrityId tracking
     - Multi-client support (threaded)
     - CPU state management
     """
 
-    def __init__(self, protocol_version: int = ProtocolVersion.V1, password: Optional[str] = None) -> None:
+    def __init__(self, protocol_version: int = ProtocolVersion.V1) -> None:
         self._data_blocks: dict[int, DataBlock] = {}
         self._cpu_state = CPUState.RUN
         self._protocol_version = protocol_version
-        self._password = password
         self._next_session_id = 1
-        # Per-client authentication state (session_id -> authenticated)
-        self._authenticated_sessions: dict[int, bool] = {}
 
         self._server_socket: Optional[socket.socket] = None
         self._server_thread: Optional[threading.Thread] = None
@@ -209,7 +205,7 @@ class S7CommPlusServer:
         self._lock = threading.Lock()
         self._event_callback: Optional[Callable[..., None]] = None
 
-        # TLS configuration (V2/V3)
+        # TLS configuration (V2)
         self._ssl_context: Optional[ssl.SSLContext] = None
         self._use_tls: bool = False
 
@@ -368,12 +364,8 @@ class S7CommPlusServer:
             session_id = 0
             tls_activated = False
             # Per-client IntegrityId tracking (V2+)
-            # IntegrityId tracking starts AFTER the session setup (SetMultiVariables
-            # echoing ServerSessionVersion). The first SetMultiVariables after
-            # CreateObject is the session setup and doesn't include IntegrityId.
             integrity_id_read = 0
             integrity_id_write = 0
-            integrity_id_active = False
 
             while self._running:
                 try:
@@ -383,9 +375,7 @@ class S7CommPlusServer:
                         break
 
                     # Process the S7CommPlus request
-                    response = self._process_request(
-                        data, session_id, integrity_id_read, integrity_id_write, integrity_id_active
-                    )
+                    response = self._process_request(data, session_id, integrity_id_read, integrity_id_write)
 
                     if response is not None:
                         # Check if session ID was assigned
@@ -422,12 +412,7 @@ class S7CommPlusServer:
                             payload = data[hdr_consumed:]
                             if len(payload) >= 14:
                                 func_code = struct.unpack_from(">H", payload, 3)[0]
-                                if not integrity_id_active:
-                                    # First SetMultiVariables after CreateObject is session setup
-                                    # (no IntegrityId). Activate tracking after it.
-                                    if func_code == FunctionCode.SET_MULTI_VARIABLES:
-                                        integrity_id_active = True
-                                elif func_code in READ_FUNCTION_CODES:
+                                if func_code in READ_FUNCTION_CODES:
                                     integrity_id_read = (integrity_id_read + 1) & 0xFFFFFFFF
                                 elif func_code not in (
                                     FunctionCode.INIT_SSL,
@@ -537,7 +522,6 @@ class S7CommPlusServer:
         session_id: int,
         integrity_id_read: int = 0,
         integrity_id_write: int = 0,
-        integrity_id_active: bool = False,
     ) -> Optional[bytes]:
         """Process an S7CommPlus request and return a response."""
         if len(data) < 4:
@@ -563,14 +547,11 @@ class S7CommPlusServer:
         seq_num = struct.unpack_from(">H", payload, 7)[0]
         req_session_id = struct.unpack_from(">I", payload, 9)[0]
 
-        # For V2+, skip IntegrityId after the 14-byte header.
-        # IntegrityId is only present after session setup is complete
-        # (integrity_id_active=True). The first SetMultiVariables after
-        # CreateObject is the session setup and doesn't include IntegrityId.
+        # For V2+, skip IntegrityId after the 14-byte header
         request_offset = 14
         if (
-            integrity_id_active
-            and self._protocol_version >= ProtocolVersion.V2
+            self._protocol_version >= ProtocolVersion.V2
+            and session_id != 0
             and function_code not in (FunctionCode.INIT_SSL, FunctionCode.CREATE_OBJECT)
         ):
             if request_offset < len(payload):
@@ -585,41 +566,14 @@ class S7CommPlusServer:
             return self._handle_create_object(seq_num, request_data)
         elif function_code == FunctionCode.DELETE_OBJECT:
             return self._handle_delete_object(seq_num, req_session_id)
-        elif function_code == FunctionCode.GET_VAR_SUBSTREAMED:
-            response = self._handle_get_var_substreamed(seq_num, req_session_id, request_data)
-        elif function_code == FunctionCode.SET_VARIABLE:
-            response = self._handle_set_variable(seq_num, req_session_id, request_data)
         elif function_code == FunctionCode.EXPLORE:
-            if not self._check_authenticated(req_session_id):
-                response = self._build_error_response(seq_num, req_session_id, function_code)
-            else:
-                response = self._handle_explore(seq_num, req_session_id, request_data)
+            return self._handle_explore(seq_num, req_session_id, request_data)
         elif function_code == FunctionCode.GET_MULTI_VARIABLES:
-            if not self._check_authenticated(req_session_id):
-                response = self._build_error_response(seq_num, req_session_id, function_code)
-            else:
-                response = self._handle_get_multi_variables(seq_num, req_session_id, request_data)
+            return self._handle_get_multi_variables(seq_num, req_session_id, request_data)
         elif function_code == FunctionCode.SET_MULTI_VARIABLES:
-            # Auth check is inside the handler: session setup must bypass auth
-            response = self._handle_set_multi_variables(
-                seq_num, req_session_id, request_data, self._check_authenticated(req_session_id)
-            )
+            return self._handle_set_multi_variables(seq_num, req_session_id, request_data)
         else:
-            response = self._build_error_response(seq_num, req_session_id, function_code)
-
-        # For V2+, insert IntegrityId right after the 14-byte response header.
-        # The client expects IntegrityId at offset 14 in the response, mirroring
-        # the request format. Only insert when IntegrityId tracking is active.
-        if (
-            integrity_id_active
-            and self._protocol_version >= ProtocolVersion.V2
-            and function_code not in (FunctionCode.INIT_SSL, FunctionCode.CREATE_OBJECT)
-            and response is not None
-            and len(response) >= 14
-        ):
-            response = response[:14] + encode_uint32_vlq(0) + response[14:]
-
-        return response
+            return self._build_error_response(seq_num, req_session_id, function_code)
 
     def _build_response_header(
         self,
@@ -844,30 +798,16 @@ class S7CommPlusServer:
         # Terminate error list
         response += encode_uint32_vlq(0)
 
+        # IntegrityId
+        response += encode_uint32_vlq(0)
+
         return bytes(response)
 
-    def _handle_set_multi_variables(
-        self, seq_num: int, session_id: int, request_data: bytes, is_authenticated: bool = True
-    ) -> bytes:
+    def _handle_set_multi_variables(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle SetMultiVariables -- write variables to data blocks.
-
-        Also handles session setup (SetMultiVariables echoing ServerSessionVersion).
-        Session setup is detected by InObjectId matching the session_id.
-        Session setup always bypasses auth; data writes require authentication.
 
         Reference: thomas-v2/S7CommPlusDriver/Core/SetMultiVariablesRequest.cs
         """
-        # Check if this is a session setup write (InObjectId = session_id)
-        if len(request_data) >= 4:
-            in_object_id = struct.unpack_from(">I", request_data, 0)[0]
-            if in_object_id == session_id and session_id != 0:
-                # Session setup: just acknowledge success (no auth required)
-                return self._build_set_multi_response(seq_num, session_id, [])
-
-        # For data writes, require authentication
-        if not is_authenticated:
-            return self._build_error_response(seq_num, session_id, FunctionCode.SET_MULTI_VARIABLES)
-
         response = bytearray()
         response += struct.pack(
             ">BHHHHIB",
@@ -903,98 +843,8 @@ class S7CommPlusServer:
         # Terminate error list
         response += encode_uint32_vlq(0)
 
-        return bytes(response)
-
-    def _build_set_multi_response(
-        self, seq_num: int, session_id: int, errors: list[tuple[int, int]]
-    ) -> bytes:
-        """Build a SetMultiVariables response."""
-        response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.SET_MULTI_VARIABLES,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
-        response += encode_uint64_vlq(0)  # ReturnValue: success
-        for err_item, err_code in errors:
-            response += encode_uint32_vlq(err_item)
-            response += encode_uint64_vlq(err_code)
-        response += encode_uint32_vlq(0)  # Terminate error list
-        return bytes(response)
-
-    def _check_authenticated(self, session_id: int) -> bool:
-        """Check if a session is authenticated (or no password is required)."""
-        if self._password is None:
-            return True
-        return self._authenticated_sessions.get(session_id, False)
-
-    def _handle_get_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
-        """Handle GetVarSubStreamed -- used for legitimation challenge request.
-
-        Returns a 20-byte random challenge when the client requests
-        ServerSessionRequest (address 303).
-        """
-        import os
-
-        response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.GET_VAR_SUBSTREAMED,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
-
-        # ReturnValue: success
-        response += encode_uint64_vlq(0)
-
-        # Value: 20-byte challenge as BLOB
-        challenge = os.urandom(20)
-        response += bytes([0x00, DataType.BLOB])
-        response += encode_uint32_vlq(len(challenge))
-        response += challenge
-
-        # Trailing padding
-        response += struct.pack(">I", 0)
-
-        return bytes(response)
-
-    def _handle_set_variable(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
-        """Handle SetVariable -- used for legitimation response.
-
-        Accepts the client's authentication response and marks the session
-        as authenticated. In this emulator, any response is accepted (we
-        don't verify the actual crypto).
-        """
-        # Mark session as authenticated
-        self._authenticated_sessions[session_id] = True
-        logger.debug(f"Session {session_id} authenticated via SetVariable")
-
-        response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.SET_VARIABLE,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
-
-        # ReturnValue: success
-        response += encode_uint64_vlq(0)
-
-        # Trailing padding
-        response += struct.pack(">I", 0)
+        # IntegrityId
+        response += encode_uint32_vlq(0)
 
         return bytes(response)
 
