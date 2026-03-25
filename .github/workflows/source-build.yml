@@ -23,13 +23,9 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - name: Install build tools
-        run: |
-          uv venv
-          uv pip install build
       - name: Create source tarball
         run: |
-           uv run python -m build . --sdist
+           uv build --sdist
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
