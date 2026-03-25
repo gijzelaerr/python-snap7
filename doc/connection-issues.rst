@@ -8,11 +8,57 @@ Connection Issues
 
 .. _connection-recovery:
 
-Connection Recovery
+Automatic Reconnection
+----------------------
+
+The :class:`~snap7.client.Client` has built-in auto-reconnect with exponential
+backoff and optional heartbeat monitoring. This is the recommended approach for
+long-running applications:
+
+.. code-block:: python
+
+   import snap7
+
+   def on_disconnect():
+       print("Connection lost!")
+
+   def on_reconnect():
+       print("Reconnected!")
+
+   client = snap7.Client(
+       auto_reconnect=True,        # Enable automatic reconnection
+       max_retries=5,              # Retry up to 5 times (default: 3)
+       retry_delay=1.0,            # Initial delay between retries in seconds
+       backoff_factor=2.0,         # Double the delay after each failure
+       max_delay=30.0,             # Cap delay at 30 seconds
+       heartbeat_interval=10.0,    # Probe connection every 10 seconds (0=disabled)
+       on_disconnect=on_disconnect,
+       on_reconnect=on_reconnect,
+   )
+   client.connect("192.168.1.10", 0, 1)
+
+   # If the connection drops, read/write operations will automatically
+   # reconnect before retrying. The heartbeat detects silent disconnects.
+   data = client.db_read(1, 0, 10)
+
+The parameters:
+
+- **auto_reconnect**: Enable automatic reconnection on connection loss.
+- **max_retries**: Maximum reconnection attempts before raising an error.
+- **retry_delay**: Initial delay (seconds) between reconnection attempts.
+- **backoff_factor**: Multiplier applied to the delay after each failed attempt.
+- **max_delay**: Upper bound on the delay between attempts.
+- **heartbeat_interval**: Interval (seconds) for background heartbeat probes.
+  Set to ``0`` to disable (default).
+- **on_disconnect**: Callback invoked when the connection is lost.
+- **on_reconnect**: Callback invoked after a successful reconnection.
+
+
+Manual Reconnection
 -------------------
 
-Network connections to PLCs can drop due to cable issues, PLC restarts, or
-network problems. Use a reconnection pattern to handle this gracefully:
+If you need full control over reconnection behavior, you can implement it
+manually:
 
 .. code-block:: python
 
@@ -40,20 +86,6 @@ network problems. Use a reconnection pattern to handle this gracefully:
            time.sleep(1)
            connect()
            return client.db_read(db, start, size)
-
-   def safe_write(db: int, start: int, data: bytearray) -> None:
-       """Write to DB with automatic reconnection on failure."""
-       try:
-           client.db_write(db, start, data)
-       except Exception:
-           logger.warning("Write failed, attempting reconnection...")
-           try:
-               client.disconnect()
-           except Exception:
-               pass
-           time.sleep(1)
-           connect()
-           client.db_write(db, start, data)
 
 For long-running applications, wrap your main loop with reconnection logic:
 

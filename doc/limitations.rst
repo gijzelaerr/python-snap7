@@ -17,12 +17,14 @@ are **not possible** with this protocol:
      - The PLC stores only raw bytes. The structure definition lives in the TIA
        Portal project. You must define your data layout in your Python code.
    * - Discover PLCs on the network
-     - There is no S7 broadcast discovery mechanism. You must know the PLC's IP
-       address.
+     - The classic S7 protocol has no broadcast discovery mechanism. However,
+       python-snap7 provides PROFINET DCP discovery via the ``s7 discover``
+       CLI command (requires ``pip install python-snap7[discovery]``).
+       See :doc:`cli` for details.
    * - Create PLC backups
      - Full project backup requires TIA Portal. python-snap7 can upload
        individual blocks, but this is not a complete backup.
    * - Access S7-1200/1500 PLCs with S7CommPlus security
-     - PLCs configured to require S7CommPlus encrypted communication cannot be
-       accessed with the classic S7 protocol. PUT/GET must be enabled as a
-       fallback.
+     - python-snap7 supports S7CommPlus V1 and V2 (with TLS) via
+       :mod:`snap7.s7commplus`. V3 is not yet supported. For PLCs that only
+       support V3, enable PUT/GET as a fallback or use OPC UA.
