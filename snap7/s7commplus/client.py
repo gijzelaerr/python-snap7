@@ -148,43 +148,12 @@ class S7CommPlusClient:
             logger.info("Performing PLC legitimation (password authentication)")
             self._connection.authenticate(password)
 
-        # Probe S7CommPlus data operations with a minimal request
-        if not self._probe_s7commplus_data():
-            logger.info("S7CommPlus data operations not supported, falling back to legacy S7 protocol")
+        # Check if S7CommPlus session setup succeeded. If the PLC accepted the
+        # ServerSessionVersion echo, data operations should work. If it returned
+        # an error (e.g. ERROR2), fall back to legacy S7 protocol.
+        if not self._connection.session_setup_ok:
+            logger.info("S7CommPlus session setup failed, falling back to legacy S7 protocol")
             self._setup_legacy_fallback()
-
-    def _probe_s7commplus_data(self) -> bool:
-        """Test if the PLC supports S7CommPlus data operations.
-
-        Sends a minimal GetMultiVariables request with zero items. If the PLC
-        responds with ERROR2 or a non-zero return code, data operations are
-        not supported.
-
-        Returns:
-            True if S7CommPlus data operations work.
-        """
-        if self._connection is None:
-            return False
-
-        try:
-            # Send a minimal GetMultiVariables with 0 items
-            payload = struct.pack(">I", 0) + encode_uint32_vlq(0) + encode_uint32_vlq(0)
-            payload += encode_object_qualifier()
-            payload += struct.pack(">I", 0)
-
-            response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
-
-            # Check if we got a valid response (return value = 0)
-            if len(response) < 1:
-                return False
-            return_value, _ = decode_uint64_vlq(response, 0)
-            if return_value != 0:
-                logger.debug(f"S7CommPlus probe: PLC returned error {return_value}")
-                return False
-            return True
-        except Exception as e:
-            logger.debug(f"S7CommPlus probe failed: {e}")
-            return False
 
     def _setup_legacy_fallback(self) -> None:
         """Establish a secondary legacy S7 connection for data operations."""

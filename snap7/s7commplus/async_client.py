@@ -166,10 +166,10 @@ class S7CommPlusAsyncClient:
             if use_tls:
                 await self._activate_tls(tls_cert=tls_cert, tls_key=tls_key, tls_ca=tls_ca)
 
-            # Step 4: S7CommPlus session setup
+            # Step 4: S7CommPlus session setup (CreateObject)
             await self._create_session()
 
-            # Step 5: Version-specific post-setup
+            # Step 5: Version-specific validation (before session setup handshake)
             if self._protocol_version >= ProtocolVersion.V3:
                 if not use_tls:
                     logger.warning(
@@ -187,15 +187,22 @@ class S7CommPlusAsyncClient:
                 logger.info("V2 IntegrityId tracking enabled")
 
             self._connected = True
+
+            # Step 6: Session setup - echo ServerSessionVersion back to PLC
+            if self._server_session_version is not None:
+                session_setup_ok = await self._setup_session()
+            else:
+                logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
+                session_setup_ok = False
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
                 f"tls={self._tls_active}"
             )
 
-            # Probe S7CommPlus data operations
-            if not await self._probe_s7commplus_data():
-                logger.info("S7CommPlus data operations not supported, falling back to legacy S7 protocol")
+            # Check if S7CommPlus session setup succeeded
+            if not session_setup_ok:
+                logger.info("S7CommPlus session setup failed, falling back to legacy S7 protocol")
                 await self._setup_legacy_fallback()
 
         except Exception:
@@ -408,25 +415,6 @@ class S7CommPlusAsyncClient:
 
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
-
-    async def _probe_s7commplus_data(self) -> bool:
-        """Test if the PLC supports S7CommPlus data operations."""
-        try:
-            payload = struct.pack(">I", 0) + encode_uint32_vlq(0) + encode_uint32_vlq(0)
-            payload += encode_object_qualifier()
-            payload += struct.pack(">I", 0)
-
-            response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
-            if len(response) < 1:
-                return False
-            return_value, _ = decode_uint64_vlq(response, 0)
-            if return_value != 0:
-                logger.debug(f"S7CommPlus probe: PLC returned error {return_value}")
-                return False
-            return True
-        except Exception as e:
-            logger.debug(f"S7CommPlus probe failed: {e}")
-            return False
 
     async def _setup_legacy_fallback(self) -> None:
         """Establish a secondary legacy S7 connection for data operations."""
@@ -736,6 +724,106 @@ class S7CommPlusAsyncClient:
 
         self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
+
+        # Parse ServerSessionVersion from response payload
+        self._parse_create_object_response(response[14:])
+
+    def _parse_create_object_response(self, payload: bytes) -> None:
+        """Parse CreateObject response to extract ServerSessionVersion (attribute 306)."""
+        offset = 0
+        while offset < len(payload):
+            tag = payload[offset]
+
+            if tag == ElementID.ATTRIBUTE:
+                offset += 1
+                if offset >= len(payload):
+                    break
+                attr_id, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed
+
+                if attr_id == ObjectId.SERVER_SESSION_VERSION:
+                    if offset + 2 > len(payload):
+                        break
+                    _flags = payload[offset]
+                    datatype = payload[offset + 1]
+                    offset += 2
+                    if datatype in (DataType.UDINT, DataType.DWORD):
+                        value, consumed = decode_uint32_vlq(payload, offset)
+                        offset += consumed
+                        self._server_session_version = value
+                        logger.info(f"ServerSessionVersion = {value}")
+                        return
+                else:
+                    # Skip attribute value
+                    if offset + 2 > len(payload):
+                        break
+                    _flags = payload[offset]
+                    _dt = payload[offset + 1]
+                    offset += 2
+                    # Best-effort skip: advance past common VLQ-encoded values
+                    if offset < len(payload):
+                        _, consumed = decode_uint32_vlq(payload, offset)
+                        offset += consumed
+
+            elif tag == ElementID.START_OF_OBJECT:
+                offset += 1
+                if offset + 4 > len(payload):
+                    break
+                offset += 4  # RelationId
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed  # ClassId
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed  # ClassFlags
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed  # AttributeId
+
+            elif tag == ElementID.TERMINATING_OBJECT:
+                offset += 1
+            elif tag == 0x00:
+                offset += 1
+            else:
+                offset += 1
+
+        logger.debug("ServerSessionVersion not found in CreateObject response")
+
+    async def _setup_session(self) -> bool:
+        """Echo ServerSessionVersion back to the PLC via SetMultiVariables.
+
+        Without this step, the PLC rejects all subsequent data operations
+        with ERROR2 (0x05A9).
+
+        Returns:
+            True if session setup succeeded.
+        """
+        if self._server_session_version is None:
+            return False
+
+        payload = bytearray()
+        payload += struct.pack(">I", self._session_id)
+        payload += encode_uint32_vlq(1)  # Item count
+        payload += encode_uint32_vlq(1)  # Total address field count
+        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        payload += encode_uint32_vlq(1)  # ItemNumber
+        payload += bytes([0x00, DataType.UDINT])
+        payload += encode_uint32_vlq(self._server_session_version)
+        payload += bytes([0x00])  # Fill byte
+        payload += encode_object_qualifier()
+        payload += struct.pack(">I", 0)  # Trailing padding
+
+        try:
+            resp_payload = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
+            if len(resp_payload) >= 1:
+                return_value, _ = decode_uint64_vlq(resp_payload, 0)
+                if return_value != 0:
+                    logger.warning(f"SetupSession: PLC returned error {return_value}")
+                    return False
+                else:
+                    logger.info("Session setup completed successfully")
+                    return True
+            return False
+        except Exception as e:
+            logger.warning(f"SetupSession failed: {e}")
+            return False
 
     async def _delete_session(self) -> None:
         """Send DeleteObject to close the session."""
