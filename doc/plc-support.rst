@@ -59,7 +59,7 @@ Supported PLCs
      - No
      - V2
      - **Full** (S7CommPlus V2)
-     - S7CommPlus V2 with TLS is supported via :mod:`snap7.s7commplus`.
+     - S7CommPlus V2 with TLS is supported via the ``s7`` package.
    * - S7-1500 (FW 3.x+)
      - ~2022
      - PUT/GET only
@@ -143,7 +143,7 @@ Siemens has evolved their PLC communication protocols over time:
 python-snap7 implements the **classic S7 protocol** and **S7CommPlus V1/V2**.
 The classic protocol remains available on most PLC families via the PUT/GET
 mechanism. S7CommPlus V1 and V2 (with TLS) are supported via the
-:mod:`snap7.s7commplus` package. For PLCs that require S7CommPlus V3 (such
+``s7`` package. For PLCs that require S7CommPlus V3 (such
 as the S7-1500R/H), consider using OPC UA as an alternative.
 
 

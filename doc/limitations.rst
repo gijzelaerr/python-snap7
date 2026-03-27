@@ -26,5 +26,5 @@ are **not possible** with this protocol:
        individual blocks, but this is not a complete backup.
    * - Access S7-1200/1500 PLCs with S7CommPlus security
      - python-snap7 supports S7CommPlus V1 and V2 (with TLS) via
-       :mod:`snap7.s7commplus`. V3 is not yet supported. For PLCs that only
+       the ``s7`` package. V3 is not yet supported. For PLCs that only
        support V3, enable PUT/GET as a fallback or use OPC UA.

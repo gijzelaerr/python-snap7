@@ -19,8 +19,8 @@ from snap7.client import Client
 from snap7.error import S7ConnectionError
 from snap7.server import Server
 from snap7.type import SrvArea
-from snap7.s7commplus.connection import S7CommPlusConnection
-from snap7.s7commplus.legitimation import (
+from s7.connection import S7CommPlusConnection
+from s7.legitimation import (
     LegitimationState,
     build_legacy_response,
 )
@@ -158,8 +158,8 @@ class TestLegitimationFailurePaths:
 # S7CommPlus async client
 # ============================================================================
 
-from snap7.s7commplus.server import S7CommPlusServer  # noqa: E402
-from snap7.s7commplus.async_client import S7CommPlusAsyncClient  # noqa: E402
+from s7._s7commplus_server import S7CommPlusServer  # noqa: E402
+from s7._s7commplus_async_client import S7CommPlusAsyncClient  # noqa: E402
 
 ASYNC_TEST_PORT = 11125
 
@@ -227,13 +227,12 @@ class TestAsyncClientCoverage:
         finally:
             await client.disconnect()
 
-    async def test_using_legacy_fallback_property(self, async_server: S7CommPlusServer) -> None:
+    async def test_session_setup_ok_property(self, async_server: S7CommPlusServer) -> None:
         client = S7CommPlusAsyncClient()
         await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
         try:
-            # Server supports S7CommPlus data ops, so no fallback
-            # (or fallback, depending on server implementation — just check the property works)
-            assert isinstance(client.using_legacy_fallback, bool)
+            # Server supports S7CommPlus data ops, so session setup should succeed
+            assert isinstance(client.session_setup_ok, bool)
         finally:
             await client.disconnect()
 

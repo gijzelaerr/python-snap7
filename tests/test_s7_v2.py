@@ -8,20 +8,20 @@ import hashlib
 
 import pytest
 
-from snap7.s7commplus.protocol import (
+from s7.protocol import (
     FunctionCode,
     LegitimationId,
     ProtocolVersion,
     READ_FUNCTION_CODES,
 )
-from snap7.s7commplus.legitimation import (
+from s7.legitimation import (
     LegitimationState,
     build_legacy_response,
     derive_legitimation_key,
     _build_legitimation_payload,
 )
-from snap7.s7commplus.vlq import encode_uint32_vlq, decode_uint32_vlq
-from snap7.s7commplus.connection import S7CommPlusConnection
+from s7.vlq import encode_uint32_vlq, decode_uint32_vlq
+from s7.connection import S7CommPlusConnection
 
 
 class TestReadFunctionCodes:
@@ -243,7 +243,7 @@ class TestBuildNewResponse:
     """Test AES-256-CBC legitimation response building."""
 
     def test_new_response_returns_bytes(self) -> None:
-        from snap7.s7commplus.legitimation import build_new_response
+        from s7.legitimation import build_new_response
 
         result = build_new_response(
             password="test",
@@ -253,7 +253,7 @@ class TestBuildNewResponse:
         assert isinstance(result, bytes)
 
     def test_new_response_is_aes_block_aligned(self) -> None:
-        from snap7.s7commplus.legitimation import build_new_response
+        from s7.legitimation import build_new_response
 
         result = build_new_response(
             password="test",
@@ -264,7 +264,7 @@ class TestBuildNewResponse:
         assert len(result) % 16 == 0
 
     def test_new_response_different_passwords_differ(self) -> None:
-        from snap7.s7commplus.legitimation import build_new_response
+        from s7.legitimation import build_new_response
 
         challenge = b"\xab" * 16
         oms = b"\xcd" * 32
@@ -273,7 +273,7 @@ class TestBuildNewResponse:
         assert r1 != r2
 
     def test_new_response_different_secrets_differ(self) -> None:
-        from snap7.s7commplus.legitimation import build_new_response
+        from s7.legitimation import build_new_response
 
         challenge = b"\xab" * 16
         r1 = build_new_response("test", challenge, b"\x00" * 32)
@@ -281,7 +281,7 @@ class TestBuildNewResponse:
         assert r1 != r2
 
     def test_new_response_with_username(self) -> None:
-        from snap7.s7commplus.legitimation import build_new_response
+        from s7.legitimation import build_new_response
 
         result = build_new_response(
             password="test",
@@ -294,7 +294,7 @@ class TestBuildNewResponse:
 
     def test_new_response_decryptable(self) -> None:
         """Verify the response can be decrypted back to the original payload."""
-        from snap7.s7commplus.legitimation import (
+        from s7.legitimation import (
             build_new_response,
             derive_legitimation_key,
             _build_legitimation_payload,

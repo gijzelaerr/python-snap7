@@ -2,7 +2,7 @@
 
 import pytest
 
-from snap7.s7commplus.vlq import (
+from s7.vlq import (
     encode_uint32_vlq,
     decode_uint32_vlq,
     encode_int32_vlq,

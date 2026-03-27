@@ -44,7 +44,7 @@ import struct
 from typing import Optional, Type
 from types import TracebackType
 
-from ..connection import ISOTCPConnection
+from snap7.connection import ISOTCPConnection
 from .protocol import (
     FunctionCode,
     Opcode,
@@ -216,7 +216,7 @@ class S7CommPlusConnection:
                     )
             elif self._protocol_version == ProtocolVersion.V2:
                 if not self._tls_active:
-                    from ..error import S7ConnectionError
+                    from snap7.error import S7ConnectionError
 
                     raise S7ConnectionError("PLC reports V2 protocol but TLS is not active. V2 requires TLS. Use use_tls=True.")
                 # Enable IntegrityId tracking for V2+
@@ -254,12 +254,12 @@ class S7CommPlusConnection:
             S7ConnectionError: If not connected, TLS not active, or auth fails
         """
         if not self._connected:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Not connected")
 
         if not self._tls_active or self._oms_secret is None:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
 
@@ -317,13 +317,13 @@ class S7CommPlusConnection:
         offset += consumed
 
         if return_value != 0:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError(f"GetVarSubStreamed for challenge failed: return_value={return_value}")
 
         # Value is a USIntArray (BLOB) - read flags + type + length + data
         if offset + 2 > len(resp_payload):
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Challenge response too short")
 
@@ -370,7 +370,7 @@ class S7CommPlusConnection:
         if len(resp_payload) >= 1:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value < 0:
-                from ..error import S7ConnectionError
+                from snap7.error import S7ConnectionError
 
                 raise S7ConnectionError(f"Legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"New legitimation return_value={return_value}")
@@ -402,7 +402,7 @@ class S7CommPlusConnection:
         if len(resp_payload) >= 1:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value < 0:
-                from ..error import S7ConnectionError
+                from snap7.error import S7ConnectionError
 
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
@@ -444,7 +444,7 @@ class S7CommPlusConnection:
             Response payload (after the 14-byte response header)
         """
         if not self._connected:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Not connected")
 
@@ -510,7 +510,7 @@ class S7CommPlusConnection:
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
         if len(response) < 14:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Response too short")
 
@@ -586,7 +586,7 @@ class S7CommPlusConnection:
         response = response_frame[consumed:]
 
         if len(response) < 14:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("InitSSL response too short")
 
@@ -675,7 +675,7 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response body ({len(response)} bytes): {response.hex(' ')}")
 
         if len(response) < 14:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("CreateObject response too short")
 
@@ -911,7 +911,7 @@ class S7CommPlusConnection:
         response = response_frame[consumed : consumed + data_length]
 
         if len(response) < 14:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("SetupSession response too short")
 
@@ -988,7 +988,7 @@ class S7CommPlusConnection:
         # Wrap the raw TCP socket used by ISOTCPConnection
         raw_socket = self._iso_conn.socket
         if raw_socket is None:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Cannot activate TLS: no TCP socket")
 

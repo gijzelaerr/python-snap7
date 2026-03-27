@@ -8,9 +8,9 @@ from collections.abc import Generator
 import pytest
 
 from snap7.error import S7ConnectionError
-from snap7.s7commplus.async_client import S7CommPlusAsyncClient
-from snap7.s7commplus.server import S7CommPlusServer
-from snap7.s7commplus.protocol import ProtocolVersion
+from s7._s7commplus_async_client import S7CommPlusAsyncClient
+from s7._s7commplus_server import S7CommPlusServer
+from s7.protocol import ProtocolVersion
 
 TEST_PORT_V2 = 11130
 TEST_PORT_V2_TLS = 11131

@@ -29,8 +29,8 @@ doc: .venv/bin/sphinx-build
 
 .PHONY: check
 check: .venv/bin/pytest
-	 uv run ruff check snap7 tests example
-	 uv run ruff format --diff snap7 tests example
+	 uv run ruff check snap7 s7 tests example
+	 uv run ruff format --diff snap7 s7 tests example
 
 .PHONY: ruff
 ruff: .venv/bin/tox

@@ -69,8 +69,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for mod_name in [
         "tests.test_client_e2e",
         "test_client_e2e",
-        "tests.test_s7commplus_e2e",
-        "test_s7commplus_e2e",
+        "tests.test_s7_e2e",
+        "test_s7_e2e",
     ]:
         e2e = sys.modules.get(mod_name)
         if e2e is not None:

@@ -7,10 +7,10 @@ from collections.abc import Generator
 import pytest
 import asyncio
 
-from snap7.s7commplus.server import S7CommPlusServer, CPUState, DataBlock
-from snap7.s7commplus.client import S7CommPlusClient
-from snap7.s7commplus.async_client import S7CommPlusAsyncClient
-from snap7.s7commplus.protocol import ProtocolVersion
+from s7._s7commplus_server import S7CommPlusServer, CPUState, DataBlock
+from s7._s7commplus_client import S7CommPlusClient
+from s7._s7commplus_async_client import S7CommPlusAsyncClient
+from s7.protocol import ProtocolVersion
 
 # Use a high port to avoid conflicts
 TEST_PORT = 11120
