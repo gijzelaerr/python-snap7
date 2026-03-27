@@ -112,6 +112,7 @@ class S7CommPlusConnection:
         self._tls_active: bool = False
         self._connected = False
         self._server_session_version: Optional[int] = None
+        self._session_setup_ok: bool = False
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -149,6 +150,11 @@ class S7CommPlusConnection:
     def integrity_id_write(self) -> int:
         """Current write IntegrityId counter (V2+)."""
         return self._integrity_id_write
+
+    @property
+    def session_setup_ok(self) -> bool:
+        """Whether the session setup (ServerSessionVersion echo) succeeded."""
+        return self._session_setup_ok
 
     @property
     def oms_secret(self) -> Optional[bytes]:
@@ -197,9 +203,10 @@ class S7CommPlusConnection:
 
             # Step 5: Session setup - echo ServerSessionVersion back to PLC
             if self._server_session_version is not None:
-                self._setup_session()
+                self._session_setup_ok = self._setup_session()
             else:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
+                self._session_setup_ok = False
 
             # Step 6: Version-specific post-setup
             if self._protocol_version >= ProtocolVersion.V3:
@@ -409,6 +416,7 @@ class S7CommPlusConnection:
                 pass
 
         self._connected = False
+        self._session_setup_ok = False
         self._tls_active = False
         self._ssl_socket = None
         self._oms_secret = None
@@ -836,17 +844,20 @@ class S7CommPlusConnection:
             # Unknown type - can't skip reliably
             return offset
 
-    def _setup_session(self) -> None:
+    def _setup_session(self) -> bool:
         """Send SetMultiVariables to echo ServerSessionVersion back to the PLC.
 
         This completes the session handshake by writing the ServerSessionVersion
         attribute back to the session object. Without this step, the PLC rejects
         all subsequent data operations with ERROR2 (0x05A9).
 
+        Returns:
+            True if session setup succeeded (return_value == 0).
+
         Reference: thomas-v2/S7CommPlusDriver SetSessionSetupData
         """
         if self._server_session_version is None:
-            return
+            return False
 
         seq_num = self._next_sequence_number()
 
@@ -913,8 +924,11 @@ class S7CommPlusConnection:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value != 0:
                 logger.warning(f"SetupSession: PLC returned error {return_value}")
+                return False
             else:
                 logger.info("Session setup completed successfully")
+                return True
+        return False
 
     def _delete_session(self) -> None:
         """Send DeleteObject to close the session."""
