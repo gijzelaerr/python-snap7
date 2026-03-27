@@ -167,8 +167,12 @@ class AsyncClient:
         self._plus = plus
         return True
 
-    async def disconnect(self) -> None:
-        """Disconnect from PLC."""
+    async def disconnect(self) -> int:
+        """Disconnect from PLC.
+
+        Returns:
+            0 on success (matches snap7.AsyncClient).
+        """
         if self._plus is not None:
             try:
                 await self._plus.disconnect()
@@ -184,6 +188,7 @@ class AsyncClient:
             self._legacy = None
 
         self._protocol = Protocol.AUTO
+        return 0
 
     async def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """Read raw bytes from a data block."""
@@ -193,14 +198,17 @@ class AsyncClient:
             return await self._legacy.db_read(db_number, start, size)
         raise RuntimeError("Not connected")
 
-    async def db_write(self, db_number: int, start: int, data: bytearray) -> None:
-        """Write raw bytes to a data block."""
+    async def db_write(self, db_number: int, start: int, data: bytearray) -> int:
+        """Write raw bytes to a data block.
+
+        Returns:
+            0 on success (matches snap7.AsyncClient).
+        """
         if self._protocol == Protocol.S7COMMPLUS and self._plus is not None:
             await self._plus.db_write(db_number, start, bytes(data))
-            return
+            return 0
         if self._legacy is not None:
-            await self._legacy.db_write(db_number, start, data)
-            return
+            return await self._legacy.db_write(db_number, start, data)
         raise RuntimeError("Not connected")
 
     async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytearray]:

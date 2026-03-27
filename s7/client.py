@@ -176,8 +176,12 @@ class Client:
         self._plus = plus
         return True
 
-    def disconnect(self) -> None:
-        """Disconnect from PLC."""
+    def disconnect(self) -> int:
+        """Disconnect from PLC.
+
+        Returns:
+            0 on success (matches snap7.Client).
+        """
         if self._plus is not None:
             try:
                 self._plus.disconnect()
@@ -193,6 +197,7 @@ class Client:
             self._legacy = None
 
         self._protocol = Protocol.AUTO
+        return 0
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """Read raw bytes from a data block.
@@ -205,17 +210,19 @@ class Client:
             return self._legacy.db_read(db_number, start, size)
         raise RuntimeError("Not connected")
 
-    def db_write(self, db_number: int, start: int, data: bytearray) -> None:
+    def db_write(self, db_number: int, start: int, data: bytearray) -> int:
         """Write raw bytes to a data block.
 
         Uses S7CommPlus when available, otherwise legacy S7.
+
+        Returns:
+            0 on success (matches snap7.Client).
         """
         if self._protocol == Protocol.S7COMMPLUS and self._plus is not None:
             self._plus.db_write(db_number, start, bytes(data))
-            return
+            return 0
         if self._legacy is not None:
-            self._legacy.db_write(db_number, start, data)
-            return
+            return self._legacy.db_write(db_number, start, data)
         raise RuntimeError("Not connected")
 
     def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytearray]:

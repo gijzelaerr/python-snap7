@@ -14,6 +14,20 @@ backwards compatibility.
 python-snap7 requires Python 3.10+ and runs on Windows, macOS and Linux
 without any native dependencies.
 
+The library provides two packages:
+
+- **snap7** -- the original S7 protocol implementation, supporting S7-300,
+  S7-400, S7-1200 and S7-1500 PLCs via the classic PUT/GET interface.
+- **s7** -- a newer unified client that automatically tries the S7CommPlus
+  protocol (used natively by S7-1200/1500) and falls back to legacy S7 when
+  needed. ``s7.Client`` is a drop-in replacement for ``snap7.Client``.
+
+.. note::
+
+   The ``s7`` package and its S7CommPlus support are **experimental**.
+   The legacy ``snap7`` package remains fully supported and is the safe choice
+   for production use. See :doc:`API/s7commplus` for details.
+
 .. note::
 
    **Version 3.0 is a complete rewrite.** Previous versions of python-snap7
