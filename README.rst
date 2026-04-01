@@ -62,7 +62,7 @@ and S7) is implemented in pure Python.
        $ pip install "python-snap7<3"
 
    Documentation for pre-3.0 versions is available at
-   `Read The Docs <https://python-snap7.readthedocs.io/en/v2/>`_.
+   `Read The Docs <https://python-snap7.readthedocs.io/en/2.1.0/>`_.
 
 
 Version 3.1 — S7CommPlus Protocol Support (unreleased)
