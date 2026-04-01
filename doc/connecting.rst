@@ -78,6 +78,20 @@ S7-1200 / S7-1500
    client = snap7.Client()
    client.connect("192.168.1.10", 0, 1)
 
+.. tip::
+
+   For S7-1200/1500 PLCs you can also use the **experimental** ``s7`` package,
+   which automatically tries the newer S7CommPlus protocol and falls back to
+   legacy S7 when needed::
+
+      from s7 import Client
+
+      client = Client()
+      client.connect("192.168.1.10", 0, 1)
+      print(client.protocol)  # Protocol.S7COMMPLUS or Protocol.LEGACY
+
+   See :doc:`API/s7commplus` for full details.
+
 S7-200 / Logo (TSAP Connection)
 --------------------------------
 

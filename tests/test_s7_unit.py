@@ -3,17 +3,17 @@
 import struct
 import pytest
 
-from snap7.s7commplus.client import (
+from s7._s7commplus_client import (
     S7CommPlusClient,
     _build_read_payload,
     _parse_read_response,
     _build_write_payload,
     _parse_write_response,
 )
-from snap7.s7commplus.codec import encode_pvalue_blob
-from snap7.s7commplus.connection import S7CommPlusConnection, _element_size
-from snap7.s7commplus.protocol import DataType, ElementID, ObjectId
-from snap7.s7commplus.vlq import (
+from s7.codec import encode_pvalue_blob
+from s7.connection import S7CommPlusConnection, _element_size
+from s7.protocol import DataType, ElementID, ObjectId
+from s7.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
     encode_int32_vlq,
@@ -269,7 +269,7 @@ class TestSkipTypedValue:
         assert new_offset == len(vlq)
 
     def test_lint(self, conn: S7CommPlusConnection) -> None:
-        from snap7.s7commplus.vlq import encode_int64_vlq
+        from s7.vlq import encode_int64_vlq
 
         vlq = encode_int64_vlq(-(2**40))
         new_offset = conn._skip_typed_value(vlq, 0, DataType.LINT, 0x00)
@@ -288,7 +288,7 @@ class TestSkipTypedValue:
         assert conn._skip_typed_value(data, 0, DataType.TIMESTAMP, 0x00) == 8
 
     def test_timespan(self, conn: S7CommPlusConnection) -> None:
-        from snap7.s7commplus.vlq import encode_int64_vlq
+        from s7.vlq import encode_int64_vlq
 
         vlq = encode_int64_vlq(5000)
         # TIMESPAN uses uint64_vlq for skipping in _skip_typed_value
@@ -430,7 +430,7 @@ class TestClientErrorPaths:
         assert client.connected is False
         assert client.protocol_version == 0
         assert client.session_id == 0
-        assert client.using_legacy_fallback is False
+        assert client.session_setup_ok is False
 
     def test_db_read_not_connected(self) -> None:
         client = S7CommPlusClient()

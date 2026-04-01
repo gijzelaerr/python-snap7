@@ -3,7 +3,7 @@
 import struct
 import pytest
 
-from snap7.s7commplus.codec import (
+from s7.codec import (
     encode_header,
     decode_header,
     encode_request_header,
@@ -35,8 +35,8 @@ from snap7.s7commplus.codec import (
     encode_object_qualifier,
     _pvalue_element_size,
 )
-from snap7.s7commplus.protocol import PROTOCOL_ID, DataType, Opcode, FunctionCode, Ids
-from snap7.s7commplus.vlq import encode_uint32_vlq, encode_int32_vlq, encode_uint64_vlq, encode_int64_vlq
+from s7.protocol import PROTOCOL_ID, DataType, Opcode, FunctionCode, Ids
+from s7.vlq import encode_uint32_vlq, encode_int32_vlq, encode_uint64_vlq, encode_int64_vlq
 
 
 class TestFrameHeader:

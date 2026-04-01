@@ -8,6 +8,7 @@ Python-snap7 is a pure Python S7 communication library for interfacing with Siem
 
 ## Key Architecture
 
+### snap7/ — Legacy S7 protocol (S7-300/400, PUT/GET on S7-1200/1500)
 - **snap7/client.py**: Main Client class for connecting to S7 PLCs
 - **snap7/server.py**: Server implementation for PLC simulation
 - **snap7/logo.py**: Logo PLC communication
@@ -18,6 +19,20 @@ Python-snap7 is a pure Python S7 communication library for interfacing with Siem
 - **snap7/util/**: Utility functions for data conversion (getters.py, setters.py, db.py)
 - **snap7/type.py**: Type definitions and enums (Area, Block, WordLen, etc.)
 - **snap7/error.py**: Error handling and exceptions
+
+### s7/ — Unified client with S7CommPlus + legacy fallback
+- **s7/client.py**: Unified Client — tries S7CommPlus, falls back to snap7.Client
+- **s7/async_client.py**: Unified AsyncClient — same pattern, async
+- **s7/server.py**: Unified Server wrapping both legacy and S7CommPlus
+- **s7/_protocol.py**: Protocol enum (AUTO/LEGACY/S7COMMPLUS)
+- **s7/_s7commplus_client.py**: Pure S7CommPlus sync client (internal)
+- **s7/_s7commplus_async_client.py**: Pure S7CommPlus async client (internal)
+- **s7/_s7commplus_server.py**: S7CommPlus server emulator (internal)
+- **s7/connection.py**: S7CommPlus low-level connection
+- **s7/protocol.py**: S7CommPlus protocol constants/enums
+- **s7/codec.py**: S7CommPlus encoding/decoding
+- **s7/vlq.py**: Variable-Length Quantity encoding
+- **s7/legitimation.py**: Authentication helpers
 
 ## Implementation Details
 
@@ -41,24 +56,31 @@ The library implements the complete S7 protocol stack:
 - Block operations (list, info, upload, download)
 - Date/time operations
 
-### Usage
+### Usage (unified s7 package — recommended for S7-1200/1500)
+
+```python
+from s7 import Client
+
+client = Client()
+client.connect("192.168.1.10", 0, 1)  # auto-detects S7CommPlus vs legacy
+data = client.db_read(1, 0, 4)
+client.disconnect()
+```
+
+### Usage (legacy snap7 package — S7-300/400)
 
 ```python
 import snap7
 
-# Create and connect client
 client = snap7.Client()
 client.connect("192.168.1.10", 0, 1)
 
-# Read/write operations
 data = client.db_read(1, 0, 4)
 client.db_write(1, 0, bytearray([1, 2, 3, 4]))
 
-# Memory area access
 marker_data = client.mb_read(0, 4)
 client.mb_write(0, 4, bytearray([1, 2, 3, 4]))
 
-# Disconnect
 client.disconnect()
 ```
 
@@ -98,15 +120,15 @@ pytest tests/test_client.py
 ### Code Quality
 ```bash
 # Type checking
-mypy snap7 tests example
+mypy snap7 s7 tests example
 
 # Linting and formatting check
-ruff check snap7 tests example
-ruff format --diff snap7 tests example
+ruff check snap7 s7 tests example
+ruff format --diff snap7 s7 tests example
 
 # Auto-format code
-ruff format snap7 tests example
-ruff check --fix snap7 tests example
+ruff format snap7 s7 tests example
+ruff check --fix snap7 s7 tests example
 ```
 
 ### Development with tox

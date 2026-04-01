@@ -1,19 +1,10 @@
-"""
-Async S7CommPlus client for S7-1200/1500 PLCs.
+"""Pure async S7CommPlus client for S7-1200/1500 PLCs (no legacy fallback).
 
-Provides the same API as S7CommPlusClient but using asyncio for
-non-blocking I/O. Uses asyncio.Lock for concurrent safety.
+This is an internal module used by the unified ``s7.AsyncClient``.  It provides
+raw S7CommPlus data operations without any fallback logic -- the unified
+client is responsible for deciding when to fall back to legacy S7.
 
-When a PLC does not support S7CommPlus data operations, the client
-transparently falls back to the legacy S7 protocol for data block
-read/write operations (using synchronous calls in an executor).
-
-Example::
-
-    async with S7CommPlusAsyncClient() as client:
-        await client.connect("192.168.1.10")
-        data = await client.db_read(1, 0, 4)
-        await client.db_write(1, 0, struct.pack(">f", 23.5))
+Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
 
 import asyncio
@@ -35,7 +26,7 @@ from .protocol import (
 )
 from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
-from .client import _build_read_payload, _parse_read_response, _build_write_payload, _parse_write_response
+from ._s7commplus_client import _build_read_payload, _parse_read_response, _build_write_payload, _parse_write_response
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +37,9 @@ _COTP_DT = 0xF0
 
 
 class S7CommPlusAsyncClient:
-    """Async S7CommPlus client for S7-1200/1500 PLCs.
+    """Pure async S7CommPlus client without legacy fallback.
 
-    Supports all S7CommPlus protocol versions (V1/V2/V3/TLS). The protocol
-    version is auto-detected from the PLC's CreateObject response during
-    connection setup.
-
-    Uses asyncio for all I/O operations and asyncio.Lock for
-    concurrent safety when shared between multiple coroutines.
-
-    When the PLC does not support S7CommPlus data operations, the client
-    automatically falls back to legacy S7 protocol for db_read/db_write.
+    Use ``s7.AsyncClient`` for automatic protocol selection.
     """
 
     def __init__(self) -> None:
@@ -67,12 +50,6 @@ class S7CommPlusAsyncClient:
         self._protocol_version: int = 0
         self._connected = False
         self._lock = asyncio.Lock()
-        self._legacy_client: Optional[Any] = None
-        self._use_legacy_data: bool = False
-        self._host: str = ""
-        self._port: int = 102
-        self._rack: int = 0
-        self._slot: int = 1
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -83,11 +60,10 @@ class S7CommPlusAsyncClient:
         self._tls_active: bool = False
         self._oms_secret: Optional[bytes] = None
         self._server_session_version: Optional[int] = None
+        self._session_setup_ok: bool = False
 
     @property
     def connected(self) -> bool:
-        if self._use_legacy_data and self._legacy_client is not None:
-            return bool(self._legacy_client.connected)
         return self._connected
 
     @property
@@ -99,9 +75,9 @@ class S7CommPlusAsyncClient:
         return self._session_id
 
     @property
-    def using_legacy_fallback(self) -> bool:
-        """Whether the client is using legacy S7 protocol for data operations."""
-        return self._use_legacy_data
+    def session_setup_ok(self) -> bool:
+        """Whether the S7CommPlus session setup succeeded for data operations."""
+        return self._session_setup_ok
 
     @property
     def tls_active(self) -> bool:
@@ -125,32 +101,19 @@ class S7CommPlusAsyncClient:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Connect to an S7-1200/1500 PLC.
-
-        The connection sequence:
-        1. COTP connection (same as legacy S7comm)
-        2. InitSSL handshake
-        3. TLS activation (if use_tls=True, required for V2)
-        4. CreateObject to establish S7CommPlus session
-        5. Enable IntegrityId tracking (V2+)
-
-        If the PLC does not support S7CommPlus data operations, a secondary
-        legacy S7 connection is established transparently for data access.
+        """Connect to an S7-1200/1500 PLC using S7CommPlus.
 
         Args:
             host: PLC IP address or hostname
             port: TCP port (default 102)
-            rack: PLC rack number
-            slot: PLC slot number
+            rack: PLC rack number (unused, kept for API symmetry)
+            slot: PLC slot number (unused, kept for API symmetry)
             use_tls: Whether to activate TLS after InitSSL.
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
         self._host = host
-        self._port = port
-        self._rack = rack
-        self._slot = slot
 
         # TCP connect
         self._reader, self._writer = await asyncio.open_connection(host, port)
@@ -169,7 +132,7 @@ class S7CommPlusAsyncClient:
             # Step 4: S7CommPlus session setup (CreateObject)
             await self._create_session()
 
-            # Step 5: Version-specific validation (before session setup handshake)
+            # Step 5: Version-specific validation
             if self._protocol_version >= ProtocolVersion.V3:
                 if not use_tls:
                     logger.warning(
@@ -177,10 +140,9 @@ class S7CommPlusAsyncClient:
                     )
             elif self._protocol_version == ProtocolVersion.V2:
                 if not self._tls_active:
-                    from ..error import S7ConnectionError
+                    from snap7.error import S7ConnectionError
 
                     raise S7ConnectionError("PLC reports V2 protocol but TLS is not active. V2 requires TLS. Use use_tls=True.")
-                # Enable IntegrityId tracking for V2+
                 self._with_integrity_id = True
                 self._integrity_id_read = 0
                 self._integrity_id_write = 0
@@ -190,20 +152,15 @@ class S7CommPlusAsyncClient:
 
             # Step 6: Session setup - echo ServerSessionVersion back to PLC
             if self._server_session_version is not None:
-                session_setup_ok = await self._setup_session()
+                self._session_setup_ok = await self._setup_session()
             else:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
-                session_setup_ok = False
+                self._session_setup_ok = False
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
                 f"tls={self._tls_active}"
             )
-
-            # Check if S7CommPlus session setup succeeded
-            if not session_setup_ok:
-                logger.info("S7CommPlus session setup failed, falling back to legacy S7 protocol")
-                await self._setup_legacy_fallback()
 
         except Exception:
             await self.disconnect()
@@ -211,12 +168,6 @@ class S7CommPlusAsyncClient:
 
     async def authenticate(self, password: str, username: str = "") -> None:
         """Perform PLC password authentication (legitimation).
-
-        Must be called after connect() and before data operations on
-        password-protected PLCs. Requires TLS to be active (V2+).
-
-        The method auto-detects legacy vs new legitimation based on
-        the PLC's firmware version.
 
         Args:
             password: PLC password
@@ -226,20 +177,18 @@ class S7CommPlusAsyncClient:
             S7ConnectionError: If not connected, TLS not active, or auth fails
         """
         if not self._connected:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Not connected")
 
         if not self._tls_active or self._oms_secret is None:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
 
-        # Step 1: Get challenge from PLC
         challenge = await self._get_legitimation_challenge()
         logger.info(f"Received legitimation challenge ({len(challenge)} bytes)")
 
-        # Step 2: Build response (auto-detect legacy vs new)
         from .legitimation import build_legacy_response, build_new_response
 
         if username:
@@ -261,28 +210,17 @@ class S7CommPlusAsyncClient:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 over the COTP connection.
-
-        Called after InitSSL and before CreateObject. Uses asyncio's
-        start_tls() to upgrade the existing connection to TLS.
-
-        Args:
-            tls_cert: Path to client TLS certificate (PEM)
-            tls_key: Path to client private key (PEM)
-            tls_ca: Path to CA certificate for PLC verification (PEM)
-        """
+        """Activate TLS 1.3 over the COTP connection."""
         if self._writer is None:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Cannot activate TLS: not connected")
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
 
-        # TLS 1.3 ciphersuites are configured differently from TLS 1.2
         if hasattr(ctx, "set_ciphersuites"):
             ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
-        # If set_ciphersuites not available, TLS 1.3 uses its mandatory defaults
 
         if tls_cert and tls_key:
             ctx.load_cert_chain(tls_cert, tls_key)
@@ -293,7 +231,6 @@ class S7CommPlusAsyncClient:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-        # Upgrade existing transport to TLS using asyncio start_tls
         transport = self._writer.transport
         loop = asyncio.get_event_loop()
         new_transport = await loop.start_tls(
@@ -303,13 +240,11 @@ class S7CommPlusAsyncClient:
             server_hostname=self._host,
         )
 
-        # Update reader/writer to use the TLS transport
         self._writer._transport = new_transport
         self._tls_active = True
 
-        # Extract OMS exporter secret for legitimation key derivation
         if new_transport is None:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("TLS handshake failed: no transport returned")
 
@@ -325,13 +260,7 @@ class S7CommPlusAsyncClient:
         logger.info("TLS 1.3 activated on async COTP connection")
 
     async def _get_legitimation_challenge(self) -> bytes:
-        """Request legitimation challenge from PLC.
-
-        Sends GetVarSubStreamed with address ServerSessionRequest (303).
-
-        Returns:
-            Challenge bytes from PLC
-        """
+        """Request legitimation challenge from PLC."""
         from .protocol import LegitimationId, DataType as DT
 
         payload = bytearray()
@@ -348,12 +277,12 @@ class S7CommPlusAsyncClient:
         offset += consumed
 
         if return_value != 0:
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError(f"GetVarSubStreamed for challenge failed: return_value={return_value}")
 
         if offset + 2 > len(resp_payload):
-            from ..error import S7ConnectionError
+            from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Challenge response too short")
 
@@ -388,7 +317,7 @@ class S7CommPlusAsyncClient:
         if len(resp_payload) >= 1:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value < 0:
-                from ..error import S7ConnectionError
+                from snap7.error import S7ConnectionError
 
                 raise S7ConnectionError(f"Legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"New legitimation return_value={return_value}")
@@ -411,32 +340,13 @@ class S7CommPlusAsyncClient:
         if len(resp_payload) >= 1:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value < 0:
-                from ..error import S7ConnectionError
+                from snap7.error import S7ConnectionError
 
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
 
-    async def _setup_legacy_fallback(self) -> None:
-        """Establish a secondary legacy S7 connection for data operations."""
-        from ..client import Client
-
-        loop = asyncio.get_event_loop()
-        client = Client()
-        await loop.run_in_executor(None, lambda: client.connect(self._host, self._rack, self._slot, self._port))
-        self._legacy_client = client
-        self._use_legacy_data = True
-        logger.info(f"Legacy S7 fallback connected to {self._host}:{self._port}")
-
     async def disconnect(self) -> None:
         """Disconnect from PLC."""
-        if self._legacy_client is not None:
-            try:
-                self._legacy_client.disconnect()
-            except Exception:
-                pass
-            self._legacy_client = None
-            self._use_legacy_data = False
-
         if self._connected and self._session_id:
             try:
                 await self._delete_session()
@@ -453,6 +363,7 @@ class S7CommPlusAsyncClient:
         self._tls_active = False
         self._oms_secret = None
         self._server_session_version = None
+        self._session_setup_ok = False
 
         if self._writer:
             try:
@@ -464,22 +375,7 @@ class S7CommPlusAsyncClient:
             self._reader = None
 
     async def db_read(self, db_number: int, start: int, size: int) -> bytes:
-        """Read raw bytes from a data block.
-
-        Args:
-            db_number: Data block number
-            start: Start byte offset
-            size: Number of bytes to read
-
-        Returns:
-            Raw bytes read from the data block
-        """
-        if self._use_legacy_data and self._legacy_client is not None:
-            client = self._legacy_client
-            loop = asyncio.get_event_loop()
-            data = await loop.run_in_executor(None, lambda: client.db_read(db_number, start, size))
-            return bytes(data)
-
+        """Read raw bytes from a data block."""
         payload = _build_read_payload([(db_number, start, size)])
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
 
@@ -491,67 +387,26 @@ class S7CommPlusAsyncClient:
         return results[0]
 
     async def db_write(self, db_number: int, start: int, data: bytes) -> None:
-        """Write raw bytes to a data block.
-
-        Args:
-            db_number: Data block number
-            start: Start byte offset
-            data: Bytes to write
-        """
-        if self._use_legacy_data and self._legacy_client is not None:
-            client = self._legacy_client
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, lambda: client.db_write(db_number, start, bytearray(data)))
-            return
-
+        """Write raw bytes to a data block."""
         payload = _build_write_payload([(db_number, start, data)])
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
     async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
-        """Read multiple data block regions in a single request.
-
-        Args:
-            items: List of (db_number, start_offset, size) tuples
-
-        Returns:
-            List of raw bytes for each item
-        """
-        if self._use_legacy_data and self._legacy_client is not None:
-            client = self._legacy_client
-            loop = asyncio.get_event_loop()
-            multi_results: list[bytes] = []
-            for db_number, start, size in items:
-
-                def _read(db: int = db_number, s: int = start, sz: int = size) -> bytearray:
-                    return bytearray(client.db_read(db, s, sz))
-
-                data = await loop.run_in_executor(None, _read)
-                multi_results.append(bytes(data))
-            return multi_results
-
+        """Read multiple data block regions in a single request."""
         payload = _build_read_payload(items)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
-
         parsed = _parse_read_response(response)
         return [r if r is not None else b"" for r in parsed]
 
     async def explore(self) -> bytes:
-        """Browse the PLC object tree.
-
-        Returns:
-            Raw response payload
-        """
+        """Browse the PLC object tree."""
         return await self._send_request(FunctionCode.EXPLORE, b"")
 
     # -- Internal methods --
 
     async def _send_request(self, function_code: int, payload: bytes) -> bytes:
-        """Send an S7CommPlus request and receive the response.
-
-        For V2+ with IntegrityId tracking, inserts IntegrityId after the
-        14-byte request header and strips it from the response.
-        """
+        """Send an S7CommPlus request and receive the response."""
         async with self._lock:
             if not self._connected or self._writer is None or self._reader is None:
                 raise RuntimeError("Not connected")
@@ -569,7 +424,6 @@ class S7CommPlusAsyncClient:
                 0x36,
             )
 
-            # For V2+ with IntegrityId, insert after header
             integrity_id_bytes = b""
             if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
                 is_read = function_code in READ_FUNCTION_CODES
@@ -582,7 +436,6 @@ class S7CommPlusAsyncClient:
             frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
             await self._send_cotp_dt(frame)
 
-            # Increment appropriate IntegrityId counter
             if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
                 if function_code in READ_FUNCTION_CODES:
                     self._integrity_id_read = (self._integrity_id_read + 1) & 0xFFFFFFFF
@@ -597,7 +450,6 @@ class S7CommPlusAsyncClient:
             if len(response) < 14:
                 raise RuntimeError("Response too short")
 
-            # For V2+, skip IntegrityId in response
             resp_offset = 14
             if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
                 if resp_offset < len(response):
@@ -611,7 +463,6 @@ class S7CommPlusAsyncClient:
         if self._writer is None or self._reader is None:
             raise RuntimeError("Not connected")
 
-        # Build COTP CR
         base_pdu = struct.pack(">BBHHB", 6, _COTP_CR, 0x0000, 0x0001, 0x00)
         calling_tsap = struct.pack(">BBH", 0xC1, 2, local_tsap)
         called_tsap = struct.pack(">BB", 0xC2, len(remote_tsap)) + remote_tsap
@@ -620,12 +471,10 @@ class S7CommPlusAsyncClient:
         params = calling_tsap + called_tsap + pdu_size_param
         cr_pdu = struct.pack(">B", 6 + len(params)) + base_pdu[1:] + params
 
-        # Send TPKT + CR
         tpkt = struct.pack(">BBH", 3, 0, 4 + len(cr_pdu)) + cr_pdu
         self._writer.write(tpkt)
         await self._writer.drain()
 
-        # Receive TPKT + CC
         tpkt_header = await self._reader.readexactly(4)
         _, _, length = struct.unpack(">BBH", tpkt_header)
         payload = await self._reader.readexactly(length - 4)
@@ -645,7 +494,7 @@ class S7CommPlusAsyncClient:
             0x0000,
             seq_num,
             0x00000000,
-            0x30,  # Transport flags for InitSSL
+            0x30,
         )
         request += struct.pack(">I", 0)
 
@@ -666,7 +515,6 @@ class S7CommPlusAsyncClient:
         """Send CreateObject to establish S7CommPlus session."""
         seq_num = self._next_sequence_number()
 
-        # Build CreateObject request header
         request = struct.pack(
             ">BHHHHIB",
             Opcode.REQUEST,
@@ -674,32 +522,24 @@ class S7CommPlusAsyncClient:
             FunctionCode.CREATE_OBJECT,
             0x0000,
             seq_num,
-            ObjectId.OBJECT_NULL_SERVER_SESSION,  # SessionId = 288
+            ObjectId.OBJECT_NULL_SERVER_SESSION,
             0x36,
         )
 
-        # RequestId: ObjectServerSessionContainer (285)
         request += struct.pack(">I", ObjectId.OBJECT_SERVER_SESSION_CONTAINER)
-
-        # RequestValue: ValueUDInt(0)
         request += bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(0)
-
-        # Unknown padding
         request += struct.pack(">I", 0)
 
-        # RequestObject: NullServerSession PObject
         request += bytes([ElementID.START_OF_OBJECT])
         request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
         request += encode_uint32_vlq(ObjectId.CLASS_SERVER_SESSION)
-        request += encode_uint32_vlq(0)  # ClassFlags
-        request += encode_uint32_vlq(0)  # AttributeId
+        request += encode_uint32_vlq(0)
+        request += encode_uint32_vlq(0)
 
-        # Attribute: ServerSessionClientRID = 0x80c3c901
         request += bytes([ElementID.ATTRIBUTE])
         request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
         request += encode_typed_value(DataType.RID, 0x80C3C901)
 
-        # Nested: ClassSubscriptions
         request += bytes([ElementID.START_OF_OBJECT])
         request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
         request += encode_uint32_vlq(ObjectId.CLASS_SUBSCRIPTIONS)
@@ -710,7 +550,6 @@ class S7CommPlusAsyncClient:
         request += bytes([ElementID.TERMINATING_OBJECT])
         request += struct.pack(">I", 0)
 
-        # Frame header + trailer
         frame = encode_header(ProtocolVersion.V1, len(request)) + request
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
         await self._send_cotp_dt(frame)
@@ -725,7 +564,6 @@ class S7CommPlusAsyncClient:
         self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
-        # Parse ServerSessionVersion from response payload
         self._parse_create_object_response(response[14:])
 
     def _parse_create_object_response(self, payload: bytes) -> None:
@@ -754,13 +592,11 @@ class S7CommPlusAsyncClient:
                         logger.info(f"ServerSessionVersion = {value}")
                         return
                 else:
-                    # Skip attribute value
                     if offset + 2 > len(payload):
                         break
                     _flags = payload[offset]
                     _dt = payload[offset + 1]
                     offset += 2
-                    # Best-effort skip: advance past common VLQ-encoded values
                     if offset < len(payload):
                         _, consumed = decode_uint32_vlq(payload, offset)
                         offset += consumed
@@ -769,13 +605,13 @@ class S7CommPlusAsyncClient:
                 offset += 1
                 if offset + 4 > len(payload):
                     break
-                offset += 4  # RelationId
+                offset += 4
                 _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassId
+                offset += consumed
                 _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassFlags
+                offset += consumed
                 _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # AttributeId
+                offset += consumed
 
             elif tag == ElementID.TERMINATING_OBJECT:
                 offset += 1
@@ -787,28 +623,21 @@ class S7CommPlusAsyncClient:
         logger.debug("ServerSessionVersion not found in CreateObject response")
 
     async def _setup_session(self) -> bool:
-        """Echo ServerSessionVersion back to the PLC via SetMultiVariables.
-
-        Without this step, the PLC rejects all subsequent data operations
-        with ERROR2 (0x05A9).
-
-        Returns:
-            True if session setup succeeded.
-        """
+        """Echo ServerSessionVersion back to the PLC via SetMultiVariables."""
         if self._server_session_version is None:
             return False
 
         payload = bytearray()
         payload += struct.pack(">I", self._session_id)
-        payload += encode_uint32_vlq(1)  # Item count
-        payload += encode_uint32_vlq(1)  # Total address field count
+        payload += encode_uint32_vlq(1)
+        payload += encode_uint32_vlq(1)
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
-        payload += encode_uint32_vlq(1)  # ItemNumber
+        payload += encode_uint32_vlq(1)
         payload += bytes([0x00, DataType.UDINT])
         payload += encode_uint32_vlq(self._server_session_version)
-        payload += bytes([0x00])  # Fill byte
+        payload += bytes([0x00])
         payload += encode_object_qualifier()
-        payload += struct.pack(">I", 0)  # Trailing padding
+        payload += struct.pack(">I", 0)
 
         try:
             resp_payload = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
