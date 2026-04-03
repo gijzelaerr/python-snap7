@@ -11,19 +11,29 @@ Connection Issues
 Automatic Reconnection
 ----------------------
 
-The :class:`~snap7.client.Client` has built-in auto-reconnect with exponential
-backoff and optional heartbeat monitoring. This is the recommended approach for
-long-running applications:
+The :class:`~snap7.client.Client` (used internally by ``s7.Client``) has
+built-in auto-reconnect with exponential backoff and optional heartbeat
+monitoring. This is the recommended approach for long-running applications:
 
 .. code-block:: python
 
-   import snap7
+   from s7 import Client
 
    def on_disconnect():
        print("Connection lost!")
 
    def on_reconnect():
        print("Reconnected!")
+
+   client = Client()
+   client.connect("192.168.1.10", 0, 1)
+
+For finer control over reconnection parameters, use the legacy ``snap7.Client``
+directly:
+
+.. code-block:: python
+
+   import snap7
 
    client = snap7.Client(
        auto_reconnect=True,        # Enable automatic reconnection
@@ -62,13 +72,13 @@ manually:
 
 .. code-block:: python
 
-   import snap7
+   from s7 import Client
    import time
    import logging
 
    logger = logging.getLogger(__name__)
 
-   client = snap7.Client()
+   client = Client()
 
    def connect(address: str = "192.168.1.10", rack: int = 0, slot: int = 1) -> None:
        client.connect(address, rack, slot)
@@ -109,9 +119,9 @@ the underlying connection object:
 
 .. code-block:: python
 
-   import snap7
+   from s7 import Client
 
-   client = snap7.Client()
+   client = Client()
 
    # Connect with a custom timeout (in seconds)
    client.connect("192.168.1.10", 0, 1)
@@ -120,12 +130,11 @@ the underlying connection object:
    # Default is 5.0 seconds
    client.connection.timeout = 10.0  # Set to 10 seconds
 
-To set the timeout **before** connecting, use ``set_connection_params`` and then
-connect manually, or simply reconnect after adjusting:
+To set the timeout **before** connecting, connect first and then adjust:
 
 .. code-block:: python
 
-   client = snap7.Client()
+   client = Client()
    client.connect("192.168.1.10", 0, 1)
 
    # Adjust timeout for slow networks

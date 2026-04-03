@@ -2,15 +2,15 @@ Reading & Writing Data
 ======================
 
 This page covers address mapping, data type conversions, memory area access,
-and analog I/O — everything you need for reading from and writing to a PLC.
+and analog I/O -- everything you need for reading from and writing to a PLC.
 
 All examples assume you have a connected client:
 
 .. code-block:: python
 
-   import snap7
+   from s7 import Client
 
-   client = snap7.Client()
+   client = Client()
    client.connect("192.168.1.10", 0, 1)
 
 .. contents:: On this page
@@ -29,7 +29,7 @@ as follows.
    :widths: 25 40 35
 
    * - PLC Address
-     - python-snap7 Call
+     - API Call
      - Explanation
    * - DB1.DBB0
      - ``db_read(1, 0, 1)``
@@ -58,7 +58,7 @@ as follows.
 
 .. important::
 
-   The ``byte_index`` parameter in all ``snap7.util`` getter/setter functions
+   The ``byte_index`` parameter in all ``s7.util`` getter/setter functions
    is **relative to the returned bytearray**, not the absolute PLC address.
 
    For example, to read DB1.DBX10.3:
@@ -66,7 +66,8 @@ as follows.
    .. code-block:: python
 
       data = client.db_read(1, 10, 1)  # Read 1 byte starting at offset 10
-      value = snap7.util.get_bool(data, 0, 3)  # byte_index=0, NOT 10
+      from s7.util import get_bool
+      value = get_bool(data, 0, 3)  # byte_index=0, NOT 10
 
    You read from PLC offset 10, but ``data[0]`` *is* byte 10 from the PLC.
 
@@ -74,7 +75,8 @@ as follows.
 Data Types
 ----------
 
-Each example below shows a complete read and write cycle.
+Each example below shows a complete read and write cycle. Data conversion
+helpers live in ``s7.util`` and work with any client.
 
 BOOL
 ^^^^
@@ -85,14 +87,16 @@ the whole byte back.
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBX0.3 (bit 3 of byte 0)
    data = client.db_read(1, 0, 1)
-   value = snap7.util.get_bool(data, 0, 3)
+   value = util.get_bool(data, 0, 3)
    print(f"DB1.DBX0.3 = {value}")
 
    # Write DB1.DBX0.3 -- read first, then modify, then write
    data = client.db_read(1, 0, 1)
-   snap7.util.set_bool(data, 0, 3, True)
+   util.set_bool(data, 0, 3, True)
    client.db_write(1, 0, data)
 
 .. warning::
@@ -105,14 +109,16 @@ BYTE (1 byte, unsigned 0--255)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBB0 (1 byte at offset 0)
    data = client.db_read(1, 0, 1)
-   value = snap7.util.get_byte(data, 0)
+   value = util.get_byte(data, 0)
    print(f"DB1.DBB0 = {value}")
 
    # Write
    data = bytearray(1)
-   snap7.util.set_byte(data, 0, 200)
+   util.set_byte(data, 0, 200)
    client.db_write(1, 0, data)
 
 INT (2 bytes, signed -32768 to 32767)
@@ -120,14 +126,16 @@ INT (2 bytes, signed -32768 to 32767)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBW10
    data = client.db_read(1, 10, 2)
-   value = snap7.util.get_int(data, 0)
+   value = util.get_int(data, 0)
    print(f"DB1.DBW10 = {value}")
 
    # Write
    data = bytearray(2)
-   snap7.util.set_int(data, 0, -1234)
+   util.set_int(data, 0, -1234)
    client.db_write(1, 10, data)
 
 WORD (2 bytes, unsigned 0--65535)
@@ -135,14 +143,16 @@ WORD (2 bytes, unsigned 0--65535)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBW20
    data = client.db_read(1, 20, 2)
-   value = snap7.util.get_word(data, 0)
+   value = util.get_word(data, 0)
    print(f"DB1.DBW20 = {value}")
 
    # Write
    data = bytearray(2)
-   snap7.util.set_word(data, 0, 50000)
+   util.set_word(data, 0, 50000)
    client.db_write(1, 20, data)
 
 DINT (4 bytes, signed -2147483648 to 2147483647)
@@ -150,14 +160,16 @@ DINT (4 bytes, signed -2147483648 to 2147483647)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBD30
    data = client.db_read(1, 30, 4)
-   value = snap7.util.get_dint(data, 0)
+   value = util.get_dint(data, 0)
    print(f"DB1.DBD30 = {value}")
 
    # Write
    data = bytearray(4)
-   snap7.util.set_dint(data, 0, 100000)
+   util.set_dint(data, 0, 100000)
    client.db_write(1, 30, data)
 
 DWORD (4 bytes, unsigned 0--4294967295)
@@ -165,14 +177,16 @@ DWORD (4 bytes, unsigned 0--4294967295)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBD40
    data = client.db_read(1, 40, 4)
-   value = snap7.util.get_dword(data, 0)
+   value = util.get_dword(data, 0)
    print(f"DB1.DBD40 = {value}")
 
    # Write
    data = bytearray(4)
-   snap7.util.set_dword(data, 0, 3000000000)
+   util.set_dword(data, 0, 3000000000)
    client.db_write(1, 40, data)
 
 LINT (8 bytes, signed -9223372036854775808 to 9223372036854775807)
@@ -180,9 +194,11 @@ LINT (8 bytes, signed -9223372036854775808 to 9223372036854775807)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read 8 bytes from DB1 at offset 60
    data = client.db_read(1, 60, 8)
-   value = snap7.util.get_lint(data, 0)
+   value = util.get_lint(data, 0)
    print(f"LINT = {value}")
 
    # Write (no set_lint helper -- use struct directly)
@@ -195,9 +211,11 @@ ULINT (8 bytes, unsigned 0--18446744073709551615)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read 8 bytes from DB1 at offset 68
    data = client.db_read(1, 68, 8)
-   value = snap7.util.get_ulint(data, 0)
+   value = util.get_ulint(data, 0)
    print(f"ULINT = {value}")
 
    # Write (no set_ulint helper -- use struct directly)
@@ -210,14 +228,16 @@ REAL (4 bytes, IEEE 754 float)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1.DBD50
    data = client.db_read(1, 50, 4)
-   value = snap7.util.get_real(data, 0)
+   value = util.get_real(data, 0)
    print(f"DB1.DBD50 = {value}")
 
    # Write
    data = bytearray(4)
-   snap7.util.set_real(data, 0, 3.14)
+   util.set_real(data, 0, 3.14)
    client.db_write(1, 50, data)
 
 LREAL (8 bytes, IEEE 754 double)
@@ -225,14 +245,16 @@ LREAL (8 bytes, IEEE 754 double)
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read DB1, offset 60, 8 bytes
    data = client.db_read(1, 60, 8)
-   value = snap7.util.get_lreal(data, 0)
+   value = util.get_lreal(data, 0)
    print(f"LREAL = {value}")
 
    # Write
    data = bytearray(8)
-   snap7.util.set_lreal(data, 0, 3.141592653589793)
+   util.set_lreal(data, 0, 3.141592653589793)
    client.db_write(1, 60, data)
 
 STRING (2 header bytes + characters)
@@ -248,15 +270,17 @@ When reading, always request ``max_length + 2`` bytes to include the header.
 
 .. code-block:: python
 
+   from s7 import util
+
    # Read a string at DB1, offset 10, declared as STRING[20] in the PLC
    max_length = 20
    data = client.db_read(1, 10, max_length + 2)  # 20 + 2 header bytes = 22
-   text = snap7.util.get_string(data, 0)
+   text = util.get_string(data, 0)
    print(f"String = '{text}'")
 
    # Write a string
    data = client.db_read(1, 10, max_length + 2)
-   snap7.util.set_string(data, 0, "Hello", max_length)
+   util.set_string(data, 0, "Hello", max_length)
    client.db_write(1, 10, data)
 
 .. note::
@@ -270,11 +294,12 @@ DATE_AND_TIME (8 bytes, BCD encoded)
 
 .. code-block:: python
 
+   from s7 import util
    from datetime import datetime
 
    # Read DATE_AND_TIME at DB1, offset 70 (returns ISO 8601 string)
    data = client.db_read(1, 70, 8)
-   dt_string = snap7.util.get_dt(data, 0)
+   dt_string = util.get_dt(data, 0)
    print(f"DATE_AND_TIME = {dt_string}")  # e.g. '2024-06-15T14:30:00.000000'
 
    # Parse to Python datetime if needed
@@ -282,7 +307,7 @@ DATE_AND_TIME (8 bytes, BCD encoded)
 
    # Write DATE_AND_TIME
    data = client.db_read(1, 70, 8)
-   snap7.util.set_dt(data, 0, datetime(2024, 6, 15, 14, 30, 0))
+   util.set_dt(data, 0, datetime(2024, 6, 15, 14, 30, 0))
    client.db_write(1, 70, data)
 
 
@@ -319,7 +344,7 @@ Inputs (I / E)
 
 .. code-block:: python
 
-   from snap7.type import Area
+   from s7 import Area
 
    # Read 2 input bytes starting at IB0
    data = client.read_area(Area.PE, 0, 0, 2)
@@ -329,7 +354,7 @@ Outputs (Q / A)
 
 .. code-block:: python
 
-   from snap7.type import Area
+   from s7 import Area
 
    # Read 2 output bytes starting at QB0
    data = client.read_area(Area.PA, 0, 0, 2)
@@ -342,7 +367,7 @@ Timers (T)
 
 .. code-block:: python
 
-   from snap7.type import Area
+   from s7 import Area
 
    # Read timer T0 (1 timer = 2 bytes)
    data = client.read_area(Area.TM, 0, 0, 1)
@@ -352,7 +377,7 @@ Counters (C)
 
 .. code-block:: python
 
-   from snap7.type import Area
+   from s7 import Area
 
    # Read counter C0 (1 counter = 2 bytes)
    data = client.read_area(Area.CT, 0, 0, 1)
@@ -370,15 +395,15 @@ Reading Analog Inputs
 
 .. code-block:: python
 
-   import snap7
-   from snap7.type import Area
+   from s7 import util
+   from s7 import Client, Area
 
-   client = snap7.Client()
+   client = Client()
    client.connect("192.168.1.10", 0, 1)
 
    # Read AIW0 (analog input word at address 0)
    data = client.read_area(Area.PE, 0, 0, 2)
-   raw_value = snap7.util.get_int(data, 0)
+   raw_value = util.get_int(data, 0)
    print(f"Raw value: {raw_value}")
 
    # Scale to engineering units
@@ -390,18 +415,19 @@ Reading Analog Inputs
 
    # Read AIW2 (second analog input)
    data = client.read_area(Area.PE, 0, 2, 2)
-   raw_value = snap7.util.get_int(data, 0)
+   raw_value = util.get_int(data, 0)
 
 Writing Analog Outputs
 ^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
-   from snap7.type import Area
+   from s7 import util
+   from s7 import Area
 
    # Write to AQW0 (analog output word at address 0)
    data = bytearray(2)
-   snap7.util.set_int(data, 0, 13824)  # ~50% of 27648
+   util.set_int(data, 0, 13824)  # ~50% of 27648
    client.write_area(Area.PA, 0, 0, data)
 
 .. note::

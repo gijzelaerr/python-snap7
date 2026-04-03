@@ -1,15 +1,10 @@
-S7CommPlus (S7-1200/1500)
-=========================
+S7 Client (recommended)
+=======================
 
-.. warning::
-
-   S7CommPlus support is **experimental**. The API may change in future
-   releases. If you encounter problems, please `open an issue
-   <https://github.com/gijzelaerr/python-snap7/issues>`_.
-
-The ``s7`` package provides a unified client for Siemens S7-1200 and S7-1500
-PLCs. It automatically tries the S7CommPlus protocol first and falls back to
-the legacy S7 protocol when needed.
+The ``s7`` package is the recommended entry point for communicating with any
+supported Siemens S7 PLC. It provides a unified client that works with all
+PLC models -- S7-300, S7-400, S7-1200 and S7-1500 -- and automatically
+selects the best protocol (S7CommPlus or legacy S7).
 
 Synchronous client
 ------------------

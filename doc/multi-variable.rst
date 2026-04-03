@@ -6,11 +6,11 @@ request, which is significantly faster than individual reads.
 
 .. code-block:: python
 
-   import snap7
-   from snap7.type import Area, WordLen, S7DataItem
+   from s7 import Client, Area, WordLen
+   from snap7.type import S7DataItem
    from ctypes import c_uint8, cast, POINTER
 
-   client = snap7.Client()
+   client = Client()
    client.connect("192.168.1.10", 0, 1)
 
    # Prepare items to read

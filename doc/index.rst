@@ -39,9 +39,9 @@ Welcome to python-snap7's documentation!
    :maxdepth: 2
    :caption: API Reference
 
+   API/s7commplus
    API/client
    API/async_client
-   API/s7commplus
    API/server
    API/partner
    API/logo

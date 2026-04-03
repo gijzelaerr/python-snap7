@@ -4,7 +4,7 @@ Introduction
 python-snap7 is a pure Python S7 communication library for interfacing
 natively with Siemens S7 PLCs. The library implements the complete S7
 protocol stack including TPKT (RFC 1006), COTP (ISO 8073), and S7
-protocol layers.
+protocol layers, as well as the S7CommPlus protocol for newer PLCs.
 
 The name "python-snap7" is historical: the library originally started as a
 Python wrapper around the `Snap7 <http://snap7.sourceforge.net/>`_ C library.
@@ -14,19 +14,33 @@ backwards compatibility.
 python-snap7 requires Python 3.10+ and runs on Windows, macOS and Linux
 without any native dependencies.
 
-The library provides two packages:
+The ``s7`` package
+------------------
 
-- **snap7** -- the original S7 protocol implementation, supporting S7-300,
-  S7-400, S7-1200 and S7-1500 PLCs via the classic PUT/GET interface.
-- **s7** -- a newer unified client that automatically tries the S7CommPlus
-  protocol (used natively by S7-1200/1500) and falls back to legacy S7 when
-  needed. ``s7.Client`` is a drop-in replacement for ``snap7.Client``.
+The recommended way to use this library is through the ``s7`` package. It
+provides a unified client that works with **all supported PLC models** --
+S7-300, S7-400, S7-1200 and S7-1500. For newer PLCs (S7-1200/1500) it
+automatically tries the S7CommPlus protocol and falls back to legacy S7 when
+needed:
 
-.. note::
+.. code-block:: python
 
-   The ``s7`` package and its S7CommPlus support are **experimental**.
-   The legacy ``snap7`` package remains fully supported and is the safe choice
-   for production use. See :doc:`API/s7commplus` for details.
+   from s7 import Client
+
+   client = Client()
+   client.connect("192.168.1.10", 0, 1)
+   data = client.db_read(1, 0, 4)
+   client.disconnect()
+
+The ``snap7`` package (legacy)
+------------------------------
+
+The ``snap7`` package is the original S7 protocol implementation. It remains
+fully functional and is kept for backwards compatibility. It supports
+S7-300, S7-400, S7-1200 and S7-1500 PLCs via the classic PUT/GET interface.
+
+If you have existing code that uses ``snap7.Client``, it will continue to work
+unchanged. For new projects, we recommend using ``s7.Client`` instead.
 
 .. note::
 

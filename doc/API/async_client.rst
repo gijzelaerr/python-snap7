@@ -1,11 +1,9 @@
-AsyncClient
-===========
+AsyncClient (legacy)
+====================
 
-.. warning::
-
-   The ``AsyncClient`` is **experimental**. The API may change in future
-   releases. If you encounter problems, please `open an issue
-   <https://github.com/gijzelaerr/python-snap7/issues>`_.
+The :class:`~snap7.async_client.AsyncClient` is the legacy async S7 client.
+For new projects, we recommend using ``s7.AsyncClient`` instead --
+see :doc:`s7commplus`.
 
 The :class:`~snap7.async_client.AsyncClient` provides a native ``asyncio``
 interface for communicating with Siemens S7 PLCs.  It has feature parity with
@@ -18,10 +16,10 @@ Quick start
 .. code-block:: python
 
    import asyncio
-   import snap7
+   from s7 import AsyncClient
 
    async def main():
-       async with snap7.AsyncClient() as client:
+       async with AsyncClient() as client:
            await client.connect("192.168.1.10", 0, 1)
            data = await client.db_read(1, 0, 4)
            print(data)
