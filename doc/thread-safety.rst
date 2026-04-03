@@ -10,10 +10,10 @@ and cause unpredictable errors.
 .. code-block:: python
 
    import threading
-   import snap7
+   from s7 import Client
 
    def worker(address: str, rack: int, slot: int) -> None:
-       client = snap7.Client()
+       client = Client()
        client.connect(address, rack, slot)
        data = client.db_read(1, 0, 10)
        client.disconnect()
@@ -28,9 +28,9 @@ and cause unpredictable errors.
 .. code-block:: python
 
    import threading
-   import snap7
+   from s7 import Client
 
-   client = snap7.Client()
+   client = Client()
    client.connect("192.168.1.10", 0, 1)
    lock = threading.Lock()
 

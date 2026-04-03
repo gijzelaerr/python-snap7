@@ -1,7 +1,9 @@
 """
-Pure Python S7 client implementation.
+Legacy S7 client implementation.
 
-Drop-in replacement for the ctypes-based client with native Python implementation.
+Pure Python implementation of the classic S7 protocol. For new projects,
+use :class:`s7.Client` instead, which supports all PLC models and
+automatically selects the best protocol.
 """
 
 import logging
@@ -45,14 +47,15 @@ logger = logging.getLogger(__name__)
 
 class Client(ClientMixin):
     """
-    Pure Python S7 client implementation.
+    Legacy S7 client for classic PUT/GET communication.
 
-    Drop-in replacement for the ctypes-based client that provides native Python
-    communication with Siemens S7 PLCs without requiring the Snap7 C library.
+    Supports S7-300, S7-400, S7-1200 and S7-1500 PLCs via the classic S7
+    protocol. For new projects, use :class:`s7.Client` instead, which
+    automatically selects the best protocol for any supported PLC.
 
     Examples:
-        >>> import snap7
-        >>> client = snap7.Client()
+        >>> from s7 import Client
+        >>> client = Client()
         >>> client.connect("192.168.1.10", 0, 1)
         >>> data = client.db_read(1, 0, 4)
         >>> client.disconnect()

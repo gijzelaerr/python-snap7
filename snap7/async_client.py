@@ -1,8 +1,11 @@
 """
-Native async S7 client implementation.
+Legacy async S7 client implementation.
 
 Uses asyncio streams for non-blocking I/O with an asyncio.Lock() to serialize
 send/receive cycles, ensuring safe concurrent use via asyncio.gather().
+
+For new projects, use :class:`s7.AsyncClient` instead, which supports all PLC
+models and automatically selects the best protocol.
 """
 
 import asyncio
@@ -277,15 +280,17 @@ class AsyncISOTCPConnection:
 
 class AsyncClient(ClientMixin):
     """
-    Native async S7 client implementation.
+    Legacy async S7 client for classic PUT/GET communication.
 
     Uses asyncio streams for non-blocking I/O. An internal asyncio.Lock
     serializes each send+receive cycle so that concurrent coroutines
     (e.g. via asyncio.gather) never interleave on the same TCP socket.
 
+    For new projects, use :class:`s7.AsyncClient` instead.
+
     Examples:
-        >>> import snap7
-        >>> async with snap7.AsyncClient() as client:
+        >>> from s7 import AsyncClient
+        >>> async with AsyncClient() as client:
         ...     await client.connect("192.168.1.10", 0, 1)
         ...     data = await client.db_read(1, 0, 4)
     """

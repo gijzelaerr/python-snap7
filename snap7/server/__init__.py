@@ -1,7 +1,9 @@
 """
-Pure Python S7 server implementation.
+Legacy S7 server implementation.
 
-Provides a complete S7 server emulator without dependencies on the Snap7 C library.
+Provides a complete S7 server emulator for the classic S7 protocol. For new
+projects, use :class:`s7.Server` instead, which supports both legacy S7 and
+S7CommPlus clients.
 """
 
 import socket
@@ -40,13 +42,14 @@ class CPUState(IntEnum):
 
 class Server:
     """
-    Pure Python S7 server implementation.
+    Legacy S7 server implementation.
 
     Emulates a Siemens S7 PLC for testing and development purposes.
+    For new projects, use :class:`s7.Server` instead.
 
     Examples:
-        >>> import snap7
-        >>> server = snap7.Server()
+        >>> from s7 import Server
+        >>> server = Server()
         >>> server.start()
         >>> # ... register areas and handle clients
         >>> server.stop()
