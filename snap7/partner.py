@@ -648,9 +648,7 @@ class Partner:
         if self._connection is None:
             raise S7ConnectionError("No connection for S7 setup")
 
-        request = self._protocol.build_setup_communication_request(
-            max_amq_caller=1, max_amq_callee=1, pdu_length=self.pdu_length
-        )
+        request = self._protocol.build_setup_communication_request(max_amq_caller=1, max_amq_callee=1, pdu_length=self.pdu_length)
         self._connection.send_data(request)
         response_data = self._connection.receive_data()
         response = self._protocol.parse_response(response_data)
