@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 _PUSH_FUNC_GROUP = 0x06
 
 # Partner push subfunctions
-_PUSH_SUBFUNCTION_DATA = 0x01  # bsend data push
-_PUSH_SUBFUNCTION_ACK = 0x02  # bsend acknowledgment
+_PUSH_SUBFUNCTION_BSEND = 0x06  # bsend data push
 
 
 class PartnerStatus:
@@ -781,19 +780,17 @@ class Partner:
 
         sequence = self._protocol._next_sequence()
 
-        # Parameter section: 12-byte USERDATA header + 4-byte R-ID
+        # Parameter section: USERDATA header + 4-byte R-ID
         param = struct.pack(
-            ">BBBBBBBBBBxx",
+            ">BBBBBBBB",
             0x00,  # reserved
             0x01,  # parameter count
             0x12,  # type header
-            0x08,  # length of following parameter data
+            0x04,  # length of following parameter data
             0x11,  # method: request
             0x46,  # type 4 (request) | group 6 (push)
-            _PUSH_SUBFUNCTION_DATA,
+            _PUSH_SUBFUNCTION_BSEND,
             sequence & 0xFF,
-            0x00,  # data unit reference (no fragmentation)
-            0x00,  # last data unit = yes
         )
         param += struct.pack(">I", r_id)
 
@@ -859,19 +856,17 @@ class Partner:
         sequence = self._protocol._next_sequence()
 
         param = struct.pack(
-            ">BBBBBBBBBBxx",
+            ">BBBBBBBB",
             0x00,
             0x01,
             0x12,
-            0x08,
+            0x08,  # length: 4 base + 2 (dur/ldu) + 2 (error code)
             0x12,  # method: response
             0x86,  # type 8 (response) | group 6 (push)
-            _PUSH_SUBFUNCTION_ACK,
+            _PUSH_SUBFUNCTION_BSEND,
             sequence & 0xFF,
-            0x00,
-            0x00,
         )
-        param += struct.pack(">I", r_id)
+        param += struct.pack(">BBHI", 0x00, 0x00, 0x0000, r_id)  # dur, ldu, error_code, R-ID
 
         header = struct.pack(
             ">BBHHHH",
@@ -889,7 +884,7 @@ class Partner:
         """Parse a partner acknowledgment PDU.
 
         Validates that the PDU is a proper S7 USERDATA response for a push
-        acknowledgment.
+        acknowledgment and checks for error codes.
         """
         if len(pdu) < 6:
             raise S7Error("Invalid partner ACK: too short")
@@ -900,6 +895,19 @@ class Partner:
 
         if pdu_type != S7PDUType.USERDATA:
             raise S7Error(f"Expected partner ACK (USERDATA), got {pdu_type:#04x}")
+
+        # Check for error code in parameter section
+        if len(pdu) >= 10:
+            _, _, _, _, param_len, _ = struct.unpack(">BBHHHH", pdu[:10])
+            param = pdu[10 : 10 + param_len]
+            # Parameter layout: 00 01 12 LL [method tg sf seq ...] [error_code]
+            if len(param) >= 4:
+                sub_len = param[3]
+                if sub_len >= 8 and len(param) >= 12:
+                    # Error code is at offset 10-11 within param (bytes 6-7 after 12 LL)
+                    error_code = struct.unpack(">H", param[10:12])[0]
+                    if error_code != 0:
+                        raise S7Error(f"Partner ACK error: {error_code:#06x}")
 
     def __enter__(self) -> "Partner":
         """Context manager entry."""
