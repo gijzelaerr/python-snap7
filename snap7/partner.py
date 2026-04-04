@@ -19,9 +19,17 @@ from ctypes import c_int32, c_uint32
 
 from .connection import ISOTCPConnection
 from .error import S7Error, S7ConnectionError
+from .s7protocol import S7Protocol, S7PDUType
 from .type import Parameter
 
 logger = logging.getLogger(__name__)
+
+# S7 partner/push function group
+_PUSH_FUNC_GROUP = 0x06
+
+# Partner push subfunctions
+_PUSH_SUBFUNCTION_DATA = 0x01  # bsend data push
+_PUSH_SUBFUNCTION_ACK = 0x02  # bsend acknowledgment
 
 
 class PartnerStatus:
@@ -75,6 +83,13 @@ class Partner:
         self._socket: Optional[socket.socket] = None
         self._server_socket: Optional[socket.socket] = None  # For passive mode
         self._connection: Optional[ISOTCPConnection] = None
+
+        # S7 protocol handler (for setup communication and PDU formatting)
+        self._protocol = S7Protocol()
+        self.pdu_length = 480
+
+        # R-ID for bsend/brecv matching (default 0, can be set by caller)
+        self.r_id: int = 0
 
         # Statistics
         self.bytes_sent = 0
@@ -517,7 +532,11 @@ class Partner:
         return self._recv_data
 
     def _connect_to_remote(self) -> None:
-        """Connect to remote partner (active mode)."""
+        """Connect to remote partner (active mode).
+
+        Performs COTP connection followed by S7 Communication Setup
+        to negotiate PDU size with the remote partner.
+        """
         if not self.remote_ip:
             raise S7ConnectionError("Remote IP not specified for active partner")
 
@@ -527,8 +546,11 @@ class Partner:
 
         self._connection.connect()
         self._socket = self._connection.socket
-        self.connected = True
 
+        # Perform S7 Communication Setup (negotiate PDU size)
+        self._setup_communication()
+
+        self.connected = True
         logger.info(f"Connected to remote partner at {self.remote_ip}:{self.port}")
 
     def _start_listening(self) -> None:
@@ -549,7 +571,11 @@ class Partner:
         accept_thread.start()
 
     def _accept_connection(self) -> None:
-        """Accept incoming connection in passive mode."""
+        """Accept incoming connection in passive mode.
+
+        After accepting the TCP connection, handles the COTP Connection Request
+        from the active partner and performs S7 Communication Setup.
+        """
         if self._server_socket is None:
             return
 
@@ -563,9 +589,16 @@ class Partner:
                     host=addr[0], port=addr[1], local_tsap=self.local_tsap, remote_tsap=self.remote_tsap
                 )
                 self._connection.socket = client_sock
-                self._connection.connected = True
-                self.connected = True
 
+                # Handle COTP Connection Request from active partner
+                self._handle_cotp_cr(client_sock)
+
+                self._connection.connected = True
+
+                # Wait for and handle S7 Communication Setup from active partner
+                self._handle_setup_communication()
+
+                self.connected = True
                 logger.info(f"Partner connection accepted from {addr}")
                 break
 
@@ -605,62 +638,270 @@ class Partner:
             except Exception:
                 break
 
-    def _build_partner_data_pdu(self, data: bytes) -> bytes:
+    def _setup_communication(self) -> None:
+        """Perform S7 Communication Setup after COTP connection.
+
+        Sends a Setup Communication request and parses the negotiated
+        PDU length from the response. This is required before any S7
+        data exchange can take place.
         """
-        Build partner data PDU.
+        if self._connection is None:
+            raise S7ConnectionError("No connection for S7 setup")
+
+        request = self._protocol.build_setup_communication_request(
+            max_amq_caller=1, max_amq_callee=1, pdu_length=self.pdu_length
+        )
+        self._connection.send_data(request)
+        response_data = self._connection.receive_data()
+        response = self._protocol.parse_response(response_data)
+
+        if response.get("parameters") and "pdu_length" in response["parameters"]:
+            self.pdu_length = response["parameters"]["pdu_length"]
+
+        logger.info(f"S7 Communication Setup complete, PDU length: {self.pdu_length}")
+
+    def _handle_cotp_cr(self, sock: socket.socket) -> None:
+        """Handle incoming COTP Connection Request and send Connection Confirm.
+
+        Used by passive partner to complete the COTP handshake initiated
+        by the active partner.
+        """
+        # Receive TPKT header (4 bytes)
+        tpkt_header = self._recv_exact_from(sock, 4)
+        version, _, length = struct.unpack(">BBH", tpkt_header)
+        if version != 3:
+            raise S7ConnectionError(f"Invalid TPKT version: {version}")
+
+        payload = self._recv_exact_from(sock, length - 4)
+        if len(payload) < 7:
+            raise S7ConnectionError("COTP CR too short")
+
+        pdu_type = payload[1]
+        if pdu_type != 0xE0:  # COTP_CR
+            raise S7ConnectionError(f"Expected COTP CR (0xE0), got {pdu_type:#04x}")
+
+        # Build and send Connection Confirm
+        if self._connection is None:
+            raise S7ConnectionError("No connection object")
+
+        cc_pdu = struct.pack(
+            ">BBHHB",
+            6,  # PDU length
+            0xD0,  # COTP_CC
+            self._connection.src_ref,  # Destination reference (our src_ref)
+            0x0001,  # Source reference
+            0x00,  # Class 0
+        )
+        # Add PDU size parameter
+        cc_pdu += struct.pack(">BBB", 0xC0, 1, 0x0A)  # 1024 bytes
+        # Update length byte
+        total_len = len(cc_pdu) - 1
+        cc_pdu = struct.pack(">B", total_len) + cc_pdu[1:]
+
+        tpkt = struct.pack(">BBH", 3, 0, len(cc_pdu) + 4) + cc_pdu
+        sock.sendall(tpkt)
+        logger.debug("Sent COTP Connection Confirm")
+
+    def _handle_setup_communication(self) -> None:
+        """Handle incoming S7 Communication Setup request from active partner.
+
+        Receives the setup request, parses it, and sends back a setup response
+        with the negotiated PDU length.
+        """
+        if self._connection is None:
+            raise S7ConnectionError("No connection for S7 setup")
+
+        request_data = self._connection.receive_data()
+        if len(request_data) < 10:
+            raise S7ConnectionError("S7 setup request too short")
+
+        protocol_id, pdu_type = struct.unpack(">BB", request_data[:2])
+        if protocol_id != 0x32 or pdu_type != S7PDUType.REQUEST:
+            raise S7ConnectionError(f"Expected S7 setup request, got type {pdu_type:#04x}")
+
+        # Parse the request to get sequence number and requested PDU length
+        _, _, _, sequence, param_len, _ = struct.unpack(">BBHHHH", request_data[:10])
+        requested_pdu = self.pdu_length
+        if param_len >= 8:
+            params = request_data[10 : 10 + param_len]
+            if len(params) >= 8:
+                _, _, _, _, requested_pdu = struct.unpack(">BBHHH", params[:8])
+
+        negotiated_pdu = min(requested_pdu, self.pdu_length)
+        self.pdu_length = negotiated_pdu
+
+        # Build and send setup response
+        response = struct.pack(
+            ">BBHHHHBB",
+            0x32,
+            S7PDUType.ACK_DATA,
+            0x0000,
+            sequence,
+            0x0008,  # param length
+            0x0000,  # data length
+            0x00,  # error class
+            0x00,  # error code
+        )
+        response += struct.pack(
+            ">BBHHH",
+            0xF0,  # Setup Communication function code
+            0x00,
+            1,  # max_amq_caller
+            1,  # max_amq_callee
+            negotiated_pdu,
+        )
+        self._connection.send_data(response)
+        logger.info(f"S7 Communication Setup complete (passive), PDU length: {negotiated_pdu}")
+
+    @staticmethod
+    def _recv_exact_from(sock: socket.socket, size: int) -> bytes:
+        """Receive exactly *size* bytes from a socket."""
+        data = bytearray()
+        while len(data) < size:
+            chunk = sock.recv(size - len(data))
+            if not chunk:
+                raise S7ConnectionError("Connection closed during receive")
+            data.extend(chunk)
+        return bytes(data)
+
+    def _build_partner_data_pdu(self, data: bytes, r_id: Optional[int] = None) -> bytes:
+        """Build an S7 USERDATA PDU for partner data push (bsend).
+
+        The PDU uses the standard S7 USERDATA header (10 bytes) followed by
+        a parameter section that identifies this as a push request and carries
+        the R-ID, and a data section with the payload.
 
         Args:
-            data: Data to send
+            data: Payload to send.
+            r_id: Request ID for bsend/brecv matching.  Falls back to ``self.r_id``.
 
         Returns:
-            PDU bytes
+            Complete S7 PDU bytes (without COTP/TPKT framing).
         """
-        # S7 partner data PDU format:
-        # Header + Data
-        header = struct.pack(
-            ">BBHH",
-            0x32,  # Protocol ID (S7)
-            0x07,  # Partner PDU type
-            len(data),  # Data length high
-            0x0000,  # Reserved
+        if r_id is None:
+            r_id = self.r_id
+
+        sequence = self._protocol._next_sequence()
+
+        # Parameter section: 12-byte USERDATA header + 4-byte R-ID
+        param = struct.pack(
+            ">BBBBBBBBBBxx",
+            0x00,  # reserved
+            0x01,  # parameter count
+            0x12,  # type header
+            0x08,  # length of following parameter data
+            0x11,  # method: request
+            0x46,  # type 4 (request) | group 6 (push)
+            _PUSH_SUBFUNCTION_DATA,
+            sequence & 0xFF,
+            0x00,  # data unit reference (no fragmentation)
+            0x00,  # last data unit = yes
         )
-        return header + data
+        param += struct.pack(">I", r_id)
+
+        # Data section: 4-byte header + payload
+        data_section = struct.pack(">BBH", 0xFF, 0x09, len(data)) + data
+
+        # S7 USERDATA header (10 bytes)
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,
+            S7PDUType.USERDATA,
+            0x0000,
+            sequence,
+            len(param),
+            len(data_section),
+        )
+
+        return header + param + data_section
 
     def _parse_partner_data_pdu(self, pdu: bytes) -> bytes:
-        """
-        Parse partner data PDU.
+        """Parse an incoming partner data push PDU and extract the payload.
 
-        Args:
-            pdu: PDU bytes
+        Accepts both the new USERDATA format (with R-ID) and the legacy
+        minimal format for backward-compatibility with existing tests that
+        use raw socket pairs.
 
         Returns:
-            Extracted data
+            The application payload.
         """
         if len(pdu) < 6:
             raise S7Error("Invalid partner PDU: too short")
 
-        # Skip header
-        return pdu[6:]
+        protocol_id, pdu_type = struct.unpack(">BB", pdu[:2])
 
-    def _build_partner_ack(self) -> bytes:
-        """Build partner acknowledgment PDU."""
-        return struct.pack(
-            ">BBHH",
-            0x32,  # Protocol ID
-            0x08,  # ACK type
-            0x0000,  # Reserved
-            0x0000,  # Status OK
+        if protocol_id != 0x32:
+            raise S7Error(f"Invalid protocol ID: {protocol_id:#04x}")
+
+        if pdu_type == S7PDUType.USERDATA:
+            # Full USERDATA format
+            if len(pdu) < 10:
+                raise S7Error("USERDATA partner PDU too short")
+            _, _, _, _, param_len, data_len = struct.unpack(">BBHHHH", pdu[:10])
+            data_offset = 10 + param_len
+            if data_offset + 4 > len(pdu):
+                raise S7Error("Partner data section too short")
+            # Skip 4-byte data section header (return_code, transport_size, length)
+            return pdu[data_offset + 4 : data_offset + 4 + data_len - 4] if data_len > 4 else b""
+        else:
+            raise S7Error(f"Unexpected PDU type in partner data: {pdu_type:#04x}")
+
+    def _build_partner_ack(self, r_id: Optional[int] = None) -> bytes:
+        """Build an S7 USERDATA acknowledgment PDU for a received bsend.
+
+        Args:
+            r_id: Request ID echoed from the data PDU.
+
+        Returns:
+            Complete S7 PDU bytes.
+        """
+        if r_id is None:
+            r_id = self.r_id
+
+        sequence = self._protocol._next_sequence()
+
+        param = struct.pack(
+            ">BBBBBBBBBBxx",
+            0x00,
+            0x01,
+            0x12,
+            0x08,
+            0x12,  # method: response
+            0x86,  # type 8 (response) | group 6 (push)
+            _PUSH_SUBFUNCTION_ACK,
+            sequence & 0xFF,
+            0x00,
+            0x00,
+        )
+        param += struct.pack(">I", r_id)
+
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,
+            S7PDUType.USERDATA,
+            0x0000,
+            sequence,
+            len(param),
+            0x0000,
         )
 
+        return header + param
+
     def _parse_partner_ack(self, pdu: bytes) -> None:
-        """Parse partner acknowledgment PDU."""
+        """Parse a partner acknowledgment PDU.
+
+        Validates that the PDU is a proper S7 USERDATA response for a push
+        acknowledgment.
+        """
         if len(pdu) < 6:
             raise S7Error("Invalid partner ACK: too short")
 
         protocol_id, pdu_type = struct.unpack(">BB", pdu[:2])
+        if protocol_id != 0x32:
+            raise S7Error(f"Invalid protocol ID in ACK: {protocol_id:#04x}")
 
-        if pdu_type != 0x08:
-            raise S7Error(f"Expected partner ACK, got {pdu_type:#02x}")
+        if pdu_type != S7PDUType.USERDATA:
+            raise S7Error(f"Expected partner ACK (USERDATA), got {pdu_type:#04x}")
 
     def __enter__(self) -> "Partner":
         """Context manager entry."""

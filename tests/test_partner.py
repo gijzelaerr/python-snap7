@@ -143,23 +143,33 @@ class TestPartnerPDU:
         p = Partner()
         data = b"\x01\x02\x03"
         pdu = p._build_partner_data_pdu(data)
+        # S7 USERDATA header
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
-        assert struct.unpack(">H", pdu[2:4])[0] == len(data)
-        assert pdu[6:] == data
+        # Roundtrip recovers the payload
+        assert p._parse_partner_data_pdu(pdu) == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
         pdu = p._build_partner_data_pdu(b"")
         assert pdu[0:1] == b"\x32"
-        assert struct.unpack(">H", pdu[2:4])[0] == 0
+        assert p._parse_partner_data_pdu(pdu) == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
         pdu = p._build_partner_data_pdu(data)
-        assert struct.unpack(">H", pdu[2:4])[0] == 1024
-        assert pdu[6:] == data
+        assert p._parse_partner_data_pdu(pdu) == data
+
+    def test_build_partner_data_pdu_r_id(self) -> None:
+        """R-ID is embedded in the parameter section."""
+        p = Partner()
+        p.r_id = 0xDEADBEEF
+        pdu = p._build_partner_data_pdu(b"\x01")
+        # R-ID sits at the end of the 16-byte parameter section (bytes 10..25)
+        _, _, _, _, param_len, _ = struct.unpack(">BBHHHH", pdu[:10])
+        r_id_bytes = pdu[10 + param_len - 4 : 10 + param_len]
+        assert struct.unpack(">I", r_id_bytes)[0] == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:
         p = Partner()
@@ -183,9 +193,17 @@ class TestPartnerPDU:
     def test_build_partner_ack(self) -> None:
         p = Partner()
         ack = p._build_partner_ack()
-        assert len(ack) == 6
+        # S7 USERDATA header (10 bytes) + parameter section
         assert ack[0:1] == b"\x32"
-        assert ack[1:2] == b"\x08"
+        assert ack[1:2] == b"\x07"  # USERDATA type
+
+    def test_build_partner_ack_r_id(self) -> None:
+        """ACK carries the same R-ID."""
+        p = Partner()
+        ack = p._build_partner_ack(r_id=0x12345678)
+        _, _, _, _, param_len, _ = struct.unpack(">BBHHHH", ack[:10])
+        r_id_bytes = ack[10 + param_len - 4 : 10 + param_len]
+        assert struct.unpack(">I", r_id_bytes)[0] == 0x12345678
 
     def test_parse_partner_ack_valid(self) -> None:
         p = Partner()
@@ -199,7 +217,8 @@ class TestPartnerPDU:
 
     def test_parse_partner_ack_wrong_type(self) -> None:
         p = Partner()
-        bad_ack = struct.pack(">BBHH", 0x32, 0x07, 0x0000, 0x0000)
+        # Build a PDU with REQUEST type instead of USERDATA
+        bad_ack = struct.pack(">BBHHHH", 0x32, 0x01, 0x0000, 0x0000, 0x0000, 0x0000)
         with pytest.raises(S7Error, match="Expected partner ACK"):
             p._parse_partner_ack(bad_ack)
 
