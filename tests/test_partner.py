@@ -162,13 +162,12 @@ class TestPartnerPDU:
         assert p._parse_partner_data_pdu(pdu) == data
 
     def test_build_partner_data_pdu_r_id(self) -> None:
-        """R-ID is embedded in the parameter section."""
+        """R-ID is embedded in the parameter section after the USERDATA header."""
         p = Partner()
         p.r_id = 0xDEADBEEF
         pdu = p._build_partner_data_pdu(b"\x01")
-        # R-ID sits at the end of the 16-byte parameter section (bytes 10..25)
-        _, _, _, _, param_len, _ = struct.unpack(">BBHHHH", pdu[:10])
-        r_id_bytes = pdu[10 + param_len - 4 : 10 + param_len]
+        # R-ID sits at offset 12 within the parameter section (after 12-byte USERDATA header)
+        r_id_bytes = pdu[10 + 12 : 10 + 12 + 4]
         assert struct.unpack(">I", r_id_bytes)[0] == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:

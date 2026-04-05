@@ -765,8 +765,9 @@ class Partner:
         """Build an S7 USERDATA PDU for partner data push (bsend).
 
         The PDU uses the standard S7 USERDATA header (10 bytes) followed by
-        a parameter section that identifies this as a push request and carries
-        the R-ID, and a data section with the payload.
+        a parameter section that identifies this as a PBC (Program Block
+        Communication) push with the R-ID and a variable specification
+        block, and a data section with the payload.
 
         Args:
             data: Payload to send.
@@ -780,22 +781,29 @@ class Partner:
 
         sequence = self._protocol._next_sequence()
 
-        # Parameter section: USERDATA header + 4-byte R-ID
+        # Parameter section: USERDATA header with PBC variable specification
         param = struct.pack(
-            ">BBBBBBBB",
+            ">BBBBBBBBBBH",
             0x00,  # reserved
             0x01,  # parameter count
             0x12,  # type header
-            0x04,  # length of following parameter data
-            0x11,  # method: request
-            0x46,  # type 4 (request) | group 6 (push)
+            0x08,  # length of following parameter data
+            0x12,  # method: push
+            0x06,  # type 0 (push) | group 6 (PBC)
             _PUSH_SUBFUNCTION_BSEND,
             sequence & 0xFF,
+            0x00,  # data unit reference number
+            0x00,  # last data unit
+            0x0000,  # error code
         )
+        # R-ID (4 bytes)
         param += struct.pack(">I", r_id)
+        # Variable specification block: type=0x12, len=0x06, syntax_id=0x82, transport=0x41, padding, payload_length
+        param += struct.pack(">BBBBHH", 0x12, 0x06, 0x82, 0x41, 0x0000, len(data))
 
-        # Data section: 4-byte header + payload
-        data_section = struct.pack(">BBH", 0xFF, 0x09, len(data)) + data
+        # Data section: 4-byte header + 2-byte prefix (12 00) + payload
+        payload_with_prefix = struct.pack(">BB", 0x12, 0x00) + data
+        data_section = struct.pack(">BBH", 0xFF, 0x09, len(payload_with_prefix)) + payload_with_prefix
 
         # S7 USERDATA header (10 bytes)
         header = struct.pack(
@@ -837,7 +845,11 @@ class Partner:
             if data_offset + 4 > len(pdu):
                 raise S7Error("Partner data section too short")
             # Skip 4-byte data section header (return_code, transport_size, length)
-            return pdu[data_offset + 4 : data_offset + 4 + data_len - 4] if data_len > 4 else b""
+            payload = pdu[data_offset + 4 : data_offset + 4 + data_len - 4] if data_len > 4 else b""
+            # Strip PBC prefix (12 00) if present
+            if len(payload) >= 2 and payload[0] == 0x12 and payload[1] == 0x00:
+                payload = payload[2:]
+            return payload
         else:
             raise S7Error(f"Unexpected PDU type in partner data: {pdu_type:#04x}")
 
