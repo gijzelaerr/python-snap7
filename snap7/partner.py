@@ -18,7 +18,7 @@ from types import TracebackType
 from ctypes import c_int32, c_uint32
 
 from .connection import ISOTCPConnection
-from .error import S7Error, S7ConnectionError
+from .error import S7Error, S7ConnectionError, S7TimeoutError
 from .s7protocol import S7Protocol, S7PDUType
 from .type import Parameter
 
@@ -108,7 +108,9 @@ class Partner:
         self._async_send_queue: Queue[Any] = Queue()
         self._async_recv_queue: Queue[Any] = Queue()
         self._async_thread: Optional[threading.Thread] = None
+        self._recv_listener_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
+        self._io_lock = threading.Lock()
 
         # Last error
         self.last_error = 0
@@ -118,6 +120,8 @@ class Partner:
         self._recv_data: Optional[bytes] = None
         self._async_send_in_progress = False
         self._async_send_result = 0
+        self._async_recv_in_progress = False
+        self._async_recv_result = 0
 
         logger.info(f"S7 Partner initialized (active={active}, pure Python implementation)")
 
@@ -201,9 +205,13 @@ class Partner:
             0 on success
         """
         self._stop_event.set()
+        self._async_recv_in_progress = False
 
         if self._async_thread and self._async_thread.is_alive():
             self._async_thread.join(timeout=2.0)
+
+        if self._recv_listener_thread and self._recv_listener_thread.is_alive():
+            self._recv_listener_thread.join(timeout=2.0)
 
         if self._connection:
             self._connection.disconnect()
@@ -387,18 +395,77 @@ class Partner:
 
         return self._async_send_result
 
+    def as_b_recv(self) -> int:
+        """
+        Start asynchronous receive (non-blocking).
+
+        Begins listening for incoming partner data in the background.
+        Use :meth:`check_as_b_recv_completion` or
+        :meth:`wait_as_b_recv_completion` to check for results.
+
+        Returns:
+            0 on success (receive initiated), -1 on error
+        """
+        if not self.connected:
+            self.recv_errors += 1
+            return -1
+
+        if self._async_recv_in_progress:
+            return -1
+
+        self._async_recv_in_progress = True
+        self._async_recv_result = 1  # In progress
+
+        if self._recv_listener_thread is None or not self._recv_listener_thread.is_alive():
+            self._recv_listener_thread = threading.Thread(target=self._recv_listener, daemon=True)
+            self._recv_listener_thread.start()
+
+        logger.debug("Async receive initiated")
+        return 0
+
     def check_as_b_recv_completion(self) -> int:
         """
         Check if async receive completed.
 
         Returns:
-            0 if data available, 1 if in progress
+            0 if data available, 1 if in progress, -1 on error
         """
+        if self._async_recv_result == -1:
+            return -1
+
         try:
             self._recv_data = self._async_recv_queue.get_nowait()
             return 0  # Data available
         except Empty:
             return 1  # No data yet
+
+    def wait_as_b_recv_completion(self, timeout: int = 0) -> int:
+        """
+        Wait for async receive to complete.
+
+        Args:
+            timeout: Timeout in milliseconds (0 for infinite)
+
+        Returns:
+            0 on success, -1 on timeout/error
+
+        Raises:
+            RuntimeError: If no async receive operation is in progress
+        """
+        if not self._async_recv_in_progress:
+            raise RuntimeError("No async receive operation in progress")
+
+        wait_time = timeout / 1000.0 if timeout > 0 else None
+        start = datetime.now()
+
+        while self._async_recv_in_progress:
+            if wait_time is not None:
+                elapsed = (datetime.now() - start).total_seconds()
+                if elapsed >= wait_time:
+                    return -1
+            threading.Event().wait(0.01)
+
+        return self._async_recv_result
 
     def get_status(self) -> c_int32:
         """
@@ -492,24 +559,35 @@ class Partner:
         logger.debug(f"Setting parameter {parameter} to {value}")
         return 0
 
-    def set_recv_callback(self) -> int:
+    def set_recv_callback(self, callback: Optional[Callable[[bytes], None]] = None) -> int:
         """
-        Sets the user callback for incoming data.
+        Register a callback for incoming data.
+
+        The callback is invoked with the received bytes whenever data
+        arrives via :meth:`b_recv` or async receive.
+
+        Args:
+            callback: Function called with received data, or ``None`` to clear.
 
         Returns:
             0 on success
         """
-        logger.debug("set_recv_callback called")
+        self._recv_callback = callback
+        logger.debug(f"Receive callback {'set' if callback else 'cleared'}")
         return 0
 
-    def set_send_callback(self) -> int:
+    def set_send_callback(self, callback: Optional[Callable[[int], None]] = None) -> int:
         """
-        Sets the user callback for completed async sends.
+        Register a callback for completed async sends.
+
+        Args:
+            callback: Function called with the result code, or ``None`` to clear.
 
         Returns:
             0 on success
         """
-        logger.debug("set_send_callback called")
+        self._send_callback_fn = callback
+        logger.debug(f"Send callback {'set' if callback else 'cleared'}")
         return 0
 
     def set_send_data(self, data: bytes) -> None:
@@ -609,17 +687,16 @@ class Partner:
                 break
 
     def _async_processor(self) -> None:
-        """Background thread for processing async operations."""
+        """Background thread for processing async send operations."""
         while not self._stop_event.is_set():
-            # Process async sends
             try:
                 data = self._async_send_queue.get(timeout=0.1)
 
                 try:
-                    # Temporarily set send data and call b_send
                     old_data = self._send_data
                     self._send_data = data
-                    result = self.b_send()
+                    with self._io_lock:
+                        result = self.b_send()
                     self._send_data = old_data
                     self._async_send_result = result
 
@@ -636,6 +713,57 @@ class Partner:
                 pass
             except Exception:
                 break
+
+    def _recv_listener(self) -> None:
+        """Background thread that listens for incoming partner data.
+
+        Runs while ``_async_recv_in_progress`` is set.  Uses a short
+        socket timeout so the thread can be stopped cleanly and releases
+        ``_io_lock`` between attempts to allow sends to proceed.
+        """
+        while not self._stop_event.is_set() and self._async_recv_in_progress:
+            conn = self._connection
+            if not self.connected or conn is None or conn.socket is None:
+                break
+
+            old_timeout = conn.socket.gettimeout()
+            try:
+                conn.socket.settimeout(0.2)
+                with self._io_lock:
+                    data = conn.receive_data()
+                    received = self._parse_partner_data_pdu(data)
+                    ack = self._build_partner_ack()
+                    conn.send_data(ack)
+            except (S7TimeoutError, socket.timeout):
+                # Timeout is expected — restore connected flag since
+                # ISOTCPConnection.receive_data() sets it to False on timeout
+                if conn is not None:
+                    conn.connected = True
+                continue
+            except Exception as e:
+                self.recv_errors += 1
+                self._async_recv_result = -1
+                self._async_recv_in_progress = False
+                logger.error(f"Async receive failed: {e}")
+                break
+            finally:
+                try:
+                    if conn is not None and conn.socket is not None:
+                        conn.socket.settimeout(old_timeout)
+                except OSError:
+                    pass
+
+            # Data received successfully
+            self._recv_data = received
+            self._async_recv_queue.put(received)
+            self.bytes_recv += len(received)
+            self._async_recv_result = 0
+            self._async_recv_in_progress = False
+
+            if self._recv_callback:
+                self._recv_callback(received)
+
+            logger.debug(f"Async received {len(received)} bytes")
 
     def _setup_communication(self) -> None:
         """Perform S7 Communication Setup after COTP connection.

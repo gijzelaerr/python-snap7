@@ -347,6 +347,50 @@ class TestPartnerSendRecvBuffers:
         result = p.as_b_send()
         assert result == -1
 
+    def test_as_b_recv_not_connected(self) -> None:
+        p = Partner()
+        assert p.as_b_recv() == -1
+
+    def test_as_b_recv_already_in_progress(self) -> None:
+        p = Partner()
+        p.connected = True
+        p._async_recv_in_progress = True
+        assert p.as_b_recv() == -1
+        p._async_recv_in_progress = False
+
+    def test_wait_as_b_recv_no_operation(self) -> None:
+        p = Partner()
+        with pytest.raises(RuntimeError, match="No async receive"):
+            p.wait_as_b_recv_completion()
+
+    def test_wait_as_b_recv_timeout(self) -> None:
+        p = Partner()
+        p._async_recv_in_progress = True
+        result = p.wait_as_b_recv_completion(timeout=50)
+        assert result == -1
+        p._async_recv_in_progress = False
+
+    def test_wait_as_b_recv_completes(self) -> None:
+        p = Partner()
+        p._async_recv_in_progress = True
+        p._async_recv_result = 0
+
+        def clear_flag() -> None:
+            time.sleep(0.05)
+            p._async_recv_in_progress = False
+
+        t = threading.Thread(target=clear_flag)
+        t.start()
+        result = p.wait_as_b_recv_completion(timeout=2000)
+        t.join()
+        assert result == 0
+
+    def test_check_as_b_recv_completion_error(self) -> None:
+        p = Partner()
+        p._async_recv_result = -1
+        assert p.check_as_b_recv_completion() == -1
+        p._async_recv_result = 0
+
     def test_check_as_b_recv_completion_empty(self) -> None:
         p = Partner()
         assert p.check_as_b_recv_completion() == 1
@@ -427,9 +471,23 @@ class TestPartnerParams:
         p = Partner()
         assert p.set_recv_callback() == 0
 
+    def test_set_recv_callback_with_function(self) -> None:
+        p = Partner()
+        assert p.set_recv_callback(lambda data: None) == 0
+        assert p._recv_callback is not None
+        assert p.set_recv_callback(None) == 0
+        assert p._recv_callback is None
+
     def test_set_send_callback_returns_zero(self) -> None:
         p = Partner()
         assert p.set_send_callback() == 0
+
+    def test_set_send_callback_with_function(self) -> None:
+        p = Partner()
+        assert p.set_send_callback(lambda result: None) == 0
+        assert p._send_callback_fn is not None
+        assert p.set_send_callback(None) == 0
+        assert p._send_callback_fn is None
 
 
 # ---------------------------------------------------------------------------
@@ -677,6 +735,198 @@ class TestDualPartner:
 
             assert len(received_data) == 1
             assert received_data[0] == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_with_check(self) -> None:
+        """Async receive completes and data is available via check_as_b_recv_completion."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            payload = b"async recv test"
+
+            # Start async receive on B
+            assert pb.as_b_recv() == 0
+
+            # Send from A (in a thread because b_send blocks waiting for ACK)
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(payload)
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+
+            # Poll until receive completes
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if pb.check_as_b_recv_completion() == 0:
+                    break
+                time.sleep(0.01)
+
+            t.join(timeout=3.0)
+            assert not errors
+            assert pb.get_recv_data() == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_with_wait(self) -> None:
+        """Async receive completes when using wait_as_b_recv_completion."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            payload = b"wait recv test"
+
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(payload)
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t.join(timeout=3.0)
+            assert result == 0
+            assert not errors
+            assert pb.get_recv_data() == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_callback_fires(self) -> None:
+        """Receive callback is invoked during async receive."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            received_data: list[bytes] = []
+            pb.set_recv_callback(lambda data: received_data.append(data))
+
+            payload = b"callback async"
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(payload)
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t.join(timeout=3.0)
+            assert result == 0
+            assert not errors
+            assert len(received_data) == 1
+            assert received_data[0] == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_send_callback_fires(self) -> None:
+        """Send callback is invoked during async send."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            send_results: list[int] = []
+            pa.set_send_callback(lambda result: send_results.append(result))
+
+            payload = b"send callback"
+            pa.set_send_data(payload)
+
+            # Start async processor thread for pa
+            pa._stop_event.clear()
+            pa._async_thread = threading.Thread(target=pa._async_processor, daemon=True)
+            pa._async_thread.start()
+
+            assert pa.as_b_send() == 0
+
+            # Receive on B side
+            assert pb.b_recv() == 0
+
+            # Wait for async send to complete
+            deadline = time.time() + 3.0
+            while pa._async_send_in_progress and time.time() < deadline:
+                time.sleep(0.01)
+
+            assert pb.get_recv_data() == payload
+            assert len(send_results) == 1
+            assert send_results[0] == 0
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_then_send(self) -> None:
+        """After async recv completes, sending still works (lock coordination)."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            # Phase 1: A sends, B receives async
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send_a() -> None:
+                try:
+                    pa.set_send_data(b"phase1")
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t1 = threading.Thread(target=do_send_a)
+            t1.start()
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t1.join(timeout=3.0)
+            assert result == 0
+            assert pb.get_recv_data() == b"phase1"
+            assert not errors
+
+            # Phase 2: B sends back, A receives sync
+            pb.set_send_data(b"phase2")
+
+            def do_send_b() -> None:
+                try:
+                    pb.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t2 = threading.Thread(target=do_send_b)
+            t2.start()
+            assert pa.b_recv() == 0
+            t2.join(timeout=3.0)
+            assert pa.get_recv_data() == b"phase2"
+            assert not errors
         finally:
             pa.stop()
             pb.stop()
