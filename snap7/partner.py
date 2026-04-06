@@ -122,6 +122,7 @@ class Partner:
         self._async_send_result = 0
         self._async_recv_in_progress = False
         self._async_recv_result = 0
+        self._async_recv_started = False
 
         logger.info(f"S7 Partner initialized (active={active}, pure Python implementation)")
 
@@ -414,6 +415,7 @@ class Partner:
             return -1
 
         self._async_recv_in_progress = True
+        self._async_recv_started = True
         self._async_recv_result = 1  # In progress
 
         if self._recv_listener_thread is None or not self._recv_listener_thread.is_alive():
@@ -450,9 +452,13 @@ class Partner:
             0 on success, -1 on timeout/error
 
         Raises:
-            RuntimeError: If no async receive operation is in progress
+            RuntimeError: If no async receive was ever started
         """
         if not self._async_recv_in_progress:
+            if self._async_recv_started:
+                # Listener already finished before wait was called
+                self._async_recv_started = False
+                return self._async_recv_result
             raise RuntimeError("No async receive operation in progress")
 
         wait_time = timeout / 1000.0 if timeout > 0 else None
