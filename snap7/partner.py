@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 _PUSH_FUNC_GROUP = 0x06
 
 # Partner push subfunctions
-_PUSH_SUBFUNCTION_BSEND = 0x06  # bsend data push
+_PUSH_SUBFUNCTION_BSEND = 0x01  # bsend data push
 
 
 class PartnerStatus:
@@ -781,29 +781,29 @@ class Partner:
 
         sequence = self._protocol._next_sequence()
 
-        # Parameter section: USERDATA header with PBC variable specification
+        # Parameter section: USERDATA header (12 bytes)
         param = struct.pack(
             ">BBBBBBBBBBH",
             0x00,  # reserved
             0x01,  # parameter count
             0x12,  # type header
             0x08,  # length of following parameter data
-            0x12,  # method: push
-            0x06,  # type 0 (push) | group 6 (PBC)
+            0x12,  # method: extended parameter
+            0x46,  # type 4 (request) | group 6 (PBC BSEND)
             _PUSH_SUBFUNCTION_BSEND,
-            sequence & 0xFF,
+            0x00,  # sequence number (always 0 for PBC)
             0x00,  # data unit reference number
             0x00,  # last data unit
             0x0000,  # error code
         )
-        # R-ID (4 bytes)
-        param += struct.pack(">I", r_id)
-        # Variable specification block: type=0x12, len=0x06, syntax_id=0x82, transport=0x41, padding, payload_length
-        param += struct.pack(">BBBBHH", 0x12, 0x06, 0x82, 0x41, 0x0000, len(data))
 
-        # Data section: 4-byte header + 2-byte prefix (12 00) + payload
-        payload_with_prefix = struct.pack(">BB", 0x12, 0x00) + data
-        data_section = struct.pack(">BBH", 0xFF, 0x09, len(payload_with_prefix)) + payload_with_prefix
+        # Data section: header + variable spec + R-ID + payload length + payload
+        # Variable specification: type=0x12, len=0x06, syntax_id=0x13, reserved=0x00
+        var_spec = struct.pack(">BBBB", 0x12, 0x06, 0x13, 0x00)
+        # R-ID (4 bytes) + payload length (2 bytes)
+        var_spec += struct.pack(">IH", r_id, len(data))
+        # Data header: return_code=0xFF, transport_size=0x09, length=varspec+data
+        data_section = struct.pack(">BBH", 0xFF, 0x09, len(var_spec) + len(data)) + var_spec + data
 
         # S7 USERDATA header (10 bytes)
         header = struct.pack(
@@ -846,9 +846,10 @@ class Partner:
                 raise S7Error("Partner data section too short")
             # Skip 4-byte data section header (return_code, transport_size, length)
             payload = pdu[data_offset + 4 : data_offset + 4 + data_len - 4] if data_len > 4 else b""
-            # Strip PBC prefix (12 00) if present
-            if len(payload) >= 2 and payload[0] == 0x12 and payload[1] == 0x00:
-                payload = payload[2:]
+            # Strip PBC variable specification block if present
+            # Format: 12 06 13 00 [R-ID 4 bytes] [length 2 bytes] = 10 bytes
+            if len(payload) >= 10 and payload[0] == 0x12 and payload[1] == 0x06:
+                payload = payload[10:]
             return payload
         else:
             raise S7Error(f"Unexpected PDU type in partner data: {pdu_type:#04x}")
