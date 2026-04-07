@@ -296,10 +296,10 @@ class Partner:
         try:
             # Receive partner data
             data = self._connection.receive_data()
-            received = self._parse_partner_data_pdu(data)
+            received, _r_id, pdu_ref = self._parse_partner_data_pdu(data)
 
-            # Send acknowledgment
-            ack = self._build_partner_ack()
+            # Send acknowledgment with the same PDU reference
+            ack = self._build_partner_ack(pdu_ref)
             self._connection.send_data(ack)
 
             self.bytes_recv += len(received)
@@ -737,8 +737,8 @@ class Partner:
                 conn.socket.settimeout(0.2)
                 with self._io_lock:
                     data = conn.receive_data()
-                    received = self._parse_partner_data_pdu(data)
-                    ack = self._build_partner_ack()
+                    received, _r_id, pdu_ref = self._parse_partner_data_pdu(data)
+                    ack = self._build_partner_ack(pdu_ref)
                     conn.send_data(ack)
             except (S7TimeoutError, socket.timeout):
                 # Timeout is expected — restore connected flag since
@@ -952,15 +952,14 @@ class Partner:
 
         return header + param + data_section
 
-    def _parse_partner_data_pdu(self, pdu: bytes) -> bytes:
+    def _parse_partner_data_pdu(self, pdu: bytes) -> Tuple[bytes, int, int]:
         """Parse an incoming partner data push PDU and extract the payload.
 
-        Accepts both the new USERDATA format (with R-ID) and the legacy
-        minimal format for backward-compatibility with existing tests that
-        use raw socket pairs.
-
         Returns:
-            The application payload.
+            Tuple of (payload, r_id, pdu_ref).  *r_id* and *pdu_ref* are
+            extracted from the variable specification block and the S7
+            header respectively.  If the variable specification is absent
+            both default to ``0``.
         """
         if len(pdu) < 6:
             raise S7Error("Invalid partner PDU: too short")
@@ -971,35 +970,41 @@ class Partner:
             raise S7Error(f"Invalid protocol ID: {protocol_id:#04x}")
 
         if pdu_type == S7PDUType.USERDATA:
-            # Full USERDATA format
             if len(pdu) < 10:
                 raise S7Error("USERDATA partner PDU too short")
-            _, _, _, _, param_len, data_len = struct.unpack(">BBHHHH", pdu[:10])
+            _, _, _, pdu_ref, param_len, data_len = struct.unpack(">BBHHHH", pdu[:10])
             data_offset = 10 + param_len
             if data_offset + 4 > len(pdu):
                 raise S7Error("Partner data section too short")
             # Skip 4-byte data section header (return_code, transport_size, length)
             payload = pdu[data_offset + 4 : data_offset + 4 + data_len - 4] if data_len > 4 else b""
-            # Strip PBC variable specification block if present
+            # Parse PBC variable specification block if present
             # Format: 12 06 13 00 [R-ID 4 bytes] [length 2 bytes] = 10 bytes
-            if len(payload) >= 10 and payload[0] == 0x12 and payload[1] == 0x06:
-                payload = payload[10:]
-            return payload
+            r_id = 0
+            if len(payload) >= 2 and payload[0] == 0x12:
+                var_len = payload[1]
+                if var_len == 0x06 and len(payload) >= 8:
+                    syntax_id = payload[2]
+                    if syntax_id == 0x13:
+                        (r_id,) = struct.unpack(">I", payload[4:8])
+                        # skip var spec header (2) + body (var_len) + length field (2)
+                        payload = payload[2 + var_len + 2 :]
+            return payload, r_id, pdu_ref
         else:
             raise S7Error(f"Unexpected PDU type in partner data: {pdu_type:#04x}")
 
-    def _build_partner_ack(self, r_id: Optional[int] = None) -> bytes:
+    def _build_partner_ack(self, pdu_ref: int = 0) -> bytes:
         """Build an S7 USERDATA acknowledgment PDU for a received bsend.
 
+        The PLC expects the same PDU reference in the ACK as in the
+        data PDU it sent.
+
         Args:
-            r_id: Request ID echoed from the data PDU.
+            pdu_ref: Protocol Data Unit reference echoed from the data PDU.
 
         Returns:
             Complete S7 PDU bytes.
         """
-        if r_id is None:
-            r_id = self.r_id
-
         sequence = self._protocol._next_sequence()
 
         param = struct.pack(
@@ -1013,19 +1018,22 @@ class Partner:
             _PUSH_SUBFUNCTION_BSEND,
             sequence & 0xFF,
         )
-        param += struct.pack(">BBHI", 0x00, 0x00, 0x0000, r_id)  # dur, ldu, error_code, R-ID
+        param += struct.pack(">BBH", 0x00, 0x00, 0x0000)  # dur, ldu, error_code
+
+        # Data section: return code 0x0a, transport size 0x00, length 0x0000
+        data = struct.pack(">BBH", 0x0A, 0x00, 0x0000)
 
         header = struct.pack(
             ">BBHHHH",
             0x32,
             S7PDUType.USERDATA,
             0x0000,
-            sequence,
+            pdu_ref,
             len(param),
-            0x0000,
+            len(data),
         )
 
-        return header + param
+        return header + param + data
 
     def _parse_partner_ack(self, pdu: bytes) -> None:
         """Parse a partner acknowledgment PDU.

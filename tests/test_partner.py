@@ -147,36 +147,37 @@ class TestPartnerPDU:
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
         # Roundtrip recovers the payload
-        assert p._parse_partner_data_pdu(pdu) == data
+        payload, r_id, pdu_ref = p._parse_partner_data_pdu(pdu)
+        assert payload == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
         pdu = p._build_partner_data_pdu(b"")
         assert pdu[0:1] == b"\x32"
-        assert p._parse_partner_data_pdu(pdu) == b""
+        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        assert payload == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
         pdu = p._build_partner_data_pdu(data)
-        assert p._parse_partner_data_pdu(pdu) == data
+        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        assert payload == data
 
     def test_build_partner_data_pdu_r_id(self) -> None:
-        """R-ID is embedded in the data section variable specification block."""
+        """R-ID is embedded in the data section and extracted by parser."""
         p = Partner()
         p.r_id = 0xDEADBEEF
         pdu = p._build_partner_data_pdu(b"\x01")
-        _, _, _, _, param_len, _ = struct.unpack(">BBHHHH", pdu[:10])
-        # Data section starts after header + param; skip 4-byte data header + 4-byte var spec prefix
-        data_start = 10 + param_len + 4 + 4
-        r_id_bytes = pdu[data_start : data_start + 4]
-        assert struct.unpack(">I", r_id_bytes)[0] == 0xDEADBEEF
+        payload, r_id, _pdu_ref = p._parse_partner_data_pdu(pdu)
+        assert payload == b"\x01"
+        assert r_id == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:
         p = Partner()
         original = b"Hello, Partner!"
         pdu = p._build_partner_data_pdu(original)
-        parsed = p._parse_partner_data_pdu(pdu)
+        parsed, _, _ = p._parse_partner_data_pdu(pdu)
         assert parsed == original
 
     def test_parse_partner_data_pdu_roundtrip_various_sizes(self) -> None:
@@ -184,7 +185,8 @@ class TestPartnerPDU:
         for size in [0, 1, 10, 100, 500, 1024]:
             data = (bytes(range(256)) * (size // 256 + 1))[:size]
             pdu = p._build_partner_data_pdu(data)
-            assert p._parse_partner_data_pdu(pdu) == data
+            payload, _, _ = p._parse_partner_data_pdu(pdu)
+            assert payload == data
 
     def test_parse_partner_data_pdu_too_short(self) -> None:
         p = Partner()
@@ -194,17 +196,16 @@ class TestPartnerPDU:
     def test_build_partner_ack(self) -> None:
         p = Partner()
         ack = p._build_partner_ack()
-        # S7 USERDATA header (10 bytes) + parameter section
+        # S7 USERDATA header (10 bytes) + parameter section + data section
         assert ack[0:1] == b"\x32"
         assert ack[1:2] == b"\x07"  # USERDATA type
 
-    def test_build_partner_ack_r_id(self) -> None:
-        """ACK carries the same R-ID."""
+    def test_build_partner_ack_pdu_ref(self) -> None:
+        """ACK echoes the PDU reference from the data PDU."""
         p = Partner()
-        ack = p._build_partner_ack(r_id=0x12345678)
-        _, _, _, _, param_len, _ = struct.unpack(">BBHHHH", ack[:10])
-        r_id_bytes = ack[10 + param_len - 4 : 10 + param_len]
-        assert struct.unpack(">I", r_id_bytes)[0] == 0x12345678
+        ack = p._build_partner_ack(pdu_ref=0x1234)
+        _, _, _, pdu_ref, _, _ = struct.unpack(">BBHHHH", ack[:10])
+        assert pdu_ref == 0x1234
 
     def test_parse_partner_ack_valid(self) -> None:
         p = Partner()
