@@ -338,6 +338,16 @@ class TestPartnerSendRecvBuffers:
         assert result == -1
         assert p.get_recv_data() is None
 
+    def test_get_recv_r_id_initial(self) -> None:
+        p = Partner()
+        assert p.get_recv_r_id() == 0
+
+    def test_recv_timeout_configurable(self) -> None:
+        p = Partner()
+        assert p.recv_timeout == 0.2
+        p.recv_timeout = 0.5
+        assert p.recv_timeout == 0.5
+
     def test_as_b_send_no_data(self) -> None:
         p = Partner()
         assert p.as_b_send() == -1
@@ -928,6 +938,100 @@ class TestDualPartner:
             t2.join(timeout=3.0)
             assert pa.get_recv_data() == b"phase2"
             assert not errors
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_recv_r_id_stored(self) -> None:
+        """get_recv_r_id returns the R-ID from the received PDU."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            pa.r_id = 0x42
+            pa.set_send_data(b"rid test")
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            assert pb.b_recv() == 0
+            t.join(timeout=3.0)
+            assert not errors
+            assert pb.get_recv_data() == b"rid test"
+            assert pb.get_recv_r_id() == 0x42
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_r_id_stored(self) -> None:
+        """get_recv_r_id works with async receive."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            pa.r_id = 0xABCD
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(b"async rid")
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t.join(timeout=3.0)
+            assert result == 0
+            assert not errors
+            assert pb.get_recv_r_id() == 0xABCD
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_b_send_while_recv_listener_active(self) -> None:
+        """BSend works correctly when the recv listener is active."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            # Start async recv on B (listener active)
+            assert pb.as_b_recv() == 0
+
+            # B sends to A while listener is running
+            pb.set_send_data(b"send while listening")
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pb.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            assert pa.b_recv() == 0
+            t.join(timeout=3.0)
+            assert not errors
+            assert pa.get_recv_data() == b"send while listening"
+
+            # Clean up the pending async recv
+            pb._async_recv_in_progress = False
         finally:
             pa.stop()
             pb.stop()

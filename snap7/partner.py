@@ -90,6 +90,12 @@ class Partner:
         # R-ID for bsend/brecv matching (default 0, can be set by caller)
         self.r_id: int = 0
 
+        # R-ID received from the last incoming PDU
+        self._recv_r_id: int = 0
+
+        # Socket timeout (seconds) used by the async receive listener
+        self.recv_timeout: float = 0.2
+
         # Statistics
         self.bytes_sent = 0
         self.bytes_recv = 0
@@ -110,7 +116,7 @@ class Partner:
         self._async_thread: Optional[threading.Thread] = None
         self._recv_listener_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
-        self._io_lock = threading.Lock()
+        self._io_lock = threading.RLock()
 
         # Last error
         self.last_error = 0
@@ -260,11 +266,12 @@ class Partner:
             # Build partner data PDU
             pdu = self._build_partner_data_pdu(self._send_data)
 
-            # Send via ISO connection
-            self._connection.send_data(pdu)
+            with self._io_lock:
+                # Send via ISO connection
+                self._connection.send_data(pdu)
 
-            # Wait for acknowledgment
-            ack_data = self._connection.receive_data()
+                # Wait for acknowledgment
+                ack_data = self._connection.receive_data()
             self._parse_partner_ack(ack_data)
 
             self.bytes_sent += len(self._send_data)
@@ -294,17 +301,19 @@ class Partner:
         start_time = datetime.now()
 
         try:
-            # Receive partner data
-            data = self._connection.receive_data()
-            received, _r_id, pdu_ref = self._parse_partner_data_pdu(data)
+            with self._io_lock:
+                # Receive partner data
+                data = self._connection.receive_data()
+                received, r_id, pdu_ref = self._parse_partner_data_pdu(data)
 
-            # Send acknowledgment with the same PDU reference
-            ack = self._build_partner_ack(pdu_ref)
-            self._connection.send_data(ack)
+                # Send acknowledgment with the same PDU reference
+                ack = self._build_partner_ack(pdu_ref)
+                self._connection.send_data(ack)
 
             self.bytes_recv += len(received)
             self.last_recv_time = int((datetime.now() - start_time).total_seconds() * 1000)
             self._recv_data = received
+            self._recv_r_id = r_id
 
             # Call receive callback if set
             if self._recv_callback:
@@ -607,12 +616,21 @@ class Partner:
 
     def get_recv_data(self) -> Optional[bytes]:
         """
-        Get data received by b_recv().
+        Get data received by b_recv() or async receive.
 
         Returns:
             Received data or None
         """
         return self._recv_data
+
+    def get_recv_r_id(self) -> int:
+        """
+        Get the R-ID from the last received PDU.
+
+        Returns:
+            R-ID value (0 if no data has been received yet)
+        """
+        return self._recv_r_id
 
     def _connect_to_remote(self) -> None:
         """Connect to remote partner (active mode).
@@ -732,14 +750,21 @@ class Partner:
             if not self.connected or conn is None or conn.socket is None:
                 break
 
-            old_timeout = conn.socket.gettimeout()
             try:
-                conn.socket.settimeout(0.2)
                 with self._io_lock:
-                    data = conn.receive_data()
-                    received, _r_id, pdu_ref = self._parse_partner_data_pdu(data)
-                    ack = self._build_partner_ack(pdu_ref)
-                    conn.send_data(ack)
+                    old_timeout = conn.socket.gettimeout()
+                    conn.socket.settimeout(self.recv_timeout)
+                    try:
+                        data = conn.receive_data()
+                        received, r_id, pdu_ref = self._parse_partner_data_pdu(data)
+                        ack = self._build_partner_ack(pdu_ref)
+                        conn.send_data(ack)
+                    finally:
+                        try:
+                            if conn.socket is not None:
+                                conn.socket.settimeout(old_timeout)
+                        except OSError:
+                            pass
             except (S7TimeoutError, socket.timeout):
                 # Timeout is expected — restore connected flag since
                 # ISOTCPConnection.receive_data() sets it to False on timeout
@@ -752,15 +777,10 @@ class Partner:
                 self._async_recv_in_progress = False
                 logger.error(f"Async receive failed: {e}")
                 break
-            finally:
-                try:
-                    if conn is not None and conn.socket is not None:
-                        conn.socket.settimeout(old_timeout)
-                except OSError:
-                    pass
 
             # Data received successfully
             self._recv_data = received
+            self._recv_r_id = r_id
             self._async_recv_queue.put(received)
             self.bytes_recv += len(received)
             self._async_recv_result = 0
