@@ -97,7 +97,7 @@ when needed. You can also force a specific protocol:
    # Force S7CommPlus (raises on failure)
    client.connect("192.168.1.10", 0, 1, protocol=Protocol.S7COMMPLUS)
 
-See :doc:`API/s7commplus` for details on TLS and password authentication.
+See :doc:`API/client` for details on TLS and password authentication.
 
 S7-200 / Logo (TSAP Connection)
 --------------------------------
