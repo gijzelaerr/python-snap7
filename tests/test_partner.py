@@ -143,29 +143,41 @@ class TestPartnerPDU:
         p = Partner()
         data = b"\x01\x02\x03"
         pdu = p._build_partner_data_pdu(data)
+        # S7 USERDATA header
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
-        assert struct.unpack(">H", pdu[2:4])[0] == len(data)
-        assert pdu[6:] == data
+        # Roundtrip recovers the payload
+        payload, r_id, pdu_ref = p._parse_partner_data_pdu(pdu)
+        assert payload == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
         pdu = p._build_partner_data_pdu(b"")
         assert pdu[0:1] == b"\x32"
-        assert struct.unpack(">H", pdu[2:4])[0] == 0
+        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        assert payload == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
         pdu = p._build_partner_data_pdu(data)
-        assert struct.unpack(">H", pdu[2:4])[0] == 1024
-        assert pdu[6:] == data
+        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        assert payload == data
+
+    def test_build_partner_data_pdu_r_id(self) -> None:
+        """R-ID is embedded in the data section and extracted by parser."""
+        p = Partner()
+        p.r_id = 0xDEADBEEF
+        pdu = p._build_partner_data_pdu(b"\x01")
+        payload, r_id, _pdu_ref = p._parse_partner_data_pdu(pdu)
+        assert payload == b"\x01"
+        assert r_id == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:
         p = Partner()
         original = b"Hello, Partner!"
         pdu = p._build_partner_data_pdu(original)
-        parsed = p._parse_partner_data_pdu(pdu)
+        parsed, _, _ = p._parse_partner_data_pdu(pdu)
         assert parsed == original
 
     def test_parse_partner_data_pdu_roundtrip_various_sizes(self) -> None:
@@ -173,7 +185,8 @@ class TestPartnerPDU:
         for size in [0, 1, 10, 100, 500, 1024]:
             data = (bytes(range(256)) * (size // 256 + 1))[:size]
             pdu = p._build_partner_data_pdu(data)
-            assert p._parse_partner_data_pdu(pdu) == data
+            payload, _, _ = p._parse_partner_data_pdu(pdu)
+            assert payload == data
 
     def test_parse_partner_data_pdu_too_short(self) -> None:
         p = Partner()
@@ -183,9 +196,16 @@ class TestPartnerPDU:
     def test_build_partner_ack(self) -> None:
         p = Partner()
         ack = p._build_partner_ack()
-        assert len(ack) == 6
+        # S7 USERDATA header (10 bytes) + parameter section + data section
         assert ack[0:1] == b"\x32"
-        assert ack[1:2] == b"\x08"
+        assert ack[1:2] == b"\x07"  # USERDATA type
+
+    def test_build_partner_ack_pdu_ref(self) -> None:
+        """ACK echoes the PDU reference from the data PDU."""
+        p = Partner()
+        ack = p._build_partner_ack(pdu_ref=0x1234)
+        _, _, _, pdu_ref, _, _ = struct.unpack(">BBHHHH", ack[:10])
+        assert pdu_ref == 0x1234
 
     def test_parse_partner_ack_valid(self) -> None:
         p = Partner()
@@ -199,7 +219,8 @@ class TestPartnerPDU:
 
     def test_parse_partner_ack_wrong_type(self) -> None:
         p = Partner()
-        bad_ack = struct.pack(">BBHH", 0x32, 0x07, 0x0000, 0x0000)
+        # Build a PDU with REQUEST type instead of USERDATA
+        bad_ack = struct.pack(">BBHHHH", 0x32, 0x01, 0x0000, 0x0000, 0x0000, 0x0000)
         with pytest.raises(S7Error, match="Expected partner ACK"):
             p._parse_partner_ack(bad_ack)
 
@@ -317,6 +338,16 @@ class TestPartnerSendRecvBuffers:
         assert result == -1
         assert p.get_recv_data() is None
 
+    def test_get_recv_r_id_initial(self) -> None:
+        p = Partner()
+        assert p.get_recv_r_id() == 0
+
+    def test_recv_timeout_configurable(self) -> None:
+        p = Partner()
+        assert p.recv_timeout == 0.2
+        p.recv_timeout = 0.5
+        assert p.recv_timeout == 0.5
+
     def test_as_b_send_no_data(self) -> None:
         p = Partner()
         assert p.as_b_send() == -1
@@ -326,6 +357,50 @@ class TestPartnerSendRecvBuffers:
         p.set_send_data(b"data")
         result = p.as_b_send()
         assert result == -1
+
+    def test_as_b_recv_not_connected(self) -> None:
+        p = Partner()
+        assert p.as_b_recv() == -1
+
+    def test_as_b_recv_already_in_progress(self) -> None:
+        p = Partner()
+        p.connected = True
+        p._async_recv_in_progress = True
+        assert p.as_b_recv() == -1
+        p._async_recv_in_progress = False
+
+    def test_wait_as_b_recv_no_operation(self) -> None:
+        p = Partner()
+        with pytest.raises(RuntimeError, match="No async receive"):
+            p.wait_as_b_recv_completion()
+
+    def test_wait_as_b_recv_timeout(self) -> None:
+        p = Partner()
+        p._async_recv_in_progress = True
+        result = p.wait_as_b_recv_completion(timeout=50)
+        assert result == -1
+        p._async_recv_in_progress = False
+
+    def test_wait_as_b_recv_completes(self) -> None:
+        p = Partner()
+        p._async_recv_in_progress = True
+        p._async_recv_result = 0
+
+        def clear_flag() -> None:
+            time.sleep(0.05)
+            p._async_recv_in_progress = False
+
+        t = threading.Thread(target=clear_flag)
+        t.start()
+        result = p.wait_as_b_recv_completion(timeout=2000)
+        t.join()
+        assert result == 0
+
+    def test_check_as_b_recv_completion_error(self) -> None:
+        p = Partner()
+        p._async_recv_result = -1
+        assert p.check_as_b_recv_completion() == -1
+        p._async_recv_result = 0
 
     def test_check_as_b_recv_completion_empty(self) -> None:
         p = Partner()
@@ -407,9 +482,23 @@ class TestPartnerParams:
         p = Partner()
         assert p.set_recv_callback() == 0
 
+    def test_set_recv_callback_with_function(self) -> None:
+        p = Partner()
+        assert p.set_recv_callback(lambda data: None) == 0
+        assert p._recv_callback is not None
+        assert p.set_recv_callback(None) == 0
+        assert p._recv_callback is None
+
     def test_set_send_callback_returns_zero(self) -> None:
         p = Partner()
         assert p.set_send_callback() == 0
+
+    def test_set_send_callback_with_function(self) -> None:
+        p = Partner()
+        assert p.set_send_callback(lambda result: None) == 0
+        assert p._send_callback_fn is not None
+        assert p.set_send_callback(None) == 0
+        assert p._send_callback_fn is None
 
 
 # ---------------------------------------------------------------------------
@@ -657,6 +746,292 @@ class TestDualPartner:
 
             assert len(received_data) == 1
             assert received_data[0] == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_with_check(self) -> None:
+        """Async receive completes and data is available via check_as_b_recv_completion."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            payload = b"async recv test"
+
+            # Start async receive on B
+            assert pb.as_b_recv() == 0
+
+            # Send from A (in a thread because b_send blocks waiting for ACK)
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(payload)
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+
+            # Poll until receive completes
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if pb.check_as_b_recv_completion() == 0:
+                    break
+                time.sleep(0.01)
+
+            t.join(timeout=3.0)
+            assert not errors
+            assert pb.get_recv_data() == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_with_wait(self) -> None:
+        """Async receive completes when using wait_as_b_recv_completion."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            payload = b"wait recv test"
+
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(payload)
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t.join(timeout=3.0)
+            assert result == 0
+            assert not errors
+            assert pb.get_recv_data() == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_callback_fires(self) -> None:
+        """Receive callback is invoked during async receive."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            received_data: list[bytes] = []
+            pb.set_recv_callback(lambda data: received_data.append(data))
+
+            payload = b"callback async"
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(payload)
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t.join(timeout=3.0)
+            assert result == 0
+            assert not errors
+            assert len(received_data) == 1
+            assert received_data[0] == payload
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_send_callback_fires(self) -> None:
+        """Send callback is invoked during async send."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            send_results: list[int] = []
+            pa.set_send_callback(lambda result: send_results.append(result))
+
+            payload = b"send callback"
+            pa.set_send_data(payload)
+
+            # Start async processor thread for pa
+            pa._stop_event.clear()
+            pa._async_thread = threading.Thread(target=pa._async_processor, daemon=True)
+            pa._async_thread.start()
+
+            assert pa.as_b_send() == 0
+
+            # Receive on B side
+            assert pb.b_recv() == 0
+
+            # Wait for async send to complete
+            deadline = time.time() + 3.0
+            while pa._async_send_in_progress and time.time() < deadline:
+                time.sleep(0.01)
+
+            assert pb.get_recv_data() == payload
+            assert len(send_results) == 1
+            assert send_results[0] == 0
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_then_send(self) -> None:
+        """After async recv completes, sending still works (lock coordination)."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            # Phase 1: A sends, B receives async
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send_a() -> None:
+                try:
+                    pa.set_send_data(b"phase1")
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t1 = threading.Thread(target=do_send_a)
+            t1.start()
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t1.join(timeout=3.0)
+            assert result == 0
+            assert pb.get_recv_data() == b"phase1"
+            assert not errors
+
+            # Phase 2: B sends back, A receives sync
+            pb.set_send_data(b"phase2")
+
+            def do_send_b() -> None:
+                try:
+                    pb.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t2 = threading.Thread(target=do_send_b)
+            t2.start()
+            assert pa.b_recv() == 0
+            t2.join(timeout=3.0)
+            assert pa.get_recv_data() == b"phase2"
+            assert not errors
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_recv_r_id_stored(self) -> None:
+        """get_recv_r_id returns the R-ID from the received PDU."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            pa.r_id = 0x42
+            pa.set_send_data(b"rid test")
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            assert pb.b_recv() == 0
+            t.join(timeout=3.0)
+            assert not errors
+            assert pb.get_recv_data() == b"rid test"
+            assert pb.get_recv_r_id() == 0x42
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_as_b_recv_r_id_stored(self) -> None:
+        """get_recv_r_id works with async receive."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            pa.r_id = 0xABCD
+            assert pb.as_b_recv() == 0
+
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pa.set_send_data(b"async rid")
+                    pa.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            result = pb.wait_as_b_recv_completion(timeout=3000)
+            t.join(timeout=3.0)
+            assert result == 0
+            assert not errors
+            assert pb.get_recv_r_id() == 0xABCD
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_b_send_while_recv_listener_active(self) -> None:
+        """BSend works correctly when the recv listener is active."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            # Start async recv on B (listener active)
+            assert pb.as_b_recv() == 0
+
+            # B sends to A while listener is running
+            pb.set_send_data(b"send while listening")
+            errors: list[Exception] = []
+
+            def do_send() -> None:
+                try:
+                    pb.b_send()
+                except Exception as e:
+                    errors.append(e)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            assert pa.b_recv() == 0
+            t.join(timeout=3.0)
+            assert not errors
+            assert pa.get_recv_data() == b"send while listening"
+
+            # Clean up the pending async recv
+            pb._async_recv_in_progress = False
         finally:
             pa.stop()
             pb.stop()

@@ -15,6 +15,7 @@ Usage::
 from .client import Client
 from .async_client import AsyncClient
 from .server import Server
+from .partner import Partner, PartnerStatus
 from ._protocol import Protocol
 
 from snap7.type import Area, Block, WordLen, SrvEvent, SrvArea
@@ -24,6 +25,8 @@ __all__ = [
     "Client",
     "AsyncClient",
     "Server",
+    "Partner",
+    "PartnerStatus",
     "Protocol",
     "Area",
     "Block",
