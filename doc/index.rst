@@ -39,14 +39,17 @@ Welcome to python-snap7's documentation!
    :maxdepth: 2
    :caption: API Reference
 
-   API/s7commplus
    API/client
-   API/async_client
    API/server
    API/partner
    API/logo
-   API/type
    API/util
+   API/type
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Internals
+
    API/connection
    API/s7protocol
    API/datatypes
