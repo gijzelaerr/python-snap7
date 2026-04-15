@@ -25,6 +25,7 @@ from .s7protocol import S7Protocol, get_return_code_description
 from .datatypes import S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
 from .client_base import ClientMixin
+from .log import PLCLoggerAdapter, OperationLogger
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
 
 from .type import (
@@ -170,7 +171,10 @@ class Client(ClientMixin):
         # Lock for thread safety during reconnection and heartbeat
         self._reconnect_lock = threading.RLock()
 
-        logger.info("S7Client initialized (pure Python implementation)")
+        # Structured logger with PLC context (updated on connect)
+        self.logger: PLCLoggerAdapter = PLCLoggerAdapter(logger)
+
+        self.logger.info("S7Client initialized (pure Python implementation)")
 
     @property
     def is_alive(self) -> bool:
@@ -413,7 +417,8 @@ class Client(ClientMixin):
             self.connected = True
             self._is_alive = True
             self._exec_time = int((time.time() - start_time) * 1000)
-            logger.info(f"Connected to {address}:{tcp_port} rack {rack} slot {slot}")
+            self.logger.update_context(plc_host=address, rack=rack, slot=slot, protocol="legacy")
+            self.logger.info(f"Connected to {address}:{tcp_port} rack {rack} slot {slot}")
 
             # Start heartbeat if configured
             self._start_heartbeat()
@@ -552,9 +557,8 @@ class Client(ClientMixin):
         Returns:
             Data read from DB
         """
-        logger.debug(f"db_read: DB{db_number}, start={start}, size={size}")
-
-        data = self.read_area(Area.DB, db_number, start, size)
+        with OperationLogger(self.logger, "db_read", db=db_number, start=start, size=size):
+            data = self.read_area(Area.DB, db_number, start, size)
         return data
 
     def db_write(self, db_number: int, start: int, data: bytearray) -> int:
