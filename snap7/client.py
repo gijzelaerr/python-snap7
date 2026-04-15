@@ -781,9 +781,7 @@ class Client(ClientMixin):
             self.max_parallel = 1
         logger.info(f"Auto-tuned max_parallel={self.max_parallel} (PDU={self.pdu_length})")
 
-    def _send_receive_parallel(
-        self, requests: list[Tuple[int, bytes]]
-    ) -> dict[int, dict[str, Any]]:
+    def _send_receive_parallel(self, requests: list[Tuple[int, bytes]]) -> dict[int, dict[str, Any]]:
         """Fire multiple S7 requests back-to-back and collect responses by sequence number.
 
         All PDUs are sent on the single TCP connection before reading any
@@ -910,9 +908,7 @@ class Client(ClientMixin):
         results = extract_results(working_packets, len(dict_items))
         return (0, results)
 
-    def _execute_packets_sequential(
-        self, packet_requests: list[Tuple[int, bytes, ReadPacket]]
-    ) -> None:
+    def _execute_packets_sequential(self, packet_requests: list[Tuple[int, bytes, ReadPacket]]) -> None:
         """Execute multi-block packets one at a time."""
         for _, request, packet in packet_requests:
             response = self._send_receive(request)
@@ -920,9 +916,7 @@ class Client(ClientMixin):
             for blk, buf in zip(packet.blocks, block_data_list):
                 blk.buffer = buf
 
-    def _execute_packets_parallel(
-        self, packet_requests: list[Tuple[int, bytes, ReadPacket]]
-    ) -> None:
+    def _execute_packets_parallel(self, packet_requests: list[Tuple[int, bytes, ReadPacket]]) -> None:
         """Execute multi-block packets using parallel dispatch.
 
         Sends up to *max_parallel* PDUs back-to-back before reading
