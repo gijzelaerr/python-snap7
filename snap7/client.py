@@ -167,8 +167,8 @@ class Client(ClientMixin):
         self._heartbeat_stop_event = threading.Event()
         self._is_alive = False
 
-        # Lock for thread safety during reconnection
-        self._reconnect_lock = threading.Lock()
+        # Lock for thread safety during reconnection and heartbeat
+        self._reconnect_lock = threading.RLock()
 
         logger.info("S7Client initialized (pure Python implementation)")
 
@@ -194,6 +194,8 @@ class Client(ClientMixin):
 
         Wraps the repeated send_data -> receive_data -> parse_response pattern
         with PDU reference validation and automatic retry on stale packets.
+        Acquires ``_reconnect_lock`` to prevent conflicts with the heartbeat
+        thread.
 
         Args:
             request: Complete S7 PDU to send.
@@ -207,20 +209,22 @@ class Client(ClientMixin):
             S7ProtocolError: If all retries are exhausted or other protocol error.
         """
         conn = self._get_connection()
-        conn.send_data(request)
 
-        for attempt in range(max_stale_retries + 1):
-            response_data = conn.receive_data()
-            response = self.protocol.parse_response(response_data)
+        with self._reconnect_lock:
+            conn.send_data(request)
 
-            try:
-                self.protocol.validate_pdu_reference(response["sequence"])
-                return response
-            except S7StalePacketError:
-                if attempt < max_stale_retries:
-                    logger.warning(f"Stale packet (attempt {attempt + 1}/{max_stale_retries}), retrying receive")
-                    continue
-                raise S7ProtocolError(f"Max stale packet retries ({max_stale_retries}) exceeded")
+            for attempt in range(max_stale_retries + 1):
+                response_data = conn.receive_data()
+                response = self.protocol.parse_response(response_data)
+
+                try:
+                    self.protocol.validate_pdu_reference(response["sequence"])
+                    return response
+                except S7StalePacketError:
+                    if attempt < max_stale_retries:
+                        logger.warning(f"Stale packet (attempt {attempt + 1}/{max_stale_retries}), retrying receive")
+                        continue
+                    raise S7ProtocolError(f"Max stale packet retries ({max_stale_retries}) exceeded")
 
         raise S7ProtocolError("Failed to receive valid response")  # Should not reach here
 
@@ -798,39 +802,40 @@ class Client(ClientMixin):
         """
         conn = self._get_connection()
 
-        # Build seq_num → packet_index lookup
-        pending: dict[int, int] = {}
-        for packet_index, pdu in requests:
-            seq = struct.unpack(">H", pdu[4:6])[0]
-            pending[seq] = packet_index
+        with self._reconnect_lock:
+            # Build seq_num → packet_index lookup
+            pending: dict[int, int] = {}
+            for packet_index, pdu in requests:
+                seq = struct.unpack(">H", pdu[4:6])[0]
+                pending[seq] = packet_index
 
-        # Send all requests back-to-back
-        for _, pdu in requests:
-            conn.send_data(pdu)
+            # Send all requests back-to-back
+            for _, pdu in requests:
+                conn.send_data(pdu)
 
-        # Receive responses, matching by sequence number
-        results: dict[int, dict[str, Any]] = {}
-        remaining = len(requests)
-        deadline = time.monotonic() + conn.timeout
+            # Receive responses, matching by sequence number
+            results: dict[int, dict[str, Any]] = {}
+            remaining = len(requests)
+            deadline = time.monotonic() + conn.timeout
 
-        while remaining > 0:
-            wait_time = deadline - time.monotonic()
-            if wait_time <= 0:
-                raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
+            while remaining > 0:
+                wait_time = deadline - time.monotonic()
+                if wait_time <= 0:
+                    raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
 
-            if not conn.data_available(timeout=wait_time):
-                raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
+                if not conn.data_available(timeout=wait_time):
+                    raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
 
-            response_data = conn.receive_data()
-            response = self.protocol.parse_response(response_data)
-            resp_seq = response["sequence"]
+                response_data = conn.receive_data()
+                response = self.protocol.parse_response(response_data)
+                resp_seq = response["sequence"]
 
-            if resp_seq in pending:
-                packet_index = pending.pop(resp_seq)
-                results[packet_index] = response
-                remaining -= 1
-            else:
-                logger.warning(f"Discarding unexpected response with sequence {resp_seq}")
+                if resp_seq in pending:
+                    packet_index = pending.pop(resp_seq)
+                    results[packet_index] = response
+                    remaining -= 1
+                else:
+                    logger.warning(f"Discarding unexpected response with sequence {resp_seq}")
 
         return results
 
