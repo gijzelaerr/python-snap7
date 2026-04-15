@@ -35,7 +35,7 @@ import time
 from typing import Any, MutableMapping, Optional
 
 
-class PLCLoggerAdapter(logging.LoggerAdapter[logging.Logger]):
+class PLCLoggerAdapter(logging.LoggerAdapter):  # type: ignore[type-arg]
     """Logger adapter that prepends PLC connection context to messages.
 
     Adds ``plc_host``, ``plc_rack``, ``plc_slot``, and ``plc_protocol``
