@@ -163,17 +163,73 @@ class S7CommPlusClient:
         parsed = _parse_read_response(response)
         return [r if r is not None else b"" for r in parsed]
 
-    def explore(self) -> bytes:
-        """Browse the PLC object tree.
+    def read_area(self, area_rid: int, start: int, size: int) -> bytes:
+        """Read raw bytes from a controller memory area (M, I, Q, counters, timers).
+
+        Args:
+            area_rid: Native object RID for the area, e.g.
+                ``Ids.NATIVE_THE_M_AREA_RID`` (82) for Merker.
+            start: Start byte offset.
+            size: Number of bytes to read.
 
         Returns:
-            Raw response payload
+            Raw bytes read from the area.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        response = self._connection.send_request(FunctionCode.EXPLORE, b"")
+        payload = _build_area_read_payload(area_rid, start, size)
+        response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response)
+        if not results or results[0] is None:
+            raise RuntimeError("Area read failed")
+        return results[0]
+
+    def write_area(self, area_rid: int, start: int, data: bytes) -> None:
+        """Write raw bytes to a controller memory area (M, I, Q, counters, timers).
+
+        Args:
+            area_rid: Native object RID for the area.
+            start: Start byte offset.
+            data: Bytes to write.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_area_write_payload(area_rid, start, data)
+        response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
+
+    def explore(self, explore_id: int = 0) -> bytes:
+        """Browse the PLC object tree.
+
+        Args:
+            explore_id: Object to explore (0 = root).
+
+        Returns:
+            Raw response payload.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_explore_payload(explore_id)
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload)
         return response
+
+    def set_plc_operating_state(self, state: int) -> None:
+        """Set the PLC operating state (start/stop).
+
+        Uses INVOKE to call the PLC's operating-state setter.
+
+        Args:
+            state: Target operating state.
+                1 = STOP, 2 = RUN, 3 = HOT_RESTART.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_invoke_payload(state)
+        self._connection.send_request(FunctionCode.INVOKE, payload)
 
     def __enter__(self) -> "S7CommPlusClient":
         return self
@@ -331,3 +387,72 @@ def _parse_write_response(response: bytes) -> None:
     if errors:
         err_str = ", ".join(f"item {nr}: error {val}" for nr, val in errors)
         raise RuntimeError(f"Write failed: {err_str}")
+
+
+def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:
+    """Build a GetMultiVariables payload for controller memory area access.
+
+    Unlike DB access, controller areas (M, I, Q, counters, timers) use a
+    native RID and the CONTROLLER_AREA_VALUE_ACTUAL sub-area.
+    """
+    addr_bytes, field_count = encode_item_address(
+        access_area=area_rid,
+        access_sub_area=Ids.CONTROLLER_AREA_VALUE_ACTUAL,
+        lids=[start + 1, size],
+    )
+
+    payload = bytearray()
+    payload += struct.pack(">I", 0)
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(field_count)
+    payload += addr_bytes
+    payload += encode_object_qualifier()
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
+    """Build a SetMultiVariables payload for controller memory area access."""
+    addr_bytes, field_count = encode_item_address(
+        access_area=area_rid,
+        access_sub_area=Ids.CONTROLLER_AREA_VALUE_ACTUAL,
+        lids=[start + 1, len(data)],
+    )
+
+    payload = bytearray()
+    payload += struct.pack(">I", 0)
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(field_count)
+    payload += addr_bytes
+    payload += encode_uint32_vlq(1)  # item number 1
+    payload += encode_pvalue_blob(data)
+    payload += bytes([0x00])
+    payload += encode_object_qualifier()
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_explore_payload(explore_id: int = 0) -> bytes:
+    """Build an EXPLORE request payload.
+
+    Args:
+        explore_id: Object to explore (0 = root, other values
+            explore a specific object by RID).
+    """
+    if explore_id == 0:
+        return b""
+    payload = bytearray()
+    payload += encode_uint32_vlq(explore_id)
+    return bytes(payload)
+
+
+def _build_invoke_payload(state: int) -> bytes:
+    """Build an INVOKE request payload for SetPlcOperatingState.
+
+    The INVOKE function triggers a method on a PLC object.
+    For operating state changes, this calls the CPU's state setter.
+    """
+    payload = bytearray()
+    payload += struct.pack(">I", 0)  # reserved
+    payload += encode_uint32_vlq(state)
+    return bytes(payload)

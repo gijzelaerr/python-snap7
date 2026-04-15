@@ -26,7 +26,16 @@ from .protocol import (
 )
 from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
-from ._s7commplus_client import _build_read_payload, _parse_read_response, _build_write_payload, _parse_write_response
+from ._s7commplus_client import (
+    _build_read_payload,
+    _parse_read_response,
+    _build_write_payload,
+    _parse_write_response,
+    _build_area_read_payload,
+    _build_area_write_payload,
+    _build_explore_payload,
+    _build_invoke_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -399,9 +408,30 @@ class S7CommPlusAsyncClient:
         parsed = _parse_read_response(response)
         return [r if r is not None else b"" for r in parsed]
 
-    async def explore(self) -> bytes:
+    async def read_area(self, area_rid: int, start: int, size: int) -> bytes:
+        """Read raw bytes from a controller memory area (M, I, Q, counters, timers)."""
+        payload = _build_area_read_payload(area_rid, start, size)
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response)
+        if not results or results[0] is None:
+            raise RuntimeError("Area read failed")
+        return results[0]
+
+    async def write_area(self, area_rid: int, start: int, data: bytes) -> None:
+        """Write raw bytes to a controller memory area (M, I, Q, counters, timers)."""
+        payload = _build_area_write_payload(area_rid, start, data)
+        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
+
+    async def explore(self, explore_id: int = 0) -> bytes:
         """Browse the PLC object tree."""
-        return await self._send_request(FunctionCode.EXPLORE, b"")
+        payload = _build_explore_payload(explore_id)
+        return await self._send_request(FunctionCode.EXPLORE, payload)
+
+    async def set_plc_operating_state(self, state: int) -> None:
+        """Set the PLC operating state (start/stop)."""
+        payload = _build_invoke_payload(state)
+        await self._send_request(FunctionCode.INVOKE, payload)
 
     # -- Internal methods --
 
