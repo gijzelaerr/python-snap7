@@ -231,6 +231,56 @@ class S7CommPlusClient:
         payload = _build_invoke_payload(state)
         self._connection.send_request(FunctionCode.INVOKE, payload)
 
+    def list_datablocks(self) -> list[dict[str, Any]]:
+        """List all datablocks on the PLC via EXPLORE.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns:
+            List of dicts with keys ``name``, ``number``, ``rid``.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+        return _parse_explore_datablocks(response)
+
+    def browse(self) -> list[dict[str, Any]]:
+        """Browse the PLC symbol table via EXPLORE.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns a flat list of variable info dicts with keys:
+        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``bit_size``.
+        Results can be used to construct a :class:`~snap7.util.symbols.SymbolTable`.
+
+        Returns:
+            List of variable info dicts.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        # Step 1: list datablocks
+        dbs = self.list_datablocks()
+
+        # Step 2: for each DB, explore its type info to get field layout
+        variables: list[dict[str, Any]] = []
+        for db_info in dbs:
+            db_rid = db_info.get("rid", 0)
+            if db_rid == 0:
+                continue
+            payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+            try:
+                response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+                fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
+                variables.extend(fields)
+            except Exception:
+                logger.debug(f"Failed to explore DB {db_info['name']} (rid={db_rid:#x})")
+                continue
+
+        return variables
+
     def __enter__(self) -> "S7CommPlusClient":
         return self
 
@@ -456,3 +506,211 @@ def _build_invoke_payload(state: int) -> bytes:
     payload += struct.pack(">I", 0)  # reserved
     payload += encode_uint32_vlq(state)
     return bytes(payload)
+
+
+# ---------------------------------------------------------------------------
+# EXPLORE helpers (experimental)
+# ---------------------------------------------------------------------------
+
+
+def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:
+    """Build a structured EXPLORE request for a specific object.
+
+    Args:
+        explore_id: RID of the object to explore.
+        attribute_ids: List of attribute IDs to request.
+
+    Returns:
+        Encoded EXPLORE payload.
+    """
+    payload = bytearray()
+    payload += encode_uint32_vlq(explore_id)
+    payload += encode_uint32_vlq(0)  # ExploreRequestId (0 = none)
+    payload += encode_uint32_vlq(1)  # ExploreChildsRecursive
+    payload += encode_uint32_vlq(0)  # ExploreParents
+    payload += encode_uint32_vlq(len(attribute_ids))
+    for attr_id in attribute_ids:
+        payload += encode_uint32_vlq(attr_id)
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
+    """Parse an EXPLORE response to extract datablock info.
+
+    Walks the tagged object stream looking for objects with
+    ObjectVariableTypeName (233) and Block_BlockNumber (2521) attributes.
+
+    Returns:
+        List of dicts: ``{"name": str, "number": int, "rid": int}``
+    """
+    from .vlq import decode_uint32_vlq as _vlq32
+
+    datablocks: list[dict[str, Any]] = []
+    offset = 0
+    current_name = ""
+    current_number = 0
+    current_rid = 0
+
+    while offset < len(response):
+        if offset >= len(response):
+            break
+
+        tag = response[offset]
+        offset += 1
+
+        if tag == 0xA1:  # START_OF_OBJECT
+            if offset + 4 > len(response):
+                break
+            current_rid = struct.unpack(">I", response[offset : offset + 4])[0]
+            offset += 4
+            # Skip classId, reserved, reserved (3 VLQ values)
+            for _ in range(3):
+                if offset >= len(response):
+                    break
+                _, consumed = _vlq32(response, offset)
+                offset += consumed
+            current_name = ""
+            current_number = 0
+
+        elif tag == 0xA2:  # TERMINATING_OBJECT
+            if current_name and current_number > 0:
+                datablocks.append({"name": current_name, "number": current_number, "rid": current_rid})
+
+        elif tag == 0xA3:  # ATTRIBUTE
+            if offset >= len(response):
+                break
+            attr_id, consumed = _vlq32(response, offset)
+            offset += consumed
+            if offset + 2 > len(response):
+                break
+            flags = response[offset]
+            datatype = response[offset + 1]
+            offset += 2
+
+            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype == 0x13:  # WSTRING
+                if offset >= len(response):
+                    break
+                str_len, consumed = _vlq32(response, offset)
+                offset += consumed
+                if offset + str_len <= len(response):
+                    try:
+                        current_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
+                    except Exception:
+                        current_name = ""
+                    offset += str_len
+                    continue
+
+            if attr_id == Ids.BLOCK_BLOCK_NUMBER and datatype in (0x07, 0x08):  # UDINT/DWORD
+                if offset >= len(response):
+                    break
+                current_number, consumed = _vlq32(response, offset)
+                offset += consumed
+                continue
+
+            # Skip unknown attribute value
+            if flags & 0x10:  # array
+                if offset >= len(response):
+                    break
+                count, consumed = _vlq32(response, offset)
+                offset += consumed
+                offset += count  # rough skip
+            else:
+                if offset >= len(response):
+                    break
+                _, consumed = _vlq32(response, offset)
+                offset += consumed
+
+        elif tag == 0x00:  # terminator
+            continue
+        else:
+            # Skip unknown tags
+            continue
+
+    return datablocks
+
+
+def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list[dict[str, Any]]:
+    """Parse an EXPLORE response for a single DB to extract field layout.
+
+    Returns:
+        List of dicts: ``{"name": str, "db_number": int, "db_name": str,
+        "byte_offset": int, "data_type": str}``
+    """
+    from .vlq import decode_uint32_vlq as _vlq32
+
+    fields: list[dict[str, Any]] = []
+    offset = 0
+    field_name = ""
+    byte_offset = 0
+
+    while offset < len(response):
+        tag = response[offset]
+        offset += 1
+
+        if tag == 0xA1:  # START_OF_OBJECT
+            if offset + 4 > len(response):
+                break
+            offset += 4
+            for _ in range(3):
+                if offset >= len(response):
+                    break
+                _, consumed = _vlq32(response, offset)
+                offset += consumed
+            field_name = ""
+            byte_offset = 0
+
+        elif tag == 0xA2:  # TERMINATING_OBJECT
+            if field_name:
+                fields.append(
+                    {
+                        "name": f"{db_name}.{field_name}",
+                        "db_number": db_number,
+                        "byte_offset": byte_offset,
+                        "data_type": "BYTE",  # default; refined by type info
+                    }
+                )
+
+        elif tag == 0xA3:  # ATTRIBUTE
+            if offset >= len(response):
+                break
+            attr_id, consumed = _vlq32(response, offset)
+            offset += consumed
+            if offset + 2 > len(response):
+                break
+            flags = response[offset]
+            datatype = response[offset + 1]
+            offset += 2
+
+            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype == 0x13:
+                if offset >= len(response):
+                    break
+                str_len, consumed = _vlq32(response, offset)
+                offset += consumed
+                if offset + str_len <= len(response):
+                    try:
+                        field_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
+                    except Exception:
+                        field_name = ""
+                    offset += str_len
+                    continue
+
+            # Skip attribute value
+            if flags & 0x10:
+                if offset >= len(response):
+                    break
+                count, consumed = _vlq32(response, offset)
+                offset += consumed
+                offset += count
+            else:
+                if offset >= len(response):
+                    break
+                _, consumed = _vlq32(response, offset)
+                offset += consumed
+
+        elif tag == 0x00:
+            continue
+        else:
+            continue
+
+    return fields

@@ -300,6 +300,113 @@ class SymbolTable:
         return cls(tags)
 
     @classmethod
+    def from_tia_xml(cls, source: Union[str, Path]) -> "SymbolTable":
+        """Create a SymbolTable from a TIA Portal DB source XML export.
+
+        .. warning:: This method is **experimental** and may change.
+
+        TIA Portal can export DB definitions via right-click >
+        "Generate source from blocks", producing XML with field names,
+        offsets, and data types.
+
+        Args:
+            source: path to an XML file exported from TIA Portal.
+
+        Returns:
+            A new :class:`SymbolTable`.
+        """
+        import xml.etree.ElementTree as ET
+
+        text = _read_source(source)
+        root = ET.fromstring(text)
+
+        # TIA Portal XML uses several namespace URIs depending on version
+        ns = {}
+        for prefix, uri in [("", "http://www.siemens.com/automation/Openness/SW/Interface/v5")]:
+            ns[prefix] = uri
+
+        tags: Dict[str, Dict[str, Any]] = {}
+
+        # Try to extract DB number from the document
+        db_number = 0
+        for attr_elem in root.iter():
+            if attr_elem.tag.endswith("AttributeList"):
+                for child in attr_elem:
+                    if child.tag.endswith("Number"):
+                        try:
+                            db_number = int(child.text or "0")
+                        except ValueError:
+                            pass
+                        break
+
+        # Walk Member elements to extract field definitions
+        for member in root.iter():
+            tag_name = member.tag.rsplit("}", 1)[-1] if "}" in member.tag else member.tag
+            if tag_name != "Member":
+                continue
+            name = member.get("Name", "")
+            datatype = member.get("Datatype", "")
+            offset_str = member.get("Offset", "0")
+            if not name or not datatype:
+                continue
+
+            # Normalize TIA datatype names to our type names
+            dt_map = {
+                "Bool": "BOOL",
+                "Byte": "BYTE",
+                "Char": "CHAR",
+                "Int": "INT",
+                "Word": "WORD",
+                "DInt": "DINT",
+                "DWord": "DWORD",
+                "Real": "REAL",
+                "LReal": "LREAL",
+                "SInt": "SINT",
+                "USInt": "USINT",
+                "UInt": "UINT",
+                "UDInt": "UDINT",
+                "String": "STRING",
+                "WString": "WSTRING",
+                "Date": "DATE",
+                "Time": "TIME",
+                "Time_Of_Day": "TOD",
+                "Date_And_Time": "DT",
+                "DTL": "DTL",
+                "LWord": "LWORD",
+            }
+            normalized = dt_map.get(datatype, datatype.upper())
+            tags[name] = {"db": str(db_number), "offset": offset_str, "type": normalized}
+
+        return cls(tags)
+
+    @classmethod
+    def from_browse(cls, variables: list[dict[str, Any]]) -> "SymbolTable":
+        """Create a SymbolTable from live PLC browse results.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Accepts the output of :meth:`s7.Client.browse()` (or
+        :meth:`s7._s7commplus_client.S7CommPlusClient.browse()`).
+
+        Args:
+            variables: list of dicts from ``client.browse()``.
+
+        Returns:
+            A new :class:`SymbolTable`.
+        """
+        tags: Dict[str, Dict[str, Any]] = {}
+        for var in variables:
+            name = var.get("name", "")
+            if not name:
+                continue
+            tags[name] = {
+                "db": str(var.get("db_number", 0)),
+                "offset": str(var.get("byte_offset", 0)),
+                "type": var.get("data_type", "BYTE"),
+            }
+        return cls(tags)
+
+    @classmethod
     def from_json(cls, source: Union[str, Path]) -> "SymbolTable":
         """Create a SymbolTable from a JSON file or JSON string.
 

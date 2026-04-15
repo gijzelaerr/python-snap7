@@ -35,7 +35,11 @@ from ._s7commplus_client import (
     _build_area_write_payload,
     _build_explore_payload,
     _build_invoke_payload,
+    _build_explore_request,
+    _parse_explore_datablocks,
+    _parse_explore_fields,
 )
+from .protocol import Ids
 
 logger = logging.getLogger(__name__)
 
@@ -432,6 +436,35 @@ class S7CommPlusAsyncClient:
         """Set the PLC operating state (start/stop)."""
         payload = _build_invoke_payload(state)
         await self._send_request(FunctionCode.INVOKE, payload)
+
+    async def list_datablocks(self) -> list[dict[str, Any]]:
+        """List all datablocks on the PLC via EXPLORE.
+
+        .. warning:: This method is **experimental** and may change.
+        """
+        payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
+        response = await self._send_request(FunctionCode.EXPLORE, payload)
+        return _parse_explore_datablocks(response)
+
+    async def browse(self) -> list[dict[str, Any]]:
+        """Browse the PLC symbol table via EXPLORE.
+
+        .. warning:: This method is **experimental** and may change.
+        """
+        dbs = await self.list_datablocks()
+        variables: list[dict[str, Any]] = []
+        for db_info in dbs:
+            db_rid = db_info.get("rid", 0)
+            if db_rid == 0:
+                continue
+            payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+            try:
+                response = await self._send_request(FunctionCode.EXPLORE, payload)
+                fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
+                variables.extend(fields)
+            except Exception:
+                continue
+        return variables
 
     # -- Internal methods --
 
