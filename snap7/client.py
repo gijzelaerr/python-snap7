@@ -422,6 +422,8 @@ class Client(ClientMixin):
         *dest_rack*, *dest_slot*) through S7 routing parameters embedded in
         the COTP Connection Request.
 
+        .. warning:: This method is experimental and may change in future versions.
+
         Args:
             host: IP address of the routing gateway PLC
             router_rack: Rack number of the gateway PLC

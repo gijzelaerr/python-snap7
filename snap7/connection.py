@@ -110,6 +110,8 @@ class ISOTCPConnection:
         additional parameters that instruct the gateway PLC to forward
         the connection to a target PLC on another subnet.
 
+        .. warning:: This method is experimental and may change in future versions.
+
         Args:
             subnet_id: Subnet ID of the target network (2 bytes)
             dest_rack: Rack number of the destination PLC
