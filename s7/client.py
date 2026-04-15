@@ -285,6 +285,42 @@ class Client:
             raise RuntimeError("browse() requires S7CommPlus connection")
         return self._plus.browse()
 
+    def read_diagnostic_buffer(self) -> list[dict[str, Any]]:
+        """Read the PLC diagnostic buffer.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Uses the legacy S7 protocol (SZL read).
+        """
+        if self._legacy is None:
+            raise RuntimeError("Not connected")
+        return self._legacy.read_diagnostic_buffer()
+
+    def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+        """Create a data change subscription (S7CommPlus only).
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            items: List of (db_number, start_offset, size) tuples.
+            cycle_ms: Cycle time in milliseconds (0 = on change).
+
+        Returns:
+            Subscription ID.
+        """
+        if self._plus is None:
+            raise RuntimeError("create_subscription() requires S7CommPlus connection")
+        return self._plus.create_subscription(items, cycle_ms)
+
+    def delete_subscription(self, subscription_id: int) -> None:
+        """Delete a data change subscription (S7CommPlus only).
+
+        .. warning:: This method is **experimental** and may change.
+        """
+        if self._plus is None:
+            raise RuntimeError("delete_subscription() requires S7CommPlus connection")
+        self._plus.delete_subscription(subscription_id)
+
     def __getattr__(self, name: str) -> Any:
         """Delegate unknown methods to the legacy client."""
         if name.startswith("_"):

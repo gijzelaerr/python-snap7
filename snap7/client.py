@@ -1851,6 +1851,65 @@ class Client(ClientMixin):
         # Return raw data
         return bytes(szl.Data[: szl.Header.LengthDR])
 
+    def read_diagnostic_buffer(self) -> list[dict[str, Any]]:
+        """Read the PLC diagnostic buffer.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns a list of diagnostic entries, newest first. Each entry
+        is a dict with keys ``event_id``, ``timestamp``, and ``description``.
+
+        Returns:
+            List of diagnostic buffer entries.
+        """
+        # SZL ID 0x00A0, index 0 = diagnostic buffer
+        szl = self.read_szl(0x00A0, 0)
+        raw = bytes(szl.Data[: szl.Header.LengthDR])
+
+        entries: list[dict[str, Any]] = []
+        # Each diagnostic entry is 20 bytes
+        entry_size = 20
+        offset = 0
+        while offset + entry_size <= len(raw):
+            event_id = struct.unpack(">H", raw[offset : offset + 2])[0]
+
+            # BCD-encoded timestamp at offset 2..9
+            ts_bytes = raw[offset + 2 : offset + 10]
+            try:
+                ts = self._parse_bcd_timestamp(ts_bytes)
+            except Exception:
+                ts = None
+
+            # Additional info at offset 10..19
+            info = raw[offset + 10 : offset + entry_size]
+
+            entries.append(
+                {
+                    "event_id": event_id,
+                    "timestamp": ts,
+                    "info": info.hex(),
+                }
+            )
+            offset += entry_size
+
+        return entries
+
+    @staticmethod
+    def _parse_bcd_timestamp(data: bytes) -> datetime:
+        """Parse a BCD-encoded S7 timestamp (8 bytes) to datetime."""
+
+        def bcd(b: int) -> int:
+            return (b >> 4) * 10 + (b & 0x0F)
+
+        year = bcd(data[0])
+        year += 2000 if year < 90 else 1900
+        month = bcd(data[1])
+        day = bcd(data[2])
+        hour = bcd(data[3])
+        minute = bcd(data[4])
+        second = bcd(data[5])
+        return datetime(year, month, day, hour, minute, second)
+
     def iso_exchange_buffer(self, data: bytearray) -> bytearray:
         """
         Exchange raw ISO PDU.
