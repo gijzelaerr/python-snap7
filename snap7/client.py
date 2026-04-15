@@ -1213,7 +1213,7 @@ class Client(ClientMixin):
             cpu_info.Copyright = data[108:134].rstrip(b"\x00")
         if len(data) >= 166:
             cpu_info.SerialNumber = data[142:166].rstrip(b"\x00")
-        if len(data) >= 130:
+        if len(data) >= 208:
             cpu_info.ModuleTypeName = data[176:208].rstrip(b"\x00")
 
         return cpu_info
