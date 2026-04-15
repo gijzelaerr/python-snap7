@@ -475,6 +475,33 @@ class TestTCPConnect:
         conn._tcp_connect()
         mock_sock.setsockopt.assert_any_call(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
 
+    @patch("snap7.connection.socket.socket")
+    @patch("snap7.connection.socket")
+    def test_tcp_connect_sets_keepalive_timing(self, mock_socket_mod: MagicMock, mock_socket_cls: MagicMock) -> None:
+        """Keepalive timing parameters must be set when the platform supports them."""
+        import socket as _socket
+
+        # Simulate a platform that has all three timing attributes
+        mock_socket_mod.AF_INET = _socket.AF_INET
+        mock_socket_mod.SOCK_STREAM = _socket.SOCK_STREAM
+        mock_socket_mod.SOL_SOCKET = _socket.SOL_SOCKET
+        mock_socket_mod.SO_KEEPALIVE = _socket.SO_KEEPALIVE
+        mock_socket_mod.IPPROTO_TCP = _socket.IPPROTO_TCP
+        mock_socket_mod.TCP_NODELAY = _socket.TCP_NODELAY
+        mock_socket_mod.TCP_KEEPIDLE = 4   # simulate attribute present
+        mock_socket_mod.TCP_KEEPINTVL = 5
+        mock_socket_mod.TCP_KEEPCNT = 6
+
+        mock_sock = MagicMock()
+        mock_socket_mod.socket.return_value = mock_sock
+
+        conn = ISOTCPConnection("1.2.3.4")
+        conn._tcp_connect()
+
+        mock_sock.setsockopt.assert_any_call(_socket.IPPROTO_TCP, 4, 60)
+        mock_sock.setsockopt.assert_any_call(_socket.IPPROTO_TCP, 5, 10)
+        mock_sock.setsockopt.assert_any_call(_socket.IPPROTO_TCP, 6, 3)
+
 
 class TestISOConnect:
     """Test _iso_connect()."""
