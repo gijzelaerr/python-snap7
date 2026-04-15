@@ -22,9 +22,32 @@ versions.
 
 **Why this matters:**
 
-* **Portability**: No more platform-specific shared libraries (`.dll`, `.so`, `.dylib`).
+* **Portability**: No more platform-specific shared libraries (``.dll``, ``.so``, ``.dylib``).
   python-snap7 now works on any platform that runs Python — including ARM, Alpine Linux,
   and other environments where the C library was difficult or impossible to install.
+
+Connect to any S7 PLC::
+
+   import snap7
+
+   client = snap7.Client()
+   client.connect("192.168.1.10", 0, 1)
+   data = client.db_read(1, 0, 4)
+   client.disconnect()
+
+No native libraries or platform-specific dependencies are required.
+
+
+Version 3.0 -- Pure Python Rewrite
+====================================
+
+Version 3.0 was a ground-up rewrite of python-snap7. The library no longer wraps
+the C snap7 shared library -- instead, the entire S7 protocol stack (TPKT, COTP,
+and S7) is implemented in pure Python.
+
+* **Portability**: No more platform-specific shared libraries (``.dll``, ``.so``, ``.dylib``).
+  Works on any platform that runs Python -- including ARM, Alpine Linux, and other
+  environments where the C library was difficult or impossible to install.
 * **Easier installation**: Just ``pip install python-snap7``. No native dependencies,
   no compiler toolchains, no manual library setup.
 * **Easier to extend**: New features and protocol support can be added directly in Python.
