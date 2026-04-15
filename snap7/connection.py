@@ -5,6 +5,7 @@ Implements TPKT (Transport Service on top of TCP) and COTP (Connection Oriented
 Transport Protocol) layers for S7 communication.
 """
 
+import select
 import socket
 import struct
 import logging
@@ -467,6 +468,22 @@ class ISOTCPConnection:
                 raise S7ConnectionError(f"Receive error: {e}")
 
         return bytes(data)
+
+    def data_available(self, timeout: float = 0.0) -> bool:
+        """Check if data is available to read without blocking.
+
+        Uses ``select()`` to poll the socket for readable data.
+
+        Args:
+            timeout: How long to wait in seconds (0.0 = immediate poll).
+
+        Returns:
+            True if data is available on the socket.
+        """
+        if not self.connected or self.socket is None:
+            return False
+        readable, _, _ = select.select([self.socket], [], [], timeout)
+        return bool(readable)
 
     def check_connection(self) -> bool:
         """Check if the TCP connection is still alive.
