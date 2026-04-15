@@ -3,18 +3,20 @@
 import json
 import logging
 
+import pytest
+
 from snap7.log import PLCLoggerAdapter, OperationLogger, JSONFormatter
 
 
 class TestPLCLoggerAdapter:
-    def test_prefix_added(self, caplog: logging.LogRecord) -> None:  # type: ignore[type-arg]
+    def test_prefix_added(self, caplog: pytest.LogCaptureFixture) -> None:
         base = logging.getLogger("test.adapter")
         adapter = PLCLoggerAdapter(base, plc_host="10.0.0.1", rack=0, slot=1)
         with caplog.at_level(logging.INFO, logger="test.adapter"):
             adapter.info("Connected")
         assert "[10.0.0.1 R0/S1] Connected" in caplog.text
 
-    def test_no_prefix_without_host(self, caplog: logging.LogRecord) -> None:  # type: ignore[type-arg]
+    def test_no_prefix_without_host(self, caplog: pytest.LogCaptureFixture) -> None:
         base = logging.getLogger("test.nohost")
         adapter = PLCLoggerAdapter(base)
         with caplog.at_level(logging.INFO, logger="test.nohost"):
@@ -40,7 +42,7 @@ class TestPLCLoggerAdapter:
 
 
 class TestOperationLogger:
-    def test_logs_timing(self, caplog: logging.LogRecord) -> None:  # type: ignore[type-arg]
+    def test_logs_timing(self, caplog: pytest.LogCaptureFixture) -> None:
         base = logging.getLogger("test.oplog")
         with caplog.at_level(logging.DEBUG, logger="test.oplog"):
             with OperationLogger(base, "db_read", db=1, start=0, size=4):
@@ -49,7 +51,7 @@ class TestOperationLogger:
         assert "db=1" in caplog.text
         assert "ms)" in caplog.text
 
-    def test_works_with_adapter(self, caplog: logging.LogRecord) -> None:  # type: ignore[type-arg]
+    def test_works_with_adapter(self, caplog: pytest.LogCaptureFixture) -> None:
         base = logging.getLogger("test.oplog_adapter")
         adapter = PLCLoggerAdapter(base, plc_host="10.0.0.1", rack=0, slot=1)
         with caplog.at_level(logging.DEBUG, logger="test.oplog_adapter"):
@@ -90,9 +92,9 @@ class TestJSONFormatter:
             args=None,
             exc_info=None,
         )
-        record.plc_host = "192.168.1.10"  # type: ignore[attr-defined]
-        record.plc_rack = 0  # type: ignore[attr-defined]
-        record.plc_slot = 1  # type: ignore[attr-defined]
+        record.plc_host = "192.168.1.10"
+        record.plc_rack = 0
+        record.plc_slot = 1
         output = formatter.format(record)
         data = json.loads(output)
         assert data["plc_host"] == "192.168.1.10"
