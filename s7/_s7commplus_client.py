@@ -12,7 +12,7 @@ import struct
 from typing import Any, Optional
 
 from .connection import S7CommPlusConnection
-from .protocol import FunctionCode, Ids
+from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
     encode_item_address,
@@ -280,6 +280,47 @@ class S7CommPlusClient:
                 continue
 
         return variables
+
+    def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+        """Create a data change subscription.
+
+        .. warning:: This method is **experimental** and may change.
+
+        The PLC will push data updates for the specified variables. Use
+        :meth:`receive_notification` to receive the pushed data.
+
+        Args:
+            items: List of (db_number, start_offset, size) tuples to monitor.
+            cycle_ms: Cycle time in milliseconds (0 = on change).
+
+        Returns:
+            Subscription object ID assigned by the PLC.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_subscription_request(items, cycle_ms, self._connection.session_id)
+        response = self._connection.send_request(FunctionCode.CREATE_OBJECT, payload)
+
+        # Parse the CreateObject response to get the subscription object ID
+        sub_id, consumed = decode_uint32_vlq(response, 0)
+        logger.info(f"Subscription created, id={sub_id:#x}")
+        return sub_id
+
+    def delete_subscription(self, subscription_id: int) -> None:
+        """Delete a data change subscription.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            subscription_id: ID returned by :meth:`create_subscription`.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
+        self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Subscription {subscription_id:#x} deleted")
 
     def __enter__(self) -> "S7CommPlusClient":
         return self
@@ -714,3 +755,86 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
             continue
 
     return fields
+
+
+# ---------------------------------------------------------------------------
+# Subscription helpers (experimental)
+# ---------------------------------------------------------------------------
+
+_SUBSCRIPTION_RELATION_ID = 0x7FFFC001
+
+
+def _build_subscription_request(items: list[tuple[int, int, int]], cycle_ms: int, session_id: int) -> bytes:
+    """Build a CREATE_OBJECT request for a data change subscription.
+
+    The subscription object is modeled after the S7CommPlusDriver alarm
+    subscription pattern, adapted for data variable monitoring.
+
+    Args:
+        items: List of (db_number, start_offset, size) to monitor.
+        cycle_ms: Cycle time in milliseconds (0 = on change).
+        session_id: Current session ID.
+
+    Returns:
+        CREATE_OBJECT payload.
+    """
+    payload = bytearray()
+
+    # Session container
+    payload += struct.pack(">I", session_id)
+    payload += bytes([0x00, DataType.UDINT])
+    payload += encode_uint32_vlq(0)
+    payload += struct.pack(">I", 0)
+
+    # Start subscription object
+    payload += bytes([ElementID.START_OF_OBJECT])
+    payload += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
+    payload += encode_uint32_vlq(Ids.CLASS_SUBSCRIPTION)
+    payload += encode_uint32_vlq(0)
+    payload += encode_uint32_vlq(0)
+
+    # Subscription attributes
+    payload += bytes([ElementID.ATTRIBUTE])
+    payload += encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+    payload += bytes([0x00, DataType.WSTRING])
+    name = f"PySub_{_SUBSCRIPTION_RELATION_ID:#x}".encode("utf-8")
+    payload += encode_uint32_vlq(len(name))
+    payload += name
+
+    payload += bytes([ElementID.ATTRIBUTE])
+    payload += encode_uint32_vlq(Ids.SUBSCRIPTION_FUNCTION_CLASS_ID)
+    payload += bytes([0x00, DataType.USINT])
+    payload += bytes([0x02])
+
+    payload += bytes([ElementID.ATTRIBUTE])
+    payload += encode_uint32_vlq(Ids.SUBSCRIPTION_ACTIVE)
+    payload += bytes([0x00, DataType.BOOL])
+    payload += bytes([0x01])
+
+    payload += bytes([ElementID.ATTRIBUTE])
+    payload += encode_uint32_vlq(Ids.SUBSCRIPTION_CYCLE_TIME)
+    payload += bytes([0x00, DataType.UDINT])
+    payload += encode_uint32_vlq(cycle_ms)
+
+    payload += bytes([ElementID.ATTRIBUTE])
+    payload += encode_uint32_vlq(Ids.SUBSCRIPTION_CREDIT_LIMIT)
+    payload += bytes([0x00, DataType.INT])
+    payload += struct.pack(">h", 10)  # 10 credits
+
+    # Build reference list from items
+    ref_list = bytearray()
+    for db_number, start, size in items:
+        access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
+        ref_list += struct.pack(">I", access_area)
+
+    payload += bytes([ElementID.ATTRIBUTE])
+    payload += encode_uint32_vlq(Ids.SUBSCRIPTION_REFERENCE_LIST)
+    payload += bytes([0x10, DataType.UDINT])  # 0x10 = array
+    payload += encode_uint32_vlq(len(items))
+    payload += ref_list
+
+    # Close subscription object
+    payload += bytes([ElementID.TERMINATING_OBJECT])
+    payload += struct.pack(">I", 0)
+
+    return bytes(payload)
