@@ -36,22 +36,7 @@ Install using pip::
 
    $ pip install python-snap7
 
-The recommended way to use this library is through the ``s7`` package, which
-works with **all supported PLC models** (S7-300, S7-400, S7-1200, S7-1500) and
-automatically selects the best protocol::
-
-   from s7 import Client
-
-   client = Client()
-   client.connect("192.168.1.10", 0, 1)  # auto-detects S7CommPlus vs legacy S7
-   data = client.db_read(1, 0, 4)
-   client.disconnect()
-
-The ``s7.Client`` automatically tries S7CommPlus first (for S7-1200/1500), and
-falls back to legacy S7 when needed. No native libraries or platform-specific
-dependencies are required.
-
-The legacy ``snap7`` package is still available for backwards compatibility::
+Connect to any S7 PLC::
 
    import snap7
 
@@ -60,19 +45,35 @@ The legacy ``snap7`` package is still available for backwards compatibility::
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
+No native libraries or platform-specific dependencies are required.
 
-Version 3.1 -- S7CommPlus Protocol Support (unreleased)
-========================================================
 
-Version 3.1 adds support for the S7CommPlus protocol (up to V2), which is
-required for communicating with newer Siemens S7-1200 and S7-1500 PLCs that
-have PUT/GET disabled. This is fully backwards compatible with 3.0.
+Version 4.0 -- New ``s7`` Package (unreleased)
+===============================================
 
-The ``s7`` package is now the recommended entry point for connecting to any
-supported S7 PLC. The existing ``snap7`` package continues to work unchanged
-for legacy S7 connections.
+.. note::
 
-**Help us test!** Version 3.1 needs more real-world testing before release. If
+   Version 4.0 is **not yet released**. Installing with ``pip install python-snap7``
+   gives you version 3.0, which uses the ``snap7`` package shown above.
+   To try 4.0 early, install from the development branch (see below).
+
+Version 4.0 introduces the new ``s7`` package as the standard entry point. It
+works with **all supported PLC models** (S7-300, S7-400, S7-1200, S7-1500),
+adds S7CommPlus protocol support (required for S7-1200/1500 with PUT/GET
+disabled), and automatically selects the best protocol::
+
+   from s7 import Client
+
+   client = Client()
+   client.connect("192.168.1.10", 0, 1)  # auto-detects S7CommPlus vs legacy S7
+   data = client.db_read(1, 0, 4)
+   client.disconnect()
+
+The ``s7.Client`` automatically tries S7CommPlus first (for S7-1200/1500) and
+falls back to legacy S7 when needed. The existing ``snap7`` package continues
+to work unchanged.
+
+**Help us test!** Version 4.0 needs more real-world testing before release. If
 you have access to any of the following PLCs, we would greatly appreciate
 testing and feedback:
 

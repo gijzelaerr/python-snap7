@@ -572,6 +572,8 @@ class Server:
                 try:
                     self.server_socket.settimeout(0.1)  # Short timeout for responsive shutdown
                     client_socket, address = self.server_socket.accept()
+                    client_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
                     logger.info(f"Client connected from {address}")
 
