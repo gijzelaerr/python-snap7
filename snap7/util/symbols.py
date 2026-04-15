@@ -35,6 +35,11 @@ from snap7.util import (
     get_dtl,
     get_int,
     get_lreal,
+    get_lint,
+    get_ulint,
+    get_ltime,
+    get_ltod,
+    get_ldt,
     get_real,
     get_sint,
     get_string,
@@ -57,6 +62,11 @@ from snap7.util import (
     set_dt,
     set_dtl,
     set_int,
+    set_lint,
+    set_ulint,
+    set_ltime,
+    set_ltod,
+    set_ldt,
     set_lreal,
     set_real,
     set_sint,
@@ -102,6 +112,11 @@ _GETTER_MAP: Dict[str, Any] = {
     "LWORD": get_lword,
     "WCHAR": get_wchar,
     "DTL": get_dtl,
+    "LINT": get_lint,
+    "ULINT": get_ulint,
+    "LTIME": get_ltime,
+    "LTOD": get_ltod,
+    "LDT": get_ldt,
 }
 
 # Setters that cast value to int before calling
@@ -115,6 +130,8 @@ _INT_SETTER_MAP: Dict[str, Any] = {
     "DINT": set_dint,
     "UDINT": set_udint,
     "DWORD": set_dword,
+    "LINT": set_lint,
+    "ULINT": set_ulint,
 }
 
 # Setters that pass value through without casting
@@ -131,6 +148,9 @@ _SIMPLE_SETTER_MAP: Dict[str, Any] = {
     "DT": set_dt,
     "DTL": set_dtl,
     "LWORD": set_lword,
+    "LTIME": set_ltime,
+    "LTOD": set_ltod,
+    "LDT": set_ldt,
 }
 
 # Mapping from S7 type name to the number of bytes needed to read
@@ -157,6 +177,11 @@ _TYPE_SIZE: Dict[str, int] = {
     "LWORD": 8,
     "WCHAR": 2,
     "DTL": 12,
+    "LINT": 8,
+    "ULINT": 8,
+    "LTIME": 8,
+    "LTOD": 8,
+    "LDT": 8,
 }
 
 # Regex to extract STRING[n] or WSTRING[n] with size parameter
@@ -500,10 +525,10 @@ class SymbolTable:
         client.db_write(addr.db, addr.byte_offset, data)
 
     def read_many(self, client: Client, tags: list[str]) -> Dict[str, ValueType]:
-        """Read multiple tags individually and return them as a dictionary.
+        """Read multiple tags in batched requests.
 
-        This is a convenience method that reads each tag one at a time via
-        :meth:`read`.  It does **not** batch or group reads.
+        Groups tags by DB number and uses :meth:`~snap7.client.Client.read_multi_vars`
+        to read them in minimal PDU exchanges (via the optimizer when enabled).
 
         Args:
             client: a connected :class:`~snap7.client.Client`.
@@ -512,9 +537,33 @@ class SymbolTable:
         Returns:
             Dictionary mapping tag names to their values.
         """
+        if not tags:
+            return {}
+
+        # Resolve all tags
+        resolved: list[tuple[str, TagAddress]] = [(tag, self.resolve(tag)) for tag in tags]
+
+        # Build multi-read items grouped by what read_multi_vars expects
+        items: list[dict[str, Any]] = []
+        for _tag, addr in resolved:
+            items.append({"area": 0x84, "db_number": addr.db, "start": addr.offset, "size": addr.read_size()})
+
+        # Batch read via read_multi_vars (uses optimizer if enabled)
+        if len(items) == 1:
+            # Single tag, just read directly
+            return {tags[0]: self.read(client, tags[0])}
+
+        _code, data_list = client.read_multi_vars(items)
+
+        # Parse results
         result: Dict[str, ValueType] = {}
-        for tag in tags:
-            result[tag] = self.read(client, tag)
+        for i, (tag, addr) in enumerate(resolved):
+            raw = data_list[i]
+            if isinstance(raw, (bytes, bytearray)):
+                result[tag] = self._get_value(bytearray(raw), 0, addr)
+            else:
+                result[tag] = self.read(client, tag)
+
         return result
 
     # ------------------------------------------------------------------
