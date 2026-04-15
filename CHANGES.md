@@ -1,6 +1,33 @@
 CHANGES
 =======
 
+4.0.0 (unreleased)
+-------------------
+
+Major release: new `s7` package with S7CommPlus protocol support.
+
+* New `s7` package as recommended entry point with protocol auto-detection
+* S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
+* S7CommPlus area read/write (M, I, Q, counters, timers)
+* S7CommPlus PLC start/stop via INVOKE
+* S7CommPlus object browsing via EXPLORE
+* S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
+* Partner BSend/BRecv with correct PBC format, async receive, PDU reference echo
+* TCP_NODELAY and SO_KEEPALIVE on all sockets for lower latency
+* Structured logging with PLC connection context (`snap7.log`)
+* Command-line interface (`snap7-cli` / `s7`)
+* Multi-variable read optimizer with parallel dispatch (experimental)
+* S7 routing for multi-subnet PLC access (experimental)
+* Symbolic addressing via SymbolTable (experimental)
+* Dependabot auto-merge for dependency updates
+* Documentation restructured: API Reference + Internals sections
+
+### Thanks
+
+* [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
+* [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
+
 3.0.0
 -----
 

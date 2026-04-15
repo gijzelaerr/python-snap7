@@ -24,7 +24,7 @@ are **not possible** with this protocol:
    * - Create PLC backups
      - Full project backup requires TIA Portal. python-snap7 can upload
        individual blocks, but this is not a complete backup.
-   * - S7CommPlus V3
-     - python-snap7 supports S7CommPlus V1 and V2 (with TLS) via the ``s7``
-       package. V3 is not yet supported. For PLCs that only support V3, enable
-       PUT/GET as a fallback or use OPC UA.
+   * - S7CommPlus V4
+     - python-snap7 supports S7CommPlus V1, V2, and V3 via the ``s7``
+       package. V4 is not yet supported. For PLCs that require V4, use OPC UA
+       as an alternative.
