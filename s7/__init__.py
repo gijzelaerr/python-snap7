@@ -20,6 +20,7 @@ from ._protocol import Protocol
 
 from snap7.type import Area, Block, WordLen, SrvEvent, SrvArea
 from snap7.util.db import Row, DB
+from snap7.util.symbols import SymbolTable
 
 __all__ = [
     "Client",
@@ -35,4 +36,5 @@ __all__ = [
     "SrvArea",
     "Row",
     "DB",
+    "SymbolTable",
 ]

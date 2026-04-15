@@ -44,6 +44,7 @@ Welcome to python-snap7's documentation!
    API/partner
    API/logo
    API/util
+   API/symbols
    API/optimizer
    API/type
 

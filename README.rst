@@ -48,19 +48,20 @@ Connect to any S7 PLC::
 No native libraries or platform-specific dependencies are required.
 
 
-Version 4.0 -- New ``s7`` Package (unreleased)
-===============================================
+Version 4.0 -- S7CommPlus & the ``s7`` Package (unreleased)
+============================================================
 
 .. note::
 
    Version 4.0 is **not yet released**. Installing with ``pip install python-snap7``
    gives you version 3.0, which uses the ``snap7`` package shown above.
-   To try 4.0 early, install from the development branch (see below).
+   To try 4.0 early, install from the development branch::
 
-Version 4.0 introduces the new ``s7`` package as the standard entry point. It
-works with **all supported PLC models** (S7-300, S7-400, S7-1200, S7-1500),
-adds S7CommPlus protocol support (required for S7-1200/1500 with PUT/GET
-disabled), and automatically selects the best protocol::
+       $ pip install git+https://github.com/gijzelaerr/python-snap7.git@master
+
+**S7CommPlus protocol support** -- the headline feature of 4.0. S7CommPlus is
+required for communicating with S7-1200 and S7-1500 PLCs that have PUT/GET
+disabled. python-snap7 now supports S7CommPlus V1, V2 (with TLS), and V3::
 
    from s7 import Client
 
@@ -69,32 +70,34 @@ disabled), and automatically selects the best protocol::
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
-The ``s7.Client`` automatically tries S7CommPlus first (for S7-1200/1500) and
-falls back to legacy S7 when needed. The existing ``snap7`` package continues
-to work unchanged.
+The new ``s7`` package is the recommended entry point for all new projects. It
+automatically tries S7CommPlus first (for S7-1200/1500) and falls back to legacy
+S7 when needed. The existing ``snap7`` package continues to work unchanged.
 
-**Help us test!** Version 4.0 needs more real-world testing before release. If
-you have access to any of the following PLCs, we would greatly appreciate
-testing and feedback:
+**Other new features in 4.0:**
 
-* S7-1200 (any firmware version)
-* S7-1500 (any firmware version)
-* S7-1500 with TLS enabled
-* S7-300
-* S7-400
-* S7-1200/1500 with PUT/GET disabled (S7CommPlus-only)
-* LOGO! 0BA8 and newer
+* **Command-line interface** (``s7 read``, ``s7 write``, ``s7 info``)
+* **Partner BSend/BRecv** for peer-to-peer communication with S7-1500
+* **TCP socket optimization** (TCP_NODELAY, SO_KEEPALIVE) for lower latency
+* **S7CommPlus area read/write** for M, I, Q, counters, timers (not just DBs)
+* **Structured logging** with PLC connection context for multi-PLC environments
 
-Please report your results -- whether it works or not -- on the
+**Experimental features** (API may change):
+
+* **Multi-variable read optimizer** -- merges scattered reads into minimal PDU
+  exchanges with parallel dispatch
+* **S7 routing** -- connect to PLCs on remote subnets via a gateway PLC
+* **Symbolic addressing** -- read/write by tag name instead of raw addresses
+* **Live symbol browsing** -- resolve tag names directly from the PLC
+* **TIA Portal XML import** -- import symbol tables from TIA Portal exports
+
+**Help us test!** If you have access to any Siemens S7 PLC, we would greatly
+appreciate testing and feedback. Please report results on the
 `issue tracker <https://github.com/gijzelaerr/python-snap7/issues>`_.
 
-To install the development version::
 
-   $ pip install git+https://github.com/gijzelaerr/python-snap7.git@master
-
-
-Version 3.0 -- Pure Python Rewrite
-====================================
+Version 3.0 -- Pure Python Rewrite (current release)
+=====================================================
 
 Version 3.0 was a ground-up rewrite of python-snap7. The library no longer wraps
 the C snap7 shared library -- instead, the entire S7 protocol stack (TPKT, COTP,
