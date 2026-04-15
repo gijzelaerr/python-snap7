@@ -236,15 +236,54 @@ class Client:
             return [self._legacy.db_read(db, start, size) for db, start, size in items]
         raise RuntimeError("Not connected")
 
-    def explore(self) -> bytes:
+    def explore(self, explore_id: int = 0) -> bytes:
         """Browse the PLC object tree (S7CommPlus only).
+
+        Args:
+            explore_id: Object to explore (0 = root).
 
         Raises:
             RuntimeError: If not connected via S7CommPlus.
         """
         if self._plus is None:
             raise RuntimeError("explore() requires S7CommPlus connection")
-        return self._plus.explore()
+        return self._plus.explore(explore_id)
+
+    def list_datablocks(self) -> list[dict[str, Any]]:
+        """List all datablocks on the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Uses S7CommPlus EXPLORE when available, otherwise falls back to
+        legacy ``list_blocks_of_type``.
+
+        Returns:
+            List of dicts with keys ``name``, ``number``, ``rid``.
+        """
+        if self._plus is not None:
+            return self._plus.list_datablocks()
+        if self._legacy is not None:
+            from snap7.type import Block
+
+            numbers = self._legacy.list_blocks_of_type(Block.DB, 1024)
+            return [{"name": f"DB{n}", "number": n, "rid": 0} for n in numbers]
+        raise RuntimeError("Not connected")
+
+    def browse(self) -> list[dict[str, Any]]:
+        """Browse the PLC symbol table.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns a flat list of variable info dicts. Can be used to create
+        a :class:`~snap7.util.symbols.SymbolTable`::
+
+            symbols = SymbolTable.from_browse(client.browse())
+
+        Requires S7CommPlus connection.
+        """
+        if self._plus is None:
+            raise RuntimeError("browse() requires S7CommPlus connection")
+        return self._plus.browse()
 
     def __getattr__(self, name: str) -> Any:
         """Delegate unknown methods to the legacy client."""
