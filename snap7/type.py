@@ -341,7 +341,7 @@ class S7SZL(Structure):
     _fields_ = [("Header", S7SZLHeader), ("Data", c_ubyte * (0x4000 - 4))]
 
     def __str__(self) -> str:
-        return f"<S7SZL Header: {self.S7SZHeader}, Data: {self.Data}>"
+        return f"<S7SZL Header: {self.Header}, Data: {self.Data}>"
 
 
 class S7SZLList(Structure):
