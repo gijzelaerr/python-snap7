@@ -592,18 +592,23 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
     current_name = ""
     current_number = 0
     current_rid = 0
+    depth = 0
+
+    # Skip return code VLQ at start of response
+    if offset < len(response):
+        _, consumed = _vlq32(response, offset)
+        offset += consumed
 
     while offset < len(response):
-        if offset >= len(response):
-            break
 
         tag = response[offset]
         offset += 1
 
         if tag == 0xA1:  # START_OF_OBJECT
+            depth += 1
             if offset + 4 > len(response):
                 break
-            current_rid = struct.unpack(">I", response[offset : offset + 4])[0]
+            rid = struct.unpack(">I", response[offset : offset + 4])[0]
             offset += 4
             # Skip classId, reserved, reserved (3 VLQ values)
             for _ in range(3):
@@ -611,12 +616,15 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
                     break
                 _, consumed = _vlq32(response, offset)
                 offset += consumed
-            current_name = ""
-            current_number = 0
+            if depth == 1:
+                current_rid = rid
+                current_name = ""
+                current_number = 0
 
         elif tag == 0xA2:  # TERMINATING_OBJECT
-            if current_name and current_number > 0:
+            if depth == 1 and current_name and current_number > 0:
                 datablocks.append({"name": current_name, "number": current_number, "rid": current_rid})
+            depth = max(0, depth - 1)
 
         elif tag == 0xA3:  # ATTRIBUTE
             if offset >= len(response):
@@ -629,24 +637,27 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
             datatype = response[offset + 1]
             offset += 2
 
-            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype == 0x13:  # WSTRING
+            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype in (0x13, 0x15):  # S7STRING or WSTRING
                 if offset >= len(response):
                     break
                 str_len, consumed = _vlq32(response, offset)
                 offset += consumed
                 if offset + str_len <= len(response):
-                    try:
-                        current_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
-                    except Exception:
-                        current_name = ""
+                    if depth == 1:
+                        try:
+                            current_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
+                        except Exception:
+                            current_name = ""
                     offset += str_len
                     continue
 
-            if attr_id == Ids.BLOCK_BLOCK_NUMBER and datatype in (0x07, 0x08):  # UDINT/DWORD
+            if attr_id == Ids.BLOCK_BLOCK_NUMBER and datatype in (0x03, 0x04, 0x0C):  # UINT/UDINT/DWORD
                 if offset >= len(response):
                     break
-                current_number, consumed = _vlq32(response, offset)
+                val, consumed = _vlq32(response, offset)
                 offset += consumed
+                if depth == 1:
+                    current_number = val
                 continue
 
             # Skip unknown attribute value
@@ -680,10 +691,16 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
     """
     from .vlq import decode_uint32_vlq as _vlq32
 
+
     fields: list[dict[str, Any]] = []
     offset = 0
     field_name = ""
     byte_offset = 0
+
+    # Skip return code VLQ at start of response
+    if offset < len(response):
+        _, consumed = _vlq32(response, offset)
+        offset += consumed
 
     while offset < len(response):
         tag = response[offset]

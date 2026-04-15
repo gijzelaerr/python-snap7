@@ -127,10 +127,23 @@ class Client:
         else:
             self._protocol = Protocol.LEGACY
 
-        # Always connect legacy client (needed for block ops, PLC control, etc.)
-        self._legacy = LegacyClient()
-        self._legacy.connect(address, rack, slot, tcp_port)
-        logger.info(f"Legacy S7 connected to {address}:{tcp_port}")
+        # Connect legacy client for block ops, PLC control, etc.
+        # Skip when S7CommPlus was explicitly requested — the target may not
+        # support legacy S7 (e.g. PUT/GET disabled) or use a different port
+        # (e.g. test emulators).
+        if self._protocol != Protocol.S7COMMPLUS:
+            self._legacy = LegacyClient()
+            self._legacy.connect(address, rack, slot, tcp_port)
+            logger.info(f"Legacy S7 connected to {address}:{tcp_port}")
+        elif protocol == Protocol.AUTO:
+            # AUTO mode with S7CommPlus: also try legacy for block ops
+            try:
+                self._legacy = LegacyClient()
+                self._legacy.connect(address, rack, slot, tcp_port)
+                logger.info(f"Legacy S7 connected to {address}:{tcp_port}")
+            except Exception as e:
+                logger.debug(f"Legacy S7 connection failed (S7CommPlus available): {e}")
+                self._legacy = None
 
         return self
 

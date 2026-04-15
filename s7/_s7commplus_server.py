@@ -35,6 +35,7 @@ from .protocol import (
     DataType,
     ElementID,
     FunctionCode,
+    Ids,
     Opcode,
     ProtocolVersion,
     READ_FUNCTION_CODES,
@@ -716,7 +717,7 @@ class S7CommPlusServer:
         )
         response += encode_uint32_vlq(0)  # Return code: success
 
-        # Return list of data blocks as objects
+        # Return list of data blocks as objects using standard S7CommPlus IDs
         for db_num, db in sorted(self._data_blocks.items()):
             response += bytes([ElementID.START_OF_OBJECT])
             response += struct.pack(">I", db.object_id)  # Relation ID
@@ -724,26 +725,43 @@ class S7CommPlusServer:
             response += encode_uint32_vlq(0x00000000)  # Class flags
             response += encode_uint32_vlq(0x00000000)  # Attribute ID
 
-            # DB number attribute
+            # ObjectVariableTypeName (233) -- DB name as WSTRING
             response += bytes([ElementID.ATTRIBUTE])
-            response += encode_uint32_vlq(0x0001)  # DB number attribute ID
-            response += encode_typed_value(DataType.UINT, db_num)
+            response += encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+            name_bytes = f"DB{db_num}".encode("utf-16-be")
+            response += bytes([0x00, DataType.WSTRING])
+            response += encode_uint32_vlq(len(name_bytes))
+            response += name_bytes
 
-            # DB size attribute
+            # Block_BlockNumber (2521) -- DB number as UDINT
             response += bytes([ElementID.ATTRIBUTE])
-            response += encode_uint32_vlq(0x0002)  # DB size attribute ID
-            response += encode_typed_value(DataType.UDINT, len(db.data))
+            response += encode_uint32_vlq(Ids.BLOCK_BLOCK_NUMBER)
+            response += bytes([0x00, DataType.UDINT])
+            response += encode_uint32_vlq(db_num)
 
-            # Variable list
+            # DB size attribute (non-standard, for backward compat)
+            response += bytes([ElementID.ATTRIBUTE])
+            response += encode_uint32_vlq(0x0002)
+            response += bytes([0x00, DataType.UDINT])
+            response += encode_uint32_vlq(len(db.data))
+
+            # Variable list -- used by browse to resolve field names
             if db.variables:
-                response += bytes([ElementID.VARNAME_LIST])
-                response += encode_uint32_vlq(len(db.variables))
                 for var_name, var in db.variables.items():
-                    name_bytes = var_name.encode("utf-8")
-                    response += encode_uint32_vlq(len(name_bytes))
-                    response += name_bytes
-                    response += encode_uint32_vlq(var.soft_datatype)
-                    response += encode_uint32_vlq(var.byte_offset)
+                    response += bytes([ElementID.START_OF_OBJECT])
+                    response += struct.pack(">I", 0)  # child RID
+                    response += encode_uint32_vlq(0)
+                    response += encode_uint32_vlq(0)
+                    response += encode_uint32_vlq(0)
+
+                    response += bytes([ElementID.ATTRIBUTE])
+                    response += encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+                    vname_bytes = var_name.encode("utf-16-be")
+                    response += bytes([0x00, DataType.WSTRING])
+                    response += encode_uint32_vlq(len(vname_bytes))
+                    response += vname_bytes
+
+                    response += bytes([ElementID.TERMINATING_OBJECT])
 
             response += bytes([ElementID.TERMINATING_OBJECT])
 
