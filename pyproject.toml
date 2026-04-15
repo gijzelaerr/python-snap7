@@ -59,6 +59,7 @@ markers =[
     "logo",
     "mainloop",
     "partner",
+    "routing",
     "server",
     "util",
     "conformance: protocol conformance tests"

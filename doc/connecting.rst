@@ -122,6 +122,32 @@ Using a Non-Standard Port
    client = Client()
    client.connect("192.168.1.10", 0, 1, tcp_port=1102)
 
+Routing (Multi-Subnet Access)
+------------------------------
+
+.. warning::
+
+   Routing support is experimental and may change in future versions.
+
+When the target PLC sits on a different subnet behind a gateway PLC, use
+``connect_routed`` to let the gateway forward the connection:
+
+.. code-block:: python
+
+   import snap7
+
+   client = snap7.Client()
+   client.connect_routed(
+       host="192.168.1.1",       # gateway PLC address
+       router_rack=0,            # gateway rack
+       router_slot=2,            # gateway slot
+       subnet=0x0001,            # target subnet ID
+       dest_rack=0,              # target PLC rack
+       dest_slot=3,              # target PLC slot
+   )
+   data = client.db_read(1, 0, 4)
+   client.disconnect()
+
 Legacy ``snap7`` Package
 -------------------------
 
