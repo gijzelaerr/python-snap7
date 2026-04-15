@@ -694,6 +694,12 @@ class Client(ClientMixin):
         exchanges.  This significantly reduces the number of round-trips compared
         to reading each variable individually.
 
+        .. warning::
+
+           The read optimizer is **experimental** and may change in future
+           versions. Disable it with ``client.use_optimizer = False`` if you
+           encounter issues.
+
         Args:
             items: List of item specifications (dicts with ``area``, ``start``,
                 ``size``, and optionally ``db_number``) **or** a ctypes

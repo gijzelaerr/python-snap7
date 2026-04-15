@@ -3,6 +3,10 @@ Multi-variable read optimizer for S7 communication.
 
 Optimizes multiple scattered read requests into minimal PDU-packed S7 exchanges
 by merging adjacent/overlapping reads and packing them into PDU-sized packets.
+
+.. warning::
+
+   This module is **experimental** and its API may change in future versions.
 """
 
 import logging
