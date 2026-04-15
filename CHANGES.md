@@ -20,6 +20,13 @@ Major release: new `s7` package with S7CommPlus protocol support.
 * Multi-variable read optimizer with parallel dispatch (experimental)
 * S7 routing for multi-subnet PLC access (experimental)
 * Symbolic addressing via SymbolTable (experimental)
+* S7CommPlus CPU state reading and block transfer (upload/download)
+* Array read/write helpers (`db_read_array`, `db_write_array`)
+* Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt`
+* Optimized `SymbolTable.read_many()` with multi-variable batching
+* Optimizer excludes counter/timer areas from byte-range merging
+* Fixed `get_cpu_info` field offsets for real S7-300/1500 (thanks @qzertywsx)
+* Fixed `S7SZL.__str__` attribute name typo (thanks @qzertywsx)
 * Dependabot auto-merge for dependency updates
 * Documentation restructured: API Reference + Internals sections
 
