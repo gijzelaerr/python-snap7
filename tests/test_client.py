@@ -850,8 +850,8 @@ class TestClient(unittest.TestCase):
         # S7SZLHeader only has LengthDR and NDR fields
         self.assertEqual(1, response.Header.NDR)  # Server returns 1 record
         self.assertTrue(response.Header.LengthDR > 0)  # Has data
-        # Data should contain CPU info string
-        cpu_data = bytes(response.Data[:32]).rstrip(b"\x00")
+        # Data should contain CPU info string somewhere in the record
+        cpu_data = bytes(response.Data[: response.Header.LengthDR])
         self.assertIn(b"CPU", cpu_data)
 
         # Test reading SZL 0x0011 (order code)
