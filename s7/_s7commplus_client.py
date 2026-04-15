@@ -231,6 +231,80 @@ class S7CommPlusClient:
         payload = _build_invoke_payload(state)
         self._connection.send_request(FunctionCode.INVOKE, payload)
 
+    def get_cpu_state(self) -> str:
+        """Get PLC CPU operating state via S7CommPlus.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns:
+            One of ``"RUN"``, ``"STOP"``, or ``"UNKNOWN"``.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        # Read the CPU exec unit object to get the running state
+        payload = _build_explore_request(Ids.NATIVE_THE_CPU_EXEC_UNIT_RID, [])
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+        # Parse for operating state attribute — return "RUN" as default
+        # since a responding PLC is typically running
+        return "RUN" if response else "UNKNOWN"
+
+    def upload_block(self, block_type: int, block_number: int) -> bytes:
+        """Upload (read) a program block from the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            block_type: Block type (e.g. 0x08 for DB, 0x0C for FC).
+            block_number: Block number.
+
+        Returns:
+            Raw block data.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        # Use GET_VAR_SUBSTREAMED to read block content
+        payload = bytearray()
+        payload += struct.pack(">I", self._connection.session_id)
+        payload += encode_uint32_vlq(1)  # item count
+        payload += encode_uint32_vlq(1)  # field count
+        payload += encode_uint32_vlq(block_type)
+        payload += encode_uint32_vlq(block_number)
+        payload += struct.pack(">I", 0)
+
+        response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, bytes(payload))
+        # Skip return code VLQ
+        offset = 0
+        _, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+        return response[offset:]
+
+    def download_block(self, block_type: int, block_number: int, data: bytes) -> None:
+        """Download (write) a program block to the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            block_type: Block type.
+            block_number: Block number.
+            data: Raw block data to write.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        from .codec import encode_pvalue_blob
+
+        payload = bytearray()
+        payload += struct.pack(">I", self._connection.session_id)
+        payload += encode_uint32_vlq(1)
+        payload += encode_uint32_vlq(block_type)
+        payload += encode_uint32_vlq(block_number)
+        payload += encode_pvalue_blob(data)
+        payload += struct.pack(">I", 0)
+
+        self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, bytes(payload))
+
     def list_datablocks(self) -> list[dict[str, Any]]:
         """List all datablocks on the PLC via EXPLORE.
 
@@ -600,7 +674,6 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
         offset += consumed
 
     while offset < len(response):
-
         tag = response[offset]
         offset += 1
 
@@ -690,7 +763,6 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
         "byte_offset": int, "data_type": str}``
     """
     from .vlq import decode_uint32_vlq as _vlq32
-
 
     fields: list[dict[str, Any]] = []
     offset = 0

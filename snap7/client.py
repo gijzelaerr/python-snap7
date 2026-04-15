@@ -545,6 +545,61 @@ class Client(ClientMixin):
             return False
         return self.connection.check_connection()
 
+    def db_read_array(self, db_number: int, start: int, count: int, fmt: str = ">f") -> list[Any]:
+        """Read an array of typed values from a DB.
+
+        Reads *count* consecutive values of the given struct format starting
+        at *start* byte offset in DB *db_number*.
+
+        Args:
+            db_number: DB number to read from.
+            start: Start byte offset.
+            count: Number of values to read.
+            fmt: :mod:`struct` format for a single value (default ``">f"`` = REAL).
+
+        Returns:
+            List of unpacked values.
+
+        Examples:
+            Read 10 REAL values starting at DB1.0::
+
+                values = client.db_read_array(1, 0, 10, ">f")
+
+            Read 20 INT values starting at DB1.100::
+
+                values = client.db_read_array(1, 100, 20, ">h")
+        """
+        item_size = struct.calcsize(fmt)
+        total_size = item_size * count
+        data = self.db_read(db_number, start, total_size)
+        return [struct.unpack_from(fmt, data, i * item_size)[0] for i in range(count)]
+
+    def db_write_array(self, db_number: int, start: int, values: list[Any], fmt: str = ">f") -> int:
+        """Write an array of typed values to a DB.
+
+        Packs *values* using the given struct format and writes them
+        starting at *start* byte offset in DB *db_number*.
+
+        Args:
+            db_number: DB number to write to.
+            start: Start byte offset.
+            values: List of values to write.
+            fmt: :mod:`struct` format for a single value (default ``">f"`` = REAL).
+
+        Returns:
+            0 on success.
+
+        Examples:
+            Write 10 REAL values starting at DB1.0::
+
+                client.db_write_array(1, 0, [1.0, 2.0, 3.0], ">f")
+        """
+        item_size = struct.calcsize(fmt)
+        data = bytearray(item_size * len(values))
+        for i, v in enumerate(values):
+            struct.pack_into(fmt, data, i * item_size, v)
+        return self.db_write(db_number, start, data)
+
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """
         Read data from DB.

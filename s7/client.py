@@ -334,6 +334,39 @@ class Client:
             raise RuntimeError("delete_subscription() requires S7CommPlus connection")
         self._plus.delete_subscription(subscription_id)
 
+    def upload_block(self, block_type: int, block_number: int) -> bytes:
+        """Upload (read) a program block from the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Uses S7CommPlus when available, otherwise falls back to legacy
+        ``full_upload``.
+        """
+        if self._plus is not None:
+            return self._plus.upload_block(block_type, block_number)
+        if self._legacy is not None:
+            from snap7.type import Block
+
+            data, _size = self._legacy.full_upload(Block(block_type), block_number)
+            return bytes(data)
+        raise RuntimeError("Not connected")
+
+    def download_block(self, block_type: int, block_number: int, data: bytes) -> None:
+        """Download (write) a program block to the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Uses S7CommPlus when available, otherwise falls back to legacy
+        ``download``.
+        """
+        if self._plus is not None:
+            self._plus.download_block(block_type, block_number, data)
+            return
+        if self._legacy is not None:
+            self._legacy.download(bytearray(data), block_number)
+            return
+        raise RuntimeError("Not connected")
+
     def __getattr__(self, name: str) -> Any:
         """Delegate unknown methods to the legacy client."""
         if name.startswith("_"):

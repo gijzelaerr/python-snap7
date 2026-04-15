@@ -741,3 +741,129 @@ def set_dt(bytearray_: Buffer, byte_index: int, dt_: datetime) -> Buffer:
     bytearray_[byte_index + 7] = (ms_ones << 4) | weekday
 
     return bytearray_
+
+
+def set_lint(bytearray_: Buffer, byte_index: int, value: int) -> Buffer:
+    """Set a long int value in bytearray.
+
+    Notes:
+        Datatype ``lint`` consists of 8 bytes (64-bit signed integer).
+        Range: -9223372036854775808 to +9223372036854775807.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        value: value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(8)
+        >>> set_lint(data, 0, 12345)
+    """
+    bytearray_[byte_index : byte_index + 8] = struct.pack(">q", value)
+    return bytearray_
+
+
+def set_ulint(bytearray_: Buffer, byte_index: int, value: int) -> Buffer:
+    """Set an unsigned long int value in bytearray.
+
+    Notes:
+        Datatype ``ulint`` consists of 8 bytes (64-bit unsigned integer).
+        Range: 0 to 18446744073709551615.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        value: value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> data = bytearray(8)
+        >>> set_ulint(data, 0, 12345)
+    """
+    bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", value)
+    return bytearray_
+
+
+def set_ltime(bytearray_: Buffer, byte_index: int, value: timedelta) -> Buffer:
+    """Set an LTIME value in bytearray.
+
+    Notes:
+        Datatype ``LTIME`` consists of 8 bytes (64-bit signed integer)
+        representing nanoseconds. Used in S7-1500 PLCs.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        value: timedelta value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> data = bytearray(8)
+        >>> set_ltime(data, 0, timedelta(seconds=1))
+    """
+    nanoseconds = int(value.total_seconds() * 1_000_000_000)
+    bytearray_[byte_index : byte_index + 8] = struct.pack(">q", nanoseconds)
+    return bytearray_
+
+
+def set_ltod(bytearray_: Buffer, byte_index: int, value: timedelta) -> Buffer:
+    """Set an LTOD (Long Time of Day) value in bytearray.
+
+    Notes:
+        Datatype ``LTOD`` consists of 8 bytes (64-bit unsigned integer)
+        representing nanoseconds since midnight. Used in S7-1500 PLCs.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        value: timedelta representing time of day.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> data = bytearray(8)
+        >>> set_ltod(data, 0, timedelta(hours=12, minutes=30))
+    """
+    if value.days >= 1:
+        raise ValueError("LTOD value must be less than 24 hours")
+    nanoseconds = int(value.total_seconds() * 1_000_000_000)
+    bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", nanoseconds)
+    return bytearray_
+
+
+def set_ldt(bytearray_: Buffer, byte_index: int, value: datetime) -> Buffer:
+    """Set an LDT (Long Date and Time) value in bytearray.
+
+    Notes:
+        Datatype ``LDT`` consists of 8 bytes (64-bit unsigned integer)
+        representing nanoseconds since 1970-01-01 00:00:00 UTC.
+        Used in S7-1500 PLCs.
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        value: datetime value to write.
+
+    Returns:
+        Buffer with the written value.
+
+    Examples:
+        >>> from datetime import datetime
+        >>> data = bytearray(8)
+        >>> set_ldt(data, 0, datetime(2024, 1, 15, 10, 30, 0))
+    """
+    epoch = datetime(1970, 1, 1)
+    delta = value - epoch
+    nanoseconds = int(delta.total_seconds() * 1_000_000_000)
+    bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", nanoseconds)
+    return bytearray_
