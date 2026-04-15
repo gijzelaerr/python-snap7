@@ -1205,16 +1205,16 @@ class Client(ClientMixin):
         # ASName: 24 bytes
         # Copyright: 26 bytes
         # ModuleName: 24 bytes
-        if len(data) >= 32:
-            cpu_info.ModuleTypeName = data[0:32].rstrip(b"\x00")
-        if len(data) >= 56:
-            cpu_info.SerialNumber = data[32:56].rstrip(b"\x00")
-        if len(data) >= 80:
-            cpu_info.ASName = data[56:80].rstrip(b"\x00")
-        if len(data) >= 106:
-            cpu_info.Copyright = data[80:106].rstrip(b"\x00")
+        if len(data) >= 30:
+            cpu_info.ASName = data[6:30].rstrip(b"\x00")
+        if len(data) >= 64:
+            cpu_info.ModuleName = data[40:64].rstrip(b"\x00")
+        if len(data) >= 134:
+            cpu_info.Copyright = data[108:134].rstrip(b"\x00")
+        if len(data) >= 166:
+            cpu_info.SerialNumber = data[142:166].rstrip(b"\x00")
         if len(data) >= 130:
-            cpu_info.ModuleName = data[106:130].rstrip(b"\x00")
+            cpu_info.ModuleTypeName = data[176:208].rstrip(b"\x00")
 
         return cpu_info
 
