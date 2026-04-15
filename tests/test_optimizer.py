@@ -317,3 +317,29 @@ class TestMultiReadServer:
         for i in range(10):
             expected = bytearray(self.db1_data[i * 8 : i * 8 + 4])
             assert results[i] == expected, f"Mismatch at item {i}"
+
+    def test_parallel_dispatch(self) -> None:
+        """Parallel dispatch produces the same results as sequential."""
+        items = [{"area": Area.DB, "db_number": 1, "start": i * 8, "size": 4} for i in range(10)]
+
+        # Sequential
+        self.client.max_parallel = 1
+        _, seq_results = self.client.read_multi_vars(items)
+
+        # Parallel
+        self.client.max_parallel = 4
+        _, par_results = self.client.read_multi_vars(items)
+
+        assert seq_results == par_results
+
+    def test_auto_tune_parallel(self) -> None:
+        """Auto-tune sets max_parallel based on PDU size."""
+        self.client._auto_tune_parallel()
+        assert self.client.max_parallel >= 1
+
+    def test_data_available(self) -> None:
+        """data_available returns False when no data is pending."""
+        conn = self.client.connection
+        assert conn is not None
+        # No data should be pending on an idle connection
+        assert conn.data_available(timeout=0.0) is False

@@ -23,7 +23,7 @@ from ctypes import (
 from .connection import ISOTCPConnection
 from .s7protocol import S7Protocol, get_return_code_description
 from .datatypes import S7WordLen
-from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError
+from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
 from .client_base import ClientMixin
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
 
@@ -143,6 +143,7 @@ class Client(ClientMixin):
         self._opt_plan: Optional[_OptimizationPlan] = None
         self.multi_read_max_gap: int = 5
         self.use_optimizer: bool = True
+        self.max_parallel: int = 1
 
         # Async operation state
         self._async_pending = False
@@ -412,6 +413,10 @@ class Client(ClientMixin):
 
             # Start heartbeat if configured
             self._start_heartbeat()
+
+            # Auto-tune parallel dispatch based on PDU size
+            if self.use_optimizer:
+                self._auto_tune_parallel()
 
         except Exception as e:
             self.disconnect()
@@ -749,6 +754,86 @@ class Client(ClientMixin):
 
         return self._read_multi_vars_optimized(dict_items)
 
+    # PDU size → max_parallel mapping.  Smaller PDUs indicate older/smaller
+    # PLCs with fewer resources, so we stay sequential for safety.
+    _PARALLEL_THRESHOLDS: list[Tuple[int, int]] = [
+        (960, 8),
+        (480, 4),
+        (240, 2),
+    ]
+
+    def _auto_tune_parallel(self) -> None:
+        """Set *max_parallel* based on negotiated PDU size.
+
+        Called automatically after :meth:`connect` when the optimizer is
+        enabled.  Larger PDU sizes indicate more capable PLCs that can
+        handle multiple in-flight requests.
+        """
+        for threshold, parallel in self._PARALLEL_THRESHOLDS:
+            if self.pdu_length >= threshold:
+                self.max_parallel = parallel
+                break
+        else:
+            self.max_parallel = 1
+        logger.info(f"Auto-tuned max_parallel={self.max_parallel} (PDU={self.pdu_length})")
+
+    def _send_receive_parallel(
+        self, requests: list[Tuple[int, bytes]]
+    ) -> dict[int, dict[str, Any]]:
+        """Fire multiple S7 requests back-to-back and collect responses by sequence number.
+
+        All PDUs are sent on the single TCP connection before reading any
+        responses.  Responses are matched to requests via the S7 sequence
+        number in the header (bytes 4-5).
+
+        .. warning::
+
+           This method is **experimental** and part of the read optimizer.
+
+        Args:
+            requests: ``(packet_index, pdu_bytes)`` pairs.
+
+        Returns:
+            Dict mapping *packet_index* to the parsed response dict.
+        """
+        conn = self._get_connection()
+
+        # Build seq_num → packet_index lookup
+        pending: dict[int, int] = {}
+        for packet_index, pdu in requests:
+            seq = struct.unpack(">H", pdu[4:6])[0]
+            pending[seq] = packet_index
+
+        # Send all requests back-to-back
+        for _, pdu in requests:
+            conn.send_data(pdu)
+
+        # Receive responses, matching by sequence number
+        results: dict[int, dict[str, Any]] = {}
+        remaining = len(requests)
+        deadline = time.monotonic() + conn.timeout
+
+        while remaining > 0:
+            wait_time = deadline - time.monotonic()
+            if wait_time <= 0:
+                raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
+
+            if not conn.data_available(timeout=wait_time):
+                raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
+
+            response_data = conn.receive_data()
+            response = self.protocol.parse_response(response_data)
+            resp_seq = response["sequence"]
+
+            if resp_seq in pending:
+                packet_index = pending.pop(resp_seq)
+                results[packet_index] = response
+                remaining -= 1
+            else:
+                logger.warning(f"Discarding unexpected response with sequence {resp_seq}")
+
+        return results
+
     def _read_multi_vars_optimized(self, dict_items: List[dict[str, Any]]) -> Tuple[int, List[bytearray]]:
         """Optimized multi-variable read using merge + packetize strategy.
 
@@ -790,8 +875,9 @@ class Client(ClientMixin):
         # Deep-copy blocks from cached packets so we don't mutate cached state
         working_packets = copy.deepcopy(packets)
 
-        # Execute each packet
-        for packet in working_packets:
+        # Build PDU requests for each packet
+        packet_requests: list[Tuple[int, bytes, ReadPacket]] = []
+        for pkt_idx, packet in enumerate(working_packets):
             block_specs = [(blk.area, blk.db_number, blk.start_offset, blk.byte_length) for blk in packet.blocks]
 
             if len(block_specs) == 1:
@@ -805,16 +891,49 @@ class Client(ClientMixin):
                 )
                 blk.buffer = data
             else:
-                # Multi-block: use multi-read PDU
                 request = self.protocol.build_multi_read_request(block_specs)
-                response = self._send_receive(request)
-                block_data_list = self.protocol.extract_multi_read_data(response, len(block_specs))
-                for blk, buf in zip(packet.blocks, block_data_list):
-                    blk.buffer = buf
+                packet_requests.append((pkt_idx, request, packet))
+
+        # Execute multi-block packets
+        if packet_requests:
+            if self.max_parallel > 1 and len(packet_requests) > 1:
+                self._execute_packets_parallel(packet_requests)
+            else:
+                self._execute_packets_sequential(packet_requests)
 
         # Extract per-item results in original order
         results = extract_results(working_packets, len(dict_items))
         return (0, results)
+
+    def _execute_packets_sequential(
+        self, packet_requests: list[Tuple[int, bytes, ReadPacket]]
+    ) -> None:
+        """Execute multi-block packets one at a time."""
+        for _, request, packet in packet_requests:
+            response = self._send_receive(request)
+            block_data_list = self.protocol.extract_multi_read_data(response, len(packet.blocks))
+            for blk, buf in zip(packet.blocks, block_data_list):
+                blk.buffer = buf
+
+    def _execute_packets_parallel(
+        self, packet_requests: list[Tuple[int, bytes, ReadPacket]]
+    ) -> None:
+        """Execute multi-block packets using parallel dispatch.
+
+        Sends up to *max_parallel* PDUs back-to-back before reading
+        responses, reducing round-trip overhead.
+        """
+        # Process in chunks of max_parallel
+        for chunk_start in range(0, len(packet_requests), self.max_parallel):
+            chunk = packet_requests[chunk_start : chunk_start + self.max_parallel]
+            requests = [(pkt_idx, pdu) for pkt_idx, pdu, _ in chunk]
+            responses = self._send_receive_parallel(requests)
+
+            for pkt_idx, _, packet in chunk:
+                response = responses[pkt_idx]
+                block_data_list = self.protocol.extract_multi_read_data(response, len(packet.blocks))
+                for blk, buf in zip(packet.blocks, block_data_list):
+                    blk.buffer = buf
 
     def write_multi_vars(self, items: Union[List[dict[str, Any]], List[S7DataItem]]) -> int:
         """
