@@ -1651,22 +1651,24 @@ class Server:
             SZL data bytes or None if not available
         """
         # SZL 0x001C: Component identification (S7CpuInfo)
+        # Each field is in a 34-byte SZL record: 2-byte index + 32-byte data
+        # The client parses at specific offsets matching real PLC format:
+        #   ASName at offset 6, ModuleName at offset 40,
+        #   Copyright at offset 108, SerialNumber at offset 142,
+        #   ModuleTypeName at offset 176
         if szl_id == 0x001C:
-            # S7CpuInfo structure fields (each is a null-terminated string)
-            module_type = b"CPU 315-2 PN/DP\x00"
-            serial_number = b"S C-C2UR28922012\x00"
-            as_name = b"SNAP7-SERVER\x00"
-            copyright_info = b"Original Siemens Equipment\x00"
-            module_name = b"CPU 315-2 PN/DP\x00"
-
-            # Pad to fixed sizes (from C structure)
-            module_type = module_type.ljust(32, b"\x00")[:32]
-            serial_number = serial_number.ljust(24, b"\x00")[:24]
-            as_name = as_name.ljust(24, b"\x00")[:24]
-            copyright_info = copyright_info.ljust(26, b"\x00")[:26]
-            module_name = module_name.ljust(24, b"\x00")[:24]
-
-            return module_type + serial_number + as_name + copyright_info + module_name
+            data = bytearray(210)
+            # Record 1: ASName at offset 6 (index bytes at 4-5, data at 6)
+            data[6 : 6 + 24] = b"SNAP7-SERVER\x00".ljust(24, b"\x00")[:24]
+            # Record 2: ModuleName at offset 40
+            data[40 : 40 + 24] = b"CPU 315-2 PN/DP\x00".ljust(24, b"\x00")[:24]
+            # Record 3: Copyright at offset 108
+            data[108 : 108 + 26] = b"Original Siemens Equipment\x00".ljust(26, b"\x00")[:26]
+            # Record 4: SerialNumber at offset 142
+            data[142 : 142 + 24] = b"S C-C2UR28922012\x00".ljust(24, b"\x00")[:24]
+            # Record 5: ModuleTypeName at offset 176
+            data[176 : 176 + 32] = b"CPU 315-2 PN/DP\x00".ljust(32, b"\x00")[:32]
+            return bytes(data)
 
         # SZL 0x0011: Module identification (S7OrderCode)
         elif szl_id == 0x0011:
