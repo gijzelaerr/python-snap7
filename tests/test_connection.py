@@ -453,6 +453,28 @@ class TestTCPConnect:
         mock_sock.settimeout.assert_called_once()
         mock_sock.connect.assert_called_once_with(("1.2.3.4", 102))
 
+    @patch("snap7.connection.socket.socket")
+    def test_tcp_connect_sets_tcp_nodelay(self, mock_socket_cls: MagicMock) -> None:
+        """TCP_NODELAY must be set to eliminate Nagle buffering latency."""
+        import socket as _socket
+
+        mock_sock = MagicMock()
+        mock_socket_cls.return_value = mock_sock
+        conn = ISOTCPConnection("1.2.3.4")
+        conn._tcp_connect()
+        mock_sock.setsockopt.assert_any_call(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
+
+    @patch("snap7.connection.socket.socket")
+    def test_tcp_connect_sets_so_keepalive(self, mock_socket_cls: MagicMock) -> None:
+        """SO_KEEPALIVE must be set to detect dead connections during idle periods."""
+        import socket as _socket
+
+        mock_sock = MagicMock()
+        mock_socket_cls.return_value = mock_sock
+        conn = ISOTCPConnection("1.2.3.4")
+        conn._tcp_connect()
+        mock_sock.setsockopt.assert_any_call(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
+
 
 class TestISOConnect:
     """Test _iso_connect()."""

@@ -337,6 +337,8 @@ class S7CommPlusServer:
                 if self._server_socket is None:
                     break
                 client_sock, address = self._server_socket.accept()
+                client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
                 logger.info(f"Client connected from {address}")
                 t = threading.Thread(
                     target=self._handle_client,

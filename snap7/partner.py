@@ -683,6 +683,8 @@ class Partner:
         while self.running and not self._stop_event.is_set():
             try:
                 client_sock, addr = self._server_socket.accept()
+                client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
                 # Create connection object
                 self._socket = client_sock
