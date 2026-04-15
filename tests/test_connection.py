@@ -488,7 +488,7 @@ class TestTCPConnect:
         mock_socket_mod.SO_KEEPALIVE = _socket.SO_KEEPALIVE
         mock_socket_mod.IPPROTO_TCP = _socket.IPPROTO_TCP
         mock_socket_mod.TCP_NODELAY = _socket.TCP_NODELAY
-        mock_socket_mod.TCP_KEEPIDLE = 4   # simulate attribute present
+        mock_socket_mod.TCP_KEEPIDLE = 4  # simulate attribute present
         mock_socket_mod.TCP_KEEPINTVL = 5
         mock_socket_mod.TCP_KEEPCNT = 6
 
