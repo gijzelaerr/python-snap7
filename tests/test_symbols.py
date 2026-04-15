@@ -407,7 +407,9 @@ class TestReadMany:
 
         table = SymbolTable({"Temp": {"db": 1, "offset": 0, "type": "REAL"}})
         values = table.read_many(client, ["Temp"])
-        assert abs(values["Temp"] - 42.0) < 0.01
+        temp = values["Temp"]
+        assert isinstance(temp, float)
+        assert abs(temp - 42.0) < 0.01
 
     def test_read_many_empty(self) -> None:
         client = _make_client()
