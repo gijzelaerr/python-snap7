@@ -14,6 +14,11 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
+# Areas that support contiguous-block merging.  Counter (0x1C) and Timer
+# (0x1D) use element-based addressing, not byte-based, so merging them
+# as contiguous byte ranges would produce incorrect reads.
+_MERGEABLE_AREAS: frozenset[int] = frozenset({0x81, 0x82, 0x83, 0x84})  # PE, PA, MK, DB
+
 
 @dataclass
 class ReadItem:
@@ -116,10 +121,11 @@ def merge_items(sorted_items: list[ReadItem], max_gap: int = 5, max_block_size: 
         item_end = item.byte_offset + item.byte_length
 
         same_region = item.area == block.area and item.db_number == block.db_number
+        mergeable = block.area in _MERGEABLE_AREAS
         gap = item.byte_offset - block_end
         new_length = max(block_end, item_end) - block.start_offset
 
-        if same_region and gap <= max_gap and new_length <= max_block_size:
+        if same_region and mergeable and gap <= max_gap and new_length <= max_block_size:
             # Merge: extend block to cover the new item
             block.byte_length = new_length
             block.items.append(item)

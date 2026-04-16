@@ -46,6 +46,7 @@ Welcome to python-snap7's documentation!
    API/util
    API/symbols
    API/optimizer
+   API/log
    API/type
 
 .. toctree::

@@ -809,7 +809,8 @@ def set_ltime(bytearray_: Buffer, byte_index: int, value: timedelta) -> Buffer:
         >>> data = bytearray(8)
         >>> set_ltime(data, 0, timedelta(seconds=1))
     """
-    nanoseconds = int(value.total_seconds() * 1_000_000_000)
+    # Use integer arithmetic to avoid float precision loss
+    nanoseconds = (value.days * 86400 + value.seconds) * 1_000_000_000 + value.microseconds * 1000
     bytearray_[byte_index : byte_index + 8] = struct.pack(">q", nanoseconds)
     return bytearray_
 
@@ -836,7 +837,7 @@ def set_ltod(bytearray_: Buffer, byte_index: int, value: timedelta) -> Buffer:
     """
     if value.days >= 1:
         raise ValueError("LTOD value must be less than 24 hours")
-    nanoseconds = int(value.total_seconds() * 1_000_000_000)
+    nanoseconds = (value.days * 86400 + value.seconds) * 1_000_000_000 + value.microseconds * 1000
     bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", nanoseconds)
     return bytearray_
 
@@ -864,6 +865,6 @@ def set_ldt(bytearray_: Buffer, byte_index: int, value: datetime) -> Buffer:
     """
     epoch = datetime(1970, 1, 1)
     delta = value - epoch
-    nanoseconds = int(delta.total_seconds() * 1_000_000_000)
+    nanoseconds = (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
     bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", nanoseconds)
     return bytearray_
