@@ -214,8 +214,7 @@ class TestFromBrowse:
     def test_symbolic_browse_result(self) -> None:
         """When browse includes LID, produce symbolic Tags."""
         variables = [
-            {"name": "Motor.Speed", "db_number": 1, "byte_offset": 0,
-             "data_type": "REAL", "lid": 0xA, "symbol_crc": 0x12345678},
+            {"name": "Motor.Speed", "db_number": 1, "byte_offset": 0, "data_type": "REAL", "lid": 0xA, "symbol_crc": 0x12345678},
         ]
         tags = from_browse(variables)
         assert tags["Motor.Speed"].is_symbolic is True
