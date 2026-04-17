@@ -327,7 +327,8 @@ class S7CommPlusClient:
 
         Returns a flat list of variable info dicts with keys:
         ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``bit_size``.
-        Results can be used to construct a :class:`~snap7.util.symbols.SymbolTable`.
+        Results can be converted to :class:`~snap7.tags.Tag` objects for use
+        with :meth:`~s7.client.Client.read_tag`.
 
         Returns:
             List of variable info dicts.

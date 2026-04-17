@@ -287,10 +287,12 @@ class Client:
 
         .. warning:: This method is **experimental** and may change.
 
-        Returns a flat list of variable info dicts. Can be used to create
-        a :class:`~snap7.util.symbols.SymbolTable`::
+        Returns a flat list of variable info dicts. Can be converted to
+        :class:`~snap7.tags.Tag` objects::
 
-            symbols = SymbolTable.from_browse(client.browse())
+            from snap7 import Tag
+            variables = client.browse()
+            tags = {v["name"]: Tag(Area.DB, v["db_number"], v["byte_offset"], v["data_type"]) for v in variables}
 
         Requires S7CommPlus connection.
         """

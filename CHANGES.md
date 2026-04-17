@@ -23,7 +23,9 @@ Major release: new `s7` package with S7CommPlus protocol support.
 * S7CommPlus CPU state reading and block transfer (upload/download)
 * Array read/write helpers (`db_read_array`, `db_write_array`)
 * Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt`
-* Optimized `SymbolTable.read_many()` with multi-variable batching
+* **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
+  Siemens STEP7 syntax, replacing the homegrown SymbolTable class.
+  Loaders: `load_csv`, `load_json`, `load_tia_xml` return `dict[str, Tag]`
 * Optimizer excludes counter/timer areas from byte-range merging
 * Fixed `get_cpu_info` field offsets for real S7-300/1500 (thanks @qzertywsx)
 * Fixed `S7SZL.__str__` attribute name typo (thanks @qzertywsx)
