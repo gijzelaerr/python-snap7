@@ -801,6 +801,10 @@ class Client(ClientMixin):
             client.read_tag(Tag(Area.DB, 1, 0, "REAL"))   # from Tag instance
         """
         resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+        if resolved.is_symbolic:
+            raise NotImplementedError(
+                "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
+            )
         data = self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, resolved.size)
         return _decode_tag(resolved, bytearray(data))
 
@@ -815,6 +819,10 @@ class Client(ClientMixin):
             0 on success.
         """
         resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+        if resolved.is_symbolic:
+            raise NotImplementedError(
+                "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
+            )
         size = resolved.size
         buf = bytearray(size)
         # For BOOL writes, we need the current byte to preserve other bits

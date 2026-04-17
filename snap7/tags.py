@@ -32,7 +32,7 @@ import csv
 import io
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Union
 
@@ -75,14 +75,29 @@ _STRING_RE = re.compile(r"^(STRING|WSTRING|FSTRING)\[(\d+)]$", re.IGNORECASE)
 class Tag:
     """A typed reference to a value in a PLC data area.
 
+    A Tag can address the PLC in two ways:
+
+    1. **Byte-offset access** (classic, works on all S7 PLCs) — uses
+       ``byte_offset`` and ``bit``. Supported on S7-300/400 and on
+       S7-1200/1500 DBs with "Optimized block access" disabled.
+
+    2. **Symbolic (LID-based) access** (S7CommPlus, for optimized DBs) —
+       uses ``access_sequence`` (a list of LID values navigating the
+       PLC's symbol tree) and optionally ``symbol_crc``. Required for
+       S7-1200/1500 DBs with "Optimized block access" enabled.
+
+    If ``access_sequence`` is set, it takes precedence over ``byte_offset``.
+
     Attributes:
         area: The S7 memory area (DB, MK, PE, PA).
         db_number: DB number (0 for non-DB areas).
-        byte_offset: Start byte offset within the area.
-        bit: Bit index (0-7) for BOOL tags; 0 for others.
+        byte_offset: Start byte offset within the area (classic access).
         datatype: S7 data type name (``BOOL``, ``INT``, ``REAL``, ``STRING[20]``, ...).
+        bit: Bit index (0-7) for BOOL tags; 0 for others.
         count: Array count (1 = scalar, >1 = array).
         name: Optional tag name for debugging/logging.
+        access_sequence: LID path for S7CommPlus symbolic access (optimized DBs).
+        symbol_crc: Symbol CRC for the PLC to validate layout version (0 = no check).
     """
 
     area: Area
@@ -92,6 +107,13 @@ class Tag:
     bit: int = 0
     count: int = 1
     name: str = ""
+    access_sequence: list[int] = field(default_factory=list)
+    symbol_crc: int = 0
+
+    @property
+    def is_symbolic(self) -> bool:
+        """Whether this Tag uses S7CommPlus symbolic (LID-based) access."""
+        return bool(self.access_sequence)
 
     @property
     def size(self) -> int:
@@ -196,6 +218,78 @@ class Tag:
             return cls(area=Area.PA, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
 
         raise ValueError(f"Unsupported tag address: {address}")
+
+    @classmethod
+    def from_access_string(
+        cls,
+        access_string: str,
+        datatype: str,
+        *,
+        name: str = "",
+        symbol_crc: int = 0,
+        count: int = 1,
+    ) -> "Tag":
+        """Create a Tag from an S7CommPlus access string for optimized blocks.
+
+        The access string is a dot-separated sequence of hex IDs representing
+        the path through the PLC's symbol tree, e.g. ``"8A0E0001.A"`` (DB1,
+        LID 0xA) for a variable in DB1 with optimized block access.
+
+        This format is used for S7-1200/1500 DBs with "Optimized block access"
+        enabled.  Byte offsets are unreliable for such blocks, so the PLC is
+        addressed via the symbol tree instead.
+
+        Args:
+            access_string: Dot-separated hex IDs, e.g. ``"8A0E0001.A.1"``.
+                The first ID is the AccessArea, remaining IDs are LIDs.
+            datatype: S7 type name (e.g. ``"REAL"``, ``"BOOL"``, ``"INT[5]"``).
+            name: Optional tag name.
+            symbol_crc: Symbol CRC from the PLC (0 = no check).
+            count: Array count (overridden if datatype includes ``[n]``).
+
+        Returns:
+            A :class:`Tag` configured for symbolic access.
+
+        Raises:
+            ValueError: If the access_string is not at least one hex component.
+        """
+        parts = access_string.strip().split(".")
+        if not parts:
+            raise ValueError(f"Invalid access string: {access_string}")
+        ids = [int(p, 16) for p in parts]
+        access_area = ids[0]
+        lids = ids[1:]
+
+        # Derive the Area enum from the access area ID
+        if access_area >= 0x8A0E0000:
+            area = Area.DB
+            db_number = access_area - 0x8A0E0000
+        elif access_area == 82:  # NATIVE_THE_M_AREA_RID
+            area = Area.MK
+            db_number = 0
+        elif access_area == 80:  # NATIVE_THE_I_AREA_RID
+            area = Area.PE
+            db_number = 0
+        elif access_area == 81:  # NATIVE_THE_Q_AREA_RID
+            area = Area.PA
+            db_number = 0
+        else:
+            area = Area.DB
+            db_number = 0
+
+        resolved_type, parsed_count = _parse_type(datatype)
+        final_count = parsed_count if parsed_count > 1 else count
+
+        return cls(
+            area=area,
+            db_number=db_number,
+            byte_offset=0,
+            datatype=resolved_type,
+            count=final_count,
+            name=name,
+            access_sequence=lids,
+            symbol_crc=symbol_crc,
+        )
 
 
 def _parse_type(type_part: str) -> tuple[str, int]:

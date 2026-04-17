@@ -200,6 +200,55 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
+    def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
+        """Read a variable using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        For S7-1200/1500 DBs with "Optimized block access" enabled, byte
+        offsets are unreliable — the PLC internally relocates variables
+        between downloads. Symbolic access navigates the PLC's symbol tree
+        using LIDs (Local IDs) discovered via :meth:`browse`.
+
+        Args:
+            access_area: Access area ID. For DBs this is
+                ``0x8A0E0000 + db_number``.
+            lids: LID path through the symbol tree.
+            symbol_crc: Symbol CRC for layout validation (0 = skip check).
+
+        Returns:
+            Raw bytes of the variable value.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc)
+        response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response)
+        if not results or results[0] is None:
+            raise RuntimeError("Symbolic read failed")
+        return results[0]
+
+    def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+        """Write a variable using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        See :meth:`read_symbolic` for context on when to use symbolic access.
+
+        Args:
+            access_area: Access area ID.
+            lids: LID path through the symbol tree.
+            data: Raw bytes to write.
+            symbol_crc: Symbol CRC for layout validation (0 = skip check).
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
+
     def explore(self, explore_id: int = 0) -> bytes:
         """Browse the PLC object tree.
 
@@ -583,6 +632,65 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
         access_area=area_rid,
         access_sub_area=Ids.CONTROLLER_AREA_VALUE_ACTUAL,
         lids=[start + 1, len(data)],
+    )
+
+    payload = bytearray()
+    payload += struct.pack(">I", 0)
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(field_count)
+    payload += addr_bytes
+    payload += encode_uint32_vlq(1)  # item number 1
+    payload += encode_pvalue_blob(data)
+    payload += bytes([0x00])
+    payload += encode_object_qualifier()
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_symbolic_read_payload(access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
+    """Build a GetMultiVariables payload for symbolic (LID-based) access.
+
+    Used for optimized block access on S7-1200/1500 where byte offsets
+    are unreliable.  The PLC navigates its symbol tree using the LIDs.
+
+    For DBs, ``access_sub_area`` is ``DB_VALUE_ACTUAL``.  For controller
+    areas (M/I/Q), it's ``CONTROLLER_AREA_VALUE_ACTUAL``.
+    """
+    # Determine sub-area based on access_area
+    if access_area >= 0x8A0E0000:
+        access_sub_area = Ids.DB_VALUE_ACTUAL
+    else:
+        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+
+    addr_bytes, field_count = encode_item_address(
+        access_area=access_area,
+        access_sub_area=access_sub_area,
+        lids=lids,
+        symbol_crc=symbol_crc,
+    )
+
+    payload = bytearray()
+    payload += struct.pack(">I", 0)
+    payload += encode_uint32_vlq(1)  # one item
+    payload += encode_uint32_vlq(field_count)
+    payload += addr_bytes
+    payload += encode_object_qualifier()
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> bytes:
+    """Build a SetMultiVariables payload for symbolic (LID-based) access."""
+    if access_area >= 0x8A0E0000:
+        access_sub_area = Ids.DB_VALUE_ACTUAL
+    else:
+        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+
+    addr_bytes, field_count = encode_item_address(
+        access_area=access_area,
+        access_sub_area=access_sub_area,
+        lids=lids,
+        symbol_crc=symbol_crc,
     )
 
     payload = bytearray()

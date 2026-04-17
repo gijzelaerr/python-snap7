@@ -56,6 +56,42 @@ Supported types
 
 Arrays are supported for any fixed-size type via ``[count]`` suffix.
 
+Optimized block access (S7CommPlus)
+------------------------------------
+
+.. warning::
+
+   Symbolic (LID-based) access is **experimental** and requires real PLC
+   testing.  The wire-level implementation follows the S7CommPlusDriver
+   reference but has not yet been validated against hardware.
+
+S7-1200/1500 DBs with "Optimized block access" enabled (the default in
+TIA Portal V13+) do not use fixed byte offsets.  The PLC internally
+relocates variables between downloads, so addresses like ``DB1.DBX0.0``
+are unreliable.
+
+For optimized blocks, use :meth:`~snap7.tags.Tag.from_access_string`
+with LIDs discovered via :meth:`~s7.client.Client.browse`:
+
+.. code-block:: python
+
+   from s7 import Client, Tag
+
+   client = Client()
+   client.connect("192.168.1.10", 0, 1)
+
+   # Create a symbolic tag (LIDs come from browse)
+   tag = Tag.from_access_string(
+       "8A0E0001.A",           # DB1, LID 0xA
+       datatype="REAL",
+       name="Motor.Speed",
+       symbol_crc=0x12345678,  # optional layout version check
+   )
+
+   # Read/write via S7CommPlus symbolic access
+   speed = client.read_tag(tag)
+   client.write_tag(tag, 1500.0)
+
 API reference
 -------------
 

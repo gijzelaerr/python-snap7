@@ -197,6 +197,51 @@ class TestLoadJson:
         assert "Tank.Level" in tags
 
 
+class TestSymbolicAccess:
+    """Tag.from_access_string and symbolic access fields."""
+
+    def test_from_access_string_db(self) -> None:
+        # DB1 with LID 0xA
+        t = Tag.from_access_string("8A0E0001.A", "REAL", name="Motor.Speed")
+        assert t.area == Area.DB
+        assert t.db_number == 1
+        assert t.access_sequence == [0xA]
+        assert t.datatype == "REAL"
+        assert t.name == "Motor.Speed"
+        assert t.is_symbolic is True
+
+    def test_from_access_string_nested(self) -> None:
+        t = Tag.from_access_string("8A0E0005.A.1.3", "INT")
+        assert t.db_number == 5
+        assert t.access_sequence == [0xA, 0x1, 0x3]
+
+    def test_from_access_string_merker(self) -> None:
+        t = Tag.from_access_string("52.A", "BYTE")
+        assert t.area == Area.MK
+        assert t.access_sequence == [0xA]
+
+    def test_from_access_string_with_crc(self) -> None:
+        t = Tag.from_access_string("8A0E0001.A", "REAL", symbol_crc=0x1234ABCD)
+        assert t.symbol_crc == 0x1234ABCD
+
+    def test_from_access_string_array(self) -> None:
+        t = Tag.from_access_string("8A0E0001.A", "REAL[10]")
+        assert t.count == 10
+        assert t.size == 40
+
+    def test_is_symbolic_flag(self) -> None:
+        classic = Tag(Area.DB, 1, 0, "REAL")
+        assert classic.is_symbolic is False
+
+        symbolic = Tag(Area.DB, 1, 0, "REAL", access_sequence=[0xA])
+        assert symbolic.is_symbolic is True
+
+    def test_classic_tag_not_symbolic(self) -> None:
+        t = Tag.from_string("DB1.DBX0.0:BOOL")
+        assert t.is_symbolic is False
+        assert t.access_sequence == []
+
+
 class TestLoadTiaXml:
     """Load tags from TIA Portal XML exports."""
 

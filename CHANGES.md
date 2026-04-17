@@ -26,6 +26,11 @@ Major release: new `s7` package with S7CommPlus protocol support.
 * **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
   Siemens STEP7 syntax, replacing the homegrown SymbolTable class.
   Loaders: `load_csv`, `load_json`, `load_tia_xml` return `dict[str, Tag]`
+* **Symbolic (LID-based) access for optimized DBs** (experimental):
+  `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
+  `client.read_tag(tag)` routes to S7CommPlus LID-based access via the
+  PLC's symbol tree. Required for S7-1200/1500 DBs with
+  "Optimized block access" enabled (the TIA Portal V13+ default).
 * Optimizer excludes counter/timer areas from byte-range merging
 * Fixed `get_cpu_info` field offsets for real S7-300/1500 (thanks @qzertywsx)
 * Fixed `S7SZL.__str__` attribute name typo (thanks @qzertywsx)
