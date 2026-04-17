@@ -34,7 +34,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
+from typing import Any, Union
 
 from .type import Area
 
@@ -400,6 +400,42 @@ def load_json(source: Union[str, Path]) -> dict[str, Tag]:
     for name, info in data.items():
         bit = int(info.get("bit", 0))
         tags[name] = _make_tag(name, int(info["db"]), info["offset"], info["type"], bit)
+    return tags
+
+
+def from_browse(variables: list[dict[str, Any]]) -> dict[str, Tag]:
+    """Build a dict of Tags from :meth:`s7.Client.browse` results.
+
+    .. warning:: This function is **experimental** and may change.
+
+    When the browse result includes an ``lid`` key, the resulting Tag
+    is configured for symbolic (LID-based) access suitable for
+    optimized DBs. Otherwise it uses byte-offset access.
+
+    Args:
+        variables: List of variable-info dicts from ``client.browse()``.
+
+    Returns:
+        Dictionary mapping variable names to :class:`Tag` objects.
+    """
+    tags: dict[str, Tag] = {}
+    for var in variables:
+        name = var.get("name", "")
+        if not name:
+            continue
+        lid = var.get("lid", 0)
+        crc = var.get("symbol_crc", 0)
+        access_sequence = [lid] if lid else []
+        tags[name] = Tag(
+            area=Area.DB,
+            db_number=int(var.get("db_number", 0)),
+            byte_offset=int(var.get("byte_offset", 0)),
+            datatype=str(var.get("data_type", "BYTE")),
+            count=int(var.get("count", 1)),
+            name=name,
+            access_sequence=access_sequence,
+            symbol_crc=int(crc),
+        )
     return tags
 
 

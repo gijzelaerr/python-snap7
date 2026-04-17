@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from snap7.tags import Tag, load_csv, load_json, load_tia_xml
+from snap7.tags import Tag, from_browse, load_csv, load_json, load_tia_xml
 from snap7.type import Area
 
 
@@ -195,6 +195,37 @@ class TestLoadJson:
         f.write_text(json.dumps(self.DATA))
         tags = load_json(f)
         assert "Tank.Level" in tags
+
+
+class TestFromBrowse:
+    """from_browse converts browse results to Tag dicts."""
+
+    def test_classic_browse_result(self) -> None:
+        variables = [
+            {"name": "Motor.Speed", "db_number": 1, "byte_offset": 0, "data_type": "REAL"},
+            {"name": "Motor.Running", "db_number": 1, "byte_offset": 4, "data_type": "BOOL"},
+        ]
+        tags = from_browse(variables)
+        assert "Motor.Speed" in tags
+        assert tags["Motor.Speed"].byte_offset == 0
+        assert tags["Motor.Speed"].datatype == "REAL"
+        assert tags["Motor.Speed"].is_symbolic is False
+
+    def test_symbolic_browse_result(self) -> None:
+        """When browse includes LID, produce symbolic Tags."""
+        variables = [
+            {"name": "Motor.Speed", "db_number": 1, "byte_offset": 0,
+             "data_type": "REAL", "lid": 0xA, "symbol_crc": 0x12345678},
+        ]
+        tags = from_browse(variables)
+        assert tags["Motor.Speed"].is_symbolic is True
+        assert tags["Motor.Speed"].access_sequence == [0xA]
+        assert tags["Motor.Speed"].symbol_crc == 0x12345678
+
+    def test_skips_unnamed(self) -> None:
+        variables = [{"name": "", "db_number": 1, "byte_offset": 0, "data_type": "BYTE"}]
+        tags = from_browse(variables)
+        assert len(tags) == 0
 
 
 class TestSymbolicAccess:

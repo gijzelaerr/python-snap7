@@ -868,8 +868,10 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
     """Parse an EXPLORE response for a single DB to extract field layout.
 
     Returns:
-        List of dicts: ``{"name": str, "db_number": int, "db_name": str,
-        "byte_offset": int, "data_type": str}``
+        List of dicts with keys:
+        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``lid``,
+        ``symbol_crc``. ``lid`` and ``symbol_crc`` enable symbolic access
+        for optimized DBs.
     """
     from .vlq import decode_uint32_vlq as _vlq32
 
@@ -877,6 +879,8 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
     offset = 0
     field_name = ""
     byte_offset = 0
+    field_lid = 0
+    field_crc = 0
 
     # Skip return code VLQ at start of response
     if offset < len(response):
@@ -890,6 +894,8 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
         if tag == 0xA1:  # START_OF_OBJECT
             if offset + 4 > len(response):
                 break
+            # The RID bytes serve as the LID for symbolic access
+            field_lid = struct.unpack(">I", response[offset : offset + 4])[0]
             offset += 4
             for _ in range(3):
                 if offset >= len(response):
@@ -898,6 +904,7 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
                 offset += consumed
             field_name = ""
             byte_offset = 0
+            field_crc = 0
 
         elif tag == 0xA2:  # TERMINATING_OBJECT
             if field_name:
@@ -907,6 +914,8 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
                         "db_number": db_number,
                         "byte_offset": byte_offset,
                         "data_type": "BYTE",  # default; refined by type info
+                        "lid": field_lid,
+                        "symbol_crc": field_crc,
                     }
                 )
 
