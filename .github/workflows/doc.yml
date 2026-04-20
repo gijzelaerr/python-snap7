@@ -31,7 +31,7 @@ jobs:
         run: uv run sphinx-build -N -bhtml doc/ doc/_build -W
       - name: Upload Pages artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: doc/_build
   deploy:
