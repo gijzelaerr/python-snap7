@@ -17,6 +17,8 @@ from typing import Any, Optional
 
 from snap7.client import Client as LegacyClient
 
+from snap7.type import Area
+
 from ._protocol import Protocol
 from ._s7commplus_client import S7CommPlusClient
 
@@ -287,16 +289,103 @@ class Client:
 
         .. warning:: This method is **experimental** and may change.
 
-        Returns a flat list of variable info dicts. Can be used to create
-        a :class:`~snap7.util.symbols.SymbolTable`::
+        Returns a flat list of variable info dicts. Can be converted to
+        :class:`~snap7.tags.Tag` objects::
 
-            symbols = SymbolTable.from_browse(client.browse())
+            from snap7 import Tag
+            variables = client.browse()
+            tags = {v["name"]: Tag(Area.DB, v["db_number"], v["byte_offset"], v["data_type"]) for v in variables}
 
         Requires S7CommPlus connection.
         """
         if self._plus is None:
             raise RuntimeError("browse() requires S7CommPlus connection")
         return self._plus.browse()
+
+    def read_tag(self, tag: Any) -> Any:
+        """Read a typed value by Tag or address string.
+
+        For symbolic tags (with ``access_sequence`` set), routes to
+        S7CommPlus LID-based access.  For classic tags (byte-offset),
+        delegates to the legacy client.
+
+        Args:
+            tag: A :class:`~snap7.tags.Tag` instance or address string.
+
+        Returns:
+            The typed value.
+        """
+        from snap7.tags import Tag
+        from snap7.client import _decode_tag
+
+        resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+
+        if resolved.is_symbolic:
+            if self._plus is None:
+                raise RuntimeError("Symbolic tag access requires S7CommPlus connection")
+            # Build access_area from Tag
+            if resolved.area == Area.DB:
+                access_area = 0x8A0E0000 + resolved.db_number
+            elif resolved.area == Area.MK:
+                access_area = 82
+            elif resolved.area == Area.PE:
+                access_area = 80
+            elif resolved.area == Area.PA:
+                access_area = 81
+            else:
+                access_area = 0x8A0E0000 + resolved.db_number
+            data = self._plus.read_symbolic(access_area, resolved.access_sequence, resolved.symbol_crc)
+            return _decode_tag(resolved, bytearray(data))
+
+        # Classic byte-offset access — delegate to legacy
+        if self._legacy is None:
+            raise RuntimeError("Not connected")
+        return self._legacy.read_tag(resolved)
+
+    def write_tag(self, tag: Any, value: Any) -> int:
+        """Write a typed value by Tag or address string."""
+        from snap7.tags import Tag
+        from snap7.client import _encode_tag
+
+        resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+
+        if resolved.is_symbolic:
+            if self._plus is None:
+                raise RuntimeError("Symbolic tag access requires S7CommPlus connection")
+            if resolved.area == Area.DB:
+                access_area = 0x8A0E0000 + resolved.db_number
+            elif resolved.area == Area.MK:
+                access_area = 82
+            elif resolved.area == Area.PE:
+                access_area = 80
+            elif resolved.area == Area.PA:
+                access_area = 81
+            else:
+                access_area = 0x8A0E0000 + resolved.db_number
+            buf = bytearray(resolved.size)
+            _encode_tag(resolved, buf, value)
+            self._plus.write_symbolic(access_area, resolved.access_sequence, bytes(buf), resolved.symbol_crc)
+            return 0
+
+        # Classic — delegate to legacy
+        if self._legacy is None:
+            raise RuntimeError("Not connected")
+        return self._legacy.write_tag(resolved, value)
+
+    def read_tags(self, tags: list[Any]) -> list[Any]:
+        """Read multiple tags, routing each to the appropriate protocol."""
+        from snap7.tags import Tag
+
+        resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
+        # If any are symbolic, read each individually (batching symbolic
+        # reads via the optimizer is a future enhancement)
+        if any(t.is_symbolic for t in resolved):
+            return [self.read_tag(t) for t in resolved]
+
+        # All classic — delegate to legacy for batched optimizer read
+        if self._legacy is None:
+            raise RuntimeError("Not connected")
+        return self._legacy.read_tags(resolved)
 
     def read_diagnostic_buffer(self) -> list[dict[str, Any]]:
         """Read the PLC diagnostic buffer.

@@ -27,6 +27,8 @@ from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketErr
 from .client_base import ClientMixin
 from .log import PLCLoggerAdapter, OperationLogger
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
+from .tags import Tag, _STRING_RE
+from . import util
 
 from .type import (
     Area,
@@ -48,6 +50,185 @@ from .type import (
 _VALID_AREA_VALUES: frozenset[int] = frozenset(a.value for a in Area)
 
 logger = logging.getLogger(__name__)
+
+
+def _decode_tag(tag: Tag, data: bytearray) -> Any:
+    """Decode a Tag's raw bytes into a typed Python value."""
+    upper = tag.datatype.upper()
+    # Variable-length string types
+    match = _STRING_RE.match(upper)
+    if match:
+        kind, length = match.group(1), int(match.group(2))
+        if kind == "FSTRING":
+            return util.get_fstring(data, 0, length)
+        if kind == "STRING":
+            return util.get_string(data, 0)
+        if kind == "WSTRING":
+            return util.get_wstring(data, 0)
+
+    # Arrays
+    if tag.count > 1:
+        per = tag.size // tag.count
+        return [_decode_scalar(upper, data[i * per : (i + 1) * per], tag.bit) for i in range(tag.count)]
+
+    return _decode_scalar(upper, data, tag.bit)
+
+
+def _decode_scalar(datatype: str, data: bytearray, bit: int) -> Any:
+    """Decode a single scalar value of the given type."""
+    if datatype == "BOOL":
+        return util.get_bool(data, 0, bit)
+    if datatype == "BYTE":
+        return util.get_byte(data, 0)
+    if datatype == "SINT":
+        return util.get_sint(data, 0)
+    if datatype == "USINT":
+        return util.get_usint(data, 0)
+    if datatype == "CHAR":
+        return util.get_char(data, 0)
+    if datatype == "INT":
+        return util.get_int(data, 0)
+    if datatype == "UINT":
+        return util.get_uint(data, 0)
+    if datatype == "WORD":
+        return util.get_word(data, 0)
+    if datatype == "WCHAR":
+        return util.get_wchar(data, 0)
+    if datatype == "DATE":
+        return util.get_date(data, 0)
+    if datatype == "DINT":
+        return util.get_dint(data, 0)
+    if datatype == "UDINT":
+        return util.get_udint(data, 0)
+    if datatype == "DWORD":
+        return util.get_dword(data, 0)
+    if datatype == "REAL":
+        return util.get_real(data, 0)
+    if datatype == "TIME":
+        return util.get_time(data, 0)
+    if datatype == "TOD":
+        return util.get_tod(data, 0)
+    if datatype == "LINT":
+        return util.get_lint(data, 0)
+    if datatype == "ULINT":
+        return util.get_ulint(data, 0)
+    if datatype == "LWORD":
+        return util.get_lword(data, 0)
+    if datatype == "LREAL":
+        return util.get_lreal(data, 0)
+    if datatype == "LTIME":
+        return util.get_ltime(data, 0)
+    if datatype == "LTOD":
+        return util.get_ltod(data, 0)
+    if datatype == "LDT":
+        return util.get_ldt(data, 0)
+    if datatype == "DT":
+        return util.get_dt(data, 0)
+    if datatype == "DTL":
+        return util.get_dtl(data, 0)
+    raise ValueError(f"Unsupported tag datatype: {datatype}")
+
+
+def _encode_tag(tag: Tag, buf: bytearray, value: Any) -> None:
+    """Encode a typed Python value into a Tag's byte buffer."""
+    upper = tag.datatype.upper()
+    match = _STRING_RE.match(upper)
+    if match:
+        kind, length = match.group(1), int(match.group(2))
+        if kind == "FSTRING":
+            util.set_fstring(buf, 0, value, length)
+            return
+        if kind == "STRING":
+            util.set_string(buf, 0, value, length)
+            return
+        if kind == "WSTRING":
+            util.set_wstring(buf, 0, value, length)
+            return
+
+    if tag.count > 1:
+        per = tag.size // tag.count
+        for i, v in enumerate(value):
+            _encode_scalar(upper, buf, i * per, v, tag.bit)
+        return
+
+    _encode_scalar(upper, buf, 0, value, tag.bit)
+
+
+def _encode_scalar(datatype: str, buf: bytearray, offset: int, value: Any, bit: int) -> None:
+    """Encode a single scalar value at the given offset."""
+    if datatype == "BOOL":
+        util.set_bool(buf, offset, bit, value)
+        return
+    if datatype in ("BYTE", "USINT"):
+        util.set_byte(buf, offset, value) if datatype == "BYTE" else util.set_usint(buf, offset, value)
+        return
+    if datatype == "SINT":
+        util.set_sint(buf, offset, value)
+        return
+    if datatype == "CHAR":
+        util.set_char(buf, offset, value)
+        return
+    if datatype == "INT":
+        util.set_int(buf, offset, value)
+        return
+    if datatype == "UINT":
+        util.set_uint(buf, offset, value)
+        return
+    if datatype == "WORD":
+        util.set_word(buf, offset, value)
+        return
+    if datatype == "WCHAR":
+        util.set_wchar(buf, offset, value)
+        return
+    if datatype == "DATE":
+        util.set_date(buf, offset, value)
+        return
+    if datatype == "DINT":
+        util.set_dint(buf, offset, value)
+        return
+    if datatype == "UDINT":
+        util.set_udint(buf, offset, value)
+        return
+    if datatype == "DWORD":
+        util.set_dword(buf, offset, value)
+        return
+    if datatype == "REAL":
+        util.set_real(buf, offset, value)
+        return
+    if datatype == "TIME":
+        util.set_time(buf, offset, value)
+        return
+    if datatype == "TOD":
+        util.set_tod(buf, offset, value)
+        return
+    if datatype == "LINT":
+        util.set_lint(buf, offset, value)
+        return
+    if datatype == "ULINT":
+        util.set_ulint(buf, offset, value)
+        return
+    if datatype == "LWORD":
+        util.set_lword(buf, offset, value)
+        return
+    if datatype == "LREAL":
+        util.set_lreal(buf, offset, value)
+        return
+    if datatype == "LTIME":
+        util.set_ltime(buf, offset, value)
+        return
+    if datatype == "LTOD":
+        util.set_ltod(buf, offset, value)
+        return
+    if datatype == "LDT":
+        util.set_ldt(buf, offset, value)
+        return
+    if datatype == "DT":
+        util.set_dt(buf, offset, value)
+        return
+    if datatype == "DTL":
+        util.set_dtl(buf, offset, value)
+        return
+    raise ValueError(f"Unsupported tag datatype: {datatype}")
 
 
 class _OptimizationPlan:
@@ -599,6 +780,74 @@ class Client(ClientMixin):
         for i, v in enumerate(values):
             struct.pack_into(fmt, data, i * item_size, v)
         return self.db_write(db_number, start, data)
+
+    def read_tag(self, tag: "Union[Tag, str]") -> Any:
+        """Read a typed value by :class:`Tag` or address string.
+
+        Accepts a :class:`~snap7.tags.Tag` or a PLC4X-style address string
+        (e.g. ``"DB1.DBX0.0:BOOL"``, ``"DB1:10:INT"``, ``"M10.5:BOOL"``).
+
+        Args:
+            tag: A :class:`Tag` instance or a parseable address string.
+
+        Returns:
+            The typed value (bool/int/float/datetime/str depending on type).
+
+        Example::
+
+            client.read_tag("DB1.DBX0.0:BOOL")            # bit
+            client.read_tag("DB1.DBD4:REAL")              # float
+            client.read_tag("DB1:20:STRING[30]")          # variable-length string
+            client.read_tag(Tag(Area.DB, 1, 0, "REAL"))   # from Tag instance
+        """
+        resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+        if resolved.is_symbolic:
+            raise NotImplementedError(
+                "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
+            )
+        data = self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, resolved.size)
+        return _decode_tag(resolved, bytearray(data))
+
+    def write_tag(self, tag: "Union[Tag, str]", value: Any) -> int:
+        """Write a typed value by :class:`Tag` or address string.
+
+        Args:
+            tag: A :class:`Tag` instance or a parseable address string.
+            value: The value to write (type must match the tag's datatype).
+
+        Returns:
+            0 on success.
+        """
+        resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+        if resolved.is_symbolic:
+            raise NotImplementedError(
+                "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
+            )
+        size = resolved.size
+        buf = bytearray(size)
+        # For BOOL writes, we need the current byte to preserve other bits
+        if resolved.datatype.upper() == "BOOL":
+            current = self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, 1)
+            buf[0] = current[0]
+        _encode_tag(resolved, buf, value)
+        return self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
+
+    def read_tags(self, tags: "list[Union[Tag, str]]") -> list[Any]:
+        """Read multiple tags in a single optimized request.
+
+        Uses the multi-variable read optimizer when available to batch
+        reads into minimal PDU exchanges.
+
+        Args:
+            tags: List of :class:`Tag` instances or address strings.
+
+        Returns:
+            List of decoded values in the same order as input.
+        """
+        resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
+        items = [{"area": Area(t.area), "db_number": t.db_number, "start": t.byte_offset, "size": t.size} for t in resolved]
+        _code, data_list = self.read_multi_vars(items)
+        return [_decode_tag(t, bytearray(d)) for t, d in zip(resolved, data_list)]
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """

@@ -200,6 +200,55 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
+    def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
+        """Read a variable using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        For S7-1200/1500 DBs with "Optimized block access" enabled, byte
+        offsets are unreliable — the PLC internally relocates variables
+        between downloads. Symbolic access navigates the PLC's symbol tree
+        using LIDs (Local IDs) discovered via :meth:`browse`.
+
+        Args:
+            access_area: Access area ID. For DBs this is
+                ``0x8A0E0000 + db_number``.
+            lids: LID path through the symbol tree.
+            symbol_crc: Symbol CRC for layout validation (0 = skip check).
+
+        Returns:
+            Raw bytes of the variable value.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc)
+        response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response)
+        if not results or results[0] is None:
+            raise RuntimeError("Symbolic read failed")
+        return results[0]
+
+    def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+        """Write a variable using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        See :meth:`read_symbolic` for context on when to use symbolic access.
+
+        Args:
+            access_area: Access area ID.
+            lids: LID path through the symbol tree.
+            data: Raw bytes to write.
+            symbol_crc: Symbol CRC for layout validation (0 = skip check).
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
+
     def explore(self, explore_id: int = 0) -> bytes:
         """Browse the PLC object tree.
 
@@ -327,7 +376,8 @@ class S7CommPlusClient:
 
         Returns a flat list of variable info dicts with keys:
         ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``bit_size``.
-        Results can be used to construct a :class:`~snap7.util.symbols.SymbolTable`.
+        Results can be converted to :class:`~snap7.tags.Tag` objects for use
+        with :meth:`~s7.client.Client.read_tag`.
 
         Returns:
             List of variable info dicts.
@@ -597,6 +647,65 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
     return bytes(payload)
 
 
+def _build_symbolic_read_payload(access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
+    """Build a GetMultiVariables payload for symbolic (LID-based) access.
+
+    Used for optimized block access on S7-1200/1500 where byte offsets
+    are unreliable.  The PLC navigates its symbol tree using the LIDs.
+
+    For DBs, ``access_sub_area`` is ``DB_VALUE_ACTUAL``.  For controller
+    areas (M/I/Q), it's ``CONTROLLER_AREA_VALUE_ACTUAL``.
+    """
+    # Determine sub-area based on access_area
+    if access_area >= 0x8A0E0000:
+        access_sub_area = Ids.DB_VALUE_ACTUAL
+    else:
+        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+
+    addr_bytes, field_count = encode_item_address(
+        access_area=access_area,
+        access_sub_area=access_sub_area,
+        lids=lids,
+        symbol_crc=symbol_crc,
+    )
+
+    payload = bytearray()
+    payload += struct.pack(">I", 0)
+    payload += encode_uint32_vlq(1)  # one item
+    payload += encode_uint32_vlq(field_count)
+    payload += addr_bytes
+    payload += encode_object_qualifier()
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> bytes:
+    """Build a SetMultiVariables payload for symbolic (LID-based) access."""
+    if access_area >= 0x8A0E0000:
+        access_sub_area = Ids.DB_VALUE_ACTUAL
+    else:
+        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+
+    addr_bytes, field_count = encode_item_address(
+        access_area=access_area,
+        access_sub_area=access_sub_area,
+        lids=lids,
+        symbol_crc=symbol_crc,
+    )
+
+    payload = bytearray()
+    payload += struct.pack(">I", 0)
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(field_count)
+    payload += addr_bytes
+    payload += encode_uint32_vlq(1)  # item number 1
+    payload += encode_pvalue_blob(data)
+    payload += bytes([0x00])
+    payload += encode_object_qualifier()
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
 def _build_explore_payload(explore_id: int = 0) -> bytes:
     """Build an EXPLORE request payload.
 
@@ -759,8 +868,10 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
     """Parse an EXPLORE response for a single DB to extract field layout.
 
     Returns:
-        List of dicts: ``{"name": str, "db_number": int, "db_name": str,
-        "byte_offset": int, "data_type": str}``
+        List of dicts with keys:
+        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``lid``,
+        ``symbol_crc``. ``lid`` and ``symbol_crc`` enable symbolic access
+        for optimized DBs.
     """
     from .vlq import decode_uint32_vlq as _vlq32
 
@@ -768,6 +879,8 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
     offset = 0
     field_name = ""
     byte_offset = 0
+    field_lid = 0
+    field_crc = 0
 
     # Skip return code VLQ at start of response
     if offset < len(response):
@@ -781,6 +894,8 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
         if tag == 0xA1:  # START_OF_OBJECT
             if offset + 4 > len(response):
                 break
+            # The RID bytes serve as the LID for symbolic access
+            field_lid = struct.unpack(">I", response[offset : offset + 4])[0]
             offset += 4
             for _ in range(3):
                 if offset >= len(response):
@@ -789,6 +904,7 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
                 offset += consumed
             field_name = ""
             byte_offset = 0
+            field_crc = 0
 
         elif tag == 0xA2:  # TERMINATING_OBJECT
             if field_name:
@@ -798,6 +914,8 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
                         "db_number": db_number,
                         "byte_offset": byte_offset,
                         "data_type": "BYTE",  # default; refined by type info
+                        "lid": field_lid,
+                        "symbol_crc": field_crc,
                     }
                 )
 

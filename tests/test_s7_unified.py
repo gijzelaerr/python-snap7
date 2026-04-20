@@ -11,7 +11,7 @@ from ctypes import c_char
 
 import pytest
 
-from s7 import Client, Server, Protocol, SymbolTable
+from s7 import Client, Server, Protocol
 from s7._protocol import Protocol as Proto
 from snap7.type import SrvArea
 
@@ -103,6 +103,68 @@ class TestUnifiedClientLegacy:
             assert len(results) == 2
             assert len(results[0]) == 4
             assert len(results[1]) == 2
+        finally:
+            client.disconnect()
+
+    def test_read_tag_real(self, unified_server: Server) -> None:
+        client = Client()
+        client.connect("127.0.0.1", 0, 0, LEGACY_PORT, protocol=Protocol.LEGACY)
+        try:
+            value = client.read_tag("DB1.DBD0:REAL")
+            assert abs(value - 23.5) < 0.01
+        finally:
+            client.disconnect()
+
+    def test_read_tag_int(self, unified_server: Server) -> None:
+        client = Client()
+        client.connect("127.0.0.1", 0, 0, LEGACY_PORT, protocol=Protocol.LEGACY)
+        try:
+            value = client.read_tag("DB1.DBW4:INT")
+            assert value == 42
+        finally:
+            client.disconnect()
+
+    def test_write_tag_then_read(self, unified_server: Server) -> None:
+        client = Client()
+        client.connect("127.0.0.1", 0, 0, LEGACY_PORT, protocol=Protocol.LEGACY)
+        try:
+            client.write_tag("DB2.DBD0:REAL", 99.9)
+            value = client.read_tag("DB2.DBD0:REAL")
+            assert abs(value - 99.9) < 0.01
+        finally:
+            client.disconnect()
+
+    def test_write_tag_bool(self, unified_server: Server) -> None:
+        client = Client()
+        client.connect("127.0.0.1", 0, 0, LEGACY_PORT, protocol=Protocol.LEGACY)
+        try:
+            client.write_tag("DB2.DBX10.3:BOOL", True)
+            assert client.read_tag("DB2.DBX10.3:BOOL") is True
+            client.write_tag("DB2.DBX10.3:BOOL", False)
+            assert client.read_tag("DB2.DBX10.3:BOOL") is False
+        finally:
+            client.disconnect()
+
+    def test_read_tags_batch(self, unified_server: Server) -> None:
+        client = Client()
+        client.connect("127.0.0.1", 0, 0, LEGACY_PORT, protocol=Protocol.LEGACY)
+        try:
+            values = client.read_tags(["DB1.DBD0:REAL", "DB1.DBW4:INT"])
+            assert len(values) == 2
+            assert abs(values[0] - 23.5) < 0.01
+            assert values[1] == 42
+        finally:
+            client.disconnect()
+
+    def test_read_tag_accepts_tag_instance(self, unified_server: Server) -> None:
+        from s7 import Tag
+
+        client = Client()
+        client.connect("127.0.0.1", 0, 0, LEGACY_PORT, protocol=Protocol.LEGACY)
+        try:
+            tag = Tag.from_string("DB1.DBD0:REAL")
+            value = client.read_tag(tag)
+            assert abs(value - 23.5) < 0.01
         finally:
             client.disconnect()
 
@@ -254,15 +316,13 @@ class TestUnifiedClientS7CommPlus:
         finally:
             client.disconnect()
 
-    def test_s7commplus_browse_to_symbol_table(self, unified_server: Server) -> None:
-        """Full workflow: browse -> SymbolTable."""
+    def test_s7commplus_browse_returns_variables(self, unified_server: Server) -> None:
+        """browse() returns a list of variable dicts."""
         client = Client()
         client.connect("127.0.0.1", 0, 0, S7PLUS_PORT, protocol=Protocol.S7COMMPLUS)
         try:
             variables = client.browse()
-            # Construct SymbolTable from whatever browse returns
-            symbols = SymbolTable.from_browse(variables)
-            assert isinstance(symbols, SymbolTable)
+            assert isinstance(variables, list)
         finally:
             client.disconnect()
 

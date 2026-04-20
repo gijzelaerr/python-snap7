@@ -21,7 +21,7 @@ from .server import Server
 from .partner import Partner
 from .logo import Logo
 from .util.db import Row, DB
-from .util.symbols import SymbolTable
+from .tags import Tag, load_csv, load_json, load_tia_xml, from_browse
 from .type import Area, Block, WordLen, SrvEvent, SrvArea
 
 __all__ = [
@@ -32,7 +32,11 @@ __all__ = [
     "Logo",
     "Row",
     "DB",
-    "SymbolTable",
+    "Tag",
+    "load_csv",
+    "load_json",
+    "load_tia_xml",
+    "from_browse",
     "Area",
     "Block",
     "WordLen",
