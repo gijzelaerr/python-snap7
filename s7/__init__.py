@@ -20,7 +20,7 @@ from ._protocol import Protocol
 
 from snap7.type import Area, Block, WordLen, SrvEvent, SrvArea
 from snap7.util.db import Row, DB
-from snap7.tags import Tag, load_csv, load_json, load_tia_xml, from_browse
+from snap7.tags import NodeS7Tag, PLC4XTag, Tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
 
 __all__ = [
     "Client",
@@ -37,6 +37,9 @@ __all__ = [
     "Row",
     "DB",
     "Tag",
+    "PLC4XTag",
+    "NodeS7Tag",
+    "parse_tag",
     "load_csv",
     "load_json",
     "load_tia_xml",

@@ -26,6 +26,11 @@ Major release: new `s7` package with S7CommPlus protocol support.
 * **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
   Siemens STEP7 syntax, replacing the homegrown SymbolTable class.
   Loaders: `load_csv`, `load_json`, `load_tia_xml` return `dict[str, Tag]`
+* **Dual-dialect tag parsing**: `PLC4XTag` and `NodeS7Tag` subtypes of
+  `Tag` with dialect-specific `parse()` and `__str__` (round-trip).
+  `parse_tag(s, *, strict=True)` autodetects dialect from syntax markers
+  (`,` → nodeS7, `:TYPE` → PLC4X); `strict=False` accepts bare short
+  forms like `M7.1` or `IW22`. Enables pyS7 / Node-RED tag migration.
 * **Symbolic (LID-based) access for optimized DBs** (experimental):
   `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
   `client.read_tag(tag)` routes to S7CommPlus LID-based access via the
