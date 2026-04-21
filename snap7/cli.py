@@ -141,6 +141,41 @@ def server(port: int) -> None:
 
 
 @main.command()
+@click.option("-p", "--port", default=10102, help="Port the server will listen on.")
+@click.option(
+    "-r",
+    "--refresh",
+    default=2.0,
+    type=float,
+    help="Seconds between metric samples.",
+)
+@click.option(
+    "--plain",
+    is_flag=True,
+    help="Use plain log output instead of the rich live display.",
+)
+def demo(port: int, refresh: float, plain: bool) -> None:
+    """Start a live S7 server that exposes real host metrics on DB1.
+
+    Requires the ``demo`` extras (psutil). For the live display, also
+    install the ``cli`` extras (rich):
+
+        pip install "python-snap7[cli,demo]"
+    """
+    try:
+        from snap7.demo import run_demo
+    except ImportError as err:
+        click.echo(f"Failed to load demo module: {err}", err=True)
+        sys.exit(1)
+
+    try:
+        run_demo(port=port, refresh_seconds=refresh, live=not plain)
+    except RuntimeError as err:
+        click.echo(str(err), err=True)
+        sys.exit(1)
+
+
+@main.command()
 @click.argument("host")
 @click.option("--db", required=True, type=int, help="DB number to read from.")
 @click.option("--offset", required=True, type=int, help="Byte offset to start reading.")
