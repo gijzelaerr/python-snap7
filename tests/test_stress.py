@@ -4,7 +4,6 @@ Verify that multiple clients hitting the same server simultaneously
 don't cause cross-talk, data corruption, or crashes.
 """
 
-import random
 import struct
 import threading
 import time
@@ -16,7 +15,9 @@ from snap7.client import Client
 from snap7.server import Server
 from snap7.type import SrvArea
 
-STRESS_PORT = random.randint(20000, 30000)
+from .conftest import get_free_tcp_port
+
+STRESS_PORT = get_free_tcp_port()
 
 
 @pytest.fixture(scope="module")
