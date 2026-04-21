@@ -12,6 +12,7 @@ from enum import IntEnum
 
 from .datatypes import S7Area, S7WordLen, S7DataTypes
 from .error import S7ProtocolError, S7StalePacketError, S7PacketLostError, get_protocol_error_message
+from .type import BlocksList, TS7BlockInfo
 
 logger = logging.getLogger(__name__)
 
@@ -1047,6 +1048,22 @@ class S7Protocol:
 
         return result
 
+    def parse_list_blocks(self, response: Dict[str, Any]) -> BlocksList:
+        """Parse list blocks response directly into a :class:`BlocksList`.
+
+        Consolidates the dict→struct conversion that used to live in both
+        the sync and async clients so the field mapping is declared once.
+        """
+        return build_blocks_list_from_dict(self.parse_list_blocks_response(response))
+
+    def parse_get_block_info(self, response: Dict[str, Any]) -> TS7BlockInfo:
+        """Parse block info response directly into a :class:`TS7BlockInfo`.
+
+        Consolidates the dict→struct conversion that used to live in both
+        the sync and async clients.
+        """
+        return build_block_info_from_dict(self.parse_get_block_info_response(response))
+
     def build_read_szl_request(self, szl_id: int, szl_index: int) -> bytes:
         """
         Build USER_DATA request for reading SZL (System Status List).
@@ -1604,3 +1621,52 @@ class S7Protocol:
                 desc = get_return_code_description(return_code)
                 raise S7ProtocolError(f"Write operation failed: {desc} (0x{return_code:02x})")
         # If no data and no header error, the write was successful (ACK without data)
+
+
+# ---------------------------------------------------------------------------
+# Dict-to-struct converters shared by sync and async clients.
+# Kept at module level so both :class:`snap7.client.Client` and
+# :class:`snap7.async_client.AsyncClient` produce identical structs from
+# the same protocol parse output (see discussion #700).
+# ---------------------------------------------------------------------------
+
+
+def build_blocks_list_from_dict(counts: Dict[str, int]) -> BlocksList:
+    """Populate a :class:`BlocksList` from the dict returned by ``parse_list_blocks_response``."""
+    block_list = BlocksList()
+    block_list.OBCount = counts.get("OBCount", 0)
+    block_list.FBCount = counts.get("FBCount", 0)
+    block_list.FCCount = counts.get("FCCount", 0)
+    block_list.SFBCount = counts.get("SFBCount", 0)
+    block_list.SFCCount = counts.get("SFCCount", 0)
+    block_list.DBCount = counts.get("DBCount", 0)
+    block_list.SDBCount = counts.get("SDBCount", 0)
+    return block_list
+
+
+def build_block_info_from_dict(info: Dict[str, Any]) -> TS7BlockInfo:
+    """Populate a :class:`TS7BlockInfo` from the dict returned by ``parse_get_block_info_response``."""
+    block_info = TS7BlockInfo()
+    block_info.BlkType = info["block_type"]
+    block_info.BlkNumber = info["block_number"]
+    block_info.BlkLang = info["block_lang"]
+    block_info.BlkFlags = info["block_flags"]
+    block_info.MC7Size = info["mc7_size"]
+    block_info.LoadSize = info["load_size"]
+    block_info.LocalData = info["local_data"]
+    block_info.SBBLength = info["sbb_length"]
+    block_info.CheckSum = info["checksum"]
+    block_info.Version = info["version"]
+
+    if info["code_date"]:
+        block_info.CodeDate = info["code_date"][:10]
+    if info["intf_date"]:
+        block_info.IntfDate = info["intf_date"][:10]
+    if info["author"]:
+        block_info.Author = info["author"][:8]
+    if info["family"]:
+        block_info.Family = info["family"][:8]
+    if info["header"]:
+        block_info.Header = info["header"][:8]
+
+    return block_info

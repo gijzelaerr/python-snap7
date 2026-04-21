@@ -21,6 +21,7 @@ from .s7protocol import S7Protocol, get_return_code_description
 from .datatypes import S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin
+from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
 from .type import (
     Area,
     Block,
@@ -653,18 +654,7 @@ class AsyncClient(ClientMixin):
             desc = get_return_code_description(return_code)
             raise S7ProtocolError(f"List blocks failed: {desc} (0x{return_code:02x})")
 
-        counts = self.protocol.parse_list_blocks_response(response)
-
-        block_list = BlocksList()
-        block_list.OBCount = counts.get("OBCount", 0)
-        block_list.FBCount = counts.get("FBCount", 0)
-        block_list.FCCount = counts.get("FCCount", 0)
-        block_list.SFBCount = counts.get("SFBCount", 0)
-        block_list.SFCCount = counts.get("SFCCount", 0)
-        block_list.DBCount = counts.get("DBCount", 0)
-        block_list.SDBCount = counts.get("SDBCount", 0)
-
-        return block_list
+        return self.protocol.parse_list_blocks(response)
 
     async def list_blocks_of_type(self, block_type: Block, max_count: int) -> List[int]:
         """List blocks of a specific type.
@@ -756,66 +746,17 @@ class AsyncClient(ClientMixin):
             desc = get_return_code_description(return_code)
             raise S7ProtocolError(f"Get block info failed: {desc} (0x{return_code:02x})")
 
-        info = self.protocol.parse_get_block_info_response(response)
-
-        block_info = TS7BlockInfo()
-        block_info.BlkType = info["block_type"]
-        block_info.BlkNumber = info["block_number"]
-        block_info.BlkLang = info["block_lang"]
-        block_info.BlkFlags = info["block_flags"]
-        block_info.MC7Size = info["mc7_size"]
-        block_info.LoadSize = info["load_size"]
-        block_info.LocalData = info["local_data"]
-        block_info.SBBLength = info["sbb_length"]
-        block_info.CheckSum = info["checksum"]
-        block_info.Version = info["version"]
-
-        if info["code_date"]:
-            block_info.CodeDate = info["code_date"][:10]
-        if info["intf_date"]:
-            block_info.IntfDate = info["intf_date"][:10]
-        if info["author"]:
-            block_info.Author = info["author"][:8]
-        if info["family"]:
-            block_info.Family = info["family"][:8]
-        if info["header"]:
-            block_info.Header = info["header"][:8]
-
-        return block_info
+        return self.protocol.parse_get_block_info(response)
 
     # ---------------------------------------------------------------
     # CPU info / state
     # ---------------------------------------------------------------
 
     async def get_cpu_info(self) -> S7CpuInfo:
-        """Get CPU information.
-
-        Uses read_szl(0x001C) to get component identification data. The
-        SZL 0x001C response is a sequence of (index:2, data:N) records,
-        not a flat struct, so fields sit at offsets relative to each
-        record header. See the fix in #694 for the sync client — this
-        mirrors those offsets.
-        """
+        """Get CPU component identification (SZL 0x001C)."""
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
-
-        szl = await self.read_szl(0x001C, 0)
-
-        cpu_info = S7CpuInfo()
-        data = bytes(szl.Data[: szl.Header.LengthDR])
-
-        if len(data) >= 30:
-            cpu_info.ASName = data[6:30].rstrip(b"\x00")
-        if len(data) >= 64:
-            cpu_info.ModuleName = data[40:64].rstrip(b"\x00")
-        if len(data) >= 134:
-            cpu_info.Copyright = data[108:134].rstrip(b"\x00")
-        if len(data) >= 166:
-            cpu_info.SerialNumber = data[142:166].rstrip(b"\x00")
-        if len(data) >= 208:
-            cpu_info.ModuleTypeName = data[176:208].rstrip(b"\x00")
-
-        return cpu_info
+        return parse_cpu_info_szl(await self.read_szl(0x001C, 0))
 
     async def get_cpu_state(self) -> str:
         """Get CPU state (running/stopped)."""
@@ -1112,69 +1053,22 @@ class AsyncClient(ClientMixin):
     # ---------------------------------------------------------------
 
     async def get_cp_info(self) -> S7CpInfo:
-        """Get CP (Communication Processor) information."""
+        """Get communication processor info (SZL 0x0131)."""
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
-
-        szl = await self.read_szl(0x0131, 0)
-
-        cp_info = S7CpInfo()
-        data = bytearray(b & 0xFF for b in szl.Data[: szl.Header.LengthDR])
-
-        if len(data) >= 2:
-            cp_info.MaxPduLength = struct.unpack(">H", data[0:2])[0]
-        if len(data) >= 4:
-            cp_info.MaxConnections = struct.unpack(">H", data[2:4])[0]
-        if len(data) >= 6:
-            cp_info.MaxMpiRate = struct.unpack(">H", data[4:6])[0]
-        if len(data) >= 8:
-            cp_info.MaxBusRate = struct.unpack(">H", data[6:8])[0]
-
-        return cp_info
+        return parse_cp_info_szl(await self.read_szl(0x0131, 0))
 
     async def get_order_code(self) -> S7OrderCode:
-        """Get order code."""
+        """Get module order code and firmware version (SZL 0x0011)."""
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
-
-        szl = await self.read_szl(0x0011, 0)
-
-        order_code = S7OrderCode()
-        data = bytes(szl.Data[: szl.Header.LengthDR])
-
-        if len(data) >= 20:
-            order_code.OrderCode = data[0:20].rstrip(b"\x00")
-        if len(data) >= 21:
-            order_code.V1 = data[20]
-        if len(data) >= 22:
-            order_code.V2 = data[21]
-        if len(data) >= 23:
-            order_code.V3 = data[22]
-
-        return order_code
+        return parse_order_code_szl(await self.read_szl(0x0011, 0))
 
     async def get_protection(self) -> S7Protection:
-        """Get protection settings."""
+        """Get protection settings (SZL 0x0232)."""
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
-
-        szl = await self.read_szl(0x0232, 0)
-
-        protection = S7Protection()
-        data = bytes(szl.Data[: szl.Header.LengthDR])
-
-        if len(data) >= 2:
-            protection.sch_schal = struct.unpack(">H", data[0:2])[0]
-        if len(data) >= 4:
-            protection.sch_par = struct.unpack(">H", data[2:4])[0]
-        if len(data) >= 6:
-            protection.sch_rel = struct.unpack(">H", data[4:6])[0]
-        if len(data) >= 8:
-            protection.bart_sch = struct.unpack(">H", data[6:8])[0]
-        if len(data) >= 10:
-            protection.anl_sch = struct.unpack(">H", data[8:10])[0]
-
-        return protection
+        return parse_protection_szl(await self.read_szl(0x0232, 0))
 
     async def compress(self, timeout: int) -> int:
         """Compress PLC memory."""
