@@ -6,11 +6,14 @@ DB2 block that clients (e.g. the ha-s7 Home Assistant integration) can
 write to. An optional :mod:`rich` live display shows the current values
 and logs any writes with a timestamp.
 
-This is a demo, not a production tool. Requires the ``demo`` extras
-(``psutil``, plus ``rich`` from the ``cli`` extras for the live display)::
+This is a demo, not a production tool. Install with::
 
-    pip install "python-snap7[cli,demo]"
+    pip install "python-snap7[demo]"
     s7 demo --port 10102
+
+The ``demo`` extras pull in everything the demo needs: ``psutil`` for
+metrics, ``rich`` for the live dashboard, and ``click`` for the CLI
+entry point.
 
 DB layout
 ---------

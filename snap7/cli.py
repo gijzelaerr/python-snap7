@@ -157,10 +157,9 @@ def server(port: int) -> None:
 def demo(port: int, refresh: float, plain: bool) -> None:
     """Start a live S7 server that exposes real host metrics on DB1.
 
-    Requires the ``demo`` extras (psutil). For the live display, also
-    install the ``cli`` extras (rich):
+    Install with:
 
-        pip install "python-snap7[cli,demo]"
+        pip install "python-snap7[demo]"
     """
     try:
         from snap7.demo import run_demo
