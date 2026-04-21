@@ -308,8 +308,12 @@ def test_get_param_non_client_raises() -> None:
 
 @pytest.mark.asyncio
 async def test_list_blocks(client: AsyncClient) -> None:
+    """AsyncClient.list_blocks must decode the same block-count struct as sync."""
     result = await client.list_blocks()
-    assert hasattr(result, "DBCount")
+    # Server registers DB 0, 1 and various other areas; block counts match
+    # what the sync test_client.test_list_blocks_server test observes.
+    assert isinstance(result.DBCount, int)
+    assert result.DBCount >= 2
 
 
 @pytest.mark.asyncio
@@ -320,8 +324,59 @@ async def test_get_cpu_state(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_get_cpu_info(client: AsyncClient) -> None:
+    """AsyncClient.get_cpu_info must parse the same SZL offsets as sync client.
+
+    Regression guard for discussion #700 where the async implementation
+    kept the pre-#692 offsets (starting at 0) and returned empty fields
+    against a real PLC and the fixed server emulator.
+    """
     info = await client.get_cpu_info()
-    assert hasattr(info, "ModuleTypeName")
+    expected = (
+        ("ModuleTypeName", "CPU 315-2 PN/DP"),
+        ("SerialNumber", "S C-C2UR28922012"),
+        ("ASName", "SNAP7-SERVER"),
+        ("Copyright", "Original Siemens Equipment"),
+        ("ModuleName", "CPU 315-2 PN/DP"),
+    )
+    for field_name, value in expected:
+        assert getattr(info, field_name).decode("utf-8") == value
+
+
+@pytest.mark.asyncio
+async def test_get_cp_info(client: AsyncClient) -> None:
+    """Mirrors sync test_client.test_get_cp_info — guards SZL 0x0131 decoding."""
+    result = await client.get_cp_info()
+    assert result.MaxPduLength == 480
+    assert result.MaxConnections == 32
+    assert result.MaxMpiRate == 12
+    assert result.MaxBusRate == 12
+
+
+@pytest.mark.asyncio
+async def test_get_order_code(client: AsyncClient) -> None:
+    """Mirrors sync test — guards SZL 0x0011 decoding."""
+    result = await client.get_order_code()
+    assert b"6ES7" in result.OrderCode
+
+
+@pytest.mark.asyncio
+async def test_get_protection(client: AsyncClient) -> None:
+    """Mirrors sync test — guards SZL 0x0232 decoding."""
+    result = await client.get_protection()
+    assert result.sch_schal == 1
+    assert result.sch_par == 0
+    assert result.sch_rel == 0
+    assert result.bart_sch == 0
+    assert result.anl_sch == 0
+
+
+@pytest.mark.asyncio
+async def test_get_block_info(client: AsyncClient) -> None:
+    """Mirrors sync test — guards get_block_info dict→TS7BlockInfo conversion."""
+    from snap7.type import Block
+
+    info = await client.get_block_info(Block.DB, 1)
+    assert info.BlkNumber == 1
 
 
 @pytest.mark.asyncio
