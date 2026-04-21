@@ -320,8 +320,22 @@ async def test_get_cpu_state(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_get_cpu_info(client: AsyncClient) -> None:
+    """AsyncClient.get_cpu_info must parse the same SZL offsets as sync client.
+
+    Regression guard for discussion #700 where the async implementation
+    kept the pre-#692 offsets (starting at 0) and returned empty fields
+    against a real PLC and the fixed server emulator.
+    """
     info = await client.get_cpu_info()
-    assert hasattr(info, "ModuleTypeName")
+    expected = (
+        ("ModuleTypeName", "CPU 315-2 PN/DP"),
+        ("SerialNumber", "S C-C2UR28922012"),
+        ("ASName", "SNAP7-SERVER"),
+        ("Copyright", "Original Siemens Equipment"),
+        ("ModuleName", "CPU 315-2 PN/DP"),
+    )
+    for field_name, value in expected:
+        assert getattr(info, field_name).decode("utf-8") == value
 
 
 @pytest.mark.asyncio
