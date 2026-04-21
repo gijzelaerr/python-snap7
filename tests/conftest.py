@@ -1,7 +1,30 @@
 """Pytest configuration for python-snap7 tests."""
 
+import socket
 import sys
+
 import pytest
+
+
+def get_free_tcp_port() -> int:
+    """Return a TCP port that is free *right now* on 127.0.0.1.
+
+    Bind a throwaway socket to port 0, let the OS pick an ephemeral port,
+    read it back, then close the socket. Preferred over ``random.randint``
+    for test servers: the OS guarantees the port is currently unused, and
+    the collision window is vanishingly small (the ephemeral range is tens
+    of thousands of ports wide) instead of 1-in-5000 from a random pick
+    that drifts toward collision under pytest-xdist or repeated reruns.
+
+    There is a tiny TOCTOU race between closing this socket and the test
+    server binding, but the pool is large enough that it is not observed
+    in practice. Servers that set ``SO_REUSEADDR`` tolerate lingering
+    TIME_WAIT sockets too.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        port: int = s.getsockname()[1]
+        return port
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:

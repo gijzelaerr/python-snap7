@@ -4,7 +4,6 @@ No real PLC is needed — these tests exercise the full s7 package using the
 built-in S7CommPlus and legacy server emulators.
 """
 
-import random
 import struct
 import time
 from ctypes import c_char
@@ -15,13 +14,15 @@ from s7 import Client, Server, Protocol
 from s7._protocol import Protocol as Proto
 from snap7.type import SrvArea
 
+from .conftest import get_free_tcp_port
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
-LEGACY_PORT = random.randint(20000, 30000)
-S7PLUS_PORT = random.randint(30001, 40000)
+LEGACY_PORT = get_free_tcp_port()
+S7PLUS_PORT = get_free_tcp_port()
 
 
 @pytest.fixture(scope="module")
@@ -337,7 +338,7 @@ class TestUnifiedClientS7CommPlus:
     def test_force_s7commplus_fails_without_server(self) -> None:
         """Forcing S7CommPlus when no server is available raises."""
         client = Client()
-        port = random.randint(40001, 50000)
+        port = get_free_tcp_port()
         with pytest.raises(Exception):
             client.connect("127.0.0.1", 0, 0, port, protocol=Protocol.S7COMMPLUS)
 
@@ -380,7 +381,7 @@ class TestUnifiedServer:
     """Test s7.Server features."""
 
     def test_server_context_manager(self) -> None:
-        port = random.randint(50001, 55000)
+        port = get_free_tcp_port()
         with Server() as srv:
             srv.legacy_server.register_area(SrvArea.DB, 1, (c_char * 10).from_buffer(bytearray(10)))
             srv.start(tcp_port=port)

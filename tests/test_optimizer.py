@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import random
 import time
+
+from .conftest import get_free_tcp_port
 from ctypes import c_char
 from typing import TYPE_CHECKING
 
@@ -258,7 +259,7 @@ class TestMultiReadServer:
         db2_array = (c_char * 100).from_buffer(cls.db2_data)
         cls.server.register_area(SrvArea.DB, 2, db2_array)
 
-        port = random.randint(20000, 40000)
+        port = get_free_tcp_port()
         cls.server.start(tcp_port=port)
         time.sleep(0.2)
 
