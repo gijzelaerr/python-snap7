@@ -35,6 +35,7 @@ Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-html", "hypothesis", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
 s7commplus = ["cryptography"]
 cli = ["rich", "click" ]
+demo = ["psutil", "rich", "click"]
 doc = ["sphinx", "sphinx_rtd_theme"]
 discovery = ["pnio-dcp"]
 
