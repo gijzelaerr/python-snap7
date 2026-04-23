@@ -358,14 +358,42 @@ def _rich_available() -> bool:
         return False
 
 
+_TUNNEL_NAME_PREFIXES = ("utun", "tun", "tap", "wg", "tailscale", "zt")
+
+
 def _primary_ip() -> str:
-    """Best-effort local IP for the on-screen banner (localhost fallback on failure)."""
+    """Best-effort local IPv4 for the on-screen banner.
+
+    The older UDP-connect-to-8.8.8.8 trick picked whichever interface
+    owned the default route, which on a machine with Tailscale / other
+    VPN tunnels is the tunnel address — useless for a LAN client to
+    reach us on. Instead enumerate all interfaces via psutil, skip
+    loopback / link-local / tunnel-looking names, and prefer an
+    RFC1918 private address.
+    """
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            return str(s.getsockname()[0])
-    except OSError:
+        import psutil
+    except ImportError:
         return "127.0.0.1"
+
+    candidates: list[str] = []
+    for iface, addrs in psutil.net_if_addrs().items():
+        if iface.startswith(_TUNNEL_NAME_PREFIXES):
+            continue
+        for a in addrs:
+            if getattr(a, "family", None) != socket.AF_INET:
+                continue
+            ip = a.address
+            if ip.startswith(("127.", "169.254.", "0.")):
+                continue
+            candidates.append(ip)
+
+    # Prefer RFC1918 private-range addresses — those are the ones a LAN
+    # peer is most likely to reach us on.
+    for ip in candidates:
+        if ip.startswith(("10.", "192.168.")) or (ip.startswith("172.") and 16 <= int(ip.split(".")[1]) <= 31):
+            return ip
+    return candidates[0] if candidates else "127.0.0.1"
 
 
 def _run_plain_loop(

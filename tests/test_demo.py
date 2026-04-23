@@ -14,6 +14,9 @@ import pytest
 
 pytest.importorskip("psutil")
 
+import socket  # noqa: E402
+from unittest.mock import patch  # noqa: E402
+
 from snap7.demo import (  # noqa: E402
     _CONTROL_BOOLS,
     _CONTROL_LAYOUT,
@@ -24,6 +27,7 @@ from snap7.demo import (  # noqa: E402
     MetricCollector,
     Metrics,
     _encode_sensors,
+    _primary_ip,
 )
 
 
@@ -114,3 +118,46 @@ def test_control_watcher_detects_int_change() -> None:
     struct.pack_into(">h", buffer, offset, 200)
     watcher.tick()
     assert ("brightness", "200") in changes
+
+
+class _FakeAddr:
+    """Duck-typed stand-in for a psutil snicaddr IPv4 entry."""
+
+    def __init__(self, ip: str) -> None:
+        self.family = socket.AF_INET
+        self.address = ip
+
+
+def _addrs(*ips: str) -> list[_FakeAddr]:
+    return [_FakeAddr(ip) for ip in ips]
+
+
+def test_primary_ip_skips_tunnel_interfaces() -> None:
+    """A Tailscale / VPN-shaped address on a tunnel iface must be filtered out."""
+    import psutil
+
+    fake = {
+        "en0": _addrs("192.168.1.207"),
+        "utun3": _addrs("172.21.32.206"),  # Tailscale
+        "lo0": _addrs("127.0.0.1"),
+    }
+    with patch.object(psutil, "net_if_addrs", return_value=fake):
+        assert _primary_ip() == "192.168.1.207"
+
+
+def test_primary_ip_prefers_rfc1918_over_public() -> None:
+    import psutil
+
+    fake = {
+        "en0": _addrs("203.0.113.5"),  # TEST-NET-3 (public)
+        "en1": _addrs("192.168.1.207"),
+    }
+    with patch.object(psutil, "net_if_addrs", return_value=fake):
+        assert _primary_ip() == "192.168.1.207"
+
+
+def test_primary_ip_falls_back_when_nothing_found() -> None:
+    import psutil
+
+    with patch.object(psutil, "net_if_addrs", return_value={"lo0": _addrs("127.0.0.1")}):
+        assert _primary_ip() == "127.0.0.1"
