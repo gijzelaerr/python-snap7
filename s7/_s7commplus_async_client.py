@@ -163,12 +163,8 @@ class S7CommPlusAsyncClient:
 
             self._connected = True
 
-            # Step 6: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None:
-                self._session_setup_ok = await self._setup_session()
-            else:
-                logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
-                self._session_setup_ok = False
+            # Step 6: Session setup — echo ServerSessionVersion or accept V1 without.
+            self._session_setup_ok = await self._finalize_session_setup()
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -684,6 +680,23 @@ class S7CommPlusAsyncClient:
                 offset += 1
 
         logger.debug("ServerSessionVersion not found in CreateObject response")
+
+    async def _finalize_session_setup(self) -> bool:
+        """Apply the version-specific rule for step 6 of the handshake.
+
+        - If the PLC sent ``ServerSessionVersion``, echo it back (side effect).
+        - V1 PLCs don't track integrity IDs, so the echo is optional; some
+          S7-1200 firmware (V4.2.2) omits the attribute entirely and we must
+          still accept the connection. See GH-710.
+        - V2+ strictly requires the echo; treat absence as a setup failure.
+        """
+        if self._server_session_version is not None:
+            return await self._setup_session()
+        if self._protocol_version == ProtocolVersion.V1:
+            logger.debug("V1: no ServerSessionVersion from PLC (accepted)")
+            return True
+        logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
+        return False
 
     async def _setup_session(self) -> bool:
         """Echo ServerSessionVersion back to the PLC via SetMultiVariables."""

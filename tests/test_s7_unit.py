@@ -12,7 +12,7 @@ from s7._s7commplus_client import (
 )
 from s7.codec import encode_pvalue_blob
 from s7.connection import S7CommPlusConnection, _element_size
-from s7.protocol import DataType, ElementID, ObjectId
+from s7.protocol import DataType, ElementID, ObjectId, ProtocolVersion
 from s7.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -419,6 +419,47 @@ class TestParseCreateObjectResponse:
         payload += encode_uint32_vlq(3)
         conn._parse_create_object_response(bytes(payload))
         assert conn._server_session_version == 3
+
+
+class TestFinalizeSessionSetup:
+    """GH-710: V1 PLCs may omit ServerSessionVersion; the connection must still succeed.
+
+    V2+ still requires the echo (integrity-ID tracking), so absence there is
+    a real failure.
+    """
+
+    def test_v1_without_server_session_version_accepts(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V1
+        conn._server_session_version = None
+        assert conn._finalize_session_setup() is True
+
+    def test_v2_without_server_session_version_fails(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V2
+        conn._server_session_version = None
+        assert conn._finalize_session_setup() is False
+
+    def test_v3_without_server_session_version_fails(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V3
+        conn._server_session_version = None
+        assert conn._finalize_session_setup() is False
+
+    def test_with_server_session_version_delegates_to_setup_session(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V1
+        conn._server_session_version = 42
+        # Stub out the network call; assert it's invoked and its return is propagated.
+        calls: list[int] = []
+
+        def fake_setup_session() -> bool:
+            calls.append(1)
+            return True
+
+        conn._setup_session = fake_setup_session  # type: ignore[method-assign]
+        assert conn._finalize_session_setup() is True
+        assert calls == [1]
 
 
 # -- Client error path tests --
