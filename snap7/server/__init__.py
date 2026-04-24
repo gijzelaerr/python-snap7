@@ -6,6 +6,7 @@ Provides a complete S7 server emulator without dependencies on the Snap7 C libra
 
 import socket
 import struct
+import sys
 import threading
 import time
 import logging
@@ -2407,6 +2408,17 @@ class Server:
     ) -> None:
         """Context manager exit."""
         self.destroy()
+
+    def __del__(self) -> None:
+        # Best-effort cleanup on garbage collection. Prefer destroy() or
+        # a `with` block; during interpreter shutdown module globals may
+        # already be None, so we skip finalization and swallow errors.
+        if sys.is_finalizing():
+            return
+        try:
+            self.destroy()
+        except Exception:
+            pass
 
 
 class ServerISOConnection:

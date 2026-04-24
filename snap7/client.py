@@ -6,6 +6,7 @@ Drop-in replacement for the ctypes-based client with native Python implementatio
 
 import logging
 import struct
+import sys
 import time
 from typing import List, Any, Optional, Tuple, Union, Callable, cast
 from datetime import datetime
@@ -1919,5 +1920,12 @@ class Client:
         self.disconnect()
 
     def __del__(self) -> None:
-        """Destructor."""
-        self.disconnect()
+        # Best-effort cleanup on garbage collection. Prefer disconnect()
+        # or a `with` block; during interpreter shutdown module globals
+        # may already be None, so we skip finalization and swallow errors.
+        if sys.is_finalizing():
+            return
+        try:
+            self.disconnect()
+        except Exception:
+            pass
