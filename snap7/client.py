@@ -10,6 +10,7 @@ import copy
 import logging
 import random
 import struct
+import sys
 import threading
 import time
 from typing import List, Any, Optional, Tuple, Union, Callable, cast
@@ -2656,5 +2657,12 @@ class Client(ClientMixin):
         self.disconnect()
 
     def __del__(self) -> None:
-        """Destructor."""
-        self.disconnect()
+        # Best-effort cleanup on garbage collection. Prefer disconnect()
+        # or a `with` block; during interpreter shutdown module globals
+        # may already be None, so we skip finalization and swallow errors.
+        if sys.is_finalizing():
+            return
+        try:
+            self.disconnect()
+        except Exception:
+            pass

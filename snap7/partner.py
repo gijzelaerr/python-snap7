@@ -9,6 +9,7 @@ partners have equal rights and can send data asynchronously.
 import socket
 import struct
 import logging
+import sys
 import threading
 from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
@@ -1097,7 +1098,11 @@ class Partner:
         self.destroy()
 
     def __del__(self) -> None:
-        """Destructor."""
+        # Best-effort cleanup on garbage collection. Prefer stop() or a
+        # `with` block; during interpreter shutdown module globals may
+        # already be None, so we skip finalization and swallow errors.
+        if sys.is_finalizing():
+            return
         try:
             self.stop()
         except Exception:
