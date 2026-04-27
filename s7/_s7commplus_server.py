@@ -635,23 +635,25 @@ class S7CommPlusServer:
             session_id = self._next_session_id
             self._next_session_id += 1
 
-        # Build CreateObject response
+        # CreateObject response header is 10 bytes — there is no session_id
+        # field; session IDs come from the ResponseSet body's ObjectIds list.
+        # Reference: thomas-v2/S7CommPlusDriver CreateObjectResponse.Deserialize
         response = bytearray()
 
-        # Response header
         response += struct.pack(
-            ">BHHHHIB",
+            ">BHHHHB",
             Opcode.RESPONSE,
             0x0000,  # Reserved
             FunctionCode.CREATE_OBJECT,
             0x0000,  # Reserved
             seq_num,
-            session_id,
             0x00,  # Transport flags
         )
 
-        # Return code: success
-        response += encode_uint32_vlq(0)
+        # ResponseSet
+        response += encode_uint32_vlq(0)  # ReturnValue
+        response += bytes([1])  # ObjectIdCount
+        response += encode_uint32_vlq(session_id)  # ObjectIds[0] = session id
 
         # Object with session info
         response += bytes([ElementID.START_OF_OBJECT])

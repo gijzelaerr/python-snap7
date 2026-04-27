@@ -702,29 +702,55 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: version=V{version}, data_length={data_length}")
         logger.debug(f"CreateObject response body ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("CreateObject response too short")
 
-        # Extract session ID from response header
-        self._session_id = struct.unpack_from(">I", response, 9)[0]
-        self._protocol_version = version
-
-        # Parse and log the full response header
+        # CreateObject response header is 10 bytes (no session_id field —
+        # session IDs come from the ResponseSet body):
+        #   B opcode | H reserved | H function | H reserved | H seq | B transport
+        # Then the body: ReturnValue (UInt64 VLQ), ObjectIdCount (1 byte),
+        # ObjectIds[] (each UInt32 VLQ), ResponseObject (PObject tree).
+        # Reference: thomas-v2/S7CommPlusDriver CreateObjectResponse.Deserialize
         resp_opcode = response[0]
         resp_func = struct.unpack_from(">H", response, 3)[0]
         resp_seq = struct.unpack_from(">H", response, 7)[0]
-        resp_transport = response[13]
+        resp_transport = response[9]
+
+        offset = 10
+        return_value, consumed = decode_uint64_vlq(response, offset)
+        offset += consumed
+        if offset >= len(response):
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("CreateObject response truncated before ObjectIdCount")
+        object_id_count = response[offset]
+        offset += 1
+        object_ids: list[int] = []
+        for _ in range(object_id_count):
+            obj_id, consumed = decode_uint32_vlq(response, offset)
+            offset += consumed
+            object_ids.append(obj_id)
+
+        if not object_ids:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("CreateObject response has no session ObjectId")
+
+        # First ObjectId is the new session id; second (if any) is for notifications.
+        self._session_id = object_ids[0]
+        self._protocol_version = version
+
         logger.debug(
             f"CreateObject response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
-            f"seq={resp_seq} session=0x{self._session_id:08X} transport=0x{resp_transport:02X}"
+            f"seq={resp_seq} transport=0x{resp_transport:02X}"
         )
-        logger.debug(f"CreateObject response payload: {response[14:].hex(' ')}")
+        logger.debug(f"CreateObject response: return_value={return_value} object_ids={[hex(i) for i in object_ids]}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
-        # Parse response payload to extract ServerSessionVersion
-        self._parse_create_object_response(response[14:])
+        # Parse remaining payload (the ResponseObject tree) for ServerSessionVersion
+        self._parse_create_object_response(response[offset:])
 
     def _parse_create_object_response(self, payload: bytes) -> None:
         """Parse CreateObject response payload to extract ServerSessionVersion.
