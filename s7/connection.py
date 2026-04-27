@@ -55,7 +55,7 @@ from .protocol import (
     S7COMMPLUS_REMOTE_TSAP,
     READ_FUNCTION_CODES,
 )
-from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
+from .codec import encode_header, decode_header, encode_object_qualifier
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
@@ -112,6 +112,7 @@ class S7CommPlusConnection:
         self._tls_active: bool = False
         self._connected = False
         self._server_session_version: Optional[int] = None
+        self._server_session_version_raw: Optional[bytes] = None
         self._session_setup_ok: bool = False
 
         # V2+ IntegrityId tracking
@@ -202,7 +203,7 @@ class S7CommPlusConnection:
             self._create_session()
 
             # Step 5: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None:
+            if self._server_session_version_raw is not None or self._server_session_version is not None:
                 self._session_setup_ok = self._setup_session()
             else:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
@@ -424,6 +425,7 @@ class S7CommPlusConnection:
         self._sequence_number = 0
         self._protocol_version = 0
         self._server_session_version = None
+        self._server_session_version_raw = None
         self._with_integrity_id = False
         self._integrity_id_read = 0
         self._integrity_id_write = 0
@@ -636,17 +638,43 @@ class S7CommPlusConnection:
         # AttributeId: None (0)
         request += encode_uint32_vlq(0)
 
-        # Attribute: ServerSessionClientRID (300) = RID 0x80c3c901
+        # ServerSession attributes — full TIA-Portal-style identification.
+        # V1-initial S7-1200 firmware (e.g. FW v4.2.x) only returns
+        # ServerSessionVersion in its CreateObject response when the client
+        # introduces itself with this fuller attribute set; minimal requests
+        # (ClientRID only) get an incomplete session. See GH-712.
+        def _wstring_attr(attr_id: int, s: str) -> bytes:
+            data = s.encode("utf-8")
+            return (
+                bytes([ElementID.ATTRIBUTE])
+                + encode_uint32_vlq(attr_id)
+                + bytes([0x00, DataType.WSTRING])
+                + encode_uint32_vlq(len(data))
+                + data
+            )
+
+        client_id = "python-snap7"
+        request += _wstring_attr(233, client_id)  # ObjectVariableTypeName / class name
+        request += _wstring_attr(289, f"1:::6.0::{client_id}")  # network interface info
+        request += _wstring_attr(296, client_id)  # project name
+        request += _wstring_attr(297, "")
+        request += _wstring_attr(298, client_id)  # hostname
+        # 299: UDInt(1)
+        request += bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(299)
+        request += bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(1)
+        # 300: ServerSessionClientRID
         request += bytes([ElementID.ATTRIBUTE])
         request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
-        request += encode_typed_value(DataType.RID, 0x80C3C901)
+        request += bytes([0x00, DataType.RID]) + struct.pack(">I", 0x80C3C901)
+        request += _wstring_attr(301, "")
 
-        # Nested object: ClassSubscriptions
+        # Nested object: ClassSubscriptions, with required class-name attribute
         request += bytes([ElementID.START_OF_OBJECT])
         request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
         request += encode_uint32_vlq(ObjectId.CLASS_SUBSCRIPTIONS)
         request += encode_uint32_vlq(0)  # ClassFlags
         request += encode_uint32_vlq(0)  # AttributeId
+        request += _wstring_attr(233, "SubscriptionContainer")
         request += bytes([ElementID.TERMINATING_OBJECT])
 
         # End outer object
@@ -720,11 +748,20 @@ class S7CommPlusConnection:
                 offset += consumed
 
                 if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    # Next bytes are the typed value: flags + datatype + VLQ value
+                    # Typed value: flags + datatype + value
                     if offset + 2 > len(payload):
                         break
                     _flags = payload[offset]
                     datatype = payload[offset + 1]
+                    if datatype == DataType.STRUCT:
+                        # Real S7-1200/1500 PLCs send ServerSessionVersion as
+                        # Struct(314); capture it verbatim for the V2 setup echo.
+                        value_start = offset
+                        offset += 2
+                        offset = self._skip_typed_value(payload, offset, DataType.STRUCT, _flags)
+                        self._server_session_version_raw = bytes(payload[value_start:offset])
+                        logger.info(f"ServerSessionVersion struct captured ({len(self._server_session_version_raw)} bytes)")
+                        return
                     offset += 2
                     if datatype == DataType.UDINT:
                         value, consumed = decode_uint32_vlq(payload, offset)
@@ -830,11 +867,20 @@ class S7CommPlusConnection:
             length, consumed = decode_uint32_vlq(data, offset)
             return offset + consumed + length
         elif datatype == DataType.STRUCT:
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            for _ in range(count):
-                if offset + 2 > len(data):
+            # Struct format: 4-byte UInt32 ID, then a sequence of
+            # (VLQ key, nested PValue=flags+dtype+value) pairs, terminated
+            # by a single 0x00 byte.
+            if offset + 4 > len(data):
+                return offset
+            offset += 4
+            while offset < len(data):
+                if data[offset] == 0x00:
+                    offset += 1
                     break
+                _, consumed = decode_uint32_vlq(data, offset)
+                offset += consumed
+                if offset + 2 > len(data):
+                    return offset
                 sub_flags = data[offset]
                 sub_type = data[offset + 1]
                 offset += 2
@@ -845,23 +891,26 @@ class S7CommPlusConnection:
             return offset
 
     def _setup_session(self) -> bool:
-        """Send SetMultiVariables to echo ServerSessionVersion back to the PLC.
+        """Send V2 SetMultiVariables to echo ServerSessionVersion back to the PLC.
 
-        This completes the session handshake by writing the ServerSessionVersion
-        attribute back to the session object. Without this step, the PLC rejects
-        all subsequent data operations with ERROR2 (0x05A9).
+        Always uses V2 framing (`72 02 ...`), transport flags 0x34, and no
+        IntegrityId — these are the established session-setup conventions
+        regardless of which version the PLC negotiated on initial connect.
+        See ``thomas-v2/S7CommPlusDriver`` ``SetMultiVariablesRequest.SetSessionSetupData``.
+
+        Without this step, the PLC rejects all subsequent data operations
+        with ERROR2 (0x05A9).
 
         Returns:
             True if session setup succeeded (return_value == 0).
-
-        Reference: thomas-v2/S7CommPlusDriver SetSessionSetupData
         """
-        if self._server_session_version is None:
+        if self._server_session_version_raw is None and self._server_session_version is None:
             return False
 
         seq_num = self._next_sequence_number()
 
-        # Build SetMultiVariables request
+        # SET_MULTI_VARIABLES request header. Transport flags = 0x34 for the
+        # session-setup write (vs 0x36 for normal data ops).
         request = struct.pack(
             ">BHHHHIB",
             Opcode.REQUEST,
@@ -870,35 +919,35 @@ class S7CommPlusConnection:
             0x0000,
             seq_num,
             self._session_id,
-            0x36,  # Transport flags
+            0x34,
         )
 
         payload = bytearray()
-        # InObjectId = session ID (tells PLC which object we're writing to)
-        payload += struct.pack(">I", self._session_id)
-        # Item count = 1
-        payload += encode_uint32_vlq(1)
-        # Total address field count = 1 (just the attribute ID)
-        payload += encode_uint32_vlq(1)
-        # Address: attribute ID = ServerSessionVersion (306) as VLQ
-        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
-        # Value: ItemNumber = 1 (VLQ)
-        payload += encode_uint32_vlq(1)
-        # PValue: flags=0x00, type=UDInt, VLQ-encoded value
-        payload += bytes([0x00, DataType.UDINT])
-        payload += encode_uint32_vlq(self._server_session_version)
-        # Fill byte
-        payload += bytes([0x00])
-        # ObjectQualifier
+        payload += struct.pack(">I", self._session_id)  # InObjectId
+        payload += encode_uint32_vlq(1)  # ItemCount
+        payload += encode_uint32_vlq(1)  # AddressCount
+        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # Address: 306
+        payload += encode_uint32_vlq(1)  # ItemNumber
+
+        if self._server_session_version_raw is not None:
+            # Echo the Struct(314) value verbatim (real S7-1200/1500 path).
+            payload += self._server_session_version_raw
+        else:
+            # Test/emulator path: scalar UDInt fallback.
+            payload += bytes([0x00, DataType.UDINT])
+            payload += encode_uint32_vlq(self._server_session_version or 0)
+
+        payload += bytes([0x00])  # Fill byte
         payload += encode_object_qualifier()
-        # Trailing padding
-        payload += struct.pack(">I", 0)
+        # No IntegrityId — WithIntegrityId=false for session setup.
+        payload += struct.pack(">I", 0)  # Trailing padding
 
         request += bytes(payload)
 
-        # Wrap in S7CommPlus frame
-        frame = encode_header(self._protocol_version, len(request)) + request
-        frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
+        # Outer S7+ frame is always V2 for the setup write, even if the PLC
+        # negotiated V1 on the initial CreateObject.
+        frame = encode_header(ProtocolVersion.V2, len(request)) + request
+        frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0x0000)
 
         logger.debug(f"=== SetupSession === sending ({len(frame)} bytes): {frame.hex(' ')}")
         self._iso_conn.send_data(frame)

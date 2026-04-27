@@ -314,11 +314,13 @@ class TestSkipTypedValue:
         assert new_offset == len(data)
 
     def test_struct(self, conn: S7CommPlusConnection) -> None:
-        # Struct with 2 USINT sub-values
-        vlq_count = encode_uint32_vlq(2)
-        sub1 = bytes([0x00, DataType.USINT, 0x0A])  # flags + type + value
-        sub2 = bytes([0x00, DataType.USINT, 0x14])
-        data = vlq_count + sub1 + sub2
+        # S7CommPlus Struct format: 4-byte UInt32 ID, then a sequence of
+        # (VLQ key, nested PValue=flags+dtype+value) pairs, terminated by 0x00.
+        struct_id = bytes([0x00, 0x00, 0x00, 0x42])  # Struct ID 66
+        elem1 = encode_uint32_vlq(10) + bytes([0x00, DataType.USINT, 0x0A])
+        elem2 = encode_uint32_vlq(20) + bytes([0x00, DataType.USINT, 0x14])
+        terminator = bytes([0x00])
+        data = struct_id + elem1 + elem2 + terminator
         new_offset = conn._skip_typed_value(data, 0, DataType.STRUCT, 0x00)
         assert new_offset == len(data)
 
@@ -419,6 +421,27 @@ class TestParseCreateObjectResponse:
         payload += encode_uint32_vlq(3)
         conn._parse_create_object_response(bytes(payload))
         assert conn._server_session_version == 3
+
+    def test_parse_struct_version(self) -> None:
+        # Real S7-1200/1500 PLCs send ServerSessionVersion as Struct(314)
+        # rather than a scalar. The parser must capture the raw struct bytes
+        # so they can be echoed verbatim in the V2 SetMultiVariables.
+        conn = S7CommPlusConnection("127.0.0.1")
+        payload = bytearray()
+        payload += bytes([ElementID.ATTRIBUTE])
+        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        # typed value: flags + Struct + 4-byte ID + elements + terminator
+        struct_value = bytes([0x00, DataType.STRUCT])
+        struct_value += struct.pack(">I", 314)
+        # Element 315 → UDInt(512)
+        struct_value += encode_uint32_vlq(315) + bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(512)
+        # Element 319 → empty WString
+        struct_value += encode_uint32_vlq(319) + bytes([0x00, DataType.WSTRING]) + encode_uint32_vlq(0)
+        struct_value += bytes([0x00])  # struct terminator
+        payload += struct_value
+        conn._parse_create_object_response(bytes(payload))
+        assert conn._server_session_version is None  # scalar path is not used
+        assert conn._server_session_version_raw == struct_value
 
 
 # -- Client error path tests --
