@@ -47,6 +47,7 @@ from types import TracebackType
 from snap7.connection import ISOTCPConnection
 from .protocol import (
     FunctionCode,
+    LegitimationId,
     Opcode,
     ProtocolVersion,
     ElementID,
@@ -60,6 +61,111 @@ from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
 logger = logging.getLogger(__name__)
+
+
+# V2 session-setup legitimation BLOB observed in TIA Portal V19 captures
+# against an S7-1200 FW 4.2.2 (V1-initial firmware). 180 bytes; written to
+# address 1830 alongside ServerSessionVersion (306) in a single
+# SetMultiVariables. Without it the PLC drops the TCP connection silently
+# after the setup write.
+#
+# Most of the bytes are opaque — likely identity/integrity material that
+# TIA either pre-computes or signs with key material we don't have. The
+# only field we know we have to make per-session is the embedded PLC OMS
+# UUID at offset 32 (little-endian). Everything else is replayed verbatim
+# from one TIA capture as a first-pass experiment; if a later test shows
+# the PLC validates other byte ranges, we'll have to reverse those too.
+#
+# Reference capture: ``TIAPortalV19AccessibleDevices.pcapng`` frame 31
+# (attached to PR #713 / issue #710).
+_V2_SETUP_LEGITIMATION_BLOB_TEMPLATE = bytes.fromhex(
+    "ad de e1 fe b4 00 00 00 01 00 00 00 01 00 00 00"
+    "ce 9b 9f 3a 94 03 98 6b 01 01 00 00 00 00 00 00"
+    "00 00 00 00 00 00 00 00 10 01 00 00 00 00 00 00"  # OMS UUID slot at offset 32
+    "3f c8 df c2 7c 03 7f d9 99 4c ea c7 e2 b9 bb 1a"
+    "53 be 2a cd 00 49 53 3a fc 0e 43 64 49 5a c2 8e"
+    "20 ce ef 14 09 fe b4 aa e8 1c 54 08 e4 53 4c 08"
+    "2d ed 4b e6 31 ff b4 c5 1e 3b 56 ee b3 d4 1a d9"
+    "4a 83 b7 bf ac 3c ec 28 9d 5c dd f9 2e 12 59 87"
+    "f1 03 c7 08 f1 0b dc e1 e9 40 63 b5 2b 84 dc 58"
+    "9b d1 4c b6 26 a1 16 36 12 22 8e 5b 3d da c0 a0"
+    "b8 37 97 76 2f b1 f1 bb b2 b0 fb 44 f4 6a 50 9e"
+    "03 42 d5 6f"
+)
+_V2_SETUP_LEGITIMATION_OMS_UUID_OFFSET = 32
+
+
+def _build_v2_session_setup_legitimation_value(oms_session_uuid: bytes) -> bytes:
+    """Build the typed value written to address 1830 during session setup.
+
+    The PObject tree shape is:
+
+    Struct(1800)
+        1801: UDInt(0)
+        1802: USInt(0)
+        1803: Struct(1825)
+            1826: ULInt (opaque, replayed)
+            1827: UDInt(272)
+            1828: UDInt(0)
+        1804: Struct(1825)
+            1826: ULInt (opaque, replayed)
+            1827: UDInt(65793)
+            1828: UDInt(0)
+        1805: Blob(180 bytes — see template above; OMS UUID patched in LE)
+
+    Args:
+        oms_session_uuid: 8-byte OMS session UUID parsed from the
+            CreateObject response (attribute 233 ``"01:HEX"`` string).
+
+    Returns:
+        Encoded typed value (flags + datatype + struct body), ready to
+        append to a SetMultiVariables item.
+    """
+    if len(oms_session_uuid) != 8:
+        raise ValueError(f"OMS session UUID must be 8 bytes, got {len(oms_session_uuid)}")
+
+    blob = bytearray(_V2_SETUP_LEGITIMATION_BLOB_TEMPLATE)
+    blob[_V2_SETUP_LEGITIMATION_OMS_UUID_OFFSET : _V2_SETUP_LEGITIMATION_OMS_UUID_OFFSET + 8] = oms_session_uuid[::-1]
+
+    # PValue helpers. Each returns a complete typed value: flags + datatype
+    # + value bytes. _elem prepends the element-key VLQ for placement
+    # inside a struct.
+    def _elem(elem_id: int, typed_value: bytes) -> bytes:
+        return encode_uint32_vlq(elem_id) + typed_value
+
+    def _udint(value: int) -> bytes:
+        return bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(value)
+
+    def _usint(value: int) -> bytes:
+        return bytes([0x00, DataType.USINT, value & 0xFF])
+
+    def _ulint_raw(raw_vlq: bytes) -> bytes:
+        return bytes([0x00, DataType.ULINT]) + raw_vlq
+
+    def _struct(struct_id: int, body: bytes) -> bytes:
+        # Struct PValue: flags(0) + STRUCT + 4-byte ID + body + terminator(0)
+        return bytes([0x00, DataType.STRUCT]) + struct.pack(">I", struct_id) + body + bytes([0x00])
+
+    def _blob(data: bytes) -> bytes:
+        return bytes([0x00, DataType.BLOB]) + encode_uint32_vlq(0) + encode_uint32_vlq(len(data)) + data
+
+    # Opaque ULInt VLQs from the TIA reference capture. Each is a 9-byte
+    # VLQ. Treated as opaque payload rather than decoded numeric values
+    # since we don't know what they encode.
+    opaque_ulint_1 = bytes.fromhex("de d0 cd b0 c8 fc 90 f3 1a")
+    opaque_ulint_2 = bytes.fromhex("b5 e6 80 b9 a1 ea bf 9b ce")
+
+    inner_1803 = _elem(1826, _ulint_raw(opaque_ulint_1)) + _elem(1827, _udint(272)) + _elem(1828, _udint(0))
+    inner_1804 = _elem(1826, _ulint_raw(opaque_ulint_2)) + _elem(1827, _udint(65793)) + _elem(1828, _udint(0))
+
+    outer_body = b""
+    outer_body += _elem(1801, _udint(0))
+    outer_body += _elem(1802, _usint(0))
+    outer_body += _elem(1803, _struct(1825, inner_1803))
+    outer_body += _elem(1804, _struct(1825, inner_1804))
+    outer_body += _elem(1805, _blob(bytes(blob)))
+
+    return _struct(1800, outer_body)
 
 
 def _strip_paom_string_in_session_version(struct_bytes: bytes) -> bytes:
@@ -136,6 +242,11 @@ class S7CommPlusConnection:
         self._server_session_version: Optional[int] = None
         self._server_session_version_raw: Optional[bytes] = None
         self._session_setup_ok: bool = False
+        # PLC-provided 8-byte OMS session UUID (parsed from the
+        # ObjectVariableTypeName "01:HEX" attribute in the CreateObject
+        # response). Required to build the V2 session-setup legitimation
+        # value on V1-initial S7-1200 firmware.
+        self._oms_session_uuid: Optional[bytes] = None
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -775,11 +886,13 @@ class S7CommPlusConnection:
         self._parse_create_object_response(response[offset:])
 
     def _parse_create_object_response(self, payload: bytes) -> None:
-        """Parse CreateObject response payload to extract ServerSessionVersion.
+        """Parse CreateObject response to capture session-setup attributes.
 
-        The response contains a PObject tree with attributes. We scan for
-        attribute 306 (ServerSessionVersion) which must be echoed back to
-        complete the session handshake.
+        Scans the PObject tree for two attributes we need later:
+        - ``306`` (``SERVER_SESSION_VERSION``) — echoed back in the setup write.
+        - ``233`` (``OBJECT_VARIABLE_TYPE_NAME``) — a ``"01:HEX"`` string
+          carrying the PLC's 8-byte OMS session UUID, needed by the V2
+          session-setup legitimation value on V1-initial firmware.
 
         Args:
             payload: Response payload after the 14-byte response header
@@ -796,7 +909,6 @@ class S7CommPlusConnection:
                 offset += consumed
 
                 if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    # Typed value: flags + datatype + value
                     if offset + 2 > len(payload):
                         break
                     _flags = payload[offset]
@@ -809,26 +921,44 @@ class S7CommPlusConnection:
                         offset = self._skip_typed_value(payload, offset, DataType.STRUCT, _flags)
                         self._server_session_version_raw = bytes(payload[value_start:offset])
                         logger.info(f"ServerSessionVersion struct captured ({len(self._server_session_version_raw)} bytes)")
-                        return
-                    offset += 2
-                    if datatype == DataType.UDINT:
+                    elif datatype in (DataType.UDINT, DataType.DWORD):
+                        offset += 2
                         value, consumed = decode_uint32_vlq(payload, offset)
                         offset += consumed
                         self._server_session_version = value
                         logger.info(f"ServerSessionVersion = {value}")
-                        return
-                    elif datatype == DataType.DWORD:
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
                     else:
-                        # Skip unknown type - try to continue scanning
+                        offset += 2
+                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
                         logger.debug(f"ServerSessionVersion has unexpected type {datatype:#04x}")
+
+                elif attr_id == 233:
+                    # ObjectVariableTypeName: a WString shaped "01:HEX",
+                    # where HEX is the PLC's OMS session UUID encoded as
+                    # 16 hex characters. Captured for the V2 session-setup
+                    # legitimation value (address 1830).
+                    if offset + 2 > len(payload):
+                        break
+                    _flags = payload[offset]
+                    datatype = payload[offset + 1]
+                    if datatype == DataType.WSTRING:
+                        offset += 2
+                        length, consumed = decode_uint32_vlq(payload, offset)
+                        offset += consumed
+                        raw = bytes(payload[offset : offset + length])
+                        offset += length
+                        try:
+                            text = raw.decode("utf-8")
+                            if len(text) == 19 and text[2] == ":":
+                                self._oms_session_uuid = bytes.fromhex(text[3:])
+                                logger.info(f"OMS session UUID captured: {text}")
+                        except (UnicodeDecodeError, ValueError):
+                            logger.debug(f"Unparseable ObjectVariableTypeName: {raw!r}")
+                    else:
+                        offset += 2
+                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
+
                 else:
-                    # Skip this attribute's value - we don't parse it, just advance
-                    # Try to skip the typed value (flags + datatype + value)
                     if offset + 2 > len(payload):
                         break
                     _flags = payload[offset]
@@ -939,7 +1069,7 @@ class S7CommPlusConnection:
             return offset
 
     def _setup_session(self) -> bool:
-        """Send V2 SetMultiVariables to echo ServerSessionVersion back to the PLC.
+        """Send V2 SetMultiVariables to complete the session handshake.
 
         Always uses V2 framing (`72 02 ...`), transport flags 0x34, and no
         IntegrityId — these are the established session-setup conventions
@@ -948,6 +1078,17 @@ class S7CommPlusConnection:
 
         Without this step, the PLC rejects all subsequent data operations
         with ERROR2 (0x05A9).
+
+        Two-item form (V1-initial S7-1200, FW < 4.07): writes both
+        ``SESSION_SETUP_LEGITIMATION`` (1830) and ``SERVER_SESSION_VERSION``
+        (306) in one SetMultiVariables. TIA Portal V19 does this on FW 4.2.2
+        captures; without the legitimation item the PLC closes the TCP
+        connection silently right after the setup write. We use the two-item
+        form whenever the PLC sent us its OMS session UUID in the
+        CreateObject response (a V1-initial-firmware behaviour).
+
+        One-item form (everything else): just the ``SERVER_SESSION_VERSION``
+        echo, matching the C# driver's ``SetSessionSetupData``.
 
         Returns:
             True if session setup succeeded (return_value == 0).
@@ -970,23 +1111,36 @@ class S7CommPlusConnection:
             0x34,
         )
 
-        payload = bytearray()
-        payload += struct.pack(">I", self._session_id)  # InObjectId
-        payload += encode_uint32_vlq(1)  # ItemCount
-        payload += encode_uint32_vlq(1)  # AddressCount
-        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # Address: 306
-        payload += encode_uint32_vlq(1)  # ItemNumber
-
         if self._server_session_version_raw is not None:
             # Echo the Struct(314) value, but strip element 319 (the device
             # PAOM string) to empty. TIA Portal does this; writing the PLC's
             # own identity back appears to be rejected — the V1-initial
             # S7-1200 silently drops the connection if we don't strip it.
-            payload += _strip_paom_string_in_session_version(self._server_session_version_raw)
+            session_version_value = _strip_paom_string_in_session_version(self._server_session_version_raw)
         else:
             # Test/emulator path: scalar UDInt fallback.
-            payload += bytes([0x00, DataType.UDINT])
-            payload += encode_uint32_vlq(self._server_session_version or 0)
+            session_version_value = bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(self._server_session_version or 0)
+
+        oms_uuid = self._oms_session_uuid
+
+        payload = bytearray()
+        payload += struct.pack(">I", self._session_id)  # InObjectId
+
+        if oms_uuid is not None:
+            payload += encode_uint32_vlq(2)  # ItemCount
+            payload += encode_uint32_vlq(2)  # AddressCount
+            payload += encode_uint32_vlq(LegitimationId.SESSION_SETUP_LEGITIMATION)  # 1830
+            payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # 306
+            payload += encode_uint32_vlq(1)  # ItemNumber 1
+            payload += _build_v2_session_setup_legitimation_value(oms_uuid)
+            payload += encode_uint32_vlq(2)  # ItemNumber 2
+            payload += session_version_value
+        else:
+            payload += encode_uint32_vlq(1)  # ItemCount
+            payload += encode_uint32_vlq(1)  # AddressCount
+            payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # 306
+            payload += encode_uint32_vlq(1)  # ItemNumber
+            payload += session_version_value
 
         payload += bytes([0x00])  # Fill byte
         payload += encode_object_qualifier()
