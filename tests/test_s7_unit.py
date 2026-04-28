@@ -11,7 +11,12 @@ from s7._s7commplus_client import (
     _parse_write_response,
 )
 from s7.codec import encode_pvalue_blob
-from s7.connection import S7CommPlusConnection, _element_size
+from s7.connection import (
+    S7CommPlusConnection,
+    _build_v2_session_setup_legitimation_value,
+    _element_size,
+    _strip_paom_string_in_session_version,
+)
 from s7.protocol import DataType, ElementID, ObjectId
 from s7.vlq import (
     encode_uint32_vlq,
@@ -314,11 +319,13 @@ class TestSkipTypedValue:
         assert new_offset == len(data)
 
     def test_struct(self, conn: S7CommPlusConnection) -> None:
-        # Struct with 2 USINT sub-values
-        vlq_count = encode_uint32_vlq(2)
-        sub1 = bytes([0x00, DataType.USINT, 0x0A])  # flags + type + value
-        sub2 = bytes([0x00, DataType.USINT, 0x14])
-        data = vlq_count + sub1 + sub2
+        # S7CommPlus Struct format: 4-byte UInt32 ID, then a sequence of
+        # (VLQ key, nested PValue=flags+dtype+value) pairs, terminated by 0x00.
+        struct_id = bytes([0x00, 0x00, 0x00, 0x42])  # Struct ID 66
+        elem1 = encode_uint32_vlq(10) + bytes([0x00, DataType.USINT, 0x0A])
+        elem2 = encode_uint32_vlq(20) + bytes([0x00, DataType.USINT, 0x14])
+        terminator = bytes([0x00])
+        data = struct_id + elem1 + elem2 + terminator
         new_offset = conn._skip_typed_value(data, 0, DataType.STRUCT, 0x00)
         assert new_offset == len(data)
 
@@ -419,6 +426,108 @@ class TestParseCreateObjectResponse:
         payload += encode_uint32_vlq(3)
         conn._parse_create_object_response(bytes(payload))
         assert conn._server_session_version == 3
+
+    def test_strip_paom_string(self) -> None:
+        # Real ServerSessionVersion struct from an S7-1200 (FW v4.2). Element 319
+        # carries the device PAOM string "1;6ES7 215-1BG40-0XB0 ;V4.2".
+        captured = bytes.fromhex(
+            "00170000013a"
+            "823b00048400823c00048400823d00048480c200823e00048480c200"
+            "823f00151b313b36455337203231352d31424734302d30584230203b56342e32"
+            "8240001506323b3130383282410003000300"
+        )
+        stripped = _strip_paom_string_in_session_version(captured)
+        # Element 319 should now be an empty WString (length-VLQ 0x00).
+        assert b"\x82\x3f\x00\x15\x00\x82\x40" in stripped
+        assert b"6ES7 215-1BG40-0XB0" not in stripped
+
+    def test_strip_paom_string_idempotent_on_already_empty(self) -> None:
+        # Already-stripped struct: no PAOM string content present.
+        already_stripped = bytes.fromhex("00170000013a823f001500824000150000")
+        assert _strip_paom_string_in_session_version(already_stripped) == already_stripped
+
+    def test_strip_paom_string_no_match_returns_unchanged(self) -> None:
+        # Struct without element 319 at all — helper should leave it alone.
+        nopaom = bytes.fromhex("00170000013a823b0004840000")
+        assert _strip_paom_string_in_session_version(nopaom) == nopaom
+
+    def test_build_v2_session_setup_legitimation_value(self) -> None:
+        # The PObject tree we send at address 1830 must be byte-identical
+        # to the value TIA Portal V19 sent on a real V1-initial S7-1200,
+        # with the OMS UUID patched in. Reference: frame 31 of
+        # ``TIAPortalV19AccessibleDevices.pcapng`` (PR #713 / issue #710).
+        oms_uuid = bytes.fromhex("BD426B091F08731A")
+        got = _build_v2_session_setup_legitimation_value(oms_uuid)
+        expected_hex = (
+            "00 17 00 00 07 08"
+            "8e 09 00 04 00"
+            "8e 0a 00 02 00"
+            "8e 0b 00 17 00 00 07 21 8e 22 00 05 de d0 cd b0 c8 fc 90 f3 1a 8e 23 00 04 82 10 8e 24 00 04 00 00"
+            "8e 0c 00 17 00 00 07 21 8e 22 00 05 b5 e6 80 b9 a1 ea bf 9b ce 8e 23 00 04 84 82 01 8e 24 00 04 00 00"
+            "8e 0d 00 14 00 81 34"
+            "ad de e1 fe b4 00 00 00 01 00 00 00 01 00 00 00"
+            "ce 9b 9f 3a 94 03 98 6b 01 01 00 00 00 00 00 00"
+            "1a 73 08 1f 09 6b 42 bd 10 01 00 00 00 00 00 00"
+            "3f c8 df c2 7c 03 7f d9 99 4c ea c7 e2 b9 bb 1a"
+            "53 be 2a cd 00 49 53 3a fc 0e 43 64 49 5a c2 8e"
+            "20 ce ef 14 09 fe b4 aa e8 1c 54 08 e4 53 4c 08"
+            "2d ed 4b e6 31 ff b4 c5 1e 3b 56 ee b3 d4 1a d9"
+            "4a 83 b7 bf ac 3c ec 28 9d 5c dd f9 2e 12 59 87"
+            "f1 03 c7 08 f1 0b dc e1 e9 40 63 b5 2b 84 dc 58"
+            "9b d1 4c b6 26 a1 16 36 12 22 8e 5b 3d da c0 a0"
+            "b8 37 97 76 2f b1 f1 bb b2 b0 fb 44 f4 6a 50 9e"
+            "03 42 d5 6f"
+            "00"
+        )
+        assert got == bytes.fromhex(expected_hex)
+
+    def test_build_v2_session_setup_legitimation_value_patches_oms_uuid(self) -> None:
+        # A different OMS UUID should appear in the blob in little-endian
+        # byte order at the documented offset, leaving the rest of the
+        # template untouched.
+        oms_uuid = bytes.fromhex("0102030405060708")
+        got = _build_v2_session_setup_legitimation_value(oms_uuid)
+        # Locate the BLOB length marker (`81 34`) and check the next 32 bytes
+        # land us at the OMS UUID slot.
+        idx = got.index(bytes.fromhex("81 34"))
+        oms_le = got[idx + 2 + 32 : idx + 2 + 40]
+        assert oms_le == bytes.fromhex("0807060504030201")
+
+    def test_parse_oms_session_uuid(self) -> None:
+        # CreateObject response carries the PLC's OMS session UUID as a
+        # WString shaped "01:HEX". The parser captures it as raw bytes for
+        # the V2 session-setup legitimation value.
+        conn = S7CommPlusConnection("127.0.0.1")
+        payload = bytearray()
+        payload += bytes([ElementID.ATTRIBUTE])
+        payload += encode_uint32_vlq(233)  # ObjectVariableTypeName
+        payload += bytes([0x00, DataType.WSTRING])
+        text = "01:BD426B091F08731A"
+        payload += encode_uint32_vlq(len(text))
+        payload += text.encode("utf-8")
+        conn._parse_create_object_response(bytes(payload))
+        assert conn._oms_session_uuid == bytes.fromhex("BD426B091F08731A")
+
+    def test_parse_struct_version(self) -> None:
+        # Real S7-1200/1500 PLCs send ServerSessionVersion as Struct(314)
+        # rather than a scalar. The parser must capture the raw struct bytes
+        # so they can be echoed verbatim in the V2 SetMultiVariables.
+        conn = S7CommPlusConnection("127.0.0.1")
+        payload = bytearray()
+        payload += bytes([ElementID.ATTRIBUTE])
+        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        # typed value: flags + Struct + 4-byte ID + elements + terminator
+        struct_value = bytes([0x00, DataType.STRUCT])
+        struct_value += struct.pack(">I", 314)
+        # Element 315 → UDInt(512)
+        struct_value += encode_uint32_vlq(315) + bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(512)
+        # Element 319 → empty WString
+        struct_value += encode_uint32_vlq(319) + bytes([0x00, DataType.WSTRING]) + encode_uint32_vlq(0)
+        struct_value += bytes([0x00])  # struct terminator
+        payload += struct_value
+        conn._parse_create_object_response(bytes(payload))
+        assert conn._server_session_version is None  # scalar path is not used
+        assert conn._server_session_version_raw == struct_value
 
 
 # -- Client error path tests --

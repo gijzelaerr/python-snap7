@@ -221,6 +221,10 @@ class LegitimationId(IntEnum):
 
     SERVER_SESSION_REQUEST = 303
     SERVER_SESSION_RESPONSE = 304
+    # V2 session-setup legitimation, written alongside ServerSessionVersion
+    # in the same SetMultiVariables on V1-initial S7-1200 firmware. Distinct
+    # from LEGITIMATE (1846) which is the password-auth challenge response.
+    SESSION_SETUP_LEGITIMATION = 1830
     LEGITIMATE = 1846
 
 
