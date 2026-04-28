@@ -62,6 +62,28 @@ from .protocol import DataType
 logger = logging.getLogger(__name__)
 
 
+def _strip_paom_string_in_session_version(struct_bytes: bytes) -> bytes:
+    """Replace element 319 in a captured ServerSessionVersion struct with an empty WString.
+
+    The element is the device "PAOM string" (e.g. ``1;6ES7 215-1BG40-0XB0 ;V4.2``)
+    that the PLC sends in its CreateObject response. Real PLCs reject the V2
+    SetMultiVariables echo if we write that identity back verbatim — TIA
+    Portal strips this element to empty before echoing, and the V1-initial
+    S7-1200 drops the connection without it.
+
+    The input is a captured raw typed value: ``[flags][0x17 STRUCT][4-byte ID]
+    [...elements...][0x00 terminator]``. Element 319 is encoded as VLQ key
+    ``0x82 0x3f`` followed by ``[flags][0x15 WSTRING][len VLQ][utf-8 bytes]``.
+    """
+    needle = bytes([0x82, 0x3F, 0x00, 0x15])
+    idx = struct_bytes.find(needle)
+    if idx < 0:
+        return struct_bytes
+    after_dtype = idx + len(needle)
+    length, consumed = decode_uint32_vlq(struct_bytes, after_dtype)
+    return struct_bytes[:after_dtype] + bytes([0x00]) + struct_bytes[after_dtype + consumed + length :]
+
+
 def _element_size(datatype: int) -> int:
     """Return the fixed byte size for an array element, or 0 for variable-length."""
     if datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
@@ -956,8 +978,11 @@ class S7CommPlusConnection:
         payload += encode_uint32_vlq(1)  # ItemNumber
 
         if self._server_session_version_raw is not None:
-            # Echo the Struct(314) value verbatim (real S7-1200/1500 path).
-            payload += self._server_session_version_raw
+            # Echo the Struct(314) value, but strip element 319 (the device
+            # PAOM string) to empty. TIA Portal does this; writing the PLC's
+            # own identity back appears to be rejected — the V1-initial
+            # S7-1200 silently drops the connection if we don't strip it.
+            payload += _strip_paom_string_in_session_version(self._server_session_version_raw)
         else:
             # Test/emulator path: scalar UDInt fallback.
             payload += bytes([0x00, DataType.UDINT])

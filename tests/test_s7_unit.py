@@ -11,7 +11,7 @@ from s7._s7commplus_client import (
     _parse_write_response,
 )
 from s7.codec import encode_pvalue_blob
-from s7.connection import S7CommPlusConnection, _element_size
+from s7.connection import S7CommPlusConnection, _element_size, _strip_paom_string_in_session_version
 from s7.protocol import DataType, ElementID, ObjectId
 from s7.vlq import (
     encode_uint32_vlq,
@@ -421,6 +421,30 @@ class TestParseCreateObjectResponse:
         payload += encode_uint32_vlq(3)
         conn._parse_create_object_response(bytes(payload))
         assert conn._server_session_version == 3
+
+    def test_strip_paom_string(self) -> None:
+        # Real ServerSessionVersion struct from an S7-1200 (FW v4.2). Element 319
+        # carries the device PAOM string "1;6ES7 215-1BG40-0XB0 ;V4.2".
+        captured = bytes.fromhex(
+            "00170000013a"
+            "823b00048400823c00048400823d00048480c200823e00048480c200"
+            "823f00151b313b36455337203231352d31424734302d30584230203b56342e32"
+            "8240001506323b3130383282410003000300"
+        )
+        stripped = _strip_paom_string_in_session_version(captured)
+        # Element 319 should now be an empty WString (length-VLQ 0x00).
+        assert b"\x82\x3f\x00\x15\x00\x82\x40" in stripped
+        assert b"6ES7 215-1BG40-0XB0" not in stripped
+
+    def test_strip_paom_string_idempotent_on_already_empty(self) -> None:
+        # Already-stripped struct: no PAOM string content present.
+        already_stripped = bytes.fromhex("00170000013a823f001500824000150000")
+        assert _strip_paom_string_in_session_version(already_stripped) == already_stripped
+
+    def test_strip_paom_string_no_match_returns_unchanged(self) -> None:
+        # Struct without element 319 at all — helper should leave it alone.
+        nopaom = bytes.fromhex("00170000013a823b0004840000")
+        assert _strip_paom_string_in_session_version(nopaom) == nopaom
 
     def test_parse_struct_version(self) -> None:
         # Real S7-1200/1500 PLCs send ServerSessionVersion as Struct(314)
