@@ -990,7 +990,8 @@ class S7CommPlusConnection:
                 # Unknown tag - try to skip
                 offset += 1
 
-        logger.debug("ServerSessionVersion not found in CreateObject response")
+        if self._server_session_version_raw is None and self._server_session_version is None:
+            logger.debug("ServerSessionVersion not found in CreateObject response")
 
     def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
         """Skip over a typed value in the PObject tree.
