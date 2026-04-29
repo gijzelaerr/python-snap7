@@ -1,0 +1,41 @@
+"""S7CommPlus session-key authentication primitives.
+
+This subpackage is a Python port of the legacy-challenge half of
+`bonk-dev/HarpoS7 <https://github.com/bonk-dev/HarpoS7>`_ (MIT-licensed),
+which itself is a clean-room re-implementation of the proprietary
+authentication algorithm in Siemens' ``OMSp_core_managed.dll``.
+
+The legacy-challenge handshake is what V1-initial S7-1200 firmware
+(and pre-V17 TIA Portal) require for full S7CommPlus operation —
+without it, ``browse()`` and other CommPlus data ops fail.
+
+This first slice ports only the public-key store. Subsequent slices
+will add the AES/SHA primitives, the proprietary "monolith" transforms,
+and the auth orchestration that produces the 216-byte
+``SecurityKeyEncryptedKey`` blob.
+
+References:
+
+- HarpoS7: https://github.com/bonk-dev/HarpoS7 (MIT)
+- Cheng Lei et al. "The spear to break the security wall of S7CommPlus",
+  Black Hat EU 2017.
+- Biham, Bitan et al. "Rogue7", Black Hat USA 2019.
+"""
+
+from .keys import (
+    KeyFamily,
+    PUBLIC_KEY_LENGTH_REAL_PLC,
+    PUBLIC_KEY_LENGTH_PLCSIM,
+    UnknownPublicKeyError,
+    get_public_key,
+    parse_fingerprint,
+)
+
+__all__ = [
+    "KeyFamily",
+    "PUBLIC_KEY_LENGTH_REAL_PLC",
+    "PUBLIC_KEY_LENGTH_PLCSIM",
+    "UnknownPublicKeyError",
+    "get_public_key",
+    "parse_fingerprint",
+]
