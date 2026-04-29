@@ -59,16 +59,12 @@ class TestGetPublicKey:
         # The fingerprint @xBiggs's PLC advertises in #710. Verify the
         # bytes match HarpoS7's BD426B091F08731A.bin verbatim.
         key = get_public_key("01:BD426B091F08731A")
-        assert key == bytes.fromhex(
-            "e0e1f04a5ca3f90148178689bd0c930ab9db867b4f0ab109623959aa32316b7880ed1b4f9a9b189f"
-        )
+        assert key == bytes.fromhex("e0e1f04a5ca3f90148178689bd0c930ab9db867b4f0ab109623959aa32316b7880ed1b4f9a9b189f")
         assert len(key) == PUBLIC_KEY_LENGTH_REAL_PLC
 
     def test_known_s7_1500_key(self) -> None:
         key = get_public_key("00:181B7B0847D11694")
-        assert key == bytes.fromhex(
-            "8456a26996122216c921c571ff11e0befafdb1d70b5d4bc8390f5b0cc273ec142a03f2a04e6f1593"
-        )
+        assert key == bytes.fromhex("8456a26996122216c921c571ff11e0befafdb1d70b5d4bc8390f5b0cc273ec142a03f2a04e6f1593")
 
     def test_known_plcsim_key(self) -> None:
         key = get_public_key("03:09013727CCBFBF3C")

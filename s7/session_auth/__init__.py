@@ -30,12 +30,15 @@ from .keys import (
     get_public_key,
     parse_fingerprint,
 )
+from .utils import KEY_ID_LENGTH, derive_key_id
 
 __all__ = [
     "KeyFamily",
+    "KEY_ID_LENGTH",
     "PUBLIC_KEY_LENGTH_REAL_PLC",
     "PUBLIC_KEY_LENGTH_PLCSIM",
     "UnknownPublicKeyError",
+    "derive_key_id",
     "get_public_key",
     "parse_fingerprint",
 ]
