@@ -22,6 +22,14 @@ References:
 - Biham, Bitan et al. "Rogue7", Black Hat USA 2019.
 """
 
+from .blob_metadata import (
+    ENCRYPTED_BLOB_LENGTH_PLCSIM,
+    ENCRYPTED_BLOB_LENGTH_REAL_PLC,
+    get_blob_length,
+    get_public_key_flags,
+    get_symmetric_key_flags,
+    write_metadata,
+)
 from .keys import (
     KeyFamily,
     PUBLIC_KEY_LENGTH_REAL_PLC,
@@ -33,12 +41,18 @@ from .keys import (
 from .utils import KEY_ID_LENGTH, derive_key_id
 
 __all__ = [
+    "ENCRYPTED_BLOB_LENGTH_PLCSIM",
+    "ENCRYPTED_BLOB_LENGTH_REAL_PLC",
     "KeyFamily",
     "KEY_ID_LENGTH",
     "PUBLIC_KEY_LENGTH_REAL_PLC",
     "PUBLIC_KEY_LENGTH_PLCSIM",
     "UnknownPublicKeyError",
     "derive_key_id",
+    "get_blob_length",
     "get_public_key",
+    "get_public_key_flags",
+    "get_symmetric_key_flags",
     "parse_fingerprint",
+    "write_metadata",
 ]
