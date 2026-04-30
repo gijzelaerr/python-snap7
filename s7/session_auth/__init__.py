@@ -30,6 +30,11 @@ from .blob_metadata import (
     get_symmetric_key_flags,
     write_metadata,
 )
+from .key_derivation import (
+    derive_challenge_encryption_key,
+    derive_legitimation_challenge_key,
+    derive_seed_encryption_key_and_iv,
+)
 from .keys import (
     KeyFamily,
     PUBLIC_KEY_LENGTH_REAL_PLC,
@@ -48,7 +53,10 @@ __all__ = [
     "PUBLIC_KEY_LENGTH_REAL_PLC",
     "PUBLIC_KEY_LENGTH_PLCSIM",
     "UnknownPublicKeyError",
+    "derive_challenge_encryption_key",
     "derive_key_id",
+    "derive_legitimation_challenge_key",
+    "derive_seed_encryption_key_and_iv",
     "get_blob_length",
     "get_public_key",
     "get_public_key_flags",
