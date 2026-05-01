@@ -35,6 +35,7 @@ from .key_derivation import (
     derive_legitimation_challenge_key,
     derive_seed_encryption_key_and_iv,
 )
+from .harpo_hash import generate_lookup_table, hash_block, lut1
 from .keys import (
     KeyFamily,
     PUBLIC_KEY_LENGTH_REAL_PLC,
@@ -57,10 +58,13 @@ __all__ = [
     "derive_key_id",
     "derive_legitimation_challenge_key",
     "derive_seed_encryption_key_and_iv",
+    "generate_lookup_table",
     "get_blob_length",
     "get_public_key",
     "get_public_key_flags",
     "get_symmetric_key_flags",
+    "hash_block",
+    "lut1",
     "parse_fingerprint",
     "write_metadata",
 ]
