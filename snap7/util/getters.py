@@ -384,7 +384,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
         >>> data = bytearray(4)
         >>> data[:] = struct.pack(">i", 2147483647)
         >>> get_time(data, 0)
-            '24:20:31:23:647'
+            '24:20:31:23.647'
     """
     data_bytearray = bytearray_[byte_index : byte_index + 4]
     bits = 32
@@ -403,7 +403,7 @@ def get_time(bytearray_: bytearray, byte_index: int) -> str:
     days = hours // 24
 
     sign_str = "" if sign >= 0 else "-"
-    time_str = f"{sign_str}{days!s}:{hours % 24!s}:{minutes % 60!s}:{seconds % 60!s}.{milli_seconds!s}"
+    time_str = f"{sign_str}{days!s}:{hours % 24!s}:{minutes % 60!s}:{seconds % 60!s}.{milli_seconds:03d}"
 
     return time_str
 
