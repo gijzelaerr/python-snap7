@@ -22,6 +22,8 @@ from s7.session_auth.family0 import (
     monolith6,
     monolith7,
     monolith8,
+    monolith9,
+    monolith10,
     monolith11,
 )
 
@@ -48,6 +50,33 @@ def test_monolith_vector(monolith: object, index: int) -> None:
     dst = bytearray(len(expected))
     monolith.execute(dst, src)  # type: ignore[attr-defined]
     assert bytes(dst) == expected, f"monolith{index} output mismatch"
+
+
+@pytest.mark.parametrize(
+    "monolith,index",
+    [
+        (monolith9, 9),
+        (monolith10, 10),
+    ],
+)
+@pytest.mark.xfail(reason="orchestrators of multi-Part transforms — under investigation; refs #717")
+def test_monolith_orchestrator_vector(monolith: object, index: int) -> None:
+    src = (_FIXTURES / f"monolith{index}-src.bin").read_bytes()
+    expected = (_FIXTURES / f"monolith{index}-dst.bin").read_bytes()
+    dst = bytearray(len(expected))
+    monolith.execute(dst, src)  # type: ignore[attr-defined]
+    assert bytes(dst) == expected, f"monolith{index} output mismatch"
+
+
+def test_monolith9_and_10_at_least_run() -> None:
+    """Smoke test: even though the byte-exact vectors don't pass yet
+    (see the xfail above), neither orchestrator raises. This catches
+    regressions in transpiler signature handling for the Part files."""
+    for index, mod in [(9, monolith9), (10, monolith10)]:
+        src = (_FIXTURES / f"monolith{index}-src.bin").read_bytes()
+        expected = (_FIXTURES / f"monolith{index}-dst.bin").read_bytes()
+        dst = bytearray(len(expected))
+        mod.execute(dst, src)  # type: ignore[attr-defined]
 
 
 def test_monolith1_returns_zero() -> None:

@@ -53,9 +53,27 @@ _SUBS: tuple[tuple[str, str], ...] = (
     (re.escape("srcDwords["), "src_dwords["),
     (r"\bdst\[", "dst_dwords["),
     (r"\bsrc\[", "src_dwords["),
+    # `locals` is a Python builtin; rename to a safe alias.
+    (r"\blocals\[", "locals_["),
     # Hex literals with a `U` suffix — Python doesn't accept the suffix.
     (r"\b(0[xX][0-9A-Fa-f]+)U\b", r"\1"),
 )
+
+
+@dataclass(frozen=True)
+class Signature:
+    """Decoded ``Execute`` parameters.
+
+    All fields are `True` when the parameter appears in the C# signature.
+    The Family-0 transforms only ever pass ``source`` and ``destination``
+    as ``Span<byte>`` / ``ReadOnlySpan<byte>`` and ``locals`` as
+    ``Span<uint>``.
+    """
+
+    has_source: bool
+    has_destination: bool
+    has_locals: bool
+    return_type: str  # "uint" or "void"
 
 
 @dataclass
@@ -63,10 +81,9 @@ class TranspiledMonolith:
     """The Python source for one monolith, ready to write."""
 
     name: str  # e.g. "Monolith1"
-    src_size: int
-    dst_size: int
     body_lines: list[str]
     return_var: str  # e.g. "uVar99" or "" if void
+    signature: Signature
 
 
 def _strip_comments(text: str) -> str:
@@ -76,28 +93,30 @@ def _strip_comments(text: str) -> str:
     return text
 
 
-def _extract_execute(source: str, monolith_class: str) -> tuple[str, str]:
-    """Return ``(body_text, return_var_name)`` for the ``Execute`` method.
+def _extract_execute(source: str, monolith_class: str) -> tuple[str, str, Signature]:
+    """Return ``(body_text, return_var_name, signature)`` for ``Execute``.
 
     ``body_text`` is the raw C# inside ``Execute``'s outer braces, with
     all comments stripped; ``return_var`` is the identifier returned
-    (e.g. "uVar99"), or "" when the method is ``void``.
+    (e.g. "uVar99"), or "" when the method is ``void``; ``signature``
+    encodes which parameters the method takes.
     """
     text = _strip_comments(source)
 
     # Match `public static [type] Execute(args) { ... }`
-    sig = re.search(
+    sig_match = re.search(
         r"public\s+static\s+(uint|void)\s+Execute\s*\(",
         text,
     )
-    if sig is None:
+    if sig_match is None:
         raise ValueError(f"no Execute method found in {monolith_class}")
-    return_type = sig.group(1)
+    return_type = sig_match.group(1)
 
-    # Skip past the signature parens.
-    open_paren = text.index("(", sig.end() - 1)
+    # Capture the parameter list between the parens.
+    open_paren = text.index("(", sig_match.end() - 1)
     paren_depth = 0
     i = open_paren
+    params_start = open_paren + 1
     while i < len(text):
         c = text[i]
         if c == "(":
@@ -105,9 +124,20 @@ def _extract_execute(source: str, monolith_class: str) -> tuple[str, str]:
         elif c == ")":
             paren_depth -= 1
             if paren_depth == 0:
+                params_text = text[params_start:i]
                 i += 1
                 break
         i += 1
+    else:
+        raise ValueError(f"unterminated parameter list in {monolith_class}.Execute")
+
+    sig_obj = Signature(
+        has_source="source" in params_text,
+        has_destination="destination" in params_text,
+        has_locals="locals" in params_text,
+        return_type=return_type,
+    )
+
     # Find the opening brace of the method body.
     while i < len(text) and text[i] != "{":
         i += 1
@@ -137,7 +167,7 @@ def _extract_execute(source: str, monolith_class: str) -> tuple[str, str]:
             raise ValueError(f"no return in uint Execute of {monolith_class}")
         return_var = m.group(1)
 
-    return body, return_var
+    return body, return_var, sig_obj
 
 
 def _split_statements(body: str) -> list[str]:
@@ -198,7 +228,7 @@ def _statement_to_python(stmt: str) -> str | None:
 
 
 def transpile_monolith(source: str, monolith_class: str) -> TranspiledMonolith:
-    body, return_var = _extract_execute(source, monolith_class)
+    body, return_var, signature = _extract_execute(source, monolith_class)
     statements = _split_statements(body)
     py_lines = []
     for stmt in statements:
@@ -206,28 +236,12 @@ def transpile_monolith(source: str, monolith_class: str) -> TranspiledMonolith:
         if translated is not None:
             py_lines.append(translated)
 
-    src_size = _extract_buffer_size(source, "GetSourceBufferSize")
-    dst_size = _extract_buffer_size(source, "GetDestinationBufferSize")
-
     return TranspiledMonolith(
         name=monolith_class,
-        src_size=src_size,
-        dst_size=dst_size,
         body_lines=py_lines,
         return_var=return_var,
+        signature=signature,
     )
-
-
-def _extract_buffer_size(source: str, helper: str) -> int:
-    """Buffer-size extraction is a future work item.
-
-    For now we don't try to surface per-monolith size requirements in
-    the generated preamble — the caller has to allocate destination
-    buffers of the right size, and the unit tests check the output
-    length implicitly by comparing against the fixture.
-    """
-    del source, helper
-    return 0
 
 
 _PREAMBLE = """\
@@ -259,19 +273,35 @@ def _from_uints(uints: list[int]) -> bytes:
 def emit_python(t: TranspiledMonolith, source_path: str) -> str:
     """Return the Python source for the transpiled monolith."""
 
+    s = t.signature
     out: list[str] = []
     out.append(_PREAMBLE.format(source_path=source_path, class_name=t.name))
     out.append("")
+
+    # C# signature parameter order: destination, source, locals.
+    params: list[str] = []
+    if s.has_destination:
+        params.append("destination: bytearray")
+    if s.has_source:
+        params.append("source: bytes")
+    if s.has_locals:
+        params.append("locals_: list[int]")
     return_annotation = " -> int" if t.return_var else " -> None"
-    out.append(f"def execute(destination: bytearray, source: bytes){return_annotation}:")
+    out.append(f"def execute({', '.join(params)}){return_annotation}:")
     out.append('    """Run the transpiled body."""')
-    out.append("    src_dwords = _to_uints(source)")
-    out.append("    dst_dwords = _to_uints(destination)")
+
+    if s.has_source:
+        out.append("    src_dwords = _to_uints(source)")
+    if s.has_destination:
+        out.append("    dst_dwords = _to_uints(destination)")
     out.append("")
+
     for line in t.body_lines:
         out.append(f"    {line}")
     out.append("")
-    out.append("    destination[: len(dst_dwords) * 4] = _from_uints(dst_dwords)")
+
+    if s.has_destination:
+        out.append("    destination[: len(dst_dwords) * 4] = _from_uints(dst_dwords)")
     if t.return_var:
         out.append(f"    return {t.return_var} & _U32")
     out.append("")
