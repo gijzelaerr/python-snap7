@@ -36,6 +36,7 @@ from .key_derivation import (
     derive_seed_encryption_key_and_iv,
 )
 from .harpo_aes import AES_BLOCK_SIZE, AES_KEY_LENGTH, HarpoAes
+from .harpo_aes_ctr import HarpoAesCtr
 from .harpo_hash import generate_lookup_table, hash_block, lut1
 from .keys import (
     KeyFamily,
@@ -53,6 +54,7 @@ __all__ = [
     "ENCRYPTED_BLOB_LENGTH_PLCSIM",
     "ENCRYPTED_BLOB_LENGTH_REAL_PLC",
     "HarpoAes",
+    "HarpoAesCtr",
     "KeyFamily",
     "KEY_ID_LENGTH",
     "PUBLIC_KEY_LENGTH_REAL_PLC",
