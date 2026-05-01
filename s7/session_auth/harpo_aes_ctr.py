@@ -201,3 +201,55 @@ class HarpoAesCtr(HarpoAes):
 
         self._var2 += v4
         return bytes(out)
+
+    def calculate_checksum(self, length: int = AES_BLOCK_SIZE) -> bytes:
+        """Finalise the running MAC and emit the checksum bytes.
+
+        Folds the total bit-length of encrypted data into the
+        accumulator, runs one final HarpoHash round, AES-encrypts the
+        original IV extension as a key for the output, and XORs the
+        two together. Should be called once per session, after all
+        ``encrypt_ctr`` calls.
+
+        Args:
+            length: Number of checksum bytes to emit. Must be 1..16.
+                The full HarpoS7 protocol uses 16; smaller values
+                produce a truncated MAC.
+
+        Returns:
+            ``length`` bytes of checksum.
+
+        Raises:
+            ValueError: If ``length`` is outside 1..16.
+        """
+        if length < 1 or length > AES_BLOCK_SIZE:
+            raise ValueError(f"length must be 1..{AES_BLOCK_SIZE}, got {length}")
+
+        # Hash any partial-block tail the encryptor left unhashed.
+        if self._var2 == 0 and self._var1 != 0 and (self._var1 & 0xF) != 0:
+            self._aes3[:] = hash_block(bytes(self._aes3), bytes(self._lut))
+        if self._var2 != 0 and (self._var2 & 0xF) != 0:
+            self._aes3[:] = hash_block(bytes(self._aes3), bytes(self._lut))
+
+        # XOR the bit-length of the encrypted region into bytes 0xC..0xF
+        # of the accumulator (with overflow into 0xB).
+        v1 = (self._var2 << 3) & 0xFFFFFFFF
+        for i in range(0xF, 0xB, -1):
+            self._aes3[i] ^= (v1 >> ((0xF - i) * 8)) & 0xFF
+        self._aes3[0xB] ^= (self._var2 >> 29) & 0xFF
+
+        # Same for the pre-init region's bit-length, into bytes 4..7
+        # (with overflow into 3).
+        v2 = (self._var1 << 3) & 0xFFFFFFFF
+        for i in range(7, 3, -1):
+            self._aes3[i] ^= (v2 >> ((7 - i) * 8)) & 0xFF
+        self._aes3[3] ^= (self._var1 >> 29) & 0xFF
+
+        # Final hash round.
+        self._aes3[:] = hash_block(bytes(self._aes3), bytes(self._lut))
+
+        # AES-encrypt the original IV extension as the keystream for
+        # the checksum output.
+        self._aes2[:] = self.encrypt_ecb(bytes(self._iv_extension))
+
+        return bytes(self._aes2[i] ^ self._aes3[i] for i in range(length))

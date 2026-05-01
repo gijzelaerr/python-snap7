@@ -59,6 +59,47 @@ class TestEncryptCtr:
 
 
 @pytest.mark.skipif(not _has_cryptography, reason="requires cryptography package")
+class TestCalculateChecksum:
+    def test_harpos7_vector(self) -> None:
+        # HarpoAesCtrTests.CalculateChecksumTest — mocks every
+        # piece of internal state directly, then verifies the
+        # finalised MAC. Mirrors the C# test which uses reflection;
+        # we just assign the bytearrays.
+        cipher = HarpoAesCtr(bytes.fromhex("43950F7B8B896E30457824DC8A591E32"))
+
+        # Mock _var1, _var2.
+        cipher._var2 = 0x10
+        cipher._var1 = 0x00
+
+        # Mock LUT — load the 4096-byte fixture vendored from the
+        # C# test's _mockChecksumLut literal.
+        from pathlib import Path
+
+        fixture = Path(__file__).parent / "fixtures" / "harpo_aes_ctr_mock_checksum_lut.bin"
+        cipher._lut[:] = fixture.read_bytes()
+
+        # Mock the three 16-byte slots the test pre-fills.
+        cipher._aes3[:] = bytes.fromhex("738FA8A07EF0893A97CBF681250AD2FA")
+        cipher._aes2[:] = bytes.fromhex("478FC2674E3EB1DD3DD9787103E92316")
+        cipher._iv_extension[:] = bytes.fromhex("585CE8585DF132FA4C7FD9BECEB97461")
+
+        checksum = cipher.calculate_checksum()
+        assert checksum == bytes.fromhex("5A948DB51DC34FF25808ED3ABE15EB12")
+
+    def test_invalid_length_too_large(self) -> None:
+        cipher = HarpoAesCtr(_KEY)
+        cipher.init(b"\xcc" * 16)
+        with pytest.raises(ValueError, match="length must be 1..16"):
+            cipher.calculate_checksum(17)
+
+    def test_invalid_length_zero(self) -> None:
+        cipher = HarpoAesCtr(_KEY)
+        cipher.init(b"\xcc" * 16)
+        with pytest.raises(ValueError, match="length must be 1..16"):
+            cipher.calculate_checksum(0)
+
+
+@pytest.mark.skipif(not _has_cryptography, reason="requires cryptography package")
 class TestInitGuardClauses:
     def test_empty_iv_rejected(self) -> None:
         cipher = HarpoAesCtr(_KEY)
