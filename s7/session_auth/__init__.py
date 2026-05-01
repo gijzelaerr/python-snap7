@@ -35,6 +35,7 @@ from .key_derivation import (
     derive_legitimation_challenge_key,
     derive_seed_encryption_key_and_iv,
 )
+from .harpo_aes import AES_BLOCK_SIZE, AES_KEY_LENGTH, HarpoAes
 from .harpo_hash import generate_lookup_table, hash_block, lut1
 from .keys import (
     KeyFamily,
@@ -47,8 +48,11 @@ from .keys import (
 from .utils import KEY_ID_LENGTH, derive_key_id
 
 __all__ = [
+    "AES_BLOCK_SIZE",
+    "AES_KEY_LENGTH",
     "ENCRYPTED_BLOB_LENGTH_PLCSIM",
     "ENCRYPTED_BLOB_LENGTH_REAL_PLC",
+    "HarpoAes",
     "KeyFamily",
     "KEY_ID_LENGTH",
     "PUBLIC_KEY_LENGTH_REAL_PLC",

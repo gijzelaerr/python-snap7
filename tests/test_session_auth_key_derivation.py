@@ -22,9 +22,7 @@ class TestDeriveChallengeEncryptionKey:
 
     def test_random_24_bytes(self) -> None:
         random_key = bytes.fromhex("D36E04F64F89C24E6CB9276D82409EE0E57B98F815063EF4")
-        assert derive_challenge_encryption_key(random_key) == bytes.fromhex(
-            "B2B7DE6183FC1A97F8636952F1ABA0FD"
-        )
+        assert derive_challenge_encryption_key(random_key) == bytes.fromhex("B2B7DE6183FC1A97F8636952F1ABA0FD")
 
     def test_short_key_rejected(self) -> None:
         with pytest.raises(ValueError, match="at least 24 bytes"):
@@ -33,10 +31,7 @@ class TestDeriveChallengeEncryptionKey:
 
 class TestDeriveSeedEncryptionKeyAndIv:
     def test_harpos7_vector(self) -> None:
-        a2 = bytes.fromhex(
-            "B3420D0C6242B150D6862A4D61559E78"
-            "A00DA5DC7B68551AD86DF007ABA5BBD9"
-        )
+        a2 = bytes.fromhex("B3420D0C6242B150D6862A4D61559E78A00DA5DC7B68551AD86DF007ABA5BBD9")
         a3 = bytes.fromhex(
             "18F124E0B4A6D964CEFC8453ED903D52"
             "F1B8C85258FE5B2459776C0630DC02FE"
@@ -44,9 +39,7 @@ class TestDeriveSeedEncryptionKeyAndIv:
             "D7CCA10B1C73DA8AC3C287D2704BF325"
         )
         expected = bytes.fromhex(
-            "43950F7B8B896E30457824DC8A591E32"
-            "8772ABB8B3C193712964227561"
-            "0A4A4532687F19C02CA9EF361388943560918C"
+            "43950F7B8B896E30457824DC8A591E328772ABB8B3C1937129642275610A4A4532687F19C02CA9EF361388943560918C"
         )
         assert derive_seed_encryption_key_and_iv(a2, a3) == expected
 
