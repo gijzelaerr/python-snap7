@@ -13,6 +13,16 @@ import struct
 _U32 = 0xFFFFFFFF
 
 
+def _shr(x: int, n: int) -> int:
+    """Logical right-shift (mask to uint32 before shifting).
+
+    Python's ``>>`` on negative ints does arithmetic shift (sign-extends).
+    C#'s ``uint >> n`` does logical shift (zero-fills). This helper
+    ensures Python behaves identically to C#.
+    """
+    return (x & _U32) >> n
+
+
 def _to_uints(buf: bytes | bytearray) -> list[int]:
     n = len(buf) // 4
     return list(struct.unpack(f"<{n}I", bytes(buf[: n * 4])))
@@ -2170,21 +2180,21 @@ def execute(source: bytes, locals_: list[int]) -> None:
         ^ 0x4F3DC68F
     ) & 0xFFFFFFFF
     locals_[804] = (locals_[54] ^ locals_[71]) & 0xFFFFFFFF
-    locals_[829] = (locals_[103] >> 1) & 0xFFFFFFFF
-    locals_[584] = (locals_[102] >> 1) & 0xFFFFFFFF
-    locals_[805] = ((locals_[103] & locals_[804]) >> 1) & 0xFFFFFFFF
-    locals_[830] = (locals_[71] >> 1) & 0xFFFFFFFF
-    locals_[590] = (locals_[43] >> 1) & 0xFFFFFFFF
+    locals_[829] = (_shr(locals_[103], 1)) & 0xFFFFFFFF
+    locals_[584] = (_shr(locals_[102], 1)) & 0xFFFFFFFF
+    locals_[805] = (_shr((locals_[103] & locals_[804]), 1)) & 0xFFFFFFFF
+    locals_[830] = (_shr(locals_[71], 1)) & 0xFFFFFFFF
+    locals_[590] = (_shr(locals_[43], 1)) & 0xFFFFFFFF
     locals_[806] = (~locals_[805]) & 0xFFFFFFFF
     locals_[179] = (
         (
             (
-                ~((locals_[139] ^ locals_[43]) >> 1) & locals_[829] & locals_[804] >> 1
-                ^ (locals_[139] & locals_[43] ^ locals_[71]) >> 1
+                ~(_shr((locals_[139] ^ locals_[43]), 1)) & locals_[829] & _shr(locals_[804], 1)
+                ^ _shr((locals_[139] & locals_[43] ^ locals_[71]), 1)
             )
             & locals_[584]
-            ^ ~(locals_[54] >> 1 & ~locals_[830] & locals_[829])
-            ^ (locals_[43] & locals_[139]) >> 1 & locals_[806]
+            ^ ~(_shr(locals_[54], 1) & ~locals_[830] & locals_[829])
+            ^ _shr((locals_[43] & locals_[139]), 1) & locals_[806]
         )
         & 0x7FFFFFFF
     ) & 0xFFFFFFFF
@@ -2193,12 +2203,12 @@ def execute(source: bytes, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[181] = (
         (
-            ~(((locals_[43] ^ locals_[71]) & locals_[139] ^ locals_[804] & locals_[103]) >> 1) & 0x7FFFFFFF
+            ~(_shr(((locals_[43] ^ locals_[71]) & locals_[139] ^ locals_[804] & locals_[103]), 1)) & 0x7FFFFFFF
             ^ ~locals_[590] & locals_[830]
         )
         & locals_[584]
-        ^ ~(locals_[54] >> 1) & locals_[830] & locals_[829]
-        ^ ~locals_[830] & locals_[590] & locals_[139] >> 1
+        ^ ~(_shr(locals_[54], 1)) & locals_[830] & locals_[829]
+        ^ ~locals_[830] & locals_[590] & _shr(locals_[139], 1)
     ) & 0xFFFFFFFF
     locals_[672] = (
         (
@@ -2740,7 +2750,7 @@ def execute(source: bytes, locals_: list[int]) -> None:
         & 0x88888888
         ^ 0x77777777
     ) & 0xFFFFFFFF
-    locals_[231] = (~(locals_[105] >> 8) & locals_[70] >> 8 ^ locals_[126] >> 8) & 0xFFFFFFFF
+    locals_[231] = (~(_shr(locals_[105], 8)) & _shr(locals_[70], 8) ^ _shr(locals_[126], 8)) & 0xFFFFFFFF
     locals_[752] = (locals_[679] & 0x7FE0507) & 0xFFFFFFFF
     locals_[232] = (
         (

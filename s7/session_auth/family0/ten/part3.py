@@ -13,6 +13,16 @@ import struct
 _U32 = 0xFFFFFFFF
 
 
+def _shr(x: int, n: int) -> int:
+    """Logical right-shift (mask to uint32 before shifting).
+
+    Python's ``>>`` on negative ints does arithmetic shift (sign-extends).
+    C#'s ``uint >> n`` does logical shift (zero-fills). This helper
+    ensures Python behaves identically to C#.
+    """
+    return (x & _U32) >> n
+
+
 def _to_uints(buf: bytes | bytearray) -> list[int]:
     n = len(buf) // 4
     return list(struct.unpack(f"<{n}I", bytes(buf[: n * 4])))
@@ -35,13 +45,15 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ((locals_[214] & 0x8300000 ^ 0x9C17FFFF) & locals_[92] ^ locals_[214] & 0x5C100000 ^ 0x63E80000) & locals_[93]
         ^ (locals_[214] & 0x54200000 ^ 0xC957FFFF) & locals_[92]
     ) & 0xFFFFFFFF
-    locals_[234] = (locals_[9] >> 0x13) & 0xFFFFFFFF
+    locals_[234] = (_shr(locals_[9], 0x13)) & 0xFFFFFFFF
     locals_[261] = (
         ~(
-            (((locals_[214] & 0x36880000 ^ 0x27C00000) & locals_[92] ^ locals_[214] & 0x12800000 ^ 0xDD5FFFFF) & locals_[93])
-            >> 0x13
+            _shr(
+                (((locals_[214] & 0x36880000 ^ 0x27C00000) & locals_[92] ^ locals_[214] & 0x12800000 ^ 0xDD5FFFFF) & locals_[93]),
+                0x13,
+            )
         )
-        ^ ~(locals_[214] >> 0x13 & 0x80) & locals_[92] >> 0x13 & 0x1B87
+        ^ ~(_shr(locals_[214], 0x13) & 0x80) & _shr(locals_[92], 0x13) & 0x1B87
     ) & 0xFFFFFFFF
     locals_[157] = (
         ((locals_[214] & 0x3EB80000 ^ 0x73C00000) & locals_[92] ^ locals_[214] & 0xB17FFFFF ^ 0xEAB7FFFF) & locals_[93]
@@ -49,7 +61,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[214] & 0xA17FFFFF
         ^ 0xD977FFFF
     ) & 0xFFFFFFFF
-    locals_[202] = (locals_[157] >> 0x13) & 0xFFFFFFFF
+    locals_[202] = (_shr(locals_[157], 0x13)) & 0xFFFFFFFF
     locals_[23] = (
         ((locals_[214] & 0x7DD1E ^ 0x272F7) & locals_[92] ^ locals_[214] & 0x33611 ^ 0x4022) & locals_[93]
         ^ (locals_[214] & 0x14807 ^ 0x4422A) & locals_[92]
@@ -73,7 +85,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[15]
         ^ locals_[201]
     ) & 0xFFFFFFFF
-    locals_[159] = ((locals_[157] ^ locals_[9]) >> 0x13 & locals_[261]) & 0xFFFFFFFF
+    locals_[159] = (_shr((locals_[157] ^ locals_[9]), 0x13) & locals_[261]) & 0xFFFFFFFF
     locals_[200] = (locals_[234] & ~locals_[202]) & 0xFFFFFFFF
     locals_[233] = (locals_[250] ^ locals_[202] ^ locals_[234]) & 0xFFFFFFFF
     locals_[2] = (
@@ -92,7 +104,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ 0x3DF33
     ) & 0xFFFFFFFF
     locals_[4] = (
-        ((locals_[156] ^ locals_[233]) & locals_[261] ^ (locals_[157] & locals_[9]) >> 0x13) & locals_[201]
+        ((locals_[156] ^ locals_[233]) & locals_[261] ^ _shr((locals_[157] & locals_[9]), 0x13)) & locals_[201]
         ^ (~locals_[234] & locals_[202] ^ locals_[250] ^ locals_[234] ^ locals_[156]) & locals_[261]
         ^ locals_[234]
         ^ locals_[156]
@@ -124,7 +136,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[1]
         ^ locals_[13]
     ) & 0xFFFFFFFF
-    locals_[12] = (locals_[261] >> 0x13 & ~(locals_[4] >> 0x13) ^ locals_[4] >> 0x13) & 0xFFFFFFFF
+    locals_[12] = (_shr(locals_[261], 0x13) & ~(_shr(locals_[4], 0x13)) ^ _shr(locals_[4], 0x13)) & 0xFFFFFFFF
     locals_[234] = (locals_[261] ^ locals_[4]) & 0xFFFFFFFF
     locals_[250] = (~(locals_[2] & 0x7FFFF) & locals_[234] & 0xFFFFFFF) & 0xFFFFFFFF
     locals_[156] = (~(locals_[261] & locals_[4] & 0xFFFFFFF)) & 0xFFFFFFFF
@@ -137,7 +149,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[9]
         ^ locals_[157]
     ) & 0xFFFFFFFF
-    locals_[15] = (locals_[234] >> 0x13) & 0xFFFFFFFF
+    locals_[15] = (_shr(locals_[234], 0x13)) & 0xFFFFFFFF
     locals_[120] = (locals_[156] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[9] = ((locals_[131] & 0xFFFFFFF) << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[22] = (~locals_[120] & (locals_[250] << 0xD & 0xFFFFFFFF)) & 0xFFFFFFFF
@@ -145,7 +157,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[260] = (~(~locals_[22] & locals_[9]) ^ (locals_[250] << 0xD & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[9] = (locals_[233] & 0xC9A2A8C5) & 0xFFFFFFFF
     locals_[22] = ((locals_[156] ^ locals_[250]) << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
-    locals_[1] = ((locals_[2] & locals_[234]) >> 0x13) & 0xFFFFFFFF
+    locals_[1] = (_shr((locals_[2] & locals_[234]), 0x13)) & 0xFFFFFFFF
     locals_[234] = (locals_[233] & 0xE372EF77) & 0xFFFFFFFF
     locals_[234] = (
         ((locals_[233] & 0x896AE064 ^ 0xC3292918) & locals_[23] ^ locals_[234] ^ 0x7E1B4C01) & locals_[157]
@@ -231,18 +243,18 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[23]
         ^ locals_[159]
     ) & 0xFFFFFFFF
-    locals_[202] = (locals_[157] >> 0x13) & 0xFFFFFFFF
+    locals_[202] = (_shr(locals_[157], 0x13)) & 0xFFFFFFFF
     locals_[253] = (
         ((locals_[279] & 0xF9F80000 ^ 0x2000000) & locals_[132] ^ (locals_[13] ^ 0xC7474BF0) & 0xDAB80000) & locals_[166]
         ^ (locals_[279] & 0x4BE80000 ^ 0xB1580000) & locals_[132]
         ^ locals_[279] & 0x91200000
     ) & 0xFFFFFFFF
-    locals_[199] = (~(~locals_[202] & locals_[253] >> 0x13) ^ locals_[233] >> 0x13) & 0xFFFFFFFF
-    locals_[13] = (((locals_[263] ^ locals_[2]) & locals_[234] ^ ~locals_[2] & locals_[200] ^ 0x80000000) >> 3) & 0xFFFFFFFF
+    locals_[199] = (~(~locals_[202] & _shr(locals_[253], 0x13)) ^ _shr(locals_[233], 0x13)) & 0xFFFFFFFF
+    locals_[13] = (_shr(((locals_[263] ^ locals_[2]) & locals_[234] ^ ~locals_[2] & locals_[200] ^ 0x80000000), 3)) & 0xFFFFFFFF
     locals_[200] = (~(~locals_[200] & locals_[2]) & (locals_[3] ^ 0x7FFFFFFF) ^ locals_[200]) & 0xFFFFFFFF
-    locals_[158] = (locals_[4] >> 3) & 0xFFFFFFFF
-    locals_[261] = (locals_[200] >> 3) & 0xFFFFFFFF
-    locals_[263] = (~((locals_[4] & locals_[200]) >> 3) & locals_[13] ^ locals_[261] ^ 0xE0000000) & 0xFFFFFFFF
+    locals_[158] = (_shr(locals_[4], 3)) & 0xFFFFFFFF
+    locals_[261] = (_shr(locals_[200], 3)) & 0xFFFFFFFF
+    locals_[263] = (~(_shr((locals_[4] & locals_[200]), 3)) & locals_[13] ^ locals_[261] ^ 0xE0000000) & 0xFFFFFFFF
     locals_[234] = (~locals_[159] ^ locals_[9]) & 0xFFFFFFFF
     locals_[4] = (
         (
@@ -268,8 +280,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[12] = (locals_[3] ^ locals_[12]) & 0xFFFFFFFF
     locals_[201] = (~(~locals_[13] & locals_[158]) & locals_[261] ^ locals_[13]) & 0xFFFFFFFF
-    locals_[1] = ((locals_[253] & locals_[157] ^ locals_[233]) >> 0x13) & 0xFFFFFFFF
-    locals_[15] = (~(locals_[253] >> 0x13) & locals_[202] ^ (locals_[233] & locals_[253]) >> 0x13) & 0xFFFFFFFF
+    locals_[1] = (_shr((locals_[253] & locals_[157] ^ locals_[233]), 0x13)) & 0xFFFFFFFF
+    locals_[15] = (~(_shr(locals_[253], 0x13)) & locals_[202] ^ _shr((locals_[233] & locals_[253]), 0x13)) & 0xFFFFFFFF
     locals_[157] = (
         ~((~((locals_[22] ^ locals_[260]) & locals_[1]) ^ (locals_[22] ^ locals_[260]) & locals_[15]) & locals_[120])
         ^ locals_[260]
@@ -279,8 +291,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ~((~(~(locals_[200] & 0xFFFFE1FF) & locals_[23]) & 0xFFF81E00 ^ locals_[200]) & locals_[12] & 0xFFFFFFF)
         ^ ~locals_[23] & locals_[200] & 0xFFFFFFF
     ) & 0xFFFFFFFF
-    locals_[2] = ((locals_[23] ^ locals_[200]) >> 0x13) & 0xFFFFFFFF
-    locals_[159] = (~(locals_[3] >> 0x13 & ~locals_[2])) & 0xFFFFFFFF
+    locals_[2] = (_shr((locals_[23] ^ locals_[200]), 0x13)) & 0xFFFFFFFF
+    locals_[159] = (~(_shr(locals_[3], 0x13) & ~locals_[2])) & 0xFFFFFFFF
     locals_[233] = (~locals_[199] ^ locals_[22]) & 0xFFFFFFFF
     locals_[253] = (
         (
@@ -299,7 +311,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ((locals_[200] & 0xFF81E00 ^ 0x7E1FF) & locals_[23] ^ (locals_[200] ^ 0xFFFFE1FF) & 0x7FFFF) & locals_[12]
         ^ ~locals_[23] & locals_[200] & 0x7FFFF
     ) & 0xFFFFFFFF
-    locals_[233] = (~(locals_[4] >> 0x13) & locals_[234] >> 0x13) & 0xFFFFFFFF
+    locals_[233] = (~(_shr(locals_[4], 0x13)) & _shr(locals_[234], 0x13)) & 0xFFFFFFFF
     locals_[13] = (~locals_[158] ^ locals_[13]) & 0xFFFFFFFF
     locals_[234] = (
         (~(locals_[15] & 2) & locals_[253] & 0x4512053A ^ locals_[15] & 0x876B1CFC ^ 0x39CCEE74) & locals_[157]
@@ -373,8 +385,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[253] = (locals_[276] & locals_[200] ^ (locals_[4] << 0xD & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[120] = (~(locals_[158] & locals_[262]) ^ locals_[120]) & 0xFFFFFFFF
     locals_[158] = ((locals_[199] & locals_[264] ^ locals_[261]) << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
-    locals_[157] = (locals_[120] >> 3) & 0xFFFFFFFF
-    locals_[264] = ((locals_[158] ^ locals_[273]) >> 3 ^ ~(locals_[158] >> 3) & locals_[157]) & 0xFFFFFFFF
+    locals_[157] = (_shr(locals_[120], 3)) & 0xFFFFFFFF
+    locals_[264] = (_shr((locals_[158] ^ locals_[273]), 3) ^ ~(_shr(locals_[158], 3)) & locals_[157]) & 0xFFFFFFFF
     locals_[199] = (locals_[15] & (locals_[129] ^ locals_[165])) & 0xFFFFFFFF
     locals_[200] = (
         (~locals_[199] ^ locals_[165] ^ locals_[263]) & locals_[13]
@@ -382,7 +394,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[15]
         ^ locals_[201]
     ) & 0xFFFFFFFF
-    locals_[199] = (~(locals_[273] >> 3) & locals_[158] >> 3 ^ locals_[157] ^ 0xE0000000) & 0xFFFFFFFF
+    locals_[199] = (~(_shr(locals_[273], 3)) & _shr(locals_[158], 3) ^ locals_[157] ^ 0xE0000000) & 0xFFFFFFFF
     locals_[157] = (locals_[210] ^ locals_[159]) & 0xFFFFFFFF
     locals_[263] = (
         (~((locals_[13] ^ locals_[263] ^ locals_[202]) & locals_[201]) ^ locals_[165] ^ locals_[13]) & locals_[15]
@@ -390,12 +402,12 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[165]
         ^ locals_[263]
     ) & 0xFFFFFFFF
-    locals_[260] = (locals_[260] >> 0x13) & 0xFFFFFFFF
-    locals_[15] = (locals_[274] >> 0x13) & 0xFFFFFFFF
-    locals_[13] = (~(~(locals_[163] >> 0x13) & locals_[15]) & locals_[260] ^ locals_[15]) & 0xFFFFFFFF
-    locals_[15] = ((~((locals_[274] & locals_[164]) >> 0x13) & locals_[260] ^ ~locals_[15]) & 0x1FFF) & 0xFFFFFFFF
+    locals_[260] = (_shr(locals_[260], 0x13)) & 0xFFFFFFFF
+    locals_[15] = (_shr(locals_[274], 0x13)) & 0xFFFFFFFF
+    locals_[13] = (~(~(_shr(locals_[163], 0x13)) & locals_[15]) & locals_[260] ^ locals_[15]) & 0xFFFFFFFF
+    locals_[15] = ((~(_shr((locals_[274] & locals_[164]), 0x13)) & locals_[260] ^ ~locals_[15]) & 0x1FFF) & 0xFFFFFFFF
     locals_[201] = ((locals_[159] ^ ~locals_[2]) & locals_[233]) & 0xFFFFFFFF
-    locals_[120] = ((locals_[158] & locals_[273] ^ locals_[120]) >> 3) & 0xFFFFFFFF
+    locals_[120] = (_shr((locals_[158] & locals_[273] ^ locals_[120]), 3)) & 0xFFFFFFFF
     locals_[158] = (
         (~locals_[263] ^ locals_[200]) & locals_[210] ^ locals_[159] & ~locals_[2] ^ ~locals_[200] & locals_[263] ^ locals_[201]
     ) & 0xFFFFFFFF
@@ -405,7 +417,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (~locals_[233] & locals_[2] ^ ~locals_[200] & locals_[263]) & locals_[159]
     ) & 0xFFFFFFFF
     locals_[274] = (~locals_[158] & locals_[263] & locals_[157] & 0xFFFE1FF) & 0xFFFFFFFF
-    locals_[234] = (locals_[234] >> 0x13) & 0xFFFFFFFF
+    locals_[234] = (_shr(locals_[234], 0x13)) & 0xFFFFFFFF
     locals_[129] = (~((~locals_[263] ^ locals_[158]) & locals_[157]) ^ locals_[158]) & 0xFFFFFFFF
     locals_[233] = (~locals_[253]) & 0xFFFFFFFF
     locals_[2] = ((locals_[12] ^ locals_[233]) & locals_[23]) & 0xFFFFFFFF
@@ -634,9 +646,9 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[253] = ((locals_[159] ^ ~locals_[263] & locals_[12]) & 0x82001000 ^ 0x7DFFEFFF) & 0xFFFFFFFF
     locals_[207] = ((locals_[263] & locals_[159] ^ locals_[12]) & 0x82001000) & 0xFFFFFFFF
     locals_[15] = ((locals_[263] & ~locals_[12] ^ locals_[12] ^ locals_[159]) & 0x82001000) & 0xFFFFFFFF
-    locals_[260] = (~((locals_[253] & locals_[207]) >> 3) ^ locals_[15] >> 3) & 0xFFFFFFFF
+    locals_[260] = (~(_shr((locals_[253] & locals_[207]), 3)) ^ _shr(locals_[15], 3)) & 0xFFFFFFFF
     locals_[261] = (~locals_[164]) & 0xFFFFFFFF
-    locals_[262] = (~((locals_[207] ^ locals_[15]) >> 3) & 0x1FFFFFFF) & 0xFFFFFFFF
+    locals_[262] = (~(_shr((locals_[207] ^ locals_[15]), 3)) & 0x1FFFFFFF) & 0xFFFFFFFF
     locals_[210] = (
         ~(
             (
@@ -698,7 +710,9 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ ~((~(locals_[157] & locals_[209]) ^ locals_[202]) & locals_[210] & locals_[234]) & locals_[201]
     ) & 0xFFFFFFFF
     locals_[210] = (
-        ~(~(locals_[15] >> 3) & locals_[207] >> 3) & locals_[253] >> 3 ^ (locals_[15] & locals_[207]) >> 3 ^ 0xE0000000
+        ~(~(_shr(locals_[15], 3)) & _shr(locals_[207], 3)) & _shr(locals_[253], 3)
+        ^ _shr((locals_[15] & locals_[207]), 3)
+        ^ 0xE0000000
     ) & 0xFFFFFFFF
     locals_[233] = ((locals_[2] ^ locals_[158]) & locals_[157]) & 0xFFFFFFFF
     locals_[207] = (
@@ -758,9 +772,11 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (locals_[23] & locals_[233] ^ locals_[2] ^ locals_[201]) & locals_[157] & locals_[158]
         ^ (locals_[15] & locals_[207] & 0x7DFFEFFF ^ 0x82001000) & locals_[233]
     ) & 0xFFFFFFFF
-    locals_[261] = (locals_[157] >> 2 & ~(locals_[234] >> 2)) & 0xFFFFFFFF
-    locals_[276] = (~(locals_[253] >> 2) & locals_[157] >> 2 ^ locals_[253] >> 2 & ~(locals_[234] >> 2)) & 0xFFFFFFFF
-    locals_[201] = ((locals_[157] ^ locals_[234]) >> 2) & 0xFFFFFFFF
+    locals_[261] = (_shr(locals_[157], 2) & ~(_shr(locals_[234], 2))) & 0xFFFFFFFF
+    locals_[276] = (
+        ~(_shr(locals_[253], 2)) & _shr(locals_[157], 2) ^ _shr(locals_[253], 2) & ~(_shr(locals_[234], 2))
+    ) & 0xFFFFFFFF
+    locals_[201] = (_shr((locals_[157] ^ locals_[234]), 2)) & 0xFFFFFFFF
     locals_[2] = (~locals_[260] ^ locals_[201]) & 0xFFFFFFFF
     locals_[23] = (
         ((locals_[2] ^ locals_[261]) & locals_[262] ^ locals_[260] ^ locals_[201] ^ locals_[261]) & locals_[276]
@@ -871,13 +887,13 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[157] = (~(locals_[234] & locals_[2] & 0x82001000) ^ locals_[15] & 0x82001000) & 0xFFFFFFFF
     locals_[233] = ((~locals_[2] & locals_[234] ^ locals_[15]) & 0x82001000 ^ 0x7DFFEFFF) & 0xFFFFFFFF
     locals_[15] = (((locals_[2] ^ locals_[15]) & locals_[234] ^ locals_[2]) & 0x82001000 ^ 0x7DFFEFFF) & 0xFFFFFFFF
-    locals_[234] = (locals_[233] >> 1) & 0xFFFFFFFF
-    locals_[12] = (~(locals_[157] >> 1)) & 0xFFFFFFFF
-    locals_[253] = (locals_[15] >> 1) & 0xFFFFFFFF
-    locals_[158] = (~(locals_[234] & locals_[12]) & locals_[253] ^ locals_[157] >> 1) & 0xFFFFFFFF
+    locals_[234] = (_shr(locals_[233], 1)) & 0xFFFFFFFF
+    locals_[12] = (~(_shr(locals_[157], 1))) & 0xFFFFFFFF
+    locals_[253] = (_shr(locals_[15], 1)) & 0xFFFFFFFF
+    locals_[158] = (~(locals_[234] & locals_[12]) & locals_[253] ^ _shr(locals_[157], 1)) & 0xFFFFFFFF
     locals_[2] = ((~locals_[273] ^ locals_[164]) & locals_[208]) & 0xFFFFFFFF
-    locals_[233] = (locals_[253] & locals_[12] ^ (locals_[233] & locals_[157]) >> 1 ^ 0x80000000) & 0xFFFFFFFF
-    locals_[12] = (~((locals_[15] & locals_[157]) >> 1) & locals_[234] ^ locals_[253] ^ 0x80000000) & 0xFFFFFFFF
+    locals_[233] = (locals_[253] & locals_[12] ^ _shr((locals_[233] & locals_[157]), 1) ^ 0x80000000) & 0xFFFFFFFF
+    locals_[12] = (~(_shr((locals_[15] & locals_[157]), 1)) & locals_[234] ^ locals_[253] ^ 0x80000000) & 0xFFFFFFFF
     locals_[234] = (
         ~((~(locals_[208] & (~locals_[233] ^ locals_[158])) ^ locals_[233] ^ locals_[158]) & locals_[273])
         ^ (~(locals_[164] & (~locals_[233] ^ locals_[158])) ^ locals_[233] ^ locals_[158]) & locals_[208]
@@ -1021,7 +1037,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[158] = ((~locals_[163] ^ locals_[159] ^ locals_[276]) & locals_[209]) & 0xFFFFFFFF
     locals_[274] = (~locals_[200] & locals_[159]) & 0xFFFFFFFF
     locals_[12] = (locals_[200] & 0xFFFFFFB7) & 0xFFFFFFFF
-    locals_[281] = (~(~(locals_[23] & 0x7AF20) >> 0x13)) & 0xFFFFFFFF
+    locals_[281] = (~(_shr(~(locals_[23] & 0x7AF20), 0x13))) & 0xFFFFFFFF
     locals_[165] = (
         (
             ((locals_[276] ^ 0x46E7E558) & 0xF7EFF7D8 ^ locals_[159] & 0xFFFFFFB7) & locals_[163]
@@ -1047,9 +1063,9 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[233] = (locals_[159] << 0x13 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[262] = (~(locals_[273] << 0x13 & 0xFFFFFFFF) & (locals_[200] << 0x13 & 0xFFFFFFFF) & ~locals_[233]) & 0xFFFFFFFF
     locals_[13] = (~(locals_[208] << 0xD & 0xFFFFFFFF) & locals_[260] ^ locals_[13]) & 0xFFFFFFFF
-    locals_[206] = (~(~((locals_[210] ^ locals_[261]) >> 0xD) & locals_[207] >> 0xD) & 0x7FFFF) & 0xFFFFFFFF
+    locals_[206] = (~(~(_shr((locals_[210] ^ locals_[261]), 0xD)) & _shr(locals_[207], 0xD)) & 0x7FFFF) & 0xFFFFFFFF
     locals_[260] = (locals_[200] & 0x5D9D7FDD) & 0xFFFFFFFF
-    locals_[15] = (locals_[15] >> 0xD) & 0xFFFFFFFF
+    locals_[15] = (_shr(locals_[15], 0xD)) & 0xFFFFFFFF
     locals_[129] = (
         (
             ((locals_[276] ^ 0xB3FAB6AA) & 0xFF7FDB7F ^ locals_[159] & 0x5D9D7FDD) & locals_[163]
@@ -1071,8 +1087,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[200] & 0xDF872527
     ) & 0xFFFFFFFF
     locals_[94] = (locals_[129] ^ 0x4D89219C) & 0xFFFFFFFF
-    locals_[95] = (~((locals_[210] & locals_[261] & locals_[207]) >> 0xD)) & 0xFFFFFFFF
-    locals_[211] = (locals_[208] >> 0x13) & 0xFFFFFFFF
+    locals_[95] = (~(_shr((locals_[210] & locals_[261] & locals_[207]), 0xD))) & 0xFFFFFFFF
+    locals_[211] = (_shr(locals_[208], 0x13)) & 0xFFFFFFFF
     locals_[210] = (~locals_[211]) & 0xFFFFFFFF
     locals_[260] = (locals_[200] & 0xA7FFE5FF) & 0xFFFFFFFF
     locals_[207] = (
@@ -1122,36 +1138,42 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ~(locals_[201] & 0x80000000) & locals_[234] ^ (locals_[201] ^ locals_[234]) & locals_[13] & 0x80000000
     ) & 0xFFFFFFFF
     locals_[274] = (
-        (
-            ((locals_[94] & 0xC6E7FFFF ^ 0xA2A7FFFF) & locals_[165] ^ locals_[94] & 0x4B180000 ^ 0x4E080000) & locals_[207]
-            ^ (locals_[94] & 0x9180000 ^ 0x11100000) & locals_[165]
-            ^ locals_[94] & 0x7FF80000
+        _shr(
+            (
+                ((locals_[94] & 0xC6E7FFFF ^ 0xA2A7FFFF) & locals_[165] ^ locals_[94] & 0x4B180000 ^ 0x4E080000) & locals_[207]
+                ^ (locals_[94] & 0x9180000 ^ 0x11100000) & locals_[165]
+                ^ locals_[94] & 0x7FF80000
+            ),
+            0x13,
         )
-        >> 0x13
     ) & 0xFFFFFFFF
     locals_[282] = (
         ((locals_[94] & 0x128D ^ 0x2821A) & locals_[165] ^ locals_[94] & 0x1C529 ^ 0x1F518) & locals_[207]
         ^ (locals_[94] & 0x28097 ^ 0x7DD46) & locals_[165]
         ^ locals_[94] & 0x602A6
     ) & 0xFFFFFFFF
-    locals_[260] = ((locals_[202] ^ locals_[209]) >> 3) & 0xFFFFFFFF
+    locals_[260] = (_shr((locals_[202] ^ locals_[209]), 3)) & 0xFFFFFFFF
     locals_[276] = (
-        (
-            ((locals_[94] & 0xC6E7FFFF ^ 0x75580000) & locals_[165] ^ (locals_[129] ^ 0x4899219C) & 0x8DFFFFFF) & locals_[207]
-            ^ (locals_[94] & 0x4FF80000 ^ 0x7C480000) & locals_[165]
-            ^ locals_[94] & 0x72000000
-            ^ 0x8517FFFF
+        _shr(
+            (
+                ((locals_[94] & 0xC6E7FFFF ^ 0x75580000) & locals_[165] ^ (locals_[129] ^ 0x4899219C) & 0x8DFFFFFF) & locals_[207]
+                ^ (locals_[94] & 0x4FF80000 ^ 0x7C480000) & locals_[165]
+                ^ locals_[94] & 0x72000000
+                ^ 0x8517FFFF
+            ),
+            0x13,
         )
-        >> 0x13
     ) & 0xFFFFFFFF
     locals_[163] = (
-        (((locals_[94] & 0xD7FFFFFF ^ 0x9807FFFF) & locals_[165]) >> 0x13 ^ ~(locals_[94] >> 0x13 & 0x1BF) & 0xFFF)
-        & locals_[207] >> 0x13
-        ^ ((locals_[94] & 0x22A00000 ^ 0xA80FFFFF) & locals_[165] ^ locals_[94] & 0x77100000) >> 0x13
+        (_shr(((locals_[94] & 0xD7FFFFFF ^ 0x9807FFFF) & locals_[165]), 0x13) ^ ~(_shr(locals_[94], 0x13) & 0x1BF) & 0xFFF)
+        & _shr(locals_[207], 0x13)
+        ^ _shr(((locals_[94] & 0x22A00000 ^ 0xA80FFFFF) & locals_[165] ^ locals_[94] & 0x77100000), 0x13)
     ) & 0xFFFFFFFF
     locals_[129] = (~locals_[263]) & 0xFFFFFFFF
-    locals_[13] = ((~(~(~locals_[13] & locals_[201] & 0x7FFFFFFF) & locals_[234]) ^ locals_[13] & 0x80000000) >> 3) & 0xFFFFFFFF
-    locals_[234] = (~(locals_[202] >> 3 & ~(locals_[209] >> 3)) & locals_[13] ^ locals_[202] >> 3) & 0xFFFFFFFF
+    locals_[13] = (
+        _shr((~(~(~locals_[13] & locals_[201] & 0x7FFFFFFF) & locals_[234]) ^ locals_[13] & 0x80000000), 3)
+    ) & 0xFFFFFFFF
+    locals_[234] = (~(_shr(locals_[202], 3) & ~(_shr(locals_[209], 3))) & locals_[13] ^ _shr(locals_[202], 3)) & 0xFFFFFFFF
     locals_[208] = (locals_[159] & locals_[233] ^ ~locals_[233] & (locals_[273] << 0x13 & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[273] = (
         ~(((locals_[263] ^ locals_[120]) & locals_[199] ^ (locals_[199] ^ locals_[129]) & locals_[12]) & locals_[261])
@@ -1202,7 +1224,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ ~locals_[274] & locals_[261]
         ^ locals_[274]
     ) & 0xFFFFFFFF
-    locals_[13] = ((~((locals_[202] & locals_[209]) >> 3) & locals_[13] ^ ~(locals_[209] >> 3)) & 0x1FFFFFFF) & 0xFFFFFFFF
+    locals_[13] = ((~(_shr((locals_[202] & locals_[209]), 3)) & locals_[13] ^ ~(_shr(locals_[209], 3))) & 0x1FFFFFFF) & 0xFFFFFFFF
     locals_[12] = ((locals_[163] ^ locals_[274]) & locals_[276]) & 0xFFFFFFFF
     locals_[233] = (
         (~locals_[12] ^ locals_[263] ^ locals_[163] ^ locals_[274]) & locals_[261]
@@ -1247,15 +1269,15 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ((locals_[273] & 0x7FFFF ^ locals_[264]) & locals_[263] ^ locals_[273] & locals_[264] & 0x7FFFF) & 0xFFFFFFF
     ) & 0xFFFFFFFF
     locals_[233] = (locals_[233] & locals_[264]) & 0xFFFFFFFF
-    locals_[12] = (locals_[233] >> 0x13) & 0xFFFFFFFF
-    locals_[199] = (((locals_[273] ^ locals_[264]) & locals_[263] ^ locals_[273] & locals_[264]) >> 0x13) & 0xFFFFFFFF
+    locals_[12] = (_shr(locals_[233], 0x13)) & 0xFFFFFFFF
+    locals_[199] = (_shr(((locals_[273] ^ locals_[264]) & locals_[263] ^ locals_[273] & locals_[264]), 0x13)) & 0xFFFFFFFF
     locals_[3] = (
         ((locals_[202] & 0xFF7B6FB3 ^ 0xBE63E7F7) & locals_[200] ^ locals_[202] & 0x18508942 ^ 0xE73E7AF9) & locals_[159]
         ^ (locals_[202] & 0x1850894A ^ 0xA7E9ED35) & locals_[200]
         ^ locals_[202] & 0x18508946
         ^ 0xDBD8E561
     ) & 0xFFFFFFFF
-    locals_[9] = (locals_[4] >> 0x13) & 0xFFFFFFFF
+    locals_[9] = (_shr(locals_[4], 0x13)) & 0xFFFFFFFF
     locals_[158] = (
         ((locals_[202] & 0x8F9FFE52 ^ 0xFFF5AEA2) & locals_[200] ^ locals_[202] & 0x74EEFEE8 ^ 0x697B0015) & locals_[159]
         ^ (locals_[202] & 0x74EEFEEC ^ 0x979B51FA) & locals_[200]
@@ -1333,8 +1355,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[159]
     ) & 0xFFFFFFFF
     locals_[202] = ((~locals_[129] ^ locals_[159] ^ locals_[210]) & locals_[13]) & 0xFFFFFFFF
-    locals_[281] = (locals_[211] >> 0x13) & 0xFFFFFFFF
-    locals_[273] = (~(locals_[273] >> 0x13)) & 0xFFFFFFFF
+    locals_[281] = (_shr(locals_[211], 0x13)) & 0xFFFFFFFF
+    locals_[273] = (~(_shr(locals_[273], 0x13))) & 0xFFFFFFFF
     locals_[159] = (
         ((locals_[277] ^ locals_[159] ^ locals_[210]) & locals_[129] ^ (~locals_[159] ^ locals_[210]) & locals_[13])
         & locals_[234]
@@ -1351,10 +1373,12 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[159]
     ) & 0xFFFFFFFF
     locals_[284] = (locals_[281] ^ locals_[273]) & 0xFFFFFFFF
-    locals_[281] = (~(locals_[281] & locals_[273]) & locals_[264] >> 0x13 ^ locals_[281]) & 0xFFFFFFFF
+    locals_[281] = (~(locals_[281] & locals_[273]) & _shr(locals_[264], 0x13) ^ locals_[281]) & 0xFFFFFFFF
     locals_[260] = ((locals_[261] ^ locals_[263]) & locals_[283]) & 0xFFFFFFFF
     locals_[234] = (~locals_[263] & locals_[261] ^ locals_[260]) & 0xFFFFFFFF
-    locals_[219] = ((~((locals_[211] & locals_[274]) >> 0x13) & locals_[264] >> 0x13 ^ locals_[273]) & 0x1FFF) & 0xFFFFFFFF
+    locals_[219] = (
+        (~(_shr((locals_[211] & locals_[274]), 0x13)) & _shr(locals_[264], 0x13) ^ locals_[273]) & 0x1FFF
+    ) & 0xFFFFFFFF
     locals_[273] = (
         (locals_[234] ^ locals_[284] ^ locals_[263]) & locals_[281] ^ (locals_[234] ^ locals_[263]) & locals_[284] ^ locals_[219]
     ) & 0xFFFFFFFF
@@ -1371,7 +1395,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[210]
         ^ locals_[12]
     ) & 0xFFFFFFFF
-    locals_[233] = ((locals_[233] ^ locals_[4]) >> 0x13) & 0xFFFFFFFF
+    locals_[233] = (_shr((locals_[233] ^ locals_[4]), 0x13)) & 0xFFFFFFFF
     locals_[13] = ((~(locals_[233] & locals_[159]) ^ locals_[12] ^ locals_[9]) & locals_[276]) & 0xFFFFFFFF
     locals_[233] = (
         locals_[13] ^ ~(~locals_[12] & locals_[199]) & locals_[9] ^ locals_[233] & (locals_[159] ^ locals_[276]) & locals_[200]
@@ -1381,16 +1405,16 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         (locals_[277] & (locals_[234] ^ 0xFFFFE1FF) & 0xFF81E00 ^ locals_[9] & 0xFFFE1FF) & locals_[233]
         ^ (locals_[277] & locals_[9] ^ locals_[234] & 0xFFF81E00) & 0xFFFE1FF
     ) & 0xFFFFFFFF
-    locals_[4] = ((locals_[233] ^ locals_[277]) >> 0x13) & 0xFFFFFFFF
+    locals_[4] = (_shr((locals_[233] ^ locals_[277]), 0x13)) & 0xFFFFFFFF
     locals_[159] = (~((locals_[264] ^ locals_[211]) << 0xD & 0xFFFFFFFF) & 0xFFFFE000) & 0xFFFFFFFF
-    locals_[202] = ((locals_[159] ^ locals_[129]) >> 3) & 0xFFFFFFFF
+    locals_[202] = (_shr((locals_[159] ^ locals_[129]), 3)) & 0xFFFFFFFF
     locals_[211] = (
         (~(locals_[234] & 0x1E00) & 0x7FFFF ^ locals_[233] & locals_[9] & 0xFFFE1FF) & locals_[277]
         ^ ~locals_[233] & locals_[234] & 0x1E00
     ) & 0xFFFFFFFF
-    locals_[210] = (locals_[210] >> 0x13) & 0xFFFFFFFF
-    locals_[13] = (locals_[13] >> 0x13) & 0xFFFFFFFF
-    locals_[218] = (locals_[218] >> 0x13) & 0xFFFFFFFF
+    locals_[210] = (_shr(locals_[210], 0x13)) & 0xFFFFFFFF
+    locals_[13] = (_shr(locals_[13], 0x13)) & 0xFFFFFFFF
+    locals_[218] = (_shr(locals_[218], 0x13)) & 0xFFFFFFFF
     locals_[277] = (
         (
             (~(locals_[234] & 0xFFFFE1FF) ^ locals_[233] & (locals_[234] ^ 0xFFFFE1FF) & 0xFFF81E00) & locals_[277]
@@ -1403,10 +1427,10 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ~(locals_[211] << 0xD & 0xFFFFFFFF) & (locals_[277] << 0xD & 0xFFFFFFFF) ^ (locals_[12] << 0xD & 0xFFFFFFFF)
     ) & 0xFFFFFFFF
     locals_[199] = (
-        ((locals_[274] & locals_[264]) << 0xD & 0xFFFFFFFF & ~locals_[282] ^ ~locals_[163] & locals_[282] ^ 0x1FFF) >> 3
+        _shr(((locals_[274] & locals_[264]) << 0xD & 0xFFFFFFFF & ~locals_[282] ^ ~locals_[163] & locals_[282] ^ 0x1FFF), 3)
     ) & 0xFFFFFFFF
-    locals_[159] = (locals_[159] >> 3) & 0xFFFFFFFF
-    locals_[129] = (locals_[129] >> 3) & 0xFFFFFFFF
+    locals_[159] = (_shr(locals_[159], 3)) & 0xFFFFFFFF
+    locals_[129] = (_shr(locals_[129], 3)) & 0xFFFFFFFF
     locals_[234] = (~(~locals_[199] & locals_[129] & locals_[159])) & 0xFFFFFFFF
     locals_[199] = (~locals_[159] & locals_[129] & locals_[199]) & 0xFFFFFFFF
     locals_[159] = (
@@ -1473,7 +1497,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[135] & 0xD5671BE0
         ^ 0x426FFFFF
     ) & 0xFFFFFFFF
-    locals_[260] = (locals_[281] >> 0x13) & 0xFFFFFFFF
+    locals_[260] = (_shr(locals_[281], 0x13)) & 0xFFFFFFFF
     locals_[233] = (locals_[260] ^ 0xFFFFE000) & 0xFFFFFFFF
     locals_[159] = (~((locals_[263] & locals_[136] ^ 2) & locals_[168] & 6) ^ locals_[135] & 5) & 0xFFFFFFFF
     locals_[261] = (
@@ -1506,7 +1530,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[234]
     ) & 0xFFFFFFFF
     locals_[273] = (
-        (~(locals_[281] >> 0x13) ^ (locals_[9] ^ locals_[276]) & locals_[233] ^ 0x1FFF ^ locals_[276]) & locals_[134]
+        (~(_shr(locals_[281], 0x13)) ^ (locals_[9] ^ locals_[276]) & locals_[233] ^ 0x1FFF ^ locals_[276]) & locals_[134]
         ^ (~locals_[260] & 0x1FFF ^ locals_[9]) & locals_[233]
         ^ locals_[9]
     ) & 0xFFFFFFFF
@@ -1538,12 +1562,17 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[9] = ((locals_[263] & 0x80000000 ^ locals_[283]) & locals_[129] ^ ~locals_[283] & 0x80000000) & 0xFFFFFFFF
     locals_[220] = (
-        ((~locals_[283] & 0x80000000 ^ locals_[263]) & locals_[129] ^ (locals_[263] & 0x7FFFFFFF ^ 0x80000000) & locals_[283])
-        >> 3
+        _shr(
+            (
+                (~locals_[283] & 0x80000000 ^ locals_[263]) & locals_[129]
+                ^ (locals_[263] & 0x7FFFFFFF ^ 0x80000000) & locals_[283]
+            ),
+            3,
+        )
     ) & 0xFFFFFFFF
     locals_[260] = (~locals_[220]) & 0xFFFFFFFF
-    locals_[263] = (~((locals_[9] & locals_[281]) >> 3 & locals_[260])) & 0xFFFFFFFF
-    locals_[233] = (locals_[281] >> 3 ^ locals_[260]) & 0xFFFFFFFF
+    locals_[263] = (~(_shr((locals_[9] & locals_[281]), 3) & locals_[260])) & 0xFFFFFFFF
+    locals_[233] = (_shr(locals_[281], 3) ^ locals_[260]) & 0xFFFFFFFF
     locals_[264] = (
         ((locals_[264] & 0xFFFFFFF2 ^ 0xD) & locals_[273] ^ locals_[264] ^ 0xFFFFFFF2) & locals_[134]
         ^ (locals_[264] ^ 0xFFFFFFF2) & locals_[273]
@@ -1557,7 +1586,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[202] = (locals_[261] & locals_[199] ^ locals_[276] & locals_[234] ^ locals_[202]) & 0xFFFFFFFF
     locals_[284] = (~(~locals_[159] & locals_[274] & 0x3C00000)) & 0xFFFFFFFF
-    locals_[220] = ((locals_[9] ^ locals_[281]) >> 3 & locals_[260] ^ locals_[220]) & 0xFFFFFFFF
+    locals_[220] = (_shr((locals_[9] ^ locals_[281]), 3) & locals_[260] ^ locals_[220]) & 0xFFFFFFFF
     locals_[9] = (
         (~(~locals_[13] & locals_[218]) ^ locals_[4]) & (~(~locals_[210] & locals_[13]) ^ ~locals_[218] & locals_[210])
     ) & 0xFFFFFFFF
@@ -1880,11 +1909,11 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (locals_[134] & locals_[260] & locals_[274] ^ 0x82001000) & locals_[163]
         ^ 0x82001000
     ) & 0xFFFFFFFF
-    locals_[13] = (~(locals_[260] >> 2) ^ locals_[163] >> 2) & 0xFFFFFFFF
-    locals_[202] = (~(locals_[163] >> 2)) & 0xFFFFFFFF
-    locals_[200] = ((~(locals_[234] >> 2) & locals_[260] >> 2 ^ locals_[202]) & 0x3FFFFFFF) & 0xFFFFFFFF
+    locals_[13] = (~(_shr(locals_[260], 2)) ^ _shr(locals_[163], 2)) & 0xFFFFFFFF
+    locals_[202] = (~(_shr(locals_[163], 2))) & 0xFFFFFFFF
+    locals_[200] = ((~(_shr(locals_[234], 2)) & _shr(locals_[260], 2) ^ locals_[202]) & 0x3FFFFFFF) & 0xFFFFFFFF
     locals_[9] = (~(locals_[171] & locals_[285] & 0x82001000) ^ locals_[218] & 0x82001000) & 0xFFFFFFFF
-    locals_[202] = ((~((locals_[163] & locals_[260]) >> 2) & locals_[234] >> 2 ^ locals_[202]) & 0x3FFFFFFF) & 0xFFFFFFFF
+    locals_[202] = ((~(_shr((locals_[163] & locals_[260]), 2)) & _shr(locals_[234], 2) ^ locals_[202]) & 0x3FFFFFFF) & 0xFFFFFFFF
     locals_[210] = (
         (
             ~(
@@ -1951,10 +1980,10 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[210] & ~locals_[163]
         ^ locals_[281]
     ) & 0xFFFFFFFF
-    locals_[234] = (locals_[273] >> 3) & 0xFFFFFFFF
-    locals_[260] = (locals_[9] >> 3) & 0xFFFFFFFF
-    locals_[129] = (((~locals_[285] & locals_[171] ^ locals_[218]) & 0x82001000 ^ 0x7DFFEFFF) >> 3) & 0xFFFFFFFF
-    locals_[274] = ((locals_[273] ^ locals_[9]) >> 3) & 0xFFFFFFFF
+    locals_[234] = (_shr(locals_[273], 3)) & 0xFFFFFFFF
+    locals_[260] = (_shr(locals_[9], 3)) & 0xFFFFFFFF
+    locals_[129] = (_shr(((~locals_[285] & locals_[171] ^ locals_[218]) & 0x82001000 ^ 0x7DFFEFFF), 3)) & 0xFFFFFFFF
+    locals_[274] = (_shr((locals_[273] ^ locals_[9]), 3)) & 0xFFFFFFFF
     locals_[218] = (
         (locals_[210] ^ locals_[285] ^ locals_[199]) & locals_[163] ^ (locals_[285] ^ locals_[199]) & locals_[210] ^ locals_[281]
     ) & 0xFFFFFFFF
@@ -1982,10 +2011,10 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[260]
     ) & 0xFFFFFFFF
     locals_[13] = (((locals_[218] & ~locals_[264] ^ locals_[264]) & locals_[261] ^ ~locals_[264]) & 0x82001000) & 0xFFFFFFFF
-    locals_[202] = ((locals_[13] ^ locals_[129]) >> 1) & 0xFFFFFFFF
-    locals_[234] = (((locals_[264] ^ locals_[282]) & 0x82001000) >> 1) & 0xFFFFFFFF
-    locals_[264] = (~(~(~(locals_[129] >> 1) & locals_[13] >> 1) & locals_[234]) ^ locals_[13] >> 1) & 0xFFFFFFFF
-    locals_[234] = (~((locals_[13] & locals_[129]) >> 1) & locals_[234] ^ locals_[129] >> 1) & 0xFFFFFFFF
+    locals_[202] = (_shr((locals_[13] ^ locals_[129]), 1)) & 0xFFFFFFFF
+    locals_[234] = (_shr(((locals_[264] ^ locals_[282]) & 0x82001000), 1)) & 0xFFFFFFFF
+    locals_[264] = (~(~(~(_shr(locals_[129], 1)) & _shr(locals_[13], 1)) & locals_[234]) ^ _shr(locals_[13], 1)) & 0xFFFFFFFF
+    locals_[234] = (~(_shr((locals_[13] & locals_[129]), 1)) & locals_[234] ^ _shr(locals_[129], 1)) & 0xFFFFFFFF
     locals_[261] = (~locals_[210]) & 0xFFFFFFFF
     locals_[13] = (
         ((locals_[202] ^ locals_[163] ^ locals_[234]) & (locals_[210] ^ locals_[281]) ^ locals_[163]) & locals_[264]
@@ -2063,7 +2092,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[202] = ((locals_[210] & locals_[199] & locals_[274]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[260] = ((locals_[210] ^ locals_[199]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[9] = (~(locals_[234] & 0x1E00) ^ locals_[261] & 0xF0000000 ^ locals_[283]) & 0xFFFFFFFF
-    locals_[218] = ((locals_[210] ^ locals_[274]) >> 0xD) & 0xFFFFFFFF
+    locals_[218] = (_shr((locals_[210] ^ locals_[274]), 0xD)) & 0xFFFFFFFF
     locals_[261] = (
         (~locals_[234] & 0xFFFFE1FF ^ locals_[273]) & locals_[261] ^ (locals_[234] ^ locals_[273]) & 0xFFFFE1FF
     ) & 0xFFFFFFFF
@@ -2095,7 +2124,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         (locals_[273] & locals_[9]) << 0x13 & 0xFFFFFFFF & ~(locals_[283] << 0x13 & 0xFFFFFFFF) ^ 0x7FFFF
     ) & 0xFFFFFFFF
     locals_[264] = (locals_[264] & 0x1C00000) & 0xFFFFFFFF
-    locals_[234] = (~((locals_[274] & locals_[210]) >> 0xD) & locals_[199] >> 0xD ^ locals_[210] >> 0xD) & 0xFFFFFFFF
+    locals_[234] = (~(_shr((locals_[274] & locals_[210]), 0xD)) & _shr(locals_[199], 0xD) ^ _shr(locals_[210], 0xD)) & 0xFFFFFFFF
     locals_[138] = (
         (
             (locals_[219] & 0xE3140177 ^ locals_[264] ^ 0x9A589127) & locals_[284]
@@ -2135,7 +2164,9 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ ((locals_[284] & 0x63DEFFFF ^ 0x3FE96B54) & locals_[210] ^ 0x8208D2BF) & locals_[274]
         ^ locals_[284] & 0x8208D2BF
     ) & 0xFFFFFFFF
-    locals_[199] = (~(~(locals_[210] >> 0xD) & locals_[274] >> 0xD) & locals_[199] >> 0xD ^ locals_[274] >> 0xD) & 0xFFFFFFFF
+    locals_[199] = (
+        ~(~(_shr(locals_[210], 0xD)) & _shr(locals_[274], 0xD)) & _shr(locals_[199], 0xD) ^ _shr(locals_[274], 0xD)
+    ) & 0xFFFFFFFF
     locals_[281] = (locals_[4] ^ 0x1738156E) & 0xFFFFFFFF
     locals_[264] = (
         ((locals_[4] ^ 0xC867EA91) & locals_[138] ^ locals_[281] & 0x8280000 ^ 0x2600000) & locals_[285] & 0xAAE80000
@@ -2183,10 +2214,10 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ((locals_[281] & 0x7F800 ^ 0x70B10) & locals_[138] ^ locals_[281] & 0x39000 ^ 0x78B70) & locals_[285]
         ^ (locals_[281] & 0x40080 ^ 0x78E0) & locals_[138]
     ) & 0xFFFFFFFF
-    locals_[264] = (locals_[264] >> 0x13) & 0xFFFFFFFF
+    locals_[264] = (_shr(locals_[264], 0x13)) & 0xFFFFFFFF
     locals_[97] = (~locals_[264]) & 0xFFFFFFFF
-    locals_[283] = (locals_[283] >> 0x13) & 0xFFFFFFFF
-    locals_[264] = (~(~(locals_[170] >> 0x13 & locals_[97]) & locals_[283]) ^ locals_[264]) & 0xFFFFFFFF
+    locals_[283] = (_shr(locals_[283], 0x13)) & 0xFFFFFFFF
+    locals_[264] = (~(~(_shr(locals_[170], 0x13) & locals_[97]) & locals_[283]) ^ locals_[264]) & 0xFFFFFFFF
     locals_[273] = (~locals_[273] & locals_[9] ^ locals_[273]) & 0xFFFFFFFF
     locals_[139] = (
         (
@@ -2227,7 +2258,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ ~(locals_[129] & locals_[276]) & locals_[222]
         ^ locals_[129]
     ) & 0xFFFFFFFF
-    locals_[4] = ((locals_[170] ^ locals_[284]) >> 0x13) & 0xFFFFFFFF
+    locals_[4] = (_shr((locals_[170] ^ locals_[284]), 0x13)) & 0xFFFFFFFF
     locals_[284] = (
         ((locals_[281] & 0x3F000 ^ 0x30800) & locals_[138] ^ locals_[281] & 0x38860 ^ 0x7370) & locals_[285]
         ^ (locals_[281] & 0x10E0 ^ 0x47B70) & locals_[138]
@@ -2238,7 +2269,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[222]
         ^ locals_[276]
     ) & 0xFFFFFFFF
-    locals_[233] = ((~locals_[283] & locals_[170] >> 0x13 ^ locals_[97]) & 0x1FFF) & 0xFFFFFFFF
+    locals_[233] = ((~locals_[283] & _shr(locals_[170], 0x13) ^ locals_[97]) & 0x1FFF) & 0xFFFFFFFF
     locals_[129] = (locals_[284] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[263] = (~locals_[129]) & 0xFFFFFFFF
     locals_[220] = (locals_[274] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
@@ -2294,7 +2325,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (locals_[9] ^ 0x5D67A3FD) & locals_[139] & 0xDE67FFFF
         ^ locals_[286] & 0x37B80000
     ) & 0xFFFFFFFF
-    locals_[163] = (locals_[273] >> 0x13) & 0xFFFFFFFF
+    locals_[163] = (_shr(locals_[273], 0x13)) & 0xFFFFFFFF
     locals_[221] = (
         ((locals_[139] & 0xC104 ^ 0x1C4D5) & locals_[286] ^ 0x7092C) & locals_[223]
         ^ (locals_[286] & 0x4004 ^ 0x4F3D1) & locals_[139]
@@ -2312,20 +2343,23 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[286] & 0x2E980000
         ^ 0xC74FFFFF
     ) & 0xFFFFFFFF
-    locals_[171] = (locals_[170] >> 0x13) & 0xFFFFFFFF
-    locals_[222] = (locals_[169] >> 0x13) & 0xFFFFFFFF
+    locals_[171] = (_shr(locals_[170], 0x13)) & 0xFFFFFFFF
+    locals_[222] = (_shr(locals_[169], 0x13)) & 0xFFFFFFFF
     locals_[287] = (locals_[221] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[13] = (locals_[261] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[224] = (locals_[200] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[283] = (~locals_[287] & locals_[13] ^ locals_[224] ^ 0x1FFF) & 0xFFFFFFFF
     locals_[9] = (
-        ((locals_[274] & locals_[219]) << 0xD & 0xFFFFFFFF & locals_[263] ^ locals_[97] & locals_[129]) >> 3
+        _shr(((locals_[274] & locals_[219]) << 0xD & 0xFFFFFFFF & locals_[263] ^ locals_[97] & locals_[129]), 3)
     ) & 0xFFFFFFFF
     locals_[263] = (
         (
-            (~(~(~((locals_[219] << 0xD & 0xFFFFFFFF) & locals_[263]) & locals_[220]) >> 3) ^ (locals_[284] << 10 & 0xFFFFFFFF))
+            (
+                ~(_shr(~(~((locals_[219] << 0xD & 0xFFFFFFFF) & locals_[263]) & locals_[220]), 3))
+                ^ (locals_[284] << 10 & 0xFFFFFFFF)
+            )
             & locals_[9]
-            ^ ~(((locals_[219] << 10 & 0xFFFFFFFF) ^ locals_[97] >> 3) & ~locals_[9])
+            ^ ~(((locals_[219] << 10 & 0xFFFFFFFF) ^ _shr(locals_[97], 3)) & ~locals_[9])
         )
         & 0x1FFFFFFF
     ) & 0xFFFFFFFF
@@ -2357,11 +2391,11 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[273] = (
         locals_[129]
-        ^ (locals_[169] ^ locals_[170] ^ locals_[273]) >> 0x13 & locals_[210]
+        ^ _shr((locals_[169] ^ locals_[170] ^ locals_[273]), 0x13) & locals_[210]
         ^ (locals_[171] ^ locals_[9]) & locals_[163]
     ) & 0xFFFFFFFF
     locals_[171] = (locals_[273] ^ locals_[171]) & 0xFFFFFFFF
-    locals_[9] = ((locals_[261] & (locals_[171] ^ locals_[274])) >> 0x13) & 0xFFFFFFFF
+    locals_[9] = (_shr((locals_[261] & (locals_[171] ^ locals_[274])), 0x13)) & 0xFFFFFFFF
     locals_[13] = (~locals_[13] & locals_[224] ^ locals_[287] ^ 0x1FFF) & 0xFFFFFFFF
     locals_[219] = ((locals_[171] & 0xFF80000 ^ 0x7FFFF) & locals_[274] ^ locals_[171] & 0x7FFFF ^ 0xFF80000) & 0xFFFFFFFF
     locals_[284] = (
@@ -2371,8 +2405,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[200]
         ^ locals_[283]
     ) & 0xFFFFFFFF
-    locals_[129] = (~(locals_[129] >> 0x13) ^ locals_[134] >> 0x13) & 0xFFFFFFFF
-    locals_[210] = ((locals_[274] & locals_[273]) >> 0x13 ^ 0xFFFFE000) & 0xFFFFFFFF
+    locals_[129] = (~(_shr(locals_[129], 0x13)) ^ _shr(locals_[134], 0x13)) & 0xFFFFFFFF
+    locals_[210] = (_shr((locals_[274] & locals_[273]), 0x13) ^ 0xFFFFE000) & 0xFFFFFFFF
     locals_[276] = ((~locals_[4] ^ locals_[264]) & locals_[233]) & 0xFFFFFFFF
     locals_[163] = (locals_[261] & (locals_[171] ^ locals_[274]) & 0xFFFFFFF) & 0xFFFFFFFF
     locals_[273] = (~locals_[163]) & 0xFFFFFFFF
@@ -2424,8 +2458,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[220] = (~(((locals_[13] ^ locals_[215]) & locals_[26]) << 0xD & 0xFFFFFFFF) ^ locals_[216]) & 0xFFFFFFFF
     locals_[4] = ((locals_[273] & locals_[219]) << 0xD & 0xFFFFFFFF ^ 0x1FFF) & 0xFFFFFFFF
     locals_[13] = (locals_[13] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
-    locals_[274] = (locals_[200] >> 0x13) & 0xFFFFFFFF
-    locals_[283] = (locals_[11] >> 0x13 & ~(locals_[64] >> 0x13) ^ locals_[274]) & 0xFFFFFFFF
+    locals_[274] = (_shr(locals_[200], 0x13)) & 0xFFFFFFFF
+    locals_[283] = (_shr(locals_[11], 0x13) & ~(_shr(locals_[64], 0x13)) ^ locals_[274]) & 0xFFFFFFFF
     locals_[97] = (~locals_[216] & (locals_[26] << 0xD & 0xFFFFFFFF) ^ locals_[13]) & 0xFFFFFFFF
     locals_[276] = (~locals_[13] & locals_[216] ^ ~(locals_[26] << 0xD & 0xFFFFFFFF) & locals_[13]) & 0xFFFFFFFF
     locals_[134] = (locals_[264] ^ 0x1CAF6E9B) & 0xFFFFFFFF
@@ -2437,8 +2471,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[276] & locals_[284]
         ^ locals_[220]
     ) & 0xFFFFFFFF
-    locals_[13] = (((locals_[200] ^ locals_[64]) & locals_[7] ^ locals_[64]) >> 0x13) & 0xFFFFFFFF
-    locals_[26] = (~((locals_[64] ^ locals_[7]) >> 0x13) & locals_[274] ^ locals_[64] >> 0x13) & 0xFFFFFFFF
+    locals_[13] = (_shr(((locals_[200] ^ locals_[64]) & locals_[7] ^ locals_[64]), 0x13)) & 0xFFFFFFFF
+    locals_[26] = (~(_shr((locals_[64] ^ locals_[7]), 0x13)) & locals_[274] ^ _shr(locals_[64], 0x13)) & 0xFFFFFFFF
     locals_[11] = (locals_[261] ^ ~locals_[4]) & 0xFFFFFFFF
     locals_[274] = (
         ((locals_[4] ^ locals_[261] ^ locals_[26]) & locals_[233] ^ locals_[4] ^ locals_[261]) & locals_[13]
@@ -2482,12 +2516,12 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[261]
     ) & 0xFFFFFFFF
     locals_[26] = ((locals_[283] ^ locals_[13]) & locals_[26]) & 0xFFFFFFFF
-    locals_[200] = (~(locals_[7] >> 3) & 0x1FFFFFFF) & 0xFFFFFFFF
+    locals_[200] = (~(_shr(locals_[7], 3)) & 0x1FFFFFFF) & 0xFFFFFFFF
     locals_[13] = (
         ~((locals_[261] & ~locals_[4] ^ locals_[26]) & locals_[233]) ^ (locals_[4] ^ locals_[26]) & locals_[261] ^ locals_[13]
     ) & 0xFFFFFFFF
-    locals_[134] = (locals_[264] >> 3) & 0xFFFFFFFF
-    locals_[222] = (locals_[7] >> 3 ^ 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[134] = (_shr(locals_[264], 3)) & 0xFFFFFFFF
+    locals_[222] = (_shr(locals_[7], 3) ^ 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[261] = (locals_[64] << 0x1D & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[11] = (
         ~(locals_[264] << 0x1D & 0xFFFFFFFF) & (locals_[7] << 0x1D & 0xFFFFFFFF)
@@ -2576,20 +2610,20 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[283] = (
         ~(
             (
-                (((locals_[170] ^ 0xC86A26A9) & locals_[4] ^ locals_[291] & 0x4F80000) >> 0x13 & 0x69F ^ 0xFFFFFDE7)
-                & locals_[225] >> 0x13
-                ^ ((locals_[4] & 0x34180000 ^ 0x57D80000) & locals_[291]) >> 0x13
+                (_shr(((locals_[170] ^ 0xC86A26A9) & locals_[4] ^ locals_[291] & 0x4F80000), 0x13) & 0x69F ^ 0xFFFFFDE7)
+                & _shr(locals_[225], 0x13)
+                ^ _shr(((locals_[4] & 0x34180000 ^ 0x57D80000) & locals_[291]), 0x13)
             )
-            & (locals_[200] ^ locals_[276]) >> 0x13
+            & _shr((locals_[200] ^ locals_[276]), 0x13)
         )
     ) & 0xFFFFFFFF
     locals_[7] = (
         ~(~(locals_[284] << 0xD & 0xFFFFFFFF) & (locals_[97] << 0xD & 0xFFFFFFFF)) & (locals_[169] << 0xD & 0xFFFFFFFF)
         ^ (locals_[97] & locals_[284]) << 0xD & 0xFFFFFFFF
     ) & 0xFFFFFFFF
-    locals_[134] = ((locals_[276] & locals_[200]) >> 0x13) & 0xFFFFFFFF
+    locals_[134] = (_shr((locals_[276] & locals_[200]), 0x13)) & 0xFFFFFFFF
     locals_[233] = (~(locals_[169] << 0xD & 0xFFFFFFFF)) & 0xFFFFFFFF
-    locals_[169] = (~(locals_[200] >> 0x13) ^ locals_[276] >> 0x13) & 0xFFFFFFFF
+    locals_[169] = (~(_shr(locals_[200], 0x13)) ^ _shr(locals_[276], 0x13)) & 0xFFFFFFFF
     locals_[200] = ((locals_[210] ^ locals_[9] ^ locals_[11]) & locals_[129]) & 0xFFFFFFFF
     locals_[261] = (
         (~(locals_[233] & (locals_[284] << 0xD & 0xFFFFFFFF)) & (locals_[97] << 0xD & 0xFFFFFFFF) ^ locals_[233]) & 0xFFFFE000
@@ -2625,14 +2659,14 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[9]
         ^ locals_[11]
     ) & 0xFFFFFFFF
-    locals_[9] = (locals_[261] >> 3) & 0xFFFFFFFF
-    locals_[287] = (~(~(locals_[264] >> 3) & locals_[9]) & locals_[7] >> 3) & 0xFFFFFFFF
-    locals_[263] = ((locals_[261] & locals_[264]) >> 3 ^ locals_[287] ^ 0xE0000000) & 0xFFFFFFFF
+    locals_[9] = (_shr(locals_[261], 3)) & 0xFFFFFFFF
+    locals_[287] = (~(~(_shr(locals_[264], 3)) & locals_[9]) & _shr(locals_[7], 3)) & 0xFFFFFFFF
+    locals_[263] = (_shr((locals_[261] & locals_[264]), 3) ^ locals_[287] ^ 0xE0000000) & 0xFFFFFFFF
     locals_[200] = ((locals_[233] & 0x1E00 ^ 0x7E1FF) & locals_[11]) & 0xFFFFFFFF
     locals_[287] = (locals_[287] ^ locals_[9]) & 0xFFFFFFFF
     locals_[200] = ((locals_[200] ^ 0xFFFE1FF) & locals_[276] ^ locals_[200]) & 0xFFFFFFFF
-    locals_[226] = ((locals_[7] ^ locals_[264]) >> 3 ^ 0xE0000000) & 0xFFFFFFFF
-    locals_[7] = ((locals_[11] & locals_[233] ^ locals_[276]) >> 0x13) & 0xFFFFFFFF
+    locals_[226] = (_shr((locals_[7] ^ locals_[264]), 3) ^ 0xE0000000) & 0xFFFFFFFF
+    locals_[7] = (_shr((locals_[11] & locals_[233] ^ locals_[276]), 0x13)) & 0xFFFFFFFF
     locals_[227] = (
         ~((~(locals_[11] & 0x1E00) & 0x7FFFF ^ ~locals_[11] & locals_[233] & 0xFF81E00) & locals_[276]) ^ locals_[11] & 0x7FFFF
     ) & 0xFFFFFFFF
@@ -2643,8 +2677,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[261] = (locals_[200] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[264] = (locals_[227] << 0xD & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[9] = (~locals_[264] ^ locals_[261]) & 0xFFFFFFFF
-    locals_[64] = (~(locals_[11] >> 0x13) & locals_[276] >> 0x13 ^ (locals_[11] ^ locals_[233]) >> 0x13) & 0xFFFFFFFF
-    locals_[11] = (~(locals_[233] >> 0x13) & locals_[11] >> 0x13 ^ locals_[276] >> 0x13) & 0xFFFFFFFF
+    locals_[64] = (~(_shr(locals_[11], 0x13)) & _shr(locals_[276], 0x13) ^ _shr((locals_[11] ^ locals_[233]), 0x13)) & 0xFFFFFFFF
+    locals_[11] = (~(_shr(locals_[233], 0x13)) & _shr(locals_[11], 0x13) ^ _shr(locals_[276], 0x13)) & 0xFFFFFFFF
     locals_[129] = (~(~locals_[261] & locals_[264]) & (locals_[284] << 0xD & 0xFFFFFFFF) ^ locals_[261]) & 0xFFFFFFFF
     locals_[210] = ((~(locals_[284] << 0xD & 0xFFFFFFFF) & locals_[264] ^ ~locals_[261]) & 0xFFFFE000) & 0xFFFFFFFF
     locals_[261] = (
@@ -2919,10 +2953,10 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (~locals_[233] ^ locals_[171]) & locals_[264]
         ^ locals_[171] & locals_[175]
     ) & 0xFFFFFFFF
-    locals_[233] = ((((locals_[11] ^ locals_[64]) & locals_[134] ^ locals_[11]) & 0x82001000) >> 3) & 0xFFFFFFFF
-    locals_[11] = (locals_[283] >> 3) & 0xFFFFFFFF
-    locals_[264] = (~(~locals_[11] & locals_[233]) ^ (locals_[283] ^ locals_[13]) >> 3) & 0xFFFFFFFF
-    locals_[13] = (locals_[13] >> 3) & 0xFFFFFFFF
+    locals_[233] = (_shr((((locals_[11] ^ locals_[64]) & locals_[134] ^ locals_[11]) & 0x82001000), 3)) & 0xFFFFFFFF
+    locals_[11] = (_shr(locals_[283], 3)) & 0xFFFFFFFF
+    locals_[264] = (~(~locals_[11] & locals_[233]) ^ _shr((locals_[283] ^ locals_[13]), 3)) & 0xFFFFFFFF
+    locals_[13] = (_shr(locals_[13], 3)) & 0xFFFFFFFF
     locals_[171] = (locals_[13] ^ ~locals_[233]) & 0xFFFFFFFF
     locals_[233] = (~(locals_[13] & ~locals_[233]) & locals_[11] ^ locals_[233]) & 0xFFFFFFFF
     locals_[11] = ((locals_[129] ^ locals_[26]) & locals_[170] ^ locals_[222] ^ locals_[129]) & 0xFFFFFFFF
@@ -2960,7 +2994,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[134]
         ^ locals_[13]
     ) & 0xFFFFFFFF
-    locals_[215] = ((locals_[221] & locals_[9]) >> 2 & ~(locals_[276] >> 2)) & 0xFFFFFFFF
+    locals_[215] = (_shr((locals_[221] & locals_[9]), 2) & ~(_shr(locals_[276], 2))) & 0xFFFFFFFF
     locals_[129] = (~locals_[215]) & 0xFFFFFFFF
     locals_[229] = ((locals_[9] & locals_[169] ^ ~locals_[221]) & 0x82001000) & 0xFFFFFFFF
     locals_[26] = (~(locals_[283] & ~locals_[9]) ^ locals_[9]) & 0xFFFFFFFF
@@ -2984,7 +3018,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[222] = ((locals_[221] ^ locals_[276] & locals_[175]) & 0x82001000) & 0xFFFFFFFF
     locals_[13] = (~(locals_[276] & locals_[175]) ^ locals_[221] ^ locals_[9]) & 0xFFFFFFFF
-    locals_[170] = (locals_[9] >> 2 ^ ~(locals_[276] >> 2)) & 0xFFFFFFFF
+    locals_[170] = (_shr(locals_[9], 2) ^ ~(_shr(locals_[276], 2))) & 0xFFFFFFFF
     locals_[292] = (
         (
             ~((~(locals_[134] & locals_[175]) ^ locals_[221] ^ locals_[9]) & locals_[276])
@@ -2999,7 +3033,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[221] & ~locals_[9]
     ) & 0xFFFFFFFF
     locals_[13] = (locals_[171] & (~locals_[170] ^ locals_[129])) & 0xFFFFFFFF
-    locals_[175] = ((locals_[276] & (locals_[221] ^ locals_[9]) ^ locals_[221]) >> 2 ^ 0xC0000000) & 0xFFFFFFFF
+    locals_[175] = (_shr((locals_[276] & (locals_[221] ^ locals_[9]) ^ locals_[221]), 2) ^ 0xC0000000) & 0xFFFFFFFF
     locals_[13] = (
         (~(locals_[233] & (~locals_[170] ^ locals_[129])) ^ locals_[170] ^ locals_[129] ^ locals_[13]) & locals_[264]
         ^ (locals_[215] & locals_[170] ^ locals_[129]) & locals_[175]
@@ -3063,12 +3097,14 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (~(~locals_[293] & locals_[7]) ^ locals_[276]) & locals_[261]
         ^ locals_[293]
     ) & 0xFFFFFFFF
-    locals_[11] = (((~(locals_[283] & locals_[26]) & locals_[293] ^ locals_[283]) & 0x82001000) >> 1) & 0xFFFFFFFF
-    locals_[274] = ((locals_[26] & 0x82001000 ^ ~(locals_[283] & 0x82001000)) >> 1) & 0xFFFFFFFF
+    locals_[11] = (_shr(((~(locals_[283] & locals_[26]) & locals_[293] ^ locals_[283]) & 0x82001000), 1)) & 0xFFFFFFFF
+    locals_[274] = (_shr((locals_[26] & 0x82001000 ^ ~(locals_[283] & 0x82001000)), 1)) & 0xFFFFFFFF
     locals_[261] = (~locals_[11] & locals_[274]) & 0xFFFFFFFF
     locals_[274] = (~locals_[274]) & 0xFFFFFFFF
     locals_[276] = (locals_[274] ^ locals_[11]) & 0xFFFFFFFF
-    locals_[9] = ((~(~(~locals_[26] & locals_[283]) & locals_[293] & 0x82001000) ^ locals_[283] & 0x82001000) >> 1) & 0xFFFFFFFF
+    locals_[9] = (
+        _shr((~(~(~locals_[26] & locals_[283]) & locals_[293] & 0x82001000) ^ locals_[283] & 0x82001000), 1)
+    ) & 0xFFFFFFFF
     locals_[7] = ((locals_[229] ^ locals_[264]) & locals_[222]) & 0xFFFFFFFF
     locals_[11] = ((~(~locals_[9] & locals_[11]) ^ locals_[9] & locals_[274]) & 0x7FFFFFFF) & 0xFFFFFFFF
     locals_[7] = (
@@ -3158,9 +3194,11 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (locals_[7] ^ 0x6AE6BB89) & locals_[9]
         ^ 0xFFA8052E
     ) & 0xFFFFFFFF
-    locals_[261] = ((locals_[9] ^ locals_[7]) >> 0xD) & 0xFFFFFFFF
-    locals_[294] = (~(~(~(locals_[7] >> 0xD) & locals_[9] >> 0xD) & locals_[276] >> 0xD) ^ locals_[9] >> 0xD) & 0xFFFFFFFF
-    locals_[295] = (~(~((locals_[276] & locals_[9]) >> 0xD) & locals_[7] >> 0xD) ^ locals_[276] >> 0xD) & 0xFFFFFFFF
+    locals_[261] = (_shr((locals_[9] ^ locals_[7]), 0xD)) & 0xFFFFFFFF
+    locals_[294] = (
+        ~(~(~(_shr(locals_[7], 0xD)) & _shr(locals_[9], 0xD)) & _shr(locals_[276], 0xD)) ^ _shr(locals_[9], 0xD)
+    ) & 0xFFFFFFFF
+    locals_[295] = (~(~(_shr((locals_[276] & locals_[9]), 0xD)) & _shr(locals_[7], 0xD)) ^ _shr(locals_[276], 0xD)) & 0xFFFFFFFF
     locals_[170] = (
         ((locals_[7] ^ 0xDEFDFE9D) & locals_[9] ^ locals_[216] & 0x7112016B ^ 0x1A3D79FD) & locals_[220]
         ^ (
@@ -3231,10 +3269,10 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[230] & 0x8775F8 & locals_[134]
         ^ locals_[230] & 0x8D6CA1E8
     ) & 0xFFFFFFFF
-    locals_[11] = (locals_[9] >> 0x13) & 0xFFFFFFFF
+    locals_[11] = (_shr(locals_[9], 0x13)) & 0xFFFFFFFF
     locals_[169] = ((locals_[129] ^ locals_[26]) << 0x13 & 0xFFFFFFFF) & 0xFFFFFFFF
-    locals_[233] = (locals_[276] >> 0x13) & 0xFFFFFFFF
-    locals_[175] = (~(locals_[274] >> 0x13) & locals_[11] ^ locals_[233]) & 0xFFFFFFFF
+    locals_[233] = (_shr(locals_[276], 0x13)) & 0xFFFFFFFF
+    locals_[175] = (~(_shr(locals_[274], 0x13)) & locals_[11] ^ locals_[233]) & 0xFFFFFFFF
     locals_[215] = (locals_[169] ^ locals_[221]) & 0xFFFFFFFF
     locals_[176] = (
         (~((~locals_[169] ^ locals_[221]) & locals_[200]) ^ locals_[169] ^ locals_[221]) & locals_[227]
@@ -3243,7 +3281,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[200]
         ^ locals_[210]
     ) & 0xFFFFFFFF
-    locals_[233] = (~locals_[11] & locals_[233] ^ locals_[274] >> 0x13) & 0xFFFFFFFF
+    locals_[233] = (~locals_[11] & locals_[233] ^ _shr(locals_[274], 0x13)) & 0xFFFFFFFF
     locals_[13] = (
         ((locals_[171] ^ ~locals_[228]) & locals_[129] ^ locals_[7] & locals_[26] ^ locals_[171]) & locals_[97]
         ^ ((locals_[97] ^ locals_[129]) & locals_[228] ^ locals_[97] ^ locals_[129]) & locals_[224]
@@ -3251,7 +3289,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[171]
         ^ locals_[26]
     ) & 0xFFFFFFFF
-    locals_[276] = (((locals_[274] ^ locals_[276]) & locals_[9] ^ locals_[274]) >> 0x13) & 0xFFFFFFFF
+    locals_[276] = (_shr(((locals_[274] ^ locals_[276]) & locals_[9] ^ locals_[274]), 0x13)) & 0xFFFFFFFF
     locals_[274] = (locals_[227] ^ locals_[169] ^ locals_[221]) & 0xFFFFFFFF
     locals_[11] = (
         (
@@ -3351,26 +3389,32 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[224] & 0x30114
     ) & 0xFFFFFFFF
     locals_[97] = (
-        (
-            ((locals_[224] & 0xD2F7FFFF ^ 0xF9BFFFFF) & locals_[284] ^ locals_[224] & 0x3C900000 ^ 0x5480000) & locals_[231]
-            ^ 0x34900000
+        _shr(
+            (
+                ((locals_[224] & 0xD2F7FFFF ^ 0xF9BFFFFF) & locals_[284] ^ locals_[224] & 0x3C900000 ^ 0x5480000) & locals_[231]
+                ^ 0x34900000
+            ),
+            0x13,
         )
-        >> 0x13
-        ^ (locals_[224] >> 0x13 ^ 0xFFFFFABF) & locals_[284] >> 0x13 & 0x1F77
+        ^ (_shr(locals_[224], 0x13) ^ 0xFFFFFABF) & _shr(locals_[284], 0x13) & 0x1F77
     ) & 0xFFFFFFFF
     locals_[129] = (
-        (
-            ((locals_[224] & 0xD2F7FFFF ^ 0x4400000) & locals_[284] ^ locals_[224] & 0x8287FFFF ^ 0x25480000) & locals_[231]
-            ^ (locals_[284] & 0x4000000 ^ 0x30900000) & locals_[224]
+        _shr(
+            (
+                ((locals_[224] & 0xD2F7FFFF ^ 0x4400000) & locals_[284] ^ locals_[224] & 0x8287FFFF ^ 0x25480000) & locals_[231]
+                ^ (locals_[284] & 0x4000000 ^ 0x30900000) & locals_[224]
+            ),
+            0x13,
         )
-        >> 0x13
     ) & 0xFFFFFFFF
     locals_[13] = (
-        (
-            ((locals_[224] & 0xD7FFFFFF ^ 0x24000000) & locals_[284] ^ locals_[224] & 0x9617FFFF ^ 0xD3FFFFFF) & locals_[231]
-            ^ (locals_[284] & 0x20000000 ^ 0x5480000) & locals_[224]
+        _shr(
+            (
+                ((locals_[224] & 0xD7FFFFFF ^ 0x24000000) & locals_[284] ^ locals_[224] & 0x9617FFFF ^ 0xD3FFFFFF) & locals_[231]
+                ^ (locals_[284] & 0x20000000 ^ 0x5480000) & locals_[224]
+            ),
+            0x13,
         )
-        >> 0x13
     ) & 0xFFFFFFFF
     locals_[169] = (
         ((locals_[224] & 0x1D5EF ^ 0x7EBC9) & locals_[284] ^ locals_[224] & 0x32133 ^ 0x2281) & locals_[231]
@@ -3637,14 +3681,14 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[170] = ((locals_[228] ^ locals_[292]) & locals_[215]) & 0xFFFFFFFF
     locals_[222] = (locals_[215] & ~locals_[292]) & 0xFFFFFFFF
-    locals_[200] = (locals_[220] >> 3) & 0xFFFFFFFF
+    locals_[200] = (_shr(locals_[220], 3)) & 0xFFFFFFFF
     locals_[287] = (
         ((locals_[292] ^ locals_[210]) & locals_[228] ^ locals_[210] ^ locals_[170]) & locals_[97]
         ^ ~((locals_[228] ^ locals_[97]) & locals_[210]) & locals_[9]
         ^ (locals_[292] ^ locals_[222]) & locals_[228]
         ^ locals_[210]
     ) & 0xFFFFFFFF
-    locals_[276] = (locals_[263] >> 3 & ~locals_[200] ^ locals_[274] >> 3 ^ 0xE0000000) & 0xFFFFFFFF
+    locals_[276] = (_shr(locals_[263], 3) & ~locals_[200] ^ _shr(locals_[274], 3) ^ 0xE0000000) & 0xFFFFFFFF
     locals_[233] = (locals_[228] & ~locals_[292] ^ locals_[170]) & 0xFFFFFFFF
     locals_[97] = (
         (locals_[9] & locals_[97] ^ locals_[233]) & locals_[210]
@@ -3689,8 +3733,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ (locals_[210] & locals_[9] ^ locals_[222]) & locals_[228]
         ^ locals_[215]
     ) & 0xFFFFFFFF
-    locals_[293] = (~((locals_[274] ^ locals_[263]) >> 3) & locals_[200] ^ locals_[274] >> 3) & 0xFFFFFFFF
-    locals_[169] = ((locals_[220] & locals_[274] ^ locals_[263]) >> 3) & 0xFFFFFFFF
+    locals_[293] = (~(_shr((locals_[274] ^ locals_[263]), 3)) & locals_[200] ^ _shr(locals_[274], 3)) & 0xFFFFFFFF
+    locals_[169] = (_shr((locals_[220] & locals_[274] ^ locals_[263]), 3)) & 0xFFFFFFFF
     locals_[170] = (~locals_[9]) & 0xFFFFFFFF
     locals_[287] = (
         ~((locals_[228] ^ locals_[292] ^ locals_[170]) & locals_[233]) & locals_[215]
@@ -3731,7 +3775,7 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         )
         & 0x80000000
     ) & 0xFFFFFFFF
-    locals_[220] = ((locals_[292] ^ locals_[227]) >> 2) & 0xFFFFFFFF
+    locals_[220] = (_shr((locals_[292] ^ locals_[227]), 2)) & 0xFFFFFFFF
     locals_[170] = ((~locals_[292] ^ locals_[227]) & locals_[210] ^ 0x7FFFFFFF) & 0xFFFFFFFF
     locals_[177] = ((~locals_[210] ^ locals_[292]) & locals_[287]) & 0xFFFFFFFF
     locals_[171] = (
@@ -3746,9 +3790,11 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
         ^ locals_[210]
         ^ locals_[292]
     ) & 0xFFFFFFFF
-    locals_[9] = (locals_[210] >> 2) & 0xFFFFFFFF
-    locals_[175] = (~(~locals_[9] & locals_[292] >> 2) & locals_[227] >> 2 ^ locals_[9]) & 0xFFFFFFFF
-    locals_[215] = (~(~(locals_[292] >> 2) & locals_[227] >> 2) & locals_[9] ^ (locals_[227] & locals_[292]) >> 2) & 0xFFFFFFFF
+    locals_[9] = (_shr(locals_[210], 2)) & 0xFFFFFFFF
+    locals_[175] = (~(~locals_[9] & _shr(locals_[292], 2)) & _shr(locals_[227], 2) ^ locals_[9]) & 0xFFFFFFFF
+    locals_[215] = (
+        ~(~(_shr(locals_[292], 2)) & _shr(locals_[227], 2)) & locals_[9] ^ _shr((locals_[227] & locals_[292]), 2)
+    ) & 0xFFFFFFFF
     locals_[228] = (~locals_[276]) & 0xFFFFFFFF
     locals_[9] = (
         (~((locals_[175] ^ locals_[169]) & locals_[215]) ^ locals_[175] ^ locals_[169]) & locals_[276]
@@ -3832,11 +3878,11 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     locals_[200] = ((locals_[233] & locals_[263] ^ locals_[287]) & 0x80000000) & 0xFFFFFFFF
     locals_[13] = ((~locals_[287] & locals_[233] ^ ~locals_[233] & locals_[263]) & 0x80000000) & 0xFFFFFFFF
     locals_[263] = ((~locals_[233] & locals_[287] ^ locals_[263]) & 0x80000000 ^ 0x7FFFFFFF) & 0xFFFFFFFF
-    locals_[129] = (locals_[263] >> 1) & 0xFFFFFFFF
-    locals_[233] = (locals_[200] >> 1) & 0xFFFFFFFF
-    locals_[200] = (~((locals_[200] ^ locals_[13]) >> 1) & locals_[129] ^ locals_[13] >> 1) & 0xFFFFFFFF
-    locals_[263] = (~((locals_[13] & locals_[263]) >> 1) ^ locals_[233]) & 0xFFFFFFFF
-    locals_[129] = (~locals_[129] & locals_[233] ^ locals_[13] >> 1 ^ 0x80000000) & 0xFFFFFFFF
+    locals_[129] = (_shr(locals_[263], 1)) & 0xFFFFFFFF
+    locals_[233] = (_shr(locals_[200], 1)) & 0xFFFFFFFF
+    locals_[200] = (~(_shr((locals_[200] ^ locals_[13]), 1)) & locals_[129] ^ _shr(locals_[13], 1)) & 0xFFFFFFFF
+    locals_[263] = (~(_shr((locals_[13] & locals_[263]), 1)) ^ locals_[233]) & 0xFFFFFFFF
+    locals_[129] = (~locals_[129] & locals_[233] ^ _shr(locals_[13], 1) ^ 0x80000000) & 0xFFFFFFFF
     locals_[233] = ((locals_[263] ^ locals_[200]) & locals_[129]) & 0xFFFFFFFF
     locals_[210] = (~locals_[233] ^ locals_[263] & locals_[200]) & 0xFFFFFFFF
     locals_[233] = (locals_[263] & locals_[200] ^ locals_[233]) & 0xFFFFFFFF
@@ -4162,8 +4208,8 @@ def execute(destination: bytearray, locals_: list[int]) -> None:
     dst_dwords[0x2E] = (locals_[71]) & 0xFFFFFFFF
     dst_dwords[0x2F] = (locals_[61]) & 0xFFFFFFFF
     locals_[237] = (
-        (locals_[237] ^ (locals_[254] & locals_[73] ^ locals_[148]) >> 0xD)
-        & (~(locals_[148] >> 0xD) & locals_[254] >> 0xD ^ locals_[74])
+        (locals_[237] ^ _shr((locals_[254] & locals_[73] ^ locals_[148]), 0xD))
+        & (~(_shr(locals_[148], 0xD)) & _shr(locals_[254], 0xD) ^ locals_[74])
         ^ locals_[237]
     ) & 0xFFFFFFFF
     dst_dwords[0x30] = (

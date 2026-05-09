@@ -58,16 +58,15 @@ _SUBS: tuple[tuple[str, str], ...] = (
     # Hex literals with a `U` suffix — Python doesn't accept the suffix.
     (r"\b(0[xX][0-9A-Fa-f]+)U\b", r"\1"),
     # Left-shift in C# uint truncates to 32 bits; Python int doesn't.
-    # Wrap `<< N` with `_shl(expr, N)` to mask the result to uint32.
-    # This is the root cause of the Monolith9/10 divergence — when a
-    # left-shift overflows 32 bits, the extra high bits get picked up
-    # by subsequent `~` (negative int) `&` operations.
     (r"(\))\s*<<\s*(0x[0-9a-fA-F]+|\d+)", r"\1 << \2 & 0xFFFFFFFF"),
     (r"(\w+(?:\[\w+\])?)\s*<<\s*(0x[0-9a-fA-F]+|\d+)", r"(\1 << \2 & 0xFFFFFFFF)"),
-    # Same for `* 2` (equivalent to << 1) — uint multiplication also
-    # truncates in C# but not in Python.
+    # Same for `* 2` — uint multiplication also truncates.
     (r"(\))\s*\*\s*2\b", r"\1 * 2 & 0xFFFFFFFF"),
     (r"(\w+(?:\[\w+\])?)\s*\*\s*2\b", r"(\1 * 2 & 0xFFFFFFFF)"),
+    # Right-shift on identifiers: `ident >> N` → `_shr(ident, N)`.
+    # The `) >> N` case is handled by _fix_right_shifts (needs paren
+    # matching). The `ident >> N` case is simpler and caught here.
+    (r"(\w+(?:\[\w+\])?)\s*>>\s*(0x[0-9a-fA-F]+|\d+)", r"_shr(\1, \2)"),
 )
 
 
@@ -225,6 +224,12 @@ def _statement_to_python(stmt: str) -> str | None:
     # `uint uVar1 = expr` → `uVar1 = expr`.
     rewritten = re.sub(r"^uint\s+", "", rewritten).strip()
 
+    # Replace `) >> N` with `_shr(`, N) — wrapping the parenthesized
+    # subexpression in a _shr call that masks to uint32 before shifting.
+    # This fixes ~X ^ Y >> N where Python's arithmetic shift sign-extends
+    # but C#'s uint logical shift zero-fills.
+    rewritten = _fix_right_shifts(rewritten)
+
     # Mask uint32 on every assignment to an ident or dst_dwords[N].
     # The return statement is re-emitted by the wrapper, after the
     # final dst_dwords flush. Drop it from the body.
@@ -236,6 +241,56 @@ def _statement_to_python(stmt: str) -> str | None:
         return f"{lhs.strip()} = ({rhs.strip()}) & 0xFFFFFFFF"
 
     return rewritten
+
+
+def _fix_right_shifts(stmt: str) -> str:
+    """Replace `(expr) >> N` with `_shr(expr, N)`.
+
+    Finds each `) >> literal` pattern, walks backward to find the
+    matching `(`, and wraps the content in `_shr(content, N)`.
+    """
+    result = stmt
+    while True:
+        m = re.search(r"\)\s*>>\s*(0x[0-9a-fA-F]+|\d+)", result)
+        if not m:
+            break
+        shift_amount = m.group(1)
+        close_paren_pos = m.start()
+
+        # Find matching open paren
+        depth = 0
+        i = close_paren_pos
+        while i >= 0:
+            if result[i] == ")":
+                depth += 1
+            elif result[i] == "(":
+                depth -= 1
+                if depth == 0:
+                    break
+            i -= 1
+
+        if i < 0 or depth != 0:
+            # Can't find matching paren — skip this occurrence
+            # (replace >> with a marker to avoid infinite loop)
+            result = result[: m.start()] + ") __SHR__ " + shift_amount + result[m.end() :]
+            continue
+
+        # Check if there's a `~` immediately before the `(` — if so,
+        # include it as part of the operand (C#'s `~(X) >> N` means
+        # "shift the NOT of X", not "NOT of shift of X").
+        prefix_start = i
+        while prefix_start > 0 and result[prefix_start - 1] == "~":
+            prefix_start -= 1
+
+        # Extract the full expression including any leading ~
+        inner = result[prefix_start : close_paren_pos + 1]  # includes parens and ~
+        # Build replacement: _shr(inner, N)
+        replacement = f"_shr({inner}, {shift_amount})"
+        result = result[:prefix_start] + replacement + result[m.end() :]
+
+    # Restore any __SHR__ markers (shouldn't happen in practice)
+    result = result.replace("__SHR__", ">>")
+    return result
 
 
 def transpile_monolith(source: str, monolith_class: str) -> TranspiledMonolith:
@@ -269,6 +324,16 @@ from __future__ import annotations
 import struct
 
 _U32 = 0xFFFFFFFF
+
+
+def _shr(x: int, n: int) -> int:
+    \"\"\"Logical right-shift (mask to uint32 before shifting).
+
+    Python's ``>>`` on negative ints does arithmetic shift (sign-extends).
+    C#'s ``uint >> n`` does logical shift (zero-fills). This helper
+    ensures Python behaves identically to C#.
+    \"\"\"
+    return (x & _U32) >> n
 
 
 def _to_uints(buf: bytes | bytearray) -> list[int]:

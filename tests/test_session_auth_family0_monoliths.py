@@ -59,7 +59,6 @@ def test_monolith_vector(monolith: object, index: int) -> None:
         (monolith10, 10),
     ],
 )
-@pytest.mark.xfail(reason="orchestrators of multi-Part transforms — under investigation; refs #717")
 def test_monolith_orchestrator_vector(monolith: object, index: int) -> None:
     src = (_FIXTURES / f"monolith{index}-src.bin").read_bytes()
     expected = (_FIXTURES / f"monolith{index}-dst.bin").read_bytes()
