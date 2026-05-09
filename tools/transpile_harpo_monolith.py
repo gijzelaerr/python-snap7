@@ -57,6 +57,17 @@ _SUBS: tuple[tuple[str, str], ...] = (
     (r"\blocals\[", "locals_["),
     # Hex literals with a `U` suffix — Python doesn't accept the suffix.
     (r"\b(0[xX][0-9A-Fa-f]+)U\b", r"\1"),
+    # Left-shift in C# uint truncates to 32 bits; Python int doesn't.
+    # Wrap `<< N` with `_shl(expr, N)` to mask the result to uint32.
+    # This is the root cause of the Monolith9/10 divergence — when a
+    # left-shift overflows 32 bits, the extra high bits get picked up
+    # by subsequent `~` (negative int) `&` operations.
+    (r"(\))\s*<<\s*(0x[0-9a-fA-F]+|\d+)", r"\1 << \2 & 0xFFFFFFFF"),
+    (r"(\w+(?:\[\w+\])?)\s*<<\s*(0x[0-9a-fA-F]+|\d+)", r"(\1 << \2 & 0xFFFFFFFF)"),
+    # Same for `* 2` (equivalent to << 1) — uint multiplication also
+    # truncates in C# but not in Python.
+    (r"(\))\s*\*\s*2\b", r"\1 * 2 & 0xFFFFFFFF"),
+    (r"(\w+(?:\[\w+\])?)\s*\*\s*2\b", r"(\1 * 2 & 0xFFFFFFFF)"),
 )
 
 

@@ -37,6 +37,7 @@ def execute(destination: bytearray, source: bytes) -> None:
             ^ uVar92 & 0xF59B1AFE
         )
         * 2
+        & 0xFFFFFFFF
     ) & 0xFFFFFFFF
     uVar33 = (src_dwords[9]) & 0xFFFFFFFF
     uVar47 = (src_dwords[0xB]) & 0xFFFFFFFF
@@ -48,6 +49,7 @@ def execute(destination: bytearray, source: bytes) -> None:
             ^ uVar92 & 0x30101004
         )
         * 2
+        & 0xFFFFFFFF
         ^ 0xD5C1CF83
     ) & 0xFFFFFFFF
     uVar50 = (~(uVar33 >> 0x1F)) & 0xFFFFFFFF
@@ -71,6 +73,7 @@ def execute(destination: bytearray, source: bytes) -> None:
             ^ uVar92 & 0x38705405
         )
         * 2
+        & 0xFFFFFFFF
     ) & 0xFFFFFFFF
     uVar7 = (src_dwords[2]) & 0xFFFFFFFF
     uVar8 = (src_dwords[1]) & 0xFFFFFFFF
@@ -102,6 +105,7 @@ def execute(destination: bytearray, source: bytes) -> None:
             ^ 0xE45F9611
         )
         * 2
+        & 0xFFFFFFFF
     ) & 0xFFFFFFFF
     uVar36 = (((uVar7 ^ 0x3000) & uVar8 & 0x80407080 ^ 0x26) & uVar46 ^ (uVar7 & 0x215050D0 ^ 0x15040FA) & uVar8) & 0xFFFFFFFF
     uVar14 = (uVar37 ^ uVar14) & 0xFFFFFFFF
@@ -111,6 +115,7 @@ def execute(destination: bytearray, source: bytes) -> None:
             ^ (uVar63 & 0x24EA0114 ^ 0xDE027EEB) & uVar32
         )
         << 1
+        & 0xFFFFFFFF
     ) & 0xFFFFFFFF
     uVar94 = (
         (~((~uVar35 ^ uVar14) & uVar6 >> 0x1F) & 1 ^ uVar14 & uVar35) & uVar9
@@ -125,13 +130,18 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar35 = ((uVar50 & 0xF7BF9BD7 ^ 0x8E6D926) & uVar51) & 0xFFFFFFFF
     uVar38 = (uVar35 ^ uVar15) & 0xFFFFFFFF
     uVar37 = (uVar13 & 0xD8FD0BD0 ^ uVar38) & 0xFFFFFFFF
-    uVar66 = (~(uVar13 * 2)) & 0xFFFFFFFF
+    uVar66 = (~(uVar13 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar39 = (
         (
-            ((((uVar11 ^ 0x56309517) & uVar13) * 2 ^ 0xB8B0CDF1) & uVar51 * 2 ^ (uVar13 & 0xD85866F8) * 2) & 0xEF7F37AE
+            (
+                (((uVar11 ^ 0x56309517) & uVar13) * 2 & 0xFFFFFFFF ^ 0xB8B0CDF1) & (uVar51 * 2 & 0xFFFFFFFF)
+                ^ (uVar13 & 0xD85866F8) * 2 & 0xFFFFFFFF
+            )
+            & 0xEF7F37AE
             ^ ((((uVar11 ^ 0x5232E13D) & uVar13 ^ 0xA408) & 0xFB58E7FD ^ uVar51 & 0x141AB41A) & uVar65 ^ 0xC4021600) * 2
+            & 0xFFFFFFFF
         )
-        & uVar50 * 2
+        & (uVar50 * 2 & 0xFFFFFFFF)
         ^ (
             (
                 ((uVar76 ^ 0xD8FD0BD0) & uVar65 ^ uVar51 & 0x8E6D926 ^ 0xC0E1AA0E) & uVar12
@@ -141,10 +151,15 @@ def execute(destination: bytearray, source: bytes) -> None:
             & uVar13
         )
         * 2
-        ^ ~((((uVar37 ^ 0x181CA1DE) & uVar12) * 2 ^ (uVar38 ^ 0x181CA1DE) * 2 & uVar66) & uVar36 * 2)
+        & 0xFFFFFFFF
+        ^ ~(
+            (((uVar37 ^ 0x181CA1DE) & uVar12) * 2 & 0xFFFFFFFF ^ (uVar38 ^ 0x181CA1DE) * 2 & 0xFFFFFFFF & uVar66)
+            & (uVar36 * 2 & 0xFFFFFFFF)
+        )
     ) & 0xFFFFFFFF
     uVar14 = (
         (((uVar63 & 0xCAB6E16E ^ 0xCFA2E16C) & uVar32 ^ 0x2CE3573F) & uVar64 ^ (uVar63 & 0xCA20104 ^ 0x3AFCE9FE) & uVar32) * 2
+        & 0xFFFFFFFF
     ) & 0xFFFFFFFF
     uVar75 = (src_dwords[0x11]) & 0xFFFFFFFF
     uVar90 = (src_dwords[0xF]) & 0xFFFFFFFF
@@ -201,17 +216,20 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar93
         ^ uVar74
     ) & 0xFFFFFFFF
-    uVar9 = (uVar36 * 2) & 0xFFFFFFFF
+    uVar9 = (uVar36 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar40 = (
         (
-            (~((uVar13 ^ uVar12) * 2) & uVar9 ^ ((uVar11 ^ 0x7530B11A) & uVar13) * 2 ^ 0xDFCEBE4B) & 0xA8356DB4
-            ^ (~((uVar13 & 0xDCFFBFDA) * 2) & 0xF6B087EA ^ (uVar51 & 0x141AB41A) * 2) & uVar65 * 2
-            ^ ((uVar13 & 0xD0BD0BD0 ^ 0x23A79907) & uVar51) * 2
+            (~((uVar13 ^ uVar12) * 2 & 0xFFFFFFFF) & uVar9 ^ ((uVar11 ^ 0x7530B11A) & uVar13) * 2 & 0xFFFFFFFF ^ 0xDFCEBE4B)
+            & 0xA8356DB4
+            ^ (~((uVar13 & 0xDCFFBFDA) * 2 & 0xFFFFFFFF) & 0xF6B087EA ^ (uVar51 & 0x141AB41A) * 2 & 0xFFFFFFFF)
+            & (uVar65 * 2 & 0xFFFFFFFF)
+            ^ ((uVar13 & 0xD0BD0BD0 ^ 0x23A79907) & uVar51) * 2 & 0xFFFFFFFF
         )
-        & uVar50 * 2
-        ^ (~((uVar13 & 0x18FD0910) * 2) & uVar76 * 2 ^ uVar66 & 0xB1FA17A0) & uVar65 * 2
-        ^ (uVar12 * 2 & ~uVar9 ^ 0x303803A0) & (uVar13 & 0xD8FD0BD0) * 2
-        ^ ~((uVar13 & 0xFFFD2FD9) * 2) & (uVar51 & 0x8E6D926) * 2
+        & (uVar50 * 2 & 0xFFFFFFFF)
+        ^ (~((uVar13 & 0x18FD0910) * 2 & 0xFFFFFFFF) & (uVar76 * 2 & 0xFFFFFFFF) ^ uVar66 & 0xB1FA17A0)
+        & (uVar65 * 2 & 0xFFFFFFFF)
+        ^ ((uVar12 * 2 & 0xFFFFFFFF) & ~uVar9 ^ 0x303803A0) & (uVar13 & 0xD8FD0BD0) * 2 & 0xFFFFFFFF
+        ^ ~((uVar13 & 0xFFFD2FD9) * 2 & 0xFFFFFFFF) & (uVar51 & 0x8E6D926) * 2 & 0xFFFFFFFF
         ^ 0x303943BD
     ) & 0xFFFFFFFF
     uVar3 = (~uVar2 & uVar18) & 0xFFFFFFFF
@@ -225,8 +243,8 @@ def execute(destination: bytearray, source: bytes) -> None:
         (~((uVar3 ^ uVar2) & uVar36) ^ uVar95 ^ uVar12) & uVar13 ^ (uVar20 ^ uVar95 ^ uVar12) & uVar18 ^ uVar20 ^ uVar12
     ) & 0xFFFFFFFF
     uVar76 = (
-        (((uVar38 ^ 0x3F1E55F1) & uVar12 ^ uVar35 ^ uVar15 ^ 0xE7E35E21) & uVar13 ^ uVar50 & 0xD41AB6DA) * 2
-        ^ (((uVar37 ^ 0xE7E35E21) & uVar12) * 2 ^ (uVar38 ^ 0xE7E35E21) * 2 & uVar66) & uVar9
+        (((uVar38 ^ 0x3F1E55F1) & uVar12 ^ uVar35 ^ uVar15 ^ 0xE7E35E21) & uVar13 ^ uVar50 & 0xD41AB6DA) * 2 & 0xFFFFFFFF
+        ^ (((uVar37 ^ 0xE7E35E21) & uVar12) * 2 & 0xFFFFFFFF ^ (uVar38 ^ 0xE7E35E21) * 2 & 0xFFFFFFFF & uVar66) & uVar9
     ) & 0xFFFFFFFF
     uVar4 = (uVar92 & 0xF09012C4) & 0xFFFFFFFF
     uVar9 = (uVar92 & 0xE0E081B) & 0xFFFFFFFF
@@ -255,7 +273,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar4
         ^ 0x951F183E
     ) & 0xFFFFFFFF
-    uVar74 = (~(uVar95 * 2)) & 0xFFFFFFFF
+    uVar74 = (~(uVar95 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar38 = ((uVar95 ^ 0xFFFFF5FB) & 0x61ADA74) & 0xFFFFFFFF
     uVar77 = (uVar33 & 0xEF9FD0FB) & 0xFFFFFFFF
     uVar35 = ((uVar77 ^ 0xC4E7EE05) & uVar47) & 0xFFFFFFFF
@@ -265,15 +283,20 @@ def execute(destination: bytearray, source: bytes) -> None:
         (
             ((uVar47 & 0xED17D0CB ^ uVar38 ^ uVar33 & 0xEA8D80FB) & uVar48 ^ (uVar48 & 0x61ADA74 ^ uVar95 & 0xEF9FD0FB) & uVar2)
             * 2
-            ^ ((uVar33 * 2 ^ 0xA9CFDE0B) & uVar47 * 2 ^ (uVar33 & 0xD1652F55 ^ 0xD8900AB) * 2) & 0xDF3FA1F6
+            & 0xFFFFFFFF
+            ^ (
+                ((uVar33 * 2 & 0xFFFFFFFF) ^ 0xA9CFDE0B) & (uVar47 * 2 & 0xFFFFFFFF)
+                ^ (uVar33 & 0xD1652F55 ^ 0xD8900AB) * 2 & 0xFFFFFFFF
+            )
+            & 0xDF3FA1F6
         )
-        & uVar18 * 2
+        & (uVar18 * 2 & 0xFFFFFFFF)
         ^ (
-            ((uVar67 ^ 0xFD67EF8F) & uVar47 ^ uVar33 & 0xF8E525DB) * 2
-            ^ (uVar2 * 2 & uVar74 ^ uVar95 * 2 ^ 0xFBDA4B5F) & 0xC35B4E8
+            ((uVar67 ^ 0xFD67EF8F) & uVar47 ^ uVar33 & 0xF8E525DB) * 2 & 0xFFFFFFFF
+            ^ ((uVar2 * 2 & 0xFFFFFFFF) & uVar74 ^ (uVar95 * 2 & 0xFFFFFFFF) ^ 0xFBDA4B5F) & 0xC35B4E8
         )
-        & uVar48 * 2
-        ^ (uVar9 ^ uVar35) * 2
+        & (uVar48 * 2 & 0xFFFFFFFF)
+        ^ (uVar9 ^ uVar35) * 2 & 0xFFFFFFFF
         ^ 0x3BD2495F
     ) & 0xFFFFFFFF
     uVar20 = ((uVar40 ^ uVar39) & uVar76) & 0xFFFFFFFF
@@ -309,18 +332,20 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar15 = ((uVar48 & 0xFD77FFCF ^ uVar77 ^ 0xC4E7EE05) & uVar47 ^ (uVar48 & 0xFAEDAFFF ^ 0xD1050151) & uVar33) & 0xFFFFFFFF
     uVar11 = (uVar47 & 0xFD77FFCF) & 0xFFFFFFFF
     uVar37 = (uVar11 ^ uVar33 & 0xFAEDAFFF) & 0xFFFFFFFF
-    uVar68 = ((uVar77 * 2 & uVar74 ^ ((uVar95 ^ 0xFF9FD1FB) & 0xC4E7EE05) * 2) & uVar47 * 2) & 0xFFFFFFFF
-    uVar78 = ((uVar95 * 2 ^ 0xDF3FA1F7) & uVar37 * 2) & 0xFFFFFFFF
-    uVar55 = (uVar9 * 2 & (uVar95 * 2 ^ 0xDFFFFDFF)) & 0xFFFFFFFF
+    uVar68 = (
+        ((uVar77 * 2 & 0xFFFFFFFF) & uVar74 ^ ((uVar95 ^ 0xFF9FD1FB) & 0xC4E7EE05) * 2 & 0xFFFFFFFF) & (uVar47 * 2 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    uVar78 = (((uVar95 * 2 & 0xFFFFFFFF) ^ 0xDF3FA1F7) & (uVar37 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar55 = ((uVar9 * 2 & 0xFFFFFFFF) & ((uVar95 * 2 & 0xFFFFFFFF) ^ 0xDFFFFDFF)) & 0xFFFFFFFF
     uVar15 = (
         ~(
             (
-                ((uVar95 & 0xEF9FD0FB ^ uVar15 ^ 0xE216DB50) & uVar2 ^ (uVar95 ^ 0xFFFFF4FF) & 0xE216DB50) * 2
-                ^ (uVar78 ^ 0xC35A0E0) & uVar48 * 2
+                ((uVar95 & 0xEF9FD0FB ^ uVar15 ^ 0xE216DB50) & uVar2 ^ (uVar95 ^ 0xFFFFF4FF) & 0xE216DB50) * 2 & 0xFFFFFFFF
+                ^ (uVar78 ^ 0xC35A0E0) & (uVar48 * 2 & 0xFFFFFFFF)
                 ^ uVar55
                 ^ uVar68
             )
-            & uVar18 * 2
+            & (uVar18 * 2 & 0xFFFFFFFF)
         )
         ^ (
             (((uVar95 ^ 0x101040) & 0xFD77FFCF ^ uVar67) & uVar47 ^ (uVar95 ^ 0x2088A24) & uVar33 & 0xFAEDAFFF ^ 0x4080024)
@@ -328,17 +353,24 @@ def execute(destination: bytearray, source: bytes) -> None:
             ^ (uVar9 ^ uVar35 ^ 0xE216DB50) & uVar95
         )
         * 2
-        ^ ((uVar15 ^ 0xE216DB50) & uVar2) * 2 & uVar74
+        & 0xFFFFFFFF
+        ^ ((uVar15 ^ 0xE216DB50) & uVar2) * 2 & 0xFFFFFFFF & uVar74
     ) & 0xFFFFFFFF
     uVar77 = (((uVar37 ^ 0x61ADA74) & uVar48 ^ uVar9 ^ uVar35 ^ 0x1DE924AF) & uVar2) & 0xFFFFFFFF
     uVar98 = (
         (
-            (((uVar95 ^ 0xFFEFEFBF) & 0xFD77FFCF ^ uVar67) & uVar47 ^ (uVar95 ^ 0x212DA50) & 0x61ADA74) * 2
-            ^ (uVar95 * 2 ^ 0xFBEEEBB7) & (uVar33 & 0xFAEDAFFF) * 2
+            (((uVar95 ^ 0xFFEFEFBF) & 0xFD77FFCF ^ uVar67) & uVar47 ^ (uVar95 ^ 0x212DA50) & 0x61ADA74) * 2 & 0xFFFFFFFF
+            ^ ((uVar95 * 2 & 0xFFFFFFFF) ^ 0xFBEEEBB7) & (uVar33 & 0xFAEDAFFF) * 2 & 0xFFFFFFFF
         )
-        & uVar48 * 2
-        ^ ((uVar38 * 2 ^ uVar78) & uVar48 * 2 ^ (uVar95 & 0x1DE924AF ^ uVar77 ^ 0xE216D050) * 2 ^ uVar55 ^ uVar68) & uVar18 * 2
-        ^ (uVar9 ^ uVar35 ^ uVar77 ^ 0x1DE924AF) * 2 & uVar74
+        & (uVar48 * 2 & 0xFFFFFFFF)
+        ^ (
+            ((uVar38 * 2 & 0xFFFFFFFF) ^ uVar78) & (uVar48 * 2 & 0xFFFFFFFF)
+            ^ (uVar95 & 0x1DE924AF ^ uVar77 ^ 0xE216D050) * 2 & 0xFFFFFFFF
+            ^ uVar55
+            ^ uVar68
+        )
+        & (uVar18 * 2 & 0xFFFFFFFF)
+        ^ (uVar9 ^ uVar35 ^ uVar77 ^ 0x1DE924AF) * 2 & 0xFFFFFFFF & uVar74
     ) & 0xFFFFFFFF
     uVar74 = ((uVar92 & 0xA06E1CD ^ 0xFBE61689) & uVar108) & 0xFFFFFFFF
     uVar38 = (uVar92 & 0xF6EED1B) & 0xFFFFFFFF
@@ -393,7 +425,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ~uVar40 & uVar39 & 1
         ^ uVar40
     ) & 0xFFFFFFFF
-    uVar53 = ((~(uVar20 << 2) & uVar21 << 2 ^ ~(uVar68 << 2)) & 0xFFFFFFFC) & 0xFFFFFFFF
+    uVar53 = ((~(uVar20 << 2 & 0xFFFFFFFF) & (uVar21 << 2 & 0xFFFFFFFF) ^ ~(uVar68 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFC) & 0xFFFFFFFF
     uVar6 = ((uVar33 & 0xFBEDAFFF ^ ~(uVar47 & 0xFDF7FFCF)) & uVar48) & 0xFFFFFFFF
     uVar17 = ((uVar33 & 0x861AD070 ^ 0x8402CA04) & uVar47) & 0xFFFFFFFF
     uVar39 = ((uVar47 ^ 0x4125000) & uVar48 & 0x8412DA44 ^ uVar47 & 0x2181A74) & 0xFFFFFFFF
@@ -473,8 +505,8 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ((uVar50 & (uVar52 ^ 0xAB404125) ^ uVar51 & 0x1018C034 ^ 0xBB1845F1) & uVar67 ^ 0xFB58E7FD) & uVar65
         ^ ((uVar50 & 0x23A52C0D ^ 0x23058405) & uVar67 ^ 0xFB58E7FD) & uVar51
     ) & 0xFFFFFFFF
-    uVar24 = (~(uVar21 << 2) & uVar68 << 2 ^ uVar20 << 2 ^ 3) & 0xFFFFFFFF
-    uVar25 = (~((uVar20 & uVar21) << 2) ^ uVar68 << 2) & 0xFFFFFFFF
+    uVar24 = (~(uVar21 << 2 & 0xFFFFFFFF) & (uVar68 << 2 & 0xFFFFFFFF) ^ (uVar20 << 2 & 0xFFFFFFFF) ^ 3) & 0xFFFFFFFF
+    uVar25 = (~((uVar20 & uVar21) << 2 & 0xFFFFFFFF) ^ (uVar68 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar81 = (((~uVar3 ^ uVar2) & uVar36 ^ uVar3 ^ uVar2) & uVar13 ^ (uVar3 ^ uVar2 ^ uVar13) & uVar12 ^ uVar95) & 0xFFFFFFFF
     uVar69 = (
         (
@@ -603,14 +635,16 @@ def execute(destination: bytearray, source: bytes) -> None:
         ((~(uVar78 & uVar99) ^ uVar13 ^ uVar12) & uVar36 ^ uVar78) & (uVar29 ^ uVar58)
         ^ ((uVar29 ^ uVar58 ^ uVar15) & uVar12 ^ uVar29 ^ uVar58 ^ uVar15) & uVar13
     ) & 0xFFFFFFFF
-    uVar29 = ((~(uVar81 * 2) & uVar41 * 2 ^ uVar81 * 2) & uVar26 * 2) & 0xFFFFFFFF
+    uVar29 = (
+        (~(uVar81 * 2 & 0xFFFFFFFF) & (uVar41 * 2 & 0xFFFFFFFF) ^ (uVar81 * 2 & 0xFFFFFFFF)) & (uVar26 * 2 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     uVar66 = (uVar23 >> 0x1E) & 0xFFFFFFFF
     uVar40 = (~uVar29) & 0xFFFFFFFF
     uVar13 = (uVar80 >> 0x1E) & 0xFFFFFFFF
     uVar36 = (uVar60 >> 0x1E) & 0xFFFFFFFF
     uVar43 = ((~uVar66 & uVar13 ^ uVar66) & uVar36 ^ uVar13) & 0xFFFFFFFF
-    uVar99 = (~(uVar60 << 2)) & 0xFFFFFFFF
-    uVar15 = (uVar80 << 2 ^ uVar99) & 0xFFFFFFFF
+    uVar99 = (~(uVar60 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar15 = ((uVar80 << 2 & 0xFFFFFFFF) ^ uVar99) & 0xFFFFFFFF
     uVar78 = (~uVar36 ^ uVar66) & 0xFFFFFFFF
     uVar97 = (~uVar9) & 0xFFFFFFFF
     uVar61 = (
@@ -632,13 +666,13 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar95
     ) & 0xFFFFFFFF
     uVar13 = (~(~uVar13 & uVar66) & uVar36 ^ uVar13) & 0xFFFFFFFF
-    uVar36 = (~((uVar26 & uVar81) * 2) & uVar41 * 2) & 0xFFFFFFFF
+    uVar36 = (~((uVar26 & uVar81) * 2 & 0xFFFFFFFF) & (uVar41 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar66 = (~uVar36) & 0xFFFFFFFF
     uVar67 = (~uVar38 ^ uVar14) & 0xFFFFFFFF
     uVar71 = (~(uVar67 & uVar31) & uVar44 ^ ~((~uVar39 ^ uVar31) & uVar14) & uVar38 ^ uVar39 & uVar28 & uVar67) & 0xFFFFFFFF
     uVar62 = (~((~((uVar97 ^ uVar95) & uVar18) ^ uVar9 ^ uVar98) & uVar77)) & 0xFFFFFFFF
     uVar42 = (~((~(uVar97 & uVar18) ^ uVar9) & uVar77)) & 0xFFFFFFFF
-    uVar67 = (~(uVar80 << 2 & uVar99)) & 0xFFFFFFFF
+    uVar67 = (~((uVar80 << 2 & 0xFFFFFFFF) & uVar99)) & 0xFFFFFFFF
     uVar56 = (uVar76 ^ uVar58) & 0xFFFFFFFF
     uVar77 = (
         (
@@ -653,7 +687,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar77
     ) & 0xFFFFFFFF
     uVar42 = (~(~uVar76 & uVar58) & uVar52 ^ uVar58) & 0xFFFFFFFF
-    uVar9 = (uVar30 * 2) & 0xFFFFFFFF
+    uVar9 = (uVar30 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar37 = ((uVar37 ^ 0x861ADA74) & uVar48) & 0xFFFFFFFF
     uVar2 = ((uVar28 ^ uVar38) & uVar39) & 0xFFFFFFFF
     uVar37 = (
@@ -712,7 +746,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ((uVar14 & uVar63 ^ uVar38 & uVar32) & uVar18 ^ 0xDEA23FC5) & uVar44
         ^ uVar32 & 0xDEA23FC5
     ) & 0xFFFFFFFF
-    uVar17 = (uVar35 << 2) & 0xFFFFFFFF
+    uVar17 = (uVar35 << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar14 = (((uVar32 & 0x3D5D0682 ^ 0xBCFEC7BE) & uVar63 ^ uVar32 & 0xA5FF0106 ^ 0xA4FEC13E) & uVar64) & 0xFFFFFFFF
     uVar31 = ((uVar32 & 0x5200FEF9 ^ 0xF45FD6A9) & uVar63) & 0xFFFFFFFF
     uVar28 = ((~(uVar32 & 0xDFA27FEF) & 0xE45F9611 ^ uVar74 & uVar18 ^ uVar31 ^ uVar14) & uVar71) & 0xFFFFFFFF
@@ -738,10 +772,10 @@ def execute(destination: bytearray, source: bytes) -> None:
         (~uVar12 ^ uVar9 ^ uVar38 ^ uVar59 ^ uVar10) & uVar66 ^ (uVar54 & uVar94 ^ ~uVar38) & uVar93 ^ uVar9 ^ uVar10
     ) & 0xFFFFFFFF
     uVar14 = (uVar6 & (uVar95 ^ uVar35)) & 0xFFFFFFFF
-    uVar52 = (uVar14 << 2) & 0xFFFFFFFF
+    uVar52 = (uVar14 << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar45 = (
         (~uVar13 & uVar78 ^ uVar17 ^ uVar52) & uVar43
-        ^ (~(uVar95 << 2) ^ 0xFFFFFFFF ^ uVar17) & uVar6 << 2
+        ^ (~(uVar95 << 2 & 0xFFFFFFFF) ^ 0xFFFFFFFF ^ uVar17) & (uVar6 << 2 & 0xFFFFFFFF)
         ^ (~uVar17 ^ uVar78) & uVar13
         ^ uVar17
     ) & 0xFFFFFFFF
@@ -762,10 +796,10 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ~((~(uVar66 & uVar74) ^ uVar9) & uVar26 & uVar81) & uVar40
         ^ uVar9
     ) & 0xFFFFFFFF
-    uVar55 = (~(uVar62 << 2)) & 0xFFFFFFFF
-    uVar54 = (~(uVar28 << 2) & uVar62 << 2 ^ ~(uVar97 << 2 & uVar55)) & 0xFFFFFFFF
+    uVar55 = (~(uVar62 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar54 = (~(uVar28 << 2 & 0xFFFFFFFF) & (uVar62 << 2 & 0xFFFFFFFF) ^ ~((uVar97 << 2 & 0xFFFFFFFF) & uVar55)) & 0xFFFFFFFF
     uVar44 = (uVar57 & uVar41) & 0xFFFFFFFF
-    uVar39 = ((uVar77 & uVar2 ^ uVar36) << 2) & 0xFFFFFFFF
+    uVar39 = ((uVar77 & uVar2 ^ uVar36) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar59 = (
         ((uVar40 ^ uVar10) & uVar9 ^ uVar40 ^ uVar59 ^ uVar12 ^ uVar10) & uVar66
         ^ ((uVar40 ^ uVar94 ^ uVar10) & uVar9 ^ uVar40 ^ uVar94 ^ uVar10) & uVar93
@@ -787,8 +821,8 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar37 = (uVar37 >> 0x1E) & 0xFFFFFFFF
     uVar71 = (uVar69 >> 0x1E) & 0xFFFFFFFF
     uVar6 = (~(~(uVar79 >> 0x1E) & uVar71) ^ ~uVar71 & uVar37) & 0xFFFFFFFF
-    uVar10 = (~(uVar42 << 2) & uVar76 << 2) & 0xFFFFFFFF
-    uVar30 = (~((uVar77 ^ uVar36) << 2) & uVar2 << 2 ^ uVar77 << 2) & 0xFFFFFFFF
+    uVar10 = (~(uVar42 << 2 & 0xFFFFFFFF) & (uVar76 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar30 = (~((uVar77 ^ uVar36) << 2 & 0xFFFFFFFF) & (uVar2 << 2 & 0xFFFFFFFF) ^ (uVar77 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar74 = (uVar81 & (uVar9 ^ uVar40)) & 0xFFFFFFFF
     uVar38 = (
         (~((uVar66 & (uVar9 ^ uVar40) ^ uVar9 ^ uVar40) & uVar26) ^ uVar9 ^ uVar40) & uVar81
@@ -796,8 +830,8 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar9
         ^ uVar38
     ) & 0xFFFFFFFF
-    uVar74 = ((uVar76 ^ uVar42) << 2) & 0xFFFFFFFF
-    uVar18 = (~(uVar56 << 2 & ~uVar74)) & 0xFFFFFFFF
+    uVar74 = ((uVar76 ^ uVar42) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar18 = (~((uVar56 << 2 & 0xFFFFFFFF) & ~uVar74)) & 0xFFFFFFFF
     uVar3 = (
         ~(
             (
@@ -809,20 +843,20 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ (~((~((~uVar44 ^ uVar81) & uVar59) ^ uVar81 ^ uVar44) & uVar58) ^ uVar44) & uVar26
     ) & 0xFFFFFFFF
     uVar44 = ((uVar97 ^ uVar62) >> 0x1E) & 0xFFFFFFFF
-    uVar12 = ((uVar28 ^ uVar62) << 2) & 0xFFFFFFFF
+    uVar12 = ((uVar28 ^ uVar62) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar71 = (~(~uVar37 & uVar71) ^ uVar79 >> 0x1E) & 0xFFFFFFFF
     uVar83 = (
         ~((~((~(uVar9 & uVar57) ^ uVar81) & uVar66) ^ uVar81 ^ uVar9 & uVar57) & uVar40 & uVar41)
         ^ ((~(uVar66 & uVar9 & uVar29) ^ uVar40) & uVar26 ^ uVar9 ^ uVar40) & uVar81
         ^ uVar9 & uVar29
     ) & 0xFFFFFFFF
-    uVar29 = (~(~(uVar97 << 2) & uVar28 << 2 & uVar55)) & 0xFFFFFFFF
+    uVar29 = (~(~(uVar97 << 2 & 0xFFFFFFFF) & (uVar28 << 2 & 0xFFFFFFFF) & uVar55)) & 0xFFFFFFFF
     uVar40 = ((uVar18 ^ 0xFFFFFFFD) & uVar74 ^ ~(~uVar10 & uVar18) & 2 ^ uVar10) & 0xFFFFFFFF
     uVar55 = (uVar18 & uVar10 ^ uVar74) & 0xFFFFFFFF
     uVar26 = (
         (~(((uVar58 ^ uVar96) & uVar59 ^ ~uVar96 & uVar58 ^ uVar96) & uVar26) ^ uVar96) & uVar81 ^ uVar26 & uVar96
     ) & 0xFFFFFFFF
-    uVar9 = (~(uVar38 << 2) ^ uVar98 << 2) & 0xFFFFFFFF
+    uVar9 = (~(uVar38 << 2 & 0xFFFFFFFF) ^ (uVar98 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar37 = (uVar24 ^ ~uVar25) & 0xFFFFFFFF
     uVar57 = (uVar53 & ~uVar25) & 0xFFFFFFFF
     uVar58 = (
@@ -834,21 +868,21 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar6
     ) & 0xFFFFFFFF
     uVar37 = (~((uVar18 & 0xFFFFFFFD ^ 0xFFFFFFFD) & uVar74) ^ (uVar18 ^ uVar10) & 0xFFFFFFFD) & 0xFFFFFFFF
-    uVar18 = (~(~(uVar3 << 2) & uVar26 << 2) & uVar27 << 2) & 0xFFFFFFFF
-    uVar66 = (uVar18 ^ uVar26 << 2) & 0xFFFFFFFF
-    uVar41 = (~(uVar23 << 2) & uVar80 << 2 ^ uVar99 & uVar23 << 2) & 0xFFFFFFFF
+    uVar18 = (~(~(uVar3 << 2 & 0xFFFFFFFF) & (uVar26 << 2 & 0xFFFFFFFF)) & (uVar27 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar66 = (uVar18 ^ (uVar26 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar41 = (~(uVar23 << 2 & 0xFFFFFFFF) & (uVar80 << 2 & 0xFFFFFFFF) ^ uVar99 & (uVar23 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar10 = ((uVar83 ^ uVar38) >> 0x1E) & 0xFFFFFFFF
     uVar96 = (uVar67 ^ uVar41) & 0xFFFFFFFF
     uVar61 = (~(~uVar61 & uVar95) & uVar28 >> 0x1E ^ uVar61) & 0xFFFFFFFF
     uVar74 = (uVar15 & uVar96 ^ uVar67 ^ uVar44) & 0xFFFFFFFF
     uVar99 = ((uVar74 ^ uVar82) & uVar61 ^ uVar74 & uVar82 ^ uVar15) & 0xFFFFFFFF
-    uVar59 = (~(uVar77 << 2) & uVar2 << 2 ^ uVar36 << 2) & 0xFFFFFFFF
+    uVar59 = (~(uVar77 << 2 & 0xFFFFFFFF) & (uVar2 << 2 & 0xFFFFFFFF) ^ (uVar36 << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar74 = (
         (~((uVar24 ^ uVar53) & uVar25) ^ (uVar25 ^ uVar71) & uVar31 ^ uVar24 ^ uVar53 ^ uVar71) & uVar6
         ^ (uVar31 & ~uVar71 ^ uVar71) & uVar25
         ^ uVar24
     ) & 0xFFFFFFFF
-    uVar18 = ((uVar26 & uVar3) << 2 ^ uVar18) & 0xFFFFFFFF
+    uVar18 = ((uVar26 & uVar3) << 2 & 0xFFFFFFFF ^ uVar18) & 0xFFFFFFFF
     uVar31 = ((~uVar71 ^ uVar6) & uVar31) & 0xFFFFFFFF
     uVar6 = ((~uVar31 ^ uVar71 ^ uVar6) & uVar25 ^ (uVar31 ^ uVar57 ^ uVar71 ^ uVar6) & uVar24 ^ uVar6) & 0xFFFFFFFF
     uVar53 = (~uVar20 & uVar74) & 0xFFFFFFFF
@@ -877,7 +911,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar31 = (
         ((uVar95 & uVar30 ^ uVar3 ^ uVar27) & uVar26 ^ uVar31 ^ uVar3 ^ uVar27) & uVar39 ^ uVar95 & uVar26 ^ uVar31
     ) & 0xFFFFFFFF
-    uVar96 = (uVar95 << 2) & 0xFFFFFFFF
+    uVar96 = (uVar95 << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar84 = (~uVar38) & 0xFFFFFFFF
     uVar94 = (
         (
@@ -946,7 +980,9 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar6 = (
         ((uVar42 ^ uVar56 ^ uVar55 ^ uVar85) & uVar76 ^ uVar100 ^ uVar42 ^ uVar85) & uVar24 ^ (uVar42 & uVar56 ^ uVar55) & uVar76
     ) & 0xFFFFFFFF
-    uVar71 = (~(~(~(uVar98 << 2) & uVar38 << 2) & uVar83 << 2) ^ uVar38 << 2) & 0xFFFFFFFF
+    uVar71 = (
+        ~(~(~(uVar98 << 2 & 0xFFFFFFFF) & (uVar38 << 2 & 0xFFFFFFFF)) & (uVar83 << 2 & 0xFFFFFFFF)) ^ (uVar38 << 2 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     uVar15 = (~uVar26) & 0xFFFFFFFF
     uVar30 = (
         (~(((~((~uVar59 ^ uVar30) & uVar26) ^ uVar30) & uVar3 ^ uVar15 & uVar30 ^ uVar26) & uVar27) ^ uVar59 & uVar26 ^ uVar3)
@@ -994,17 +1030,17 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar67 = ((uVar74 ^ uVar94) & uVar57) & 0xFFFFFFFF
     uVar10 = (uVar74 & uVar94 ^ uVar67) & 0xFFFFFFFF
-    uVar53 = (~(~(uVar94 << 4) & uVar74 << 4)) & 0xFFFFFFFF
-    uVar95 = (uVar57 << 4 ^ uVar53) & 0xFFFFFFFF
+    uVar53 = (~(~(uVar94 << 4 & 0xFFFFFFFF) & (uVar74 << 4 & 0xFFFFFFFF))) & 0xFFFFFFFF
+    uVar95 = ((uVar57 << 4 & 0xFFFFFFFF) ^ uVar53) & 0xFFFFFFFF
     uVar21 = (
         ~((((uVar20 ^ uVar25) & uVar77 ^ (uVar68 ^ uVar31) & uVar30) & uVar2 ^ uVar21 & uVar30 & uVar31) & uVar36)
         ^ ~(uVar21 & uVar2 & uVar31) & uVar30
         ^ uVar77
     ) & 0xFFFFFFFF
-    uVar41 = (~(~(uVar37 << 4) & uVar73 << 4) ^ uVar40 << 4) & 0xFFFFFFFF
-    uVar31 = ((uVar35 ^ uVar14) << 2) & 0xFFFFFFFF
+    uVar41 = (~(~(uVar37 << 4 & 0xFFFFFFFF) & (uVar73 << 4 & 0xFFFFFFFF)) ^ (uVar40 << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar31 = ((uVar35 ^ uVar14) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar68 = (~(uVar40 >> 0x1C) & uVar73 >> 0x1C ^ uVar37 >> 0x1C) & 0xFFFFFFFF
-    uVar58 = (~((uVar38 & uVar98) << 2) & uVar83 << 2 ^ uVar98 << 2 ^ 3) & 0xFFFFFFFF
+    uVar58 = (~((uVar38 & uVar98) << 2 & 0xFFFFFFFF) & (uVar83 << 2 & 0xFFFFFFFF) ^ (uVar98 << 2 & 0xFFFFFFFF) ^ 3) & 0xFFFFFFFF
     uVar52 = (~uVar52) & 0xFFFFFFFF
     uVar54 = ((uVar52 ^ uVar17 ^ uVar13) & uVar78 ^ (uVar31 ^ uVar13) & uVar43 ^ uVar13) & 0xFFFFFFFF
     uVar20 = (
@@ -1018,18 +1054,18 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ (~(~uVar55 & uVar42) ^ uVar55) & uVar56
         ^ ~uVar55 & uVar42
     ) & 0xFFFFFFFF
-    uVar23 = ((uVar37 & uVar73 ^ uVar40) << 4) & 0xFFFFFFFF
+    uVar23 = ((uVar37 & uVar73 ^ uVar40) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar14 = (
         ~((~uVar19 ^ uVar66) & uVar22 & uVar34)
         ^ ~((uVar22 ^ uVar18) & uVar66) & uVar19
         ^ ((~uVar19 ^ uVar66) & uVar18 ^ uVar19 ^ uVar66) & uVar96
     ) & 0xFFFFFFFF
-    uVar53 = (uVar39 << 4 ^ uVar53) & 0xFFFFFFFF
+    uVar53 = ((uVar39 << 4 & 0xFFFFFFFF) ^ uVar53) & 0xFFFFFFFF
     uVar19 = (~(uVar73 >> 0x1C) & uVar37 >> 0x1C ^ uVar40 >> 0x1C) & 0xFFFFFFFF
     uVar34 = ((uVar40 & uVar73 ^ uVar37) >> 0x1C) & 0xFFFFFFFF
     uVar22 = ((uVar94 & uVar57) >> 0x1C) & 0xFFFFFFFF
     uVar24 = (~uVar22) & 0xFFFFFFFF
-    uVar35 = ((uVar94 & uVar57 ^ uVar74) << 4) & 0xFFFFFFFF
+    uVar35 = ((uVar94 & uVar57 ^ uVar74) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar66 = (~uVar99) & 0xFFFFFFFF
     uVar93 = (~(uVar6 & uVar66) & uVar20 ^ uVar6) & 0xFFFFFFFF
     uVar76 = (uVar14 ^ uVar82) & 0xFFFFFFFF
@@ -1043,7 +1079,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar31 = ((~uVar97 ^ uVar28) & uVar62) & 0xFFFFFFFF
     uVar20 = (~(~uVar20 & uVar99) & uVar6 ^ uVar20) & 0xFFFFFFFF
     uVar102 = ((~((~uVar31 ^ uVar97) & uVar44) ^ uVar31) & uVar70 ^ uVar97 & ~uVar44 ^ uVar44) & 0xFFFFFFFF
-    uVar17 = (~(~(uVar73 << 4) & uVar40 << 4) ^ uVar37 << 4) & 0xFFFFFFFF
+    uVar17 = (~(~(uVar73 << 4 & 0xFFFFFFFF) & (uVar40 << 4 & 0xFFFFFFFF)) ^ (uVar37 << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar42 = (
         (
             ~((~((~((uVar83 ^ uVar38) & uVar71) ^ uVar38) & uVar58) ^ uVar84 & uVar71 ^ uVar38) & uVar9)
@@ -1111,8 +1147,8 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar82
         ^ uVar3
     ) & 0xFFFFFFFF
-    uVar25 = (~(~(uVar59 << 4) & uVar56 << 4) ^ (uVar59 ^ uVar81) << 4) & 0xFFFFFFFF
-    uVar9 = (~(((uVar38 ^ uVar42) & uVar60) << 4) & 0xFFFFFFF0) & 0xFFFFFFFF
+    uVar25 = (~(~(uVar59 << 4 & 0xFFFFFFFF) & (uVar56 << 4 & 0xFFFFFFFF)) ^ (uVar59 ^ uVar81) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar9 = (~(((uVar38 ^ uVar42) & uVar60) << 4 & 0xFFFFFFFF) & 0xFFFFFFF0) & 0xFFFFFFFF
     uVar15 = (~(uVar38 >> 0x1C)) & 0xFFFFFFFF
     uVar98 = ((~(uVar42 >> 0x1C & uVar15) & uVar60 >> 0x1C ^ ~((uVar42 & uVar38) >> 0x1C)) & 0xF) & 0xFFFFFFFF
     uVar52 = (~((uVar38 ^ uVar60) >> 0x1C) & 0xF) & 0xFFFFFFFF
@@ -1158,10 +1194,10 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ~(uVar82 & uVar26) & uVar3
         ^ uVar82
     ) & 0xFFFFFFFF
-    uVar44 = (uVar101 << 4) & 0xFFFFFFFF
-    uVar26 = (~(~uVar44 & uVar82 << 4) ^ (uVar2 ^ uVar101) << 4) & 0xFFFFFFFF
-    uVar83 = (~((uVar38 & uVar60) << 4 & ~(uVar42 << 4)) & 0xFFFFFFF0) & 0xFFFFFFFF
-    uVar3 = ((uVar38 ^ uVar60) << 4) & 0xFFFFFFFF
+    uVar44 = (uVar101 << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar26 = (~(~uVar44 & (uVar82 << 4 & 0xFFFFFFFF)) ^ (uVar2 ^ uVar101) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar83 = (~((uVar38 & uVar60) << 4 & 0xFFFFFFFF & ~(uVar42 << 4 & 0xFFFFFFFF)) & 0xFFFFFFF0) & 0xFFFFFFFF
+    uVar3 = ((uVar38 ^ uVar60) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar27 = (~((uVar102 & uVar31) >> 0x1C & ~(uVar70 >> 0x1C))) & 0xFFFFFFFF
     uVar14 = (~(uVar38 & (uVar3 ^ uVar9)) ^ uVar3) & 0xFFFFFFFF
     uVar84 = (
@@ -1169,7 +1205,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar3 & ~uVar9
         ^ uVar83 & uVar14
     ) & 0xFFFFFFFF
-    uVar15 = ((uVar82 ^ uVar2) << 4) & 0xFFFFFFFF
+    uVar15 = ((uVar82 ^ uVar2) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar79 = (
         ~(
             (((~((uVar54 ^ uVar12) & uVar72) ^ uVar79 ^ uVar54 & uVar12) & uVar69 ^ uVar79 & uVar77) & uVar45 ^ uVar54 ^ uVar72)
@@ -1180,21 +1216,21 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar79
     ) & 0xFFFFFFFF
     uVar99 = ((~((uVar36 & uVar103) >> 0x1C) ^ ~(uVar103 >> 0x1C) & uVar79 >> 0x1C) & 0xF) & 0xFFFFFFFF
-    uVar55 = (~(~(uVar6 << 4) & uVar20 << 4) & uVar93 << 4) & 0xFFFFFFFF
-    uVar14 = ((~((uVar6 & uVar20) << 4) ^ uVar55) & 0xFFFFFFF0) & 0xFFFFFFFF
-    uVar78 = (uVar102 << 4) & 0xFFFFFFFF
-    uVar12 = (~(uVar70 << 4) ^ uVar78) & 0xFFFFFFFF
-    uVar44 = (~(~(uVar82 << 4) & uVar44) & uVar2 << 4 ^ uVar44) & 0xFFFFFFFF
+    uVar55 = (~(~(uVar6 << 4 & 0xFFFFFFFF) & (uVar20 << 4 & 0xFFFFFFFF)) & (uVar93 << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar14 = ((~((uVar6 & uVar20) << 4 & 0xFFFFFFFF) ^ uVar55) & 0xFFFFFFF0) & 0xFFFFFFFF
+    uVar78 = (uVar102 << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar12 = (~(uVar70 << 4 & 0xFFFFFFFF) ^ uVar78) & 0xFFFFFFFF
+    uVar44 = (~(~(uVar82 << 4 & 0xFFFFFFFF) & uVar44) & (uVar2 << 4 & 0xFFFFFFFF) ^ uVar44) & 0xFFFFFFFF
     uVar54 = ((~((uVar31 & uVar70) >> 0x1C) ^ uVar102 >> 0x1C & ~(uVar70 >> 0x1C)) & 0xF) & 0xFFFFFFFF
     uVar66 = ((uVar79 ^ uVar36) >> 0x1C) & 0xFFFFFFFF
     uVar100 = (
         ~((~((~uVar13 ^ uVar41) & uVar23) ^ uVar13 ^ uVar41) & uVar17) ^ ~((uVar27 ^ uVar23 ^ ~uVar54) & uVar41) & uVar13 ^ uVar54
     ) & 0xFFFFFFFF
-    uVar76 = ((uVar59 ^ uVar81 & uVar56) << 4) & 0xFFFFFFFF
+    uVar76 = ((uVar59 ^ uVar81 & uVar56) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar77 = (~((uVar36 & uVar79) >> 0x1C) & 0xF) & 0xFFFFFFFF
     uVar18 = (~uVar82) & 0xFFFFFFFF
-    uVar85 = ((~((uVar70 & uVar102) << 4) & uVar31 << 4 ^ ~uVar78) & 0xFFFFFFF0) & 0xFFFFFFFF
-    uVar61 = (~(uVar81 << 4) & uVar56 << 4 ^ uVar59 << 4 ^ 0xF) & 0xFFFFFFFF
+    uVar85 = ((~((uVar70 & uVar102) << 4 & 0xFFFFFFFF) & (uVar31 << 4 & 0xFFFFFFFF) ^ ~uVar78) & 0xFFFFFFF0) & 0xFFFFFFFF
+    uVar61 = (~(uVar81 << 4 & 0xFFFFFFFF) & (uVar56 << 4 & 0xFFFFFFFF) ^ (uVar59 << 4 & 0xFFFFFFFF) ^ 0xF) & 0xFFFFFFFF
     uVar29 = (~uVar61) & 0xFFFFFFFF
     uVar43 = ((~(uVar82 & uVar29) ^ uVar61) & uVar76) & 0xFFFFFFFF
     uVar96 = (
@@ -1211,20 +1247,22 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar61
         ^ uVar82
     ) & 0xFFFFFFFF
-    uVar21 = (~((uVar6 ^ uVar93) << 4) & 0xFFFFFFF0) & 0xFFFFFFFF
+    uVar21 = (~((uVar6 ^ uVar93) << 4 & 0xFFFFFFFF) & 0xFFFFFFF0) & 0xFFFFFFFF
     uVar80 = (
         (~((uVar42 & ~uVar3 ^ uVar83) & uVar9) ^ uVar3) & uVar60
         ^ ~((~(uVar60 & ~uVar9) ^ uVar9) & uVar38) & uVar83
         ^ uVar9 & ~uVar3
     ) & 0xFFFFFFFF
-    uVar62 = ((~((uVar103 & uVar36) << 4) ^ uVar79 << 4 & ~(uVar103 << 4)) & 0xFFFFFFF0) & 0xFFFFFFFF
+    uVar62 = (
+        (~((uVar103 & uVar36) << 4 & 0xFFFFFFFF) ^ (uVar79 << 4 & 0xFFFFFFFF) & ~(uVar103 << 4 & 0xFFFFFFFF)) & 0xFFFFFFF0
+    ) & 0xFFFFFFFF
     uVar104 = (
         (~((uVar13 ^ uVar23) & uVar54) ^ uVar13 ^ uVar23) & uVar41
         ^ (uVar23 & (uVar54 ^ uVar41) ^ uVar54 ^ uVar41) & uVar17
         ^ ~(uVar27 & (uVar54 ^ uVar41)) & uVar13
     ) & 0xFFFFFFFF
-    uVar97 = (~(uVar31 << 4) & uVar78 ^ uVar70 << 4 ^ 0xF) & 0xFFFFFFFF
-    uVar55 = (uVar55 ^ uVar20 << 4) & 0xFFFFFFFF
+    uVar97 = (~(uVar31 << 4 & 0xFFFFFFFF) & uVar78 ^ (uVar70 << 4 & 0xFFFFFFFF) ^ 0xF) & 0xFFFFFFFF
+    uVar55 = (uVar55 ^ (uVar20 << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar105 = (
         (~((~uVar26 ^ uVar24) & uVar10 >> 0x1C) ^ uVar26 & uVar22 ^ uVar24) & uVar39 >> 0x1C
         ^ ~((uVar44 ^ uVar15) & uVar24) & uVar26
@@ -1342,7 +1380,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar97 = (~(~(uVar80 >> 0x18) & uVar84 >> 0x18) ^ uVar12 >> 0x18) & 0xFFFFFFFF
     uVar87 = (uVar80 ^ uVar84) & 0xFFFFFFFF
-    uVar21 = (~(uVar87 << 8) & uVar12 << 8) & 0xFFFFFFFF
+    uVar21 = (~(uVar87 << 8 & 0xFFFFFFFF) & (uVar12 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar26 = (
         ~((((uVar94 & uVar57 ^ uVar10) & uVar39) >> 0x1C ^ (uVar15 ^ uVar24) & uVar26 ^ uVar24) & uVar44)
         ^ (~uVar15 & uVar26 ^ (uVar10 & uVar39) >> 0x1C) & uVar24
@@ -1377,7 +1415,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ~uVar72 & uVar99
         ^ uVar72
     ) & 0xFFFFFFFF
-    uVar15 = ((uVar80 ^ uVar12) << 8) & 0xFFFFFFFF
+    uVar15 = ((uVar80 ^ uVar12) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar66 = (uVar55 & uVar82) & 0xFFFFFFFF
     uVar77 = (
         (
@@ -1417,7 +1455,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ (uVar96 ^ uVar81 & uVar56) & uVar39
         ^ uVar17
     ) & 0xFFFFFFFF
-    uVar9 = (uVar13 << 8) & 0xFFFFFFFF
+    uVar9 = (uVar13 << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar76 = (~uVar9) & 0xFFFFFFFF
     uVar18 = (uVar77 & uVar35) & 0xFFFFFFFF
     uVar23 = (
@@ -1456,12 +1494,13 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ (uVar84 & uVar21 & uVar37 ^ uVar15) & uVar12
         ^ uVar15
     ) & 0xFFFFFFFF
-    uVar37 = (~(uVar40 << 8) & uVar14 << 8 ^ uVar29 << 8 ^ 0xFF) & 0xFFFFFFFF
-    uVar17 = (~((uVar40 ^ uVar29) << 8) & uVar14 << 8 ^ uVar40 << 8) & 0xFFFFFFFF
+    uVar37 = (~(uVar40 << 8 & 0xFFFFFFFF) & (uVar14 << 8 & 0xFFFFFFFF) ^ (uVar29 << 8 & 0xFFFFFFFF) ^ 0xFF) & 0xFFFFFFFF
+    uVar17 = (~((uVar40 ^ uVar29) << 8 & 0xFFFFFFFF) & (uVar14 << 8 & 0xFFFFFFFF) ^ (uVar40 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar56 = (
-        (~(((uVar80 ^ uVar12 ^ uVar13) << 8 & uVar21 ^ uVar15) & uVar84) & uVar80 ^ uVar15) & uVar12 ^ uVar80 & ~uVar15
+        (~(((uVar80 ^ uVar12 ^ uVar13) << 8 & 0xFFFFFFFF & uVar21 ^ uVar15) & uVar84) & uVar80 ^ uVar15) & uVar12
+        ^ uVar80 & ~uVar15
     ) & 0xFFFFFFFF
-    uVar15 = ((uVar79 & uVar36) << 4 & ~(uVar103 << 4)) & 0xFFFFFFFF
+    uVar15 = ((uVar79 & uVar36) << 4 & 0xFFFFFFFF & ~(uVar103 << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar39 = (~(uVar40 >> 0x18) ^ uVar29 >> 0x18) & 0xFFFFFFFF
     uVar78 = (
         (
@@ -1476,8 +1515,8 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar2
         ^ uVar78
     ) & 0xFFFFFFFF
-    uVar2 = ((uVar78 & uVar54 ^ uVar106) << 8) & 0xFFFFFFFF
-    uVar13 = ((uVar42 ^ uVar9) << 0x10) & 0xFFFFFFFF
+    uVar2 = ((uVar78 & uVar54 ^ uVar106) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar13 = ((uVar42 ^ uVar9) << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar22 = (~uVar52) & 0xFFFFFFFF
     uVar66 = (
         ~(
@@ -1501,18 +1540,18 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar70
     ) & 0xFFFFFFFF
     uVar77 = (~((~uVar23 & uVar35 ^ uVar23) & uVar44) ^ uVar23) & 0xFFFFFFFF
-    uVar18 = (~(uVar78 << 8) & uVar54 << 8 ^ uVar106 << 8) & 0xFFFFFFFF
+    uVar18 = (~(uVar78 << 8 & 0xFFFFFFFF) & (uVar54 << 8 & 0xFFFFFFFF) ^ (uVar106 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar10 = (~(uVar10 & uVar72) & uVar99 ^ uVar71) & 0xFFFFFFFF
     uVar24 = (uVar56 & uVar9 ^ uVar42 & (uVar56 ^ uVar9)) & 0xFFFFFFFF
-    uVar95 = (uVar24 << 0x10) & 0xFFFFFFFF
+    uVar95 = (uVar24 << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar96 = (uVar24 >> 0x10) & 0xFFFFFFFF
     uVar59 = ((uVar38 ^ uVar85) & uVar27) & 0xFFFFFFFF
-    uVar26 = ((uVar103 ^ uVar36) << 4) & 0xFFFFFFFF
+    uVar26 = ((uVar103 ^ uVar36) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar41 = (
         (~uVar20 & uVar6 ^ uVar59 ^ uVar85) & uVar93 ^ (uVar6 ^ uVar59 ^ uVar85) & uVar20 ^ uVar6 ^ uVar59 ^ uVar85
     ) & 0xFFFFFFFF
     uVar55 = (uVar19 ^ ~uVar34) & 0xFFFFFFFF
-    uVar21 = (~(~(uVar54 << 8) & uVar106 << 8) ^ uVar78 << 8) & 0xFFFFFFFF
+    uVar21 = (~(~(uVar54 << 8 & 0xFFFFFFFF) & (uVar106 << 8 & 0xFFFFFFFF)) ^ (uVar78 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar53 = (
         ((uVar68 ^ uVar15) & uVar34 ^ (uVar15 ^ ~uVar34) & uVar19 ^ (uVar15 ^ uVar55) & uVar62) & uVar26
         ^ ~(uVar34 & uVar68) & uVar19
@@ -1522,7 +1561,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar59 = ((~uVar44 ^ uVar20) & uVar93 ^ uVar44 ^ uVar59 ^ uVar85) & 0xFFFFFFFF
     uVar44 = (uVar42 & uVar9) & 0xFFFFFFFF
     uVar57 = ((~(uVar15 & uVar55) ^ uVar62 & uVar55) & uVar26 ^ uVar34 & uVar19 & uVar68 ^ uVar62) & 0xFFFFFFFF
-    uVar55 = (uVar44 << 0x10) & 0xFFFFFFFF
+    uVar55 = (uVar44 << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar35 = (uVar35 ^ uVar23) & 0xFFFFFFFF
     uVar31 = (
         (
@@ -1541,14 +1580,14 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ~(uVar45 & ~uVar102 & uVar52) & uVar69
     ) & 0xFFFFFFFF
     uVar82 = ((~((~uVar67 ^ uVar74 & uVar94) & uVar99) ^ uVar72) & uVar71 ^ uVar99 & uVar72) & 0xFFFFFFFF
-    uVar52 = (uVar82 << 8) & 0xFFFFFFFF
-    uVar67 = (~uVar52 ^ uVar10 << 8) & 0xFFFFFFFF
+    uVar52 = (uVar82 << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar67 = (~uVar52 ^ (uVar10 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar19 = (
         ((uVar34 ^ uVar19 ^ uVar15) & uVar62 ^ (uVar34 ^ uVar15) & uVar19 ^ (uVar15 ^ ~uVar68) & uVar34 ^ uVar15) & uVar26
         ^ ((~uVar19 ^ uVar68) & uVar62 ^ uVar19 & ~uVar68 ^ uVar68) & uVar34
         ^ uVar19
     ) & 0xFFFFFFFF
-    uVar15 = ((uVar40 & uVar14 ^ uVar29) << 8) & 0xFFFFFFFF
+    uVar15 = ((uVar40 & uVar14 ^ uVar29) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar99 = ((uVar82 & uVar104) >> 0x18 & ~(uVar10 >> 0x18)) & 0xFFFFFFFF
     uVar83 = ((uVar58 ^ uVar66) >> 0x18 ^ ~(uVar66 >> 0x18) & uVar31 >> 0x18) & 0xFFFFFFFF
     uVar84 = ((uVar56 & uVar42) >> 0x10) & 0xFFFFFFFF
@@ -1560,7 +1599,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar57 & ~uVar19
         ^ uVar19
     ) & 0xFFFFFFFF
-    uVar74 = (~((uVar35 ^ uVar77) << 8) & uVar76 << 8 ^ uVar35 << 8) & 0xFFFFFFFF
+    uVar74 = (~((uVar35 ^ uVar77) << 8 & 0xFFFFFFFF) & (uVar76 << 8 & 0xFFFFFFFF) ^ (uVar35 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar43 = (
         ~(((~(((uVar57 ^ uVar53) & uVar36 ^ uVar57) & uVar19) ^ uVar68 & uVar57) & uVar103 ^ ~uVar53 & uVar19) & uVar79)
         ^ (~(uVar36 & uVar53) & uVar103 ^ uVar53) & uVar19
@@ -1580,17 +1619,17 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar26 = (uVar61 >> 0x18) & 0xFFFFFFFF
     uVar36 = ((uVar58 & uVar66 ^ uVar31) >> 0x18) & 0xFFFFFFFF
     uVar6 = (~(~(~uVar26 & uVar79 >> 0x18) & uVar43 >> 0x18) ^ uVar26) & 0xFFFFFFFF
-    uVar62 = (~(uVar79 << 8)) & 0xFFFFFFFF
-    uVar20 = (uVar43 << 8) & 0xFFFFFFFF
+    uVar62 = (~(uVar79 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar20 = (uVar43 << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar27 = (uVar20 ^ uVar62) & 0xFFFFFFFF
     uVar38 = ((uVar82 ^ uVar104) >> 0x18) & 0xFFFFFFFF
     uVar38 = (~(~uVar38 & uVar10 >> 0x18) ^ uVar38) & 0xFFFFFFFF
     uVar68 = ((uVar10 ^ uVar104) >> 0x18) & 0xFFFFFFFF
-    uVar72 = (~((uVar82 & uVar10) << 8) & uVar104 << 8 ^ uVar52) & 0xFFFFFFFF
-    uVar101 = (~((uVar35 & uVar76) << 8) ^ uVar77 << 8) & 0xFFFFFFFF
-    uVar52 = (~(~(~(uVar10 << 8) & uVar52) & uVar104 << 8) ^ uVar52) & 0xFFFFFFFF
-    uVar53 = ((uVar31 & uVar58 ^ uVar66) << 8) & 0xFFFFFFFF
-    uVar22 = (~uVar20 & uVar61 << 8 & uVar62) & 0xFFFFFFFF
+    uVar72 = (~((uVar82 & uVar10) << 8 & 0xFFFFFFFF) & (uVar104 << 8 & 0xFFFFFFFF) ^ uVar52) & 0xFFFFFFFF
+    uVar101 = (~((uVar35 & uVar76) << 8 & 0xFFFFFFFF) ^ (uVar77 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar52 = (~(~(~(uVar10 << 8 & 0xFFFFFFFF) & uVar52) & (uVar104 << 8 & 0xFFFFFFFF)) ^ uVar52) & 0xFFFFFFFF
+    uVar53 = ((uVar31 & uVar58 ^ uVar66) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar22 = (~uVar20 & (uVar61 << 8 & 0xFFFFFFFF) & uVar62) & 0xFFFFFFFF
     uVar23 = (uVar83 ^ ~uVar36) & 0xFFFFFFFF
     uVar45 = (uVar34 & uVar23) & 0xFFFFFFFF
     uVar94 = (
@@ -1601,16 +1640,16 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar23 = ((uVar79 ^ uVar61) >> 0x18) & 0xFFFFFFFF
     uVar102 = ((uVar19 ^ uVar13) & uVar55) & 0xFFFFFFFF
-    uVar71 = ((uVar44 ^ uVar24) << 0x10 & uVar9) & 0xFFFFFFFF
+    uVar71 = ((uVar44 ^ uVar24) << 0x10 & 0xFFFFFFFF & uVar9) & 0xFFFFFFFF
     uVar44 = (uVar44 ^ uVar42 ^ uVar9) & 0xFFFFFFFF
-    uVar57 = ((uVar44 & uVar24) << 0x10) & 0xFFFFFFFF
+    uVar57 = ((uVar44 & uVar24) << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar57 = (
         ~((((uVar71 ^ uVar95) & uVar13 ^ (uVar95 ^ uVar9) & uVar55) & uVar56 ^ uVar57 & uVar9 ^ uVar55 ^ uVar13) & uVar42)
         ^ uVar102 & uVar56 & uVar9
         ^ uVar57
     ) & 0xFFFFFFFF
     uVar60 = (~(uVar59 & uVar41) & uVar93 ^ uVar41) & 0xFFFFFFFF
-    uVar24 = (~(uVar35 << 8) & uVar76 << 8 ^ uVar77 << 8 ^ 0xFF) & 0xFFFFFFFF
+    uVar24 = (~(uVar35 << 8 & 0xFFFFFFFF) & (uVar76 << 8 & 0xFFFFFFFF) ^ (uVar77 << 8 & 0xFFFFFFFF) ^ 0xFF) & 0xFFFFFFFF
     uVar25 = (uVar99 ^ ~uVar68) & 0xFFFFFFFF
     uVar103 = (~(((uVar25 ^ uVar21 ^ uVar2) & uVar18 ^ uVar21 ^ uVar2) & uVar38) ^ uVar25 & uVar18 ^ uVar99 ^ uVar2) & 0xFFFFFFFF
     uVar105 = (~(~(~(uVar79 >> 0x18) & uVar43 >> 0x18) & uVar26) ^ (uVar43 & uVar79) >> 0x18) & 0xFFFFFFFF
@@ -1626,9 +1665,9 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar107 = (
         (uVar52 & uVar67 ^ uVar105 & uVar23) & uVar6 ^ ~(((~uVar6 ^ uVar67) & uVar52 ^ uVar6 ^ uVar89) & uVar72) ^ uVar52 ^ uVar67
     ) & 0xFFFFFFFF
-    uVar62 = (~(uVar61 << 8) & uVar20 & uVar62) & 0xFFFFFFFF
+    uVar62 = (~(uVar61 << 8 & 0xFFFFFFFF) & uVar20 & uVar62) & 0xFFFFFFFF
     uVar85 = (~uVar62) & 0xFFFFFFFF
-    uVar70 = (~(~(uVar58 << 8) & uVar31 << 8) ^ (uVar58 & uVar66) << 8) & 0xFFFFFFFF
+    uVar70 = (~(~(uVar58 << 8 & 0xFFFFFFFF) & (uVar31 << 8 & 0xFFFFFFFF)) ^ (uVar58 & uVar66) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar100 = (
         (~((uVar62 ^ uVar27) & uVar3) ^ uVar85 ^ uVar27) & uVar98 ^ (uVar98 ^ uVar3) & (uVar62 ^ uVar27) & uVar39 ^ uVar22 ^ uVar3
     ) & 0xFFFFFFFF
@@ -1662,7 +1701,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar102 = (
         (~(((uVar71 ^ uVar55) & uVar13 ^ (uVar19 ^ uVar9) & uVar55) & uVar56) ^ uVar102 & uVar9) & uVar42
-        ^ ~(uVar44 << 0x10 & uVar56 & uVar9) & uVar95
+        ^ ~((uVar44 << 0x10 & 0xFFFFFFFF) & uVar56 & uVar9) & uVar95
     ) & 0xFFFFFFFF
     uVar20 = (~uVar6) & 0xFFFFFFFF
     uVar71 = (
@@ -1676,7 +1715,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ~uVar107 & uVar82
     ) & 0xFFFFFFFF
     uVar93 = ((uVar93 ^ uVar41) & uVar59 ^ uVar93) & 0xFFFFFFFF
-    uVar19 = (~(~(uVar31 << 8) & uVar58 << 8) ^ uVar66 << 8) & 0xFFFFFFFF
+    uVar19 = (~(~(uVar31 << 8 & 0xFFFFFFFF) & (uVar58 << 8 & 0xFFFFFFFF)) ^ (uVar66 << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar55 = (
         ((uVar36 ^ uVar15 ^ uVar17 ^ uVar37) & uVar83 ^ (uVar15 ^ uVar17 ^ uVar37) & uVar36 ^ uVar15 ^ uVar17 ^ uVar37) & uVar34
         ^ ((~uVar17 ^ uVar37) & uVar15 ^ uVar17 ^ uVar37) & uVar36
@@ -1752,10 +1791,10 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ (~(uVar20 & uVar107) & uVar104 ^ uVar107) & uVar82
     ) & 0xFFFFFFFF
     uVar97 = (~(~(uVar72 >> 0x10 & ~(uVar71 >> 0x10)) & uVar68 >> 0x10) ^ uVar71 >> 0x10) & 0xFFFFFFFF
-    uVar52 = (uVar71 << 0x10) & 0xFFFFFFFF
-    uVar21 = (~(uVar68 << 0x10)) & 0xFFFFFFFF
+    uVar52 = (uVar71 << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar21 = (~(uVar68 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar10 = (~uVar38) & 0xFFFFFFFF
-    uVar98 = (~((uVar72 & uVar71) << 0x10 & uVar21) ^ ~uVar52 & uVar68 << 0x10) & 0xFFFFFFFF
+    uVar98 = (~((uVar72 & uVar71) << 0x10 & 0xFFFFFFFF & uVar21) ^ ~uVar52 & (uVar68 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar2 = (uVar57 ^ uVar69) & 0xFFFFFFFF
     uVar3 = (uVar2 & 0x80000000) & 0xFFFFFFFF
     uVar36 = (uVar106 ^ uVar6) & 0xFFFFFFFF
@@ -1777,7 +1816,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar106
     ) & 0xFFFFFFFF
     uVar19 = ((uVar68 & uVar71 ^ uVar72) >> 0x10) & 0xFFFFFFFF
-    uVar34 = ((uVar93 ^ uVar60) << 8 ^ 0xFF) & 0xFFFFFFFF
+    uVar34 = ((uVar93 ^ uVar60) << 8 & 0xFFFFFFFF ^ 0xFF) & 0xFFFFFFFF
     uVar36 = (
         ~(
             (
@@ -1803,7 +1842,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar103
         ^ uVar106
     ) & 0xFFFFFFFF
-    uVar17 = ((~(uVar52 & uVar21) & uVar72 << 0x10 ^ uVar21) & 0xFFFF0000) & 0xFFFFFFFF
+    uVar17 = ((~(uVar52 & uVar21) & (uVar72 << 0x10 & 0xFFFFFFFF) ^ uVar21) & 0xFFFF0000) & 0xFFFFFFFF
     uVar45 = (
         ~((~((~uVar55 ^ uVar94) & uVar18 & uVar40) ^ uVar29 ^ uVar14) & uVar37)
         ^ (~((uVar94 & uVar18 ^ uVar29 ^ uVar14) & uVar40) ^ uVar29 ^ uVar14) & uVar55
@@ -1819,7 +1858,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar74 = (uVar76 ^ ~uVar77) & 0xFFFFFFFF
     uVar20 = ((~(uVar20 & uVar74) ^ uVar77 ^ uVar76) & uVar13) & 0xFFFFFFFF
     uVar13 = ((~(uVar74 & uVar13) ^ uVar77 ^ uVar76) & uVar39) & 0xFFFFFFFF
-    uVar52 = (~((uVar68 ^ uVar71) << 0x10) & uVar72 << 0x10 ^ uVar52) & 0xFFFFFFFF
+    uVar52 = (~((uVar68 ^ uVar71) << 0x10 & 0xFFFFFFFF) & (uVar72 << 0x10 & 0xFFFFFFFF) ^ uVar52) & 0xFFFFFFFF
     uVar99 = (~((~uVar20 ^ uVar77 ^ uVar76 ^ uVar13) & uVar35) ^ uVar76 & ~uVar77 ^ uVar39 ^ uVar99) & 0xFFFFFFFF
     uVar21 = ((uVar61 ^ ~uVar43) & uVar100) & 0xFFFFFFFF
     uVar23 = (uVar100 & ~uVar43) & 0xFFFFFFFF
@@ -1850,14 +1889,14 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar39 = (
         (~((uVar43 ^ uVar61 ^ uVar21) & uVar27) ^ uVar43 ^ uVar61 ^ uVar24) & uVar79 ^ uVar27 ^ uVar100 ^ uVar20 ^ uVar39
     ) & 0xFFFFFFFF
-    uVar13 = (~(uVar53 << 0x10) & uVar39 << 0x10 ^ uVar35 << 0x10) & 0xFFFFFFFF
+    uVar13 = (~(uVar53 << 0x10 & 0xFFFFFFFF) & (uVar39 << 0x10 & 0xFFFFFFFF) ^ (uVar35 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar23 = (
         ((~((~uVar40 ^ uVar29) & uVar14) ^ ~uVar40 & uVar29) & uVar55 ^ uVar29 ^ uVar14) & uVar37 ^ uVar55 & uVar18
     ) & 0xFFFFFFFF
     uVar20 = ((uVar37 ^ uVar55) & uVar29) & 0xFFFFFFFF
     uVar94 = ((uVar37 ^ uVar55 ^ uVar20) & uVar94) & 0xFFFFFFFF
     uVar29 = ((~uVar94 ^ uVar20) & uVar14 ^ uVar37 & uVar55 & uVar18 & uVar40 ^ uVar94 ^ uVar29) & 0xFFFFFFFF
-    uVar14 = ((uVar29 & uVar45) << 0x10 ^ 0xFFFF) & 0xFFFFFFFF
+    uVar14 = ((uVar29 & uVar45) << 0x10 & 0xFFFFFFFF ^ 0xFFFF) & 0xFFFFFFFF
     uVar83 = (
         (
             ~(
@@ -1874,13 +1913,18 @@ def execute(destination: bytearray, source: bytes) -> None:
         & uVar54
         ^ ~((~((~(uVar103 & uVar10) ^ uVar38) & uVar106) ^ uVar38 ^ uVar103 & uVar10) & uVar88) & uVar78
     ) & 0xFFFFFFFF
-    uVar37 = ((uVar29 ^ uVar45) << 0x10) & 0xFFFFFFFF
+    uVar37 = ((uVar29 ^ uVar45) << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar38 = (uVar23 >> 0x10 ^ ~(uVar29 >> 0x10)) & 0xFFFFFFFF
-    uVar6 = (~(uVar41 << 0x10)) & 0xFFFFFFFF
-    uVar78 = ((~((uVar29 & uVar23) << 0x10) ^ ((uVar29 ^ uVar23) & uVar45) << 0x10) & 0xFFFF0000) & 0xFFFFFFFF
-    uVar43 = ((~(uVar83 << 0x10 & uVar6) & uVar70 << 0x10 ^ uVar6) & 0xFFFF0000) & 0xFFFFFFFF
+    uVar6 = (~(uVar41 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar78 = (
+        (~((uVar29 & uVar23) << 0x10 & 0xFFFFFFFF) ^ ((uVar29 ^ uVar23) & uVar45) << 0x10 & 0xFFFFFFFF) & 0xFFFF0000
+    ) & 0xFFFFFFFF
+    uVar43 = ((~((uVar83 << 0x10 & 0xFFFFFFFF) & uVar6) & (uVar70 << 0x10 & 0xFFFFFFFF) ^ uVar6) & 0xFFFF0000) & 0xFFFFFFFF
     uVar81 = ((~uVar99 & uVar76 ^ uVar99) & uVar95 ^ uVar76) & 0xFFFFFFFF
-    uVar86 = (~(~(uVar83 << 0x10) & uVar70 << 0x10) & uVar41 << 0x10 ^ (uVar70 & uVar83) << 0x10) & 0xFFFFFFFF
+    uVar86 = (
+        ~(~(uVar83 << 0x10 & 0xFFFFFFFF) & (uVar70 << 0x10 & 0xFFFFFFFF)) & (uVar41 << 0x10 & 0xFFFFFFFF)
+        ^ (uVar70 & uVar83) << 0x10 & 0xFFFFFFFF
+    ) & 0xFFFFFFFF
     uVar76 = (~(uVar76 & uVar99) & uVar95 ^ uVar76) & 0xFFFFFFFF
     uVar54 = (~(uVar35 >> 0x10) & uVar53 >> 0x10) & 0xFFFFFFFF
     uVar6 = (uVar23 >> 0x10 & ~(uVar29 >> 0x10)) & 0xFFFFFFFF
@@ -1894,19 +1938,23 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar79 = (~(uVar58 >> 0x10) & uVar36 >> 0x10 & ~(uVar85 >> 0x10)) & 0xFFFFFFFF
     uVar24 = (~(~((uVar29 ^ uVar23) >> 0x10) & uVar45 >> 0x10) & 0xFFFF) & 0xFFFFFFFF
     uVar66 = ((uVar35 ^ uVar53) >> 0x10) & 0xFFFFFFFF
-    uVar100 = (~(uVar60 << 8 & ~(uVar73 << 8)) & uVar93 << 8 ^ uVar73 << 8) & 0xFFFFFFFF
-    uVar61 = (~((uVar41 ^ uVar83) << 0x10) & 0xFFFF0000) & 0xFFFFFFFF
+    uVar100 = (
+        ~((uVar60 << 8 & 0xFFFFFFFF) & ~(uVar73 << 8 & 0xFFFFFFFF)) & (uVar93 << 8 & 0xFFFFFFFF) ^ (uVar73 << 8 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    uVar61 = (~((uVar41 ^ uVar83) << 0x10 & 0xFFFFFFFF) & 0xFFFF0000) & 0xFFFFFFFF
     uVar55 = (~uVar19 & uVar74) & 0xFFFFFFFF
     uVar27 = (
         ~((~((uVar19 ^ uVar61 ^ uVar86) & uVar97) ^ uVar19 ^ uVar55 ^ uVar61) & uVar43) ^ (uVar55 ^ uVar86) & uVar97 ^ uVar86
     ) & 0xFFFFFFFF
-    uVar30 = (uVar85 << 0x10 ^ ~(uVar36 << 0x10)) & 0xFFFFFFFF
+    uVar30 = ((uVar85 << 0x10 & 0xFFFFFFFF) ^ ~(uVar36 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar31 = ((uVar36 ^ uVar85) >> 0x10) & 0xFFFFFFFF
-    uVar67 = ((uVar93 & uVar73 ^ uVar60) << 8) & 0xFFFFFFFF
-    uVar77 = (~(uVar76 << 0x10)) & 0xFFFFFFFF
-    uVar40 = (uVar99 << 0x10 & uVar77) & 0xFFFFFFFF
+    uVar67 = ((uVar93 & uVar73 ^ uVar60) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar77 = (~(uVar76 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar40 = ((uVar99 << 0x10 & 0xFFFFFFFF) & uVar77) & 0xFFFFFFFF
     uVar10 = (
-        ((uVar39 ^ uVar53) << 0x10 ^ ~(uVar39 << 0x10) & uVar35 << 0x10 ^ uVar13) & (uVar39 & uVar53 ^ uVar35) << 0x10
+        ((uVar39 ^ uVar53) << 0x10 & 0xFFFFFFFF ^ ~(uVar39 << 0x10 & 0xFFFFFFFF) & (uVar35 << 0x10 & 0xFFFFFFFF) ^ uVar13)
+        & (uVar39 & uVar53 ^ uVar35) << 0x10
+        & 0xFFFFFFFF
     ) & 0xFFFFFFFF
     uVar82 = ((uVar36 ^ uVar58) >> 0x10 & ~(uVar85 >> 0x10)) & 0xFFFFFFFF
     uVar21 = (~uVar10 ^ uVar38 ^ uVar13) & 0xFFFFFFFF
@@ -1937,8 +1985,11 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar19 & ~uVar97
         ^ uVar86
     ) & 0xFFFFFFFF
-    uVar13 = (~((uVar36 & uVar58) << 0x10) ^ uVar85 << 0x10) & 0xFFFFFFFF
-    uVar24 = (~((uVar36 & uVar85) << 0x10 & ~(uVar58 << 0x10)) ^ uVar58 << 0x10 & ~(uVar36 << 0x10)) & 0xFFFFFFFF
+    uVar13 = (~((uVar36 & uVar58) << 0x10 & 0xFFFFFFFF) ^ (uVar85 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar24 = (
+        ~((uVar36 & uVar85) << 0x10 & 0xFFFFFFFF & ~(uVar58 << 0x10 & 0xFFFFFFFF))
+        ^ (uVar58 << 0x10 & 0xFFFFFFFF) & ~(uVar36 << 0x10 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     uVar14 = (
         ~(((~uVar82 ^ uVar14) & uVar37 ^ uVar82 & uVar14) & uVar78)
         ^ (~((~uVar31 ^ uVar79) & uVar37) ^ uVar31 ^ uVar79) & uVar82
@@ -1954,7 +2005,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar26 & uVar38
         ^ uVar84
     ) & 0xFFFFFFFF
-    uVar79 = ((~((uVar99 ^ uVar76) << 0x10) & uVar81 << 0x10 ^ uVar77) & 0xFFFF0000) & 0xFFFFFFFF
+    uVar79 = ((~((uVar99 ^ uVar76) << 0x10 & 0xFFFFFFFF) & (uVar81 << 0x10 & 0xFFFFFFFF) ^ uVar77) & 0xFFFF0000) & 0xFFFFFFFF
     uVar28 = (~((uVar100 ^ 0xFFFFFF7F) & uVar67) & uVar34 ^ uVar100) & 0xFFFFFFFF
     uVar37 = (~uVar41 ^ uVar70) & 0xFFFFFFFF
     uVar19 = (uVar86 ^ uVar55) & 0xFFFFFFFF
@@ -1977,7 +2028,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar38 = (
         (~uVar38 ^ uVar84 ^ uVar96 ^ uVar13) & uVar24 ^ (uVar38 ^ uVar84 ^ uVar96 ^ uVar24 ^ uVar13) & uVar30 ^ uVar26 ^ uVar96
     ) & 0xFFFFFFFF
-    uVar13 = (~(uVar99 << 0x10) ^ uVar76 << 0x10) & 0xFFFFFFFF
+    uVar13 = (~(uVar99 << 0x10 & 0xFFFFFFFF) ^ (uVar76 << 0x10 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar30 = ((~uVar26 & uVar84 ^ uVar10 ^ uVar24) & uVar96 ^ (uVar10 ^ uVar24) & uVar26 ^ uVar24 ^ uVar30) & 0xFFFFFFFF
     uVar26 = (
         (~((~uVar54 ^ uVar17) & uVar98) ^ uVar54 ^ uVar17) & uVar52 ^ (~(~uVar54 & uVar66) ^ uVar54) & uVar20 ^ uVar66 ^ uVar54
@@ -2244,7 +2295,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar38 = ((uVar26 & uVar67 ^ uVar69) & 0x80000000) & 0xFFFFFFFF
     uVar57 = ((uVar79 ^ uVar72) >> 0x10) & 0xFFFFFFFF
-    uVar93 = ((uVar79 ^ uVar72) << 0x10) & 0xFFFFFFFF
+    uVar93 = ((uVar79 ^ uVar72) << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar26 = (
         ~(
             (
@@ -2268,18 +2319,18 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar58
     ) & 0xFFFFFFFF
     uVar52 = (~((uVar57 ^ uVar14) & uVar58)) & 0xFFFFFFFF
-    uVar29 = (uVar72 << 0x10) & 0xFFFFFFFF
+    uVar29 = (uVar72 << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar28 = (
         ((~((uVar52 ^ uVar14) & uVar36) ^ uVar10 & uVar14 ^ uVar58) & uVar85 ^ ~uVar57 & uVar58) & uVar60
         ^ (~((~(uVar36 & uVar10) ^ uVar58) & uVar14) ^ uVar36 & uVar10 ^ uVar58) & uVar85
         ^ uVar58
         ^ uVar57
     ) & 0xFFFFFFFF
-    uVar69 = (~((uVar79 & uVar72) << 0x10) & uVar62 << 0x10 ^ uVar29) & 0xFFFFFFFF
+    uVar69 = (~((uVar79 & uVar72) << 0x10 & 0xFFFFFFFF) & (uVar62 << 0x10 & 0xFFFFFFFF) ^ uVar29) & 0xFFFFFFFF
     uVar97 = (
         ~((~((~(uVar40 & uVar70) ^ uVar2 ^ uVar99 ^ uVar76) & uVar81) ^ (uVar97 ^ uVar71) & uVar76) & uVar34) ^ uVar97
     ) & 0xFFFFFFFF
-    uVar29 = (~(~(~(uVar79 << 0x10) & uVar29) & uVar62 << 0x10) ^ uVar29) & 0xFFFFFFFF
+    uVar29 = (~(~(~(uVar79 << 0x10 & 0xFFFFFFFF) & uVar29) & (uVar62 << 0x10 & 0xFFFFFFFF)) ^ uVar29) & 0xFFFFFFFF
     uVar40 = (
         ((uVar69 ^ 0x8000) & uVar29 ^ 0x8000) & uVar93 ^ (uVar29 & 0x8000 ^ 0xFFFF7FFF) & uVar69 ^ uVar29 ^ 0x8000
     ) & 0xFFFFFFFF
@@ -2453,7 +2504,7 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar3 = (~uVar12 ^ uVar6) & 0xFFFFFFFF
     uVar29 = (~((uVar22 & uVar3 ^ ~(uVar37 & uVar3)) & uVar77) ^ uVar22 ^ uVar37 & uVar3) & 0xFFFFFFFF
     uVar20 = ((~uVar52 ^ uVar9) & uVar25 ^ uVar52) & 0xFFFFFFFF
-    uVar14 = ((uVar77 ^ uVar37) * 2) & 0xFFFFFFFF
+    uVar14 = ((uVar77 ^ uVar37) * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar9 = (~(~uVar9 & uVar25) & uVar52 ^ uVar9) & 0xFFFFFFFF
     uVar15 = (uVar96 & (uVar55 ^ uVar68)) & 0xFFFFFFFF
     uVar31 = (uVar77 >> 0x1F) & 0xFFFFFFFF
@@ -2466,8 +2517,8 @@ def execute(destination: bytearray, source: bytes) -> None:
     uVar30 = (~uVar77 ^ uVar22) & 0xFFFFFFFF
     uVar3 = (~((uVar22 & uVar37) >> 0x1F) & uVar31 ^ uVar23) & 0xFFFFFFFF
     uVar79 = (~((~((~uVar15 ^ uVar55 & uVar68) & uVar22) ^ uVar96) & uVar37) ^ uVar22 & uVar96) & 0xFFFFFFFF
-    uVar96 = (~((uVar77 & uVar22) * 2) & uVar37 * 2 ^ uVar22 * 2) & 0xFFFFFFFF
-    uVar24 = (~(~(uVar22 * 2) & uVar37 * 2) ^ uVar77 * 2) & 0xFFFFFFFF
+    uVar96 = (~((uVar77 & uVar22) * 2 & 0xFFFFFFFF) & (uVar37 * 2 & 0xFFFFFFFF) ^ (uVar22 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar24 = (~(~(uVar22 * 2 & 0xFFFFFFFF) & (uVar37 * 2 & 0xFFFFFFFF)) ^ (uVar77 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar52 = (uVar52 ^ uVar25) & 0xFFFFFFFF
     uVar25 = (
         (~((~uVar29 ^ uVar99) & uVar76) ^ uVar29 ^ uVar99) & uVar67
@@ -2613,7 +2664,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ((uVar14 ^ uVar2) & uVar18 ^ uVar14 ^ uVar2) & uVar76 & uVar29 ^ ~uVar76 & uVar44 & uVar18 & uVar2 & uVar10
     ) & 0xFFFFFFFF
     uVar2 = (~((uVar67 ^ uVar15) >> 0x1F) & 1) & 0xFFFFFFFF
-    uVar14 = ((uVar6 ^ uVar36) * 2) & 0xFFFFFFFF
+    uVar14 = ((uVar6 ^ uVar36) * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar10 = (
         (
             ((uVar30 & 0xFDDF4FF6 ^ uVar7) & 0xDEEEFAAF ^ 0xA15070FA) & uVar8
@@ -2639,12 +2690,12 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ (uVar28 ^ uVar59) & uVar38
     ) & 0xFFFFFFFF
     uVar7 = (uVar37 & uVar96 ^ uVar12) & 0xFFFFFFFF
-    uVar9 = (~(uVar67 * 2)) & 0xFFFFFFFF
-    uVar20 = (uVar66 * 2 & uVar9) & 0xFFFFFFFF
-    uVar21 = (~uVar20 & uVar15 * 2 ^ uVar20 ^ uVar67 * 2) & 0xFFFFFFFF
-    uVar74 = ((uVar35 ^ uVar53) * 2) & 0xFFFFFFFF
-    uVar6 = (uVar6 * 2) & 0xFFFFFFFF
-    uVar36 = (uVar36 * 2) & 0xFFFFFFFF
+    uVar9 = (~(uVar67 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar20 = ((uVar66 * 2 & 0xFFFFFFFF) & uVar9) & 0xFFFFFFFF
+    uVar21 = (~uVar20 & (uVar15 * 2 & 0xFFFFFFFF) ^ uVar20 ^ (uVar67 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar74 = ((uVar35 ^ uVar53) * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar6 = (uVar6 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar36 = (uVar36 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar8 = (~(~uVar74 & uVar36) ^ uVar6) & 0xFFFFFFFF
     uVar18 = (uVar76 ^ uVar18) & 0xFFFFFFFF
     uVar35 = (~(~uVar18 & uVar78)) & 0xFFFFFFFF
@@ -2662,8 +2713,8 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar46 = ((~uVar52 & uVar15 >> 0x1F ^ uVar46) & 1) & 0xFFFFFFFF
     uVar34 = ((uVar76 ^ uVar44) >> 0x1F) & 0xFFFFFFFF
-    uVar74 = (~(uVar15 * 2 & uVar9) & uVar66 * 2 ^ uVar67 * 2) & 0xFFFFFFFF
-    uVar15 = ((uVar15 ^ uVar66) * 2 ^ 1) & 0xFFFFFFFF
+    uVar74 = (~((uVar15 * 2 & 0xFFFFFFFF) & uVar9) & (uVar66 * 2 & 0xFFFFFFFF) ^ (uVar67 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar15 = ((uVar15 ^ uVar66) * 2 & 0xFFFFFFFF ^ 1) & 0xFFFFFFFF
     uVar95 = (
         ~(
             (
@@ -2677,13 +2728,13 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar95 & ~uVar19
     ) & 0xFFFFFFFF
     uVar19 = (~((uVar76 & uVar29) >> 0x1F) & uVar44 >> 0x1F ^ uVar29 >> 0x1F) & 0xFFFFFFFF
-    uVar9 = (~(uVar76 * 2)) & 0xFFFFFFFF
-    uVar44 = (uVar44 * 2) & 0xFFFFFFFF
-    uVar36 = (uVar29 * 2) & 0xFFFFFFFF
+    uVar9 = (~(uVar76 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    uVar44 = (uVar44 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar36 = (uVar29 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar52 = (~(~(uVar36 & uVar9) & uVar44) ^ uVar36) & 0xFFFFFFFF
     uVar12 = (uVar12 ^ uVar96) & 0xFFFFFFFF
-    uVar17 = (~((uVar76 & uVar29) * 2) & uVar44 ^ uVar36) & 0xFFFFFFFF
-    uVar96 = (~(uVar44 & uVar9) & uVar36 ^ uVar76 * 2) & 0xFFFFFFFF
+    uVar17 = (~((uVar76 & uVar29) * 2 & 0xFFFFFFFF) & uVar44 ^ uVar36) & 0xFFFFFFFF
+    uVar96 = (~(uVar44 & uVar9) & uVar36 ^ (uVar76 * 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     uVar18 = (~uVar21) & 0xFFFFFFFF
     uVar44 = ((uVar7 & uVar37 ^ uVar12) >> 0x1F) & 0xFFFFFFFF
     uVar13 = (
@@ -2693,14 +2744,14 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ uVar19
     ) & 0xFFFFFFFF
     uVar76 = (~(uVar12 >> 0x1F & ~(uVar37 >> 0x1F)) & uVar7 >> 0x1F ^ uVar37 >> 0x1F) & 0xFFFFFFFF
-    uVar9 = (uVar12 * 2) & 0xFFFFFFFF
-    uVar35 = (uVar7 * 2) & 0xFFFFFFFF
-    uVar37 = (uVar37 * 2) & 0xFFFFFFFF
+    uVar9 = (uVar12 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar35 = (uVar7 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar37 = (uVar37 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar66 = (~uVar35 & uVar9 ^ uVar37 & ~uVar9) & 0xFFFFFFFF
     uVar67 = ((uVar21 ^ 0xFFFFFFFF ^ uVar74) & uVar20 ^ uVar74) & 0xFFFFFFFF
     uVar38 = (~(~(~uVar37 & uVar35) & uVar9) ^ uVar35) & 0xFFFFFFFF
     uVar36 = (~((~(uVar95 & ~uVar55) ^ uVar55) & uVar53) ^ uVar95 ^ uVar55) & 0xFFFFFFFF
-    uVar39 = (~(uVar35 & ~uVar9) & uVar37 ^ (uVar7 & uVar12) * 2 ^ 1) & 0xFFFFFFFF
+    uVar39 = (~(uVar35 & ~uVar9) & uVar37 ^ (uVar7 & uVar12) * 2 & 0xFFFFFFFF ^ 1) & 0xFFFFFFFF
     uVar78 = ((uVar53 & ~uVar55 ^ uVar55) & uVar95 ^ uVar53) & 0xFFFFFFFF
     uVar37 = (uVar23 ^ uVar31) & 0xFFFFFFFF
     uVar35 = (
@@ -2729,15 +2780,15 @@ def execute(destination: bytearray, source: bytes) -> None:
     ) & 0xFFFFFFFF
     uVar37 = (~((uVar7 ^ uVar12) >> 0x1F) & 1) & 0xFFFFFFFF
     uVar20 = ((uVar2 ^ uVar39 ^ uVar46) & uVar77) & 0xFFFFFFFF
-    uVar31 = ((uVar53 ^ uVar55) * 2) & 0xFFFFFFFF
+    uVar31 = ((uVar53 ^ uVar55) * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar17 = (
         ~(((uVar38 ^ uVar46) & uVar39 ^ (~uVar39 ^ uVar46) & uVar2 ^ uVar20 ^ uVar38 ^ uVar46) & uVar66)
         ^ (~((uVar2 ^ ~uVar77 ^ uVar46) & uVar39) ^ uVar77 ^ uVar2 ^ uVar46) & uVar38
         ^ ~(~uVar77 & uVar46) & uVar2
         ^ uVar46
     ) & 0xFFFFFFFF
-    uVar9 = (uVar78 * 2) & 0xFFFFFFFF
-    uVar74 = (uVar36 * 2) & 0xFFFFFFFF
+    uVar9 = (uVar78 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    uVar74 = (uVar36 * 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     uVar7 = (~uVar9 & uVar74 ^ uVar31) & 0xFFFFFFFF
     uVar34 = (uVar32 & 0xE7FF3947) & 0xFFFFFFFF
     uVar15 = (~uVar39 & uVar38) & 0xFFFFFFFF
@@ -2784,7 +2835,7 @@ def execute(destination: bytearray, source: bytes) -> None:
         ^ ((uVar32 & 0x7F48E6F8 ^ 0x6E5D2052) & uVar63 ^ (uVar19 ^ 0xBF5EA8D0) & 0xDBBFFFFF) & uVar64
         ^ (uVar32 & 0x62552042 ^ uVar95 ^ 0x2BC3145) & uVar63 & 0xE7FF3947
     ) & 0xFFFFFFFF
-    uVar31 = (~((uVar78 & uVar36) * 2) ^ uVar31) & 0xFFFFFFFF
+    uVar31 = (~((uVar78 & uVar36) * 2 & 0xFFFFFFFF) ^ uVar31) & 0xFFFFFFFF
     uVar74 = (uVar20 & 0x1BA069EE) & 0xFFFFFFFF
     uVar95 = (~uVar52 & uVar20) & 0xFFFFFFFF
     uVar12 = (

@@ -145,14 +145,21 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[760]
         ^ locals_[749]
     ) & 0xFFFFFFFF
-    locals_[790] = ((locals_[776] ^ locals_[761]) << 0xF) & 0xFFFFFFFF
+    locals_[790] = ((locals_[776] ^ locals_[761]) << 0xF & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[769] = (
-        (~((locals_[776] & locals_[761]) << 0xF) & locals_[781] << 0xF ^ ~(locals_[761] << 0xF)) & 0xFFFF8000
+        (
+            ~((locals_[776] & locals_[761]) << 0xF & 0xFFFFFFFF) & (locals_[781] << 0xF & 0xFFFFFFFF)
+            ^ ~(locals_[761] << 0xF & 0xFFFFFFFF)
+        )
+        & 0xFFFF8000
     ) & 0xFFFFFFFF
     locals_[709] = (
         (locals_[797] ^ locals_[749]) & (locals_[760] ^ locals_[800]) & locals_[462] ^ locals_[797] ^ locals_[760]
     ) & 0xFFFFFFFF
-    locals_[761] = (~(~(locals_[776] << 0xF) & locals_[761] << 0xF) & locals_[781] << 0xF ^ locals_[776] << 0xF) & 0xFFFFFFFF
+    locals_[761] = (
+        ~(~(locals_[776] << 0xF & 0xFFFFFFFF) & (locals_[761] << 0xF & 0xFFFFFFFF)) & (locals_[781] << 0xF & 0xFFFFFFFF)
+        ^ (locals_[776] << 0xF & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[636] = (~locals_[331]) & 0xFFFFFFFF
     locals_[760] = (
         ((locals_[636] ^ locals_[462]) & locals_[760] ^ locals_[331]) & locals_[749]
@@ -242,16 +249,18 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[699]
     ) & 0xFFFFFFFF
     locals_[816] = (locals_[813] & locals_[720] ^ locals_[462]) & 0xFFFFFFFF
-    locals_[811] = (locals_[816] << 0x10) & 0xFFFFFFFF
+    locals_[811] = (locals_[816] << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[800] = (
         ~(locals_[636] & locals_[749]) & locals_[814] & 0xFFFF0000 ^ (locals_[749] ^ 0xFFFF) & locals_[636]
     ) & 0xFFFFFFFF
-    locals_[301] = (~(~(locals_[813] << 0x10) & locals_[720] << 0x10) ^ locals_[462] << 0x10) & 0xFFFFFFFF
+    locals_[301] = (
+        ~(~(locals_[813] << 0x10 & 0xFFFFFFFF) & (locals_[720] << 0x10 & 0xFFFFFFFF)) ^ (locals_[462] << 0x10 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[813] = ((locals_[813] ^ locals_[462]) & locals_[720] ^ locals_[813]) & 0xFFFFFFFF
-    locals_[720] = (locals_[813] << 0x10) & 0xFFFFFFFF
+    locals_[720] = (locals_[813] << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[749] = ((~locals_[749] & locals_[814] & 0xFFFF0000 ^ 0xFFFF) & locals_[636]) & 0xFFFFFFFF
     locals_[462] = (~locals_[749]) & 0xFFFFFFFF
-    locals_[816] = ((locals_[813] ^ locals_[816]) << 0x10 & locals_[301]) & 0xFFFFFFFF
+    locals_[816] = ((locals_[813] ^ locals_[816]) << 0x10 & 0xFFFFFFFF & locals_[301]) & 0xFFFFFFFF
     locals_[813] = (
         (~locals_[816] ^ locals_[720] ^ locals_[811]) & locals_[769]
         ^ (locals_[816] ^ locals_[720] ^ locals_[811]) & locals_[790]
@@ -386,7 +395,7 @@ def execute(locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[778] = (~(locals_[793] >> 6) & locals_[709] >> 6) & 0xFFFFFFFF
     locals_[738] = (~locals_[778]) & 0xFFFFFFFF
-    locals_[799] = ((locals_[769] & locals_[636]) << 8 & ~(locals_[814] << 8)) & 0xFFFFFFFF
+    locals_[799] = ((locals_[769] & locals_[636]) << 8 & 0xFFFFFFFF & ~(locals_[814] << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[795] = (~((locals_[709] ^ locals_[793]) >> 6) & locals_[776] >> 6 ^ 0xFC000000) & 0xFFFFFFFF
     locals_[784] = (
         ~(
@@ -404,12 +413,14 @@ def execute(locals_: list[int]) -> None:
     locals_[749] = ((locals_[813] & 0x300030) >> 2) & 0xFFFFFFFF
     locals_[737] = (~(locals_[800] & ~(locals_[753] >> 2)) & locals_[749] ^ locals_[800]) & 0xFFFFFFFF
     locals_[301] = ((locals_[769] ^ locals_[636]) >> 4) & 0xFFFFFFFF
-    locals_[807] = (locals_[753] << 4 ^ 0xFFFFFFFF) & 0xFFFFFFFF
-    locals_[810] = (locals_[776] << 2) & 0xFFFFFFFF
-    locals_[808] = ((~((locals_[709] & locals_[793]) << 2) & locals_[810] ^ ~(locals_[793] << 2)) & 0xFFFFFFFC) & 0xFFFFFFFF
+    locals_[807] = ((locals_[753] << 4 & 0xFFFFFFFF) ^ 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[810] = (locals_[776] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[808] = (
+        (~((locals_[709] & locals_[793]) << 2 & 0xFFFFFFFF) & locals_[810] ^ ~(locals_[793] << 2 & 0xFFFFFFFF)) & 0xFFFFFFFC
+    ) & 0xFFFFFFFF
     locals_[732] = (locals_[814] >> 4 & ~locals_[301] ^ locals_[769] >> 4) & 0xFFFFFFFF
     locals_[648] = (locals_[636] >> 4 & ~(locals_[769] >> 4)) & 0xFFFFFFFF
-    locals_[708] = ((locals_[814] ^ locals_[636]) << 8) & 0xFFFFFFFF
+    locals_[708] = ((locals_[814] ^ locals_[636]) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[816] = (locals_[797] ^ locals_[761] ^ locals_[781]) & 0xFFFFFFFF
     locals_[403] = (
         ((locals_[816] ^ locals_[774]) & locals_[403] ^ locals_[816] & locals_[774] ^ locals_[761] ^ locals_[781] ^ locals_[797])
@@ -435,7 +446,7 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[784] ^ locals_[811]) & locals_[699]
         ^ locals_[403]
     ) & 0xFFFFFFFF
-    locals_[797] = ((locals_[709] ^ locals_[776]) << 2) & 0xFFFFFFFF
+    locals_[797] = ((locals_[709] ^ locals_[776]) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[761] = (
         ((locals_[403] ^ locals_[699]) & locals_[331] ^ (locals_[777] ^ locals_[811]) & locals_[784] ^ ~locals_[813])
         & locals_[580]
@@ -450,7 +461,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[580]
     ) & 0xFFFFFFFF
     locals_[781] = ((locals_[814] ^ locals_[769]) & locals_[636]) & 0xFFFFFFFF
-    locals_[776] = (locals_[781] << 8) & 0xFFFFFFFF
+    locals_[776] = (locals_[781] << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[816] = (~locals_[580]) & 0xFFFFFFFF
     locals_[720] = (~(locals_[796] & locals_[816])) & 0xFFFFFFFF
     locals_[774] = (
@@ -462,7 +473,9 @@ def execute(locals_: list[int]) -> None:
         & 0xC00CC00C
     ) & 0xFFFFFFFF
     locals_[769] = ((locals_[818] ^ locals_[768]) >> 10) & 0xFFFFFFFF
-    locals_[810] = (~(locals_[709] << 2 & ~locals_[810]) & locals_[793] << 2 ^ locals_[810]) & 0xFFFFFFFF
+    locals_[810] = (
+        ~((locals_[709] << 2 & 0xFFFFFFFF) & ~locals_[810]) & (locals_[793] << 2 & 0xFFFFFFFF) ^ locals_[810]
+    ) & 0xFFFFFFFF
     locals_[793] = (~(~((locals_[802] & locals_[753]) >> 2) & locals_[749]) ^ locals_[800]) & 0xFFFFFFFF
     locals_[800] = (locals_[800] ^ ~(locals_[753] >> 2)) & 0xFFFFFFFF
     locals_[802] = (~(((locals_[796] ^ 0xFF3FFF3F) & locals_[761] ^ 0xC000C0) & locals_[580] & 0xCC00CC0)) & 0xFFFFFFFF
@@ -486,28 +499,33 @@ def execute(locals_: list[int]) -> None:
     locals_[721] = (
         ((locals_[796] & 0xFFFCFFFC ^ locals_[816]) & locals_[761] ^ locals_[720] & 0xFFFCFFFC) & 0x30033003
     ) & 0xFFFFFFFF
-    locals_[720] = (locals_[802] << 4) & 0xFFFFFFFF
-    locals_[812] = (locals_[699] << 4) & 0xFFFFFFFF
-    locals_[811] = (locals_[749] << 4) & 0xFFFFFFFF
+    locals_[720] = (locals_[802] << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[812] = (locals_[699] << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[811] = (locals_[749] << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[796] = ((~locals_[812] & locals_[720] ^ locals_[812]) & locals_[811] ^ ~locals_[720] & 0xFFFFFFF0) & 0xFFFFFFFF
     locals_[375] = (~locals_[761] & locals_[580] & 0x30003) & 0xFFFFFFFF
-    locals_[645] = ((locals_[375] ^ locals_[721]) << 6 & ~(locals_[784] << 6) ^ 0x3F) & 0xFFFFFFFF
-    locals_[739] = (locals_[753] << 4 ^ 0xFFFFFFFF) & 0xFFFFFFFF
-    locals_[753] = (~(~(locals_[375] << 6) & locals_[721] << 6 & ~(locals_[784] << 6)) & 0xFFFFFFC0) & 0xFFFFFFFF
-    locals_[698] = ((locals_[375] ^ locals_[784]) << 6) & 0xFFFFFFFF
+    locals_[645] = ((locals_[375] ^ locals_[721]) << 6 & 0xFFFFFFFF & ~(locals_[784] << 6 & 0xFFFFFFFF) ^ 0x3F) & 0xFFFFFFFF
+    locals_[739] = ((locals_[753] << 4 & 0xFFFFFFFF) ^ 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[753] = (
+        ~(~(locals_[375] << 6 & 0xFFFFFFFF) & (locals_[721] << 6 & 0xFFFFFFFF) & ~(locals_[784] << 6 & 0xFFFFFFFF)) & 0xFFFFFFC0
+    ) & 0xFFFFFFFF
+    locals_[698] = ((locals_[375] ^ locals_[784]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[761] = (~locals_[761] & locals_[580] & 0xC000C000) & 0xFFFFFFFF
     locals_[743] = (~locals_[761]) & 0xFFFFFFFF
-    locals_[580] = (~(~(locals_[777] << 2) & locals_[403] << 2) & locals_[709] << 2 ^ locals_[777] << 2) & 0xFFFFFFFF
-    locals_[749] = (locals_[749] << 8) & 0xFFFFFFFF
-    locals_[816] = (~(locals_[699] << 8)) & 0xFFFFFFFF
-    locals_[646] = ((locals_[699] & locals_[802]) << 8 ^ locals_[749] & locals_[816] ^ 0xFF) & 0xFFFFFFFF
+    locals_[580] = (
+        ~(~(locals_[777] << 2 & 0xFFFFFFFF) & (locals_[403] << 2 & 0xFFFFFFFF)) & (locals_[709] << 2 & 0xFFFFFFFF)
+        ^ (locals_[777] << 2 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    locals_[749] = (locals_[749] << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[816] = (~(locals_[699] << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[646] = ((locals_[699] & locals_[802]) << 8 & 0xFFFFFFFF ^ locals_[749] & locals_[816] ^ 0xFF) & 0xFFFFFFFF
     locals_[696] = (
         ((locals_[645] ^ locals_[797] ^ locals_[808]) & locals_[698] ^ locals_[645] ^ locals_[797] ^ locals_[808]) & locals_[810]
         ^ (locals_[698] ^ locals_[810]) & locals_[753] & locals_[645]
         ^ locals_[698]
         ^ locals_[808]
     ) & 0xFFFFFFFF
-    locals_[650] = (~((locals_[777] & locals_[709]) << 2) ^ locals_[403] << 2) & 0xFFFFFFFF
+    locals_[650] = (~((locals_[777] & locals_[709]) << 2 & 0xFFFFFFFF) ^ (locals_[403] << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[670] = (~(~(locals_[721] >> 6) & locals_[375] >> 6) ^ locals_[784] >> 6) & 0xFFFFFFFF
     locals_[733] = (locals_[403] ^ locals_[777]) & 0xFFFFFFFF
     locals_[331] = (locals_[733] >> 2) & 0xFFFFFFFF
@@ -527,7 +545,7 @@ def execute(locals_: list[int]) -> None:
         ^ ~(~locals_[808] & locals_[797]) & locals_[810]
         ^ locals_[698]
     ) & 0xFFFFFFFF
-    locals_[797] = ((locals_[403] ^ locals_[709]) << 2) & 0xFFFFFFFF
+    locals_[797] = ((locals_[403] ^ locals_[709]) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[630] = (
         ~(
             (
@@ -542,7 +560,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[800]
     ) & 0xFFFFFFFF
     locals_[753] = (~(locals_[403] >> 2) & ~(locals_[777] >> 2) & 0x3FFFFFFF) & 0xFFFFFFFF
-    locals_[699] = (~locals_[749] & locals_[699] << 8 ^ locals_[802] << 8 ^ 0xFF) & 0xFFFFFFFF
+    locals_[699] = (~locals_[749] & (locals_[699] << 8 & 0xFFFFFFFF) ^ (locals_[802] << 8 & 0xFFFFFFFF) ^ 0xFF) & 0xFFFFFFFF
     locals_[720] = (
         (~(~locals_[811] & locals_[812]) & locals_[720] ^ locals_[811] ^ locals_[796])
         & (~(~locals_[720] & locals_[812]) & locals_[811] ^ locals_[812])
@@ -581,14 +599,17 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[795]
     ) & 0xFFFFFFFF
     locals_[816] = (
-        (locals_[699] ^ locals_[646]) & (locals_[802] << 8 & locals_[816] ^ locals_[749] ^ 0xFF) ^ locals_[699] & locals_[646]
+        (locals_[699] ^ locals_[646]) & ((locals_[802] << 8 & 0xFFFFFFFF) & locals_[816] ^ locals_[749] ^ 0xFF)
+        ^ locals_[699] & locals_[646]
     ) & 0xFFFFFFFF
     locals_[760] = (~locals_[807] & locals_[816] ^ locals_[739] ^ locals_[807]) & 0xFFFFFFFF
-    locals_[802] = (locals_[774] << 0xC) & 0xFFFFFFFF
-    locals_[796] = (locals_[743] << 0xC) & 0xFFFFFFFF
-    locals_[699] = ((~locals_[802] & locals_[796] ^ locals_[802]) & locals_[768] << 0xC ^ ~locals_[796] & 0xFFFFF000) & 0xFFFFFFFF
+    locals_[802] = (locals_[774] << 0xC & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[796] = (locals_[743] << 0xC & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[699] = (
+        (~locals_[802] & locals_[796] ^ locals_[802]) & (locals_[768] << 0xC & 0xFFFFFFFF) ^ ~locals_[796] & 0xFFFFF000
+    ) & 0xFFFFFFFF
     locals_[807] = (locals_[739] & locals_[816] ^ ~locals_[739] & locals_[807]) & 0xFFFFFFFF
-    locals_[749] = (~((locals_[768] ^ locals_[774]) << 0xC) & 0xFFFFF000) & 0xFFFFFFFF
+    locals_[749] = (~((locals_[768] ^ locals_[774]) << 0xC & 0xFFFFFFFF) & 0xFFFFF000) & 0xFFFFFFFF
     locals_[810] = ((locals_[375] & locals_[721] ^ locals_[784]) >> 6) & 0xFFFFFFFF
     locals_[645] = (
         ~(
@@ -687,7 +708,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[813] & locals_[739]
         ^ locals_[807]
     ) & 0xFFFFFFFF
-    locals_[796] = (~(~locals_[796] & locals_[802]) & locals_[768] << 0xC ^ locals_[796]) & 0xFFFFFFFF
+    locals_[796] = (~(~locals_[796] & locals_[802]) & (locals_[768] << 0xC & 0xFFFFFFFF) ^ locals_[796]) & 0xFFFFFFFF
     locals_[743] = (
         ((locals_[743] ^ locals_[301]) & locals_[774] ^ locals_[743] ^ locals_[816]) & locals_[732]
         ^ (~(locals_[768] & locals_[761]) ^ locals_[301]) & locals_[774]
@@ -748,7 +769,8 @@ def execute(locals_: list[int]) -> None:
     locals_[781] = (
         (~((locals_[799] ^ locals_[796]) & locals_[708]) ^ ~locals_[796] & locals_[799]) & locals_[776]
         ^ ((locals_[749] ^ locals_[776] ^ locals_[708]) & locals_[796] ^ locals_[749] ^ locals_[811]) & locals_[699]
-        ^ ((locals_[781] ^ locals_[814] ^ locals_[636]) << 8 & locals_[796] ^ locals_[776] ^ locals_[708]) & locals_[749]
+        ^ ((locals_[781] ^ locals_[814] ^ locals_[636]) << 8 & 0xFFFFFFFF & locals_[796] ^ locals_[776] ^ locals_[708])
+        & locals_[749]
         ^ locals_[708]
     ) & 0xFFFFFFFF
     locals_[462] = (locals_[802] >> 1) & 0xFFFFFFFF
@@ -1317,8 +1339,10 @@ def execute(locals_: list[int]) -> None:
     locals_[816] = (locals_[704] >> 1 & ~locals_[813]) & 0xFFFFFFFF
     locals_[761] = (~locals_[816] & locals_[812] ^ locals_[813] ^ 0x80000000) & 0xFFFFFFFF
     locals_[753] = ((locals_[704] ^ locals_[331]) >> 1 ^ 0x80000000) & 0xFFFFFFFF
-    locals_[720] = (~(locals_[720] << 0xF)) & 0xFFFFFFFF
-    locals_[790] = (~(locals_[704] << 0xF & locals_[720]) ^ locals_[331] << 0xF & locals_[720]) & 0xFFFFFFFF
+    locals_[720] = (~(locals_[720] << 0xF & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[790] = (
+        ~((locals_[704] << 0xF & 0xFFFFFFFF) & locals_[720]) ^ (locals_[331] << 0xF & 0xFFFFFFFF) & locals_[720]
+    ) & 0xFFFFFFFF
     locals_[813] = ((locals_[816] ^ locals_[813]) & locals_[812] ^ locals_[813]) & 0xFFFFFFFF
     locals_[636] = (locals_[636] & locals_[814]) & 0xFFFFFFFF
     locals_[812] = (
@@ -1332,8 +1356,8 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[699] ^ locals_[636] ^ locals_[301]) & locals_[788]
         ^ locals_[699]
     ) & 0xFFFFFFFF
-    locals_[301] = (~((locals_[704] & locals_[331]) << 0xF)) & 0xFFFFFFFF
-    locals_[331] = ((locals_[704] ^ locals_[331]) << 0xF) & 0xFFFFFFFF
+    locals_[301] = (~((locals_[704] & locals_[331]) << 0xF & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[331] = ((locals_[704] ^ locals_[331]) << 0xF & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[816] = (locals_[812] & 0xFFFF0000) & 0xFFFFFFFF
     locals_[704] = (~(locals_[699] & 0xFFFF0000) ^ locals_[816]) & 0xFFFFFFFF
     locals_[720] = ((~locals_[699] ^ locals_[812]) & locals_[760]) & 0xFFFFFFFF
@@ -1364,10 +1388,10 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[774]
         ^ locals_[761]
     ) & 0xFFFFFFFF
-    locals_[636] = (locals_[760] << 0x10) & 0xFFFFFFFF
-    locals_[812] = (~(locals_[699] & 0xFFFF0000) << 0x10) & 0xFFFFFFFF
+    locals_[636] = (locals_[760] << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[812] = (~(locals_[699] & 0xFFFF0000) << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[816] = (locals_[812] & ~locals_[636]) & 0xFFFFFFFF
-    locals_[802] = ((locals_[816] ^ locals_[636]) & locals_[774] << 0x10 ^ locals_[636]) & 0xFFFFFFFF
+    locals_[802] = ((locals_[816] ^ locals_[636]) & (locals_[774] << 0x10 & 0xFFFFFFFF) ^ locals_[636]) & 0xFFFFFFFF
     locals_[720] = (
         (locals_[787] ^ locals_[793]) & locals_[796]
         ^ (locals_[788] ^ locals_[781]) & locals_[776]
@@ -1384,7 +1408,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[753]
     ) & 0xFFFFFFFF
     locals_[812] = (locals_[812] ^ ~locals_[636]) & 0xFFFFFFFF
-    locals_[636] = (~(~locals_[816] & locals_[774] << 0x10) ^ locals_[636]) & 0xFFFFFFFF
+    locals_[636] = (~(~locals_[816] & (locals_[774] << 0x10 & 0xFFFFFFFF)) ^ locals_[636]) & 0xFFFFFFFF
     locals_[796] = (
         ~(((locals_[787] ^ locals_[781]) & locals_[788] ^ (locals_[796] ^ locals_[781]) & locals_[787]) & locals_[776])
         ^ (locals_[796] & (locals_[787] ^ locals_[776]) ^ locals_[787] ^ locals_[776]) & locals_[793]
@@ -1538,7 +1562,9 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[753] ^ locals_[811]) & locals_[814]
         ^ locals_[811]
     ) & 0xFFFFFFFF
-    locals_[781] = (~(locals_[749] << 8) & locals_[796] << 8 ^ locals_[793] << 8) & 0xFFFFFFFF
+    locals_[781] = (
+        ~(locals_[749] << 8 & 0xFFFFFFFF) & (locals_[796] << 8 & 0xFFFFFFFF) ^ (locals_[793] << 8 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[753] = (
         (
             (~locals_[331] ^ locals_[753]) & locals_[814]
@@ -1552,12 +1578,14 @@ def execute(locals_: list[int]) -> None:
     locals_[737] = (~locals_[720] & 0x30003 ^ locals_[788] & 0x300030) & 0xFFFFFFFF
     locals_[720] = (~locals_[797] & locals_[753] ^ locals_[797]) & 0xFFFFFFFF
     locals_[776] = (locals_[720] & 0xC000C00) & 0xFFFFFFFF
-    locals_[769] = (~(locals_[796] << 8) & locals_[793] << 8 ^ locals_[749] << 8) & 0xFFFFFFFF
+    locals_[769] = (
+        ~(locals_[796] << 8 & 0xFFFFFFFF) & (locals_[793] << 8 & 0xFFFFFFFF) ^ (locals_[749] << 8 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[813] = ((locals_[753] ^ locals_[797]) & locals_[761] ^ locals_[797]) & 0xFFFFFFFF
     locals_[709] = (locals_[813] & 0x330033) & 0xFFFFFFFF
     locals_[813] = (locals_[813] & 0xCC00CC00) & 0xFFFFFFFF
     locals_[760] = ((locals_[753] ^ locals_[797]) & 0x30003000) & 0xFFFFFFFF
-    locals_[814] = (((locals_[793] ^ locals_[749]) & locals_[796] ^ locals_[749]) << 8) & 0xFFFFFFFF
+    locals_[814] = (((locals_[793] ^ locals_[749]) & locals_[796] ^ locals_[749]) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[812] = (locals_[753] & locals_[797]) & 0xFFFFFFFF
     locals_[699] = (~(locals_[812] & 0x30003000)) & 0xFFFFFFFF
     locals_[301] = (locals_[696] >> 2) & 0xFFFFFFFF
@@ -1572,14 +1600,16 @@ def execute(locals_: list[int]) -> None:
         ((~(locals_[797] & 0xC000C) & locals_[753] ^ locals_[797] ^ 0xC000C) & locals_[761] ^ locals_[797] & 0xFFF3FFF3)
         & 0xCC00CC
     ) & 0xFFFFFFFF
-    locals_[739] = ((locals_[737] ^ locals_[704]) << 2) & 0xFFFFFFFF
+    locals_[739] = ((locals_[737] ^ locals_[704]) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[795] = ((locals_[761] ^ locals_[797]) & 0xC000C) & 0xFFFFFFFF
     locals_[818] = (~(locals_[812] & 0xC000C00)) & 0xFFFFFFFF
     locals_[720] = (locals_[720] & 0x30003) & 0xFFFFFFFF
     locals_[636] = (locals_[818] ^ locals_[776]) & 0xFFFFFFFF
-    locals_[784] = (~(locals_[636] << 4) & locals_[813] << 4 ^ locals_[776] << 4) & 0xFFFFFFFF
+    locals_[784] = (
+        ~(locals_[636] << 4 & 0xFFFFFFFF) & (locals_[813] << 4 & 0xFFFFFFFF) ^ (locals_[776] << 4 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[805] = (locals_[812] & 0x30003) & 0xFFFFFFFF
-    locals_[807] = (((locals_[799] ^ locals_[777]) & locals_[795] ^ locals_[777]) << 8) & 0xFFFFFFFF
+    locals_[807] = (((locals_[799] ^ locals_[777]) & locals_[795] ^ locals_[777]) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[788] = (
         (locals_[788] & 0xC000C000 ^ 0x3000300) & locals_[462]
         ^ ~(locals_[816] & locals_[774]) & 0xC000C000
@@ -1590,23 +1620,25 @@ def execute(locals_: list[int]) -> None:
     locals_[797] = (
         ((~locals_[797] & 0xFCFFFCFF ^ locals_[761]) & locals_[753] ^ (locals_[761] ^ 0x3000300) & locals_[797]) & 0x33003300
     ) & 0xFFFFFFFF
-    locals_[816] = (~(locals_[720] << 2)) & 0xFFFFFFFF
-    locals_[761] = (locals_[805] << 2) & 0xFFFFFFFF
-    locals_[753] = (~(~(locals_[761] & locals_[816]) & locals_[709] << 2) ^ locals_[761]) & 0xFFFFFFFF
+    locals_[816] = (~(locals_[720] << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[761] = (locals_[805] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[753] = (~(~(locals_[761] & locals_[816]) & (locals_[709] << 2 & 0xFFFFFFFF)) ^ locals_[761]) & 0xFFFFFFFF
     locals_[732] = ((locals_[699] ^ locals_[760]) >> 2) & 0xFFFFFFFF
     locals_[800] = ((locals_[737] ^ locals_[704]) >> 2) & 0xFFFFFFFF
-    locals_[648] = ((locals_[813] & locals_[776] ^ locals_[818]) << 4) & 0xFFFFFFFF
-    locals_[708] = ((locals_[720] ^ locals_[709]) << 2) & 0xFFFFFFFF
+    locals_[648] = ((locals_[813] & locals_[776] ^ locals_[818]) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[708] = ((locals_[720] ^ locals_[709]) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[774] = (locals_[774] & locals_[462] & 0xC000C00 ^ 0xF3FFF3FF) & 0xFFFFFFFF
-    locals_[403] = ((locals_[805] & locals_[709]) << 6) & 0xFFFFFFFF
+    locals_[403] = ((locals_[805] & locals_[709]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[749] = (locals_[749] >> 10) & 0xFFFFFFFF
     locals_[811] = (~locals_[749] & locals_[793] >> 10) & 0xFFFFFFFF
     locals_[580] = (~locals_[811] & locals_[796] >> 10 ^ locals_[749]) & 0xFFFFFFFF
-    locals_[761] = (~locals_[761] & locals_[720] << 2 ^ (locals_[805] & locals_[709]) << 2 & locals_[816]) & 0xFFFFFFFF
-    locals_[816] = (~(locals_[778] << 4)) & 0xFFFFFFFF
-    locals_[810] = ((locals_[774] & locals_[738]) << 4 & locals_[816]) & 0xFFFFFFFF
+    locals_[761] = (
+        ~locals_[761] & (locals_[720] << 2 & 0xFFFFFFFF) ^ (locals_[805] & locals_[709]) << 2 & 0xFFFFFFFF & locals_[816]
+    ) & 0xFFFFFFFF
+    locals_[816] = (~(locals_[778] << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[810] = ((locals_[774] & locals_[738]) << 4 & 0xFFFFFFFF & locals_[816]) & 0xFFFFFFFF
     locals_[721] = (~(locals_[793] >> 10) & locals_[749] ^ locals_[796] >> 10 & locals_[811]) & 0xFFFFFFFF
-    locals_[375] = ((locals_[799] & locals_[777] ^ locals_[795]) << 0xC) & 0xFFFFFFFF
+    locals_[375] = ((locals_[799] & locals_[777] ^ locals_[795]) << 0xC & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[811] = (~locals_[761]) & 0xFFFFFFFF
     locals_[749] = ((locals_[811] ^ locals_[790]) & locals_[800]) & 0xFFFFFFFF
     locals_[462] = (~locals_[800] & locals_[790]) & 0xFFFFFFFF
@@ -1631,17 +1663,24 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[301]
     ) & 0xFFFFFFFF
     locals_[743] = (~((locals_[797] ^ locals_[760]) >> 6) & locals_[699] >> 6 ^ 0xFC000000) & 0xFFFFFFFF
-    locals_[696] = (locals_[696] << 2) & 0xFFFFFFFF
-    locals_[737] = (locals_[737] << 2) & 0xFFFFFFFF
-    locals_[642] = (~locals_[696] & locals_[704] << 2 ^ locals_[737]) & 0xFFFFFFFF
-    locals_[650] = (~(locals_[738] << 4 & locals_[816]) & locals_[774] << 4 ^ locals_[778] << 4) & 0xFFFFFFFF
+    locals_[696] = (locals_[696] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[737] = (locals_[737] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[642] = (~locals_[696] & (locals_[704] << 2 & 0xFFFFFFFF) ^ locals_[737]) & 0xFFFFFFFF
+    locals_[650] = (
+        ~((locals_[738] << 4 & 0xFFFFFFFF) & locals_[816]) & (locals_[774] << 4 & 0xFFFFFFFF) ^ (locals_[778] << 4 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[749] = (locals_[787] >> 6) & 0xFFFFFFFF
     locals_[787] = (((locals_[788] ^ locals_[802]) & locals_[787]) >> 6) & 0xFFFFFFFF
-    locals_[733] = (((locals_[774] ^ locals_[738]) & locals_[778] ^ locals_[738]) << 4) & 0xFFFFFFFF
-    locals_[90] = (~(~(~(locals_[795] << 8) & locals_[799] << 8) & locals_[777] << 8) ^ locals_[795] << 8) & 0xFFFFFFFF
+    locals_[733] = (((locals_[774] ^ locals_[738]) & locals_[778] ^ locals_[738]) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[90] = (
+        ~(~(~(locals_[795] << 8 & 0xFFFFFFFF) & (locals_[799] << 8 & 0xFFFFFFFF)) & (locals_[777] << 8 & 0xFFFFFFFF))
+        ^ (locals_[795] << 8 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[796] = ((locals_[793] ^ locals_[796]) >> 10) & 0xFFFFFFFF
-    locals_[793] = (~((locals_[795] & locals_[799]) << 8) & locals_[777] << 8 ^ locals_[799] << 8) & 0xFFFFFFFF
-    locals_[737] = (~(~locals_[737] & locals_[704] << 2) & locals_[696] ^ locals_[737]) & 0xFFFFFFFF
+    locals_[793] = (
+        ~((locals_[795] & locals_[799]) << 8 & 0xFFFFFFFF) & (locals_[777] << 8 & 0xFFFFFFFF) ^ (locals_[799] << 8 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    locals_[737] = (~(~locals_[737] & (locals_[704] << 2 & 0xFFFFFFFF)) & locals_[696] ^ locals_[737]) & 0xFFFFFFFF
     locals_[802] = (locals_[802] >> 6) & 0xFFFFFFFF
     locals_[704] = (~locals_[749] ^ locals_[802]) & 0xFFFFFFFF
     locals_[800] = (
@@ -1672,7 +1711,7 @@ def execute(locals_: list[int]) -> None:
     locals_[630] = (
         (~(locals_[636] & locals_[331]) ^ locals_[636] & locals_[813] ^ locals_[818] ^ locals_[776]) & locals_[808] ^ locals_[776]
     ) & 0xFFFFFFFF
-    locals_[761] = ((locals_[805] ^ locals_[709]) << 6) & 0xFFFFFFFF
+    locals_[761] = ((locals_[805] ^ locals_[709]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[788] = (locals_[760] >> 6 ^ ~(locals_[797] >> 6)) & 0xFFFFFFFF
     locals_[699] = (
         ((locals_[645] ^ locals_[732]) & (locals_[301] ^ locals_[704]) ^ locals_[301] ^ locals_[704]) & locals_[462]
@@ -1680,8 +1719,14 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[704]
         ^ locals_[732]
     ) & 0xFFFFFFFF
-    locals_[696] = (~(locals_[799] << 0xC) & locals_[777] << 0xC ^ (locals_[795] & locals_[799]) << 0xC) & 0xFFFFFFFF
-    locals_[709] = (~(locals_[805] << 6 & ~(locals_[720] << 6)) ^ locals_[709] << 6 & ~(locals_[720] << 6)) & 0xFFFFFFFF
+    locals_[696] = (
+        ~(locals_[799] << 0xC & 0xFFFFFFFF) & (locals_[777] << 0xC & 0xFFFFFFFF)
+        ^ (locals_[795] & locals_[799]) << 0xC & 0xFFFFFFFF
+    ) & 0xFFFFFFFF
+    locals_[709] = (
+        ~((locals_[805] << 6 & 0xFFFFFFFF) & ~(locals_[720] << 6 & 0xFFFFFFFF))
+        ^ (locals_[709] << 6 & 0xFFFFFFFF) & ~(locals_[720] << 6 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[811] = ((~locals_[737] ^ locals_[739]) & locals_[642]) & 0xFFFFFFFF
     locals_[816] = ((locals_[403] ^ locals_[739]) & locals_[709]) & 0xFFFFFFFF
     locals_[720] = (~locals_[739]) & 0xFFFFFFFF
@@ -1708,7 +1753,8 @@ def execute(locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[301] = (locals_[760] >> 6 & ~(locals_[797] >> 6)) & 0xFFFFFFFF
     locals_[738] = (
-        (~(locals_[818] << 4 & ~(locals_[813] << 4)) ^ locals_[776] << 4) & (~locals_[648] ^ locals_[784])
+        (~((locals_[818] << 4 & 0xFFFFFFFF) & ~(locals_[813] << 4 & 0xFFFFFFFF)) ^ (locals_[776] << 4 & 0xFFFFFFFF))
+        & (~locals_[648] ^ locals_[784])
         ^ (~locals_[778] ^ locals_[738]) & locals_[774]
         ^ ~locals_[784] & locals_[648]
         ^ locals_[738]
@@ -1725,7 +1771,9 @@ def execute(locals_: list[int]) -> None:
         ^ (~locals_[403] & locals_[739] ^ ~locals_[816]) & locals_[761]
         ^ (locals_[403] ^ locals_[739]) & locals_[737] & locals_[642]
     ) & 0xFFFFFFFF
-    locals_[704] = (~(locals_[777] << 0xC) & locals_[799] << 0xC ^ locals_[795] << 0xC) & 0xFFFFFFFF
+    locals_[704] = (
+        ~(locals_[777] << 0xC & 0xFFFFFFFF) & (locals_[799] << 0xC & 0xFFFFFFFF) ^ (locals_[795] << 0xC & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[811] = (locals_[811] ^ locals_[709]) & 0xFFFFFFFF
     locals_[739] = ((locals_[403] ^ locals_[811]) & locals_[761] ^ locals_[403] & locals_[811] ^ locals_[739]) & 0xFFFFFFFF
     locals_[797] = (
@@ -2397,7 +2445,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[787]
     ) & 0xFFFFFFFF
     locals_[774] = ((~(locals_[776] >> 1) & locals_[761] >> 1 ^ ~(locals_[704] >> 1)) & 0x7FFFFFFF) & 0xFFFFFFFF
-    locals_[768] = ((locals_[761] ^ locals_[776]) << 0xF) & 0xFFFFFFFF
+    locals_[768] = ((locals_[761] ^ locals_[776]) << 0xF & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[636] = (~locals_[811]) & 0xFFFFFFFF
     locals_[769] = (
         (
@@ -2416,9 +2464,13 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[811] ^ locals_[787]) & locals_[772]
         ^ locals_[811]
     ) & 0xFFFFFFFF
-    locals_[749] = (locals_[776] << 0xF) & 0xFFFFFFFF
-    locals_[709] = ((~((locals_[761] & locals_[704]) << 0xF) & locals_[749] ^ ~(locals_[704] << 0xF)) & 0xFFFF8000) & 0xFFFFFFFF
-    locals_[749] = (~(~(locals_[761] << 0xF & ~locals_[749]) & locals_[704] << 0xF) ^ locals_[749]) & 0xFFFFFFFF
+    locals_[749] = (locals_[776] << 0xF & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[709] = (
+        (~((locals_[761] & locals_[704]) << 0xF & 0xFFFFFFFF) & locals_[749] ^ ~(locals_[704] << 0xF & 0xFFFFFFFF)) & 0xFFFF8000
+    ) & 0xFFFFFFFF
+    locals_[749] = (
+        ~(~((locals_[761] << 0xF & 0xFFFFFFFF) & ~locals_[749]) & (locals_[704] << 0xF & 0xFFFFFFFF)) ^ locals_[749]
+    ) & 0xFFFFFFFF
     locals_[331] = (
         (
             ~((locals_[331] ^ locals_[772] ^ locals_[816]) & locals_[811])
@@ -2439,9 +2491,11 @@ def execute(locals_: list[int]) -> None:
     locals_[812] = (((locals_[778] ^ 0xFFFF0000) & locals_[769] ^ locals_[816] & 0xFFFF0000) & locals_[331]) & 0xFFFFFFFF
     locals_[772] = (locals_[812] ^ 0xFFFF0000) & 0xFFFFFFFF
     locals_[760] = (~(((locals_[331] ^ 0xFFFF0000) & locals_[778] ^ 0xFFFF) & locals_[769])) & 0xFFFFFFFF
-    locals_[812] = (locals_[812] << 0x10) & 0xFFFFFFFF
-    locals_[814] = (~(locals_[799] << 0x10) & locals_[812] ^ locals_[760] << 0x10 ^ 0xFFFF) & 0xFFFFFFFF
-    locals_[790] = (~((locals_[760] & locals_[799]) << 0x10) ^ locals_[812]) & 0xFFFFFFFF
+    locals_[812] = (locals_[812] << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[814] = (
+        ~(locals_[799] << 0x10 & 0xFFFFFFFF) & locals_[812] ^ (locals_[760] << 0x10 & 0xFFFFFFFF) ^ 0xFFFF
+    ) & 0xFFFFFFFF
+    locals_[790] = (~((locals_[760] & locals_[799]) << 0x10 & 0xFFFFFFFF) ^ locals_[812]) & 0xFFFFFFFF
     locals_[753] = ((locals_[761] & locals_[776] ^ locals_[704]) >> 1) & 0xFFFFFFFF
     locals_[813] = (~locals_[769]) & 0xFFFFFFFF
     locals_[777] = (
@@ -2460,7 +2514,9 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[787]
     ) & 0xFFFFFFFF
     locals_[704] = (((locals_[776] ^ locals_[704]) & locals_[761] ^ locals_[776]) >> 1 ^ 0x80000000) & 0xFFFFFFFF
-    locals_[776] = (~(locals_[760] << 0x10) & locals_[799] << 0x10 ^ locals_[812] ^ 0xFFFF) & 0xFFFFFFFF
+    locals_[776] = (
+        ~(locals_[760] << 0x10 & 0xFFFFFFFF) & (locals_[799] << 0x10 & 0xFFFFFFFF) ^ locals_[812] ^ 0xFFFF
+    ) & 0xFFFFFFFF
     locals_[761] = (
         (~((locals_[753] ^ locals_[772] ^ locals_[760]) & locals_[799]) ^ locals_[772] ^ locals_[760]) & locals_[774]
         ^ ((locals_[799] ^ locals_[774]) & locals_[753] ^ locals_[799] ^ locals_[774]) & locals_[704]
@@ -2642,8 +2698,10 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[802] & (locals_[811] ^ 0xFFFFFFFF)
         ^ 0xFFFFFFFF
     ) & 0xFFFFFFFF
-    locals_[769] = (locals_[462] << 2) & 0xFFFFFFFF
-    locals_[709] = (~(~(locals_[772] << 2) & locals_[769]) & locals_[774] << 2 ^ locals_[772] << 2) & 0xFFFFFFFF
+    locals_[769] = (locals_[462] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[709] = (
+        ~(~(locals_[772] << 2 & 0xFFFFFFFF) & locals_[769]) & (locals_[774] << 2 & 0xFFFFFFFF) ^ (locals_[772] << 2 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[760] = (
         (((locals_[813] ^ 0xFFF3FFF3) & locals_[795] ^ locals_[816] & 0xFFF3FFF3) & locals_[749] ^ 0xFFF3FFF3) & 0xCC00CC
     ) & 0xFFFFFFFF
@@ -2681,16 +2739,18 @@ def execute(locals_: list[int]) -> None:
     locals_[816] = (~locals_[784] & locals_[814]) & 0xFFFFFFFF
     locals_[720] = (~locals_[816] & locals_[778]) & 0xFFFFFFFF
     locals_[796] = (~(locals_[720] & 0xC000C) ^ locals_[814] & 0xC000C) & 0xFFFFFFFF
-    locals_[761] = ((locals_[462] ^ locals_[772]) << 2) & 0xFFFFFFFF
-    locals_[749] = (locals_[776] << 4) & 0xFFFFFFFF
-    locals_[799] = (~(~locals_[749] & locals_[760] << 4) ^ (locals_[699] ^ locals_[776]) << 4) & 0xFFFFFFFF
+    locals_[761] = ((locals_[462] ^ locals_[772]) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[749] = (locals_[776] << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[799] = (
+        ~(~locals_[749] & (locals_[760] << 4 & 0xFFFFFFFF)) ^ (locals_[699] ^ locals_[776]) << 4 & 0xFFFFFFFF
+    ) & 0xFFFFFFFF
     locals_[636] = (~locals_[778] & locals_[784] & locals_[814]) & 0xFFFFFFFF
     locals_[795] = (~(locals_[636] & 0xC000C)) & 0xFFFFFFFF
     locals_[805] = (((locals_[784] ^ 0xFFFCFFFC) & locals_[814] ^ locals_[720] & 0xFFFCFFFC) & 0xC003C003) & 0xFFFFFFFF
     locals_[807] = (
         (~(locals_[768] >> 2) & locals_[797] >> 2 ^ ~(locals_[768] >> 2 & ~(locals_[704] >> 2))) & 0x3FFFFFFF
     ) & 0xFFFFFFFF
-    locals_[808] = (~(locals_[699] << 4) & locals_[760] << 4 ^ locals_[749]) & 0xFFFFFFFF
+    locals_[808] = (~(locals_[699] << 4 & 0xFFFFFFFF) & (locals_[760] << 4 & 0xFFFFFFFF) ^ locals_[749]) & 0xFFFFFFFF
     locals_[813] = (~locals_[814]) & 0xFFFFFFFF
     locals_[732] = (
         ~(~(locals_[784] & 0xFFCFFFCF) & locals_[813] & locals_[778] & 0xC300C30) ^ locals_[816] & 0x300030
@@ -2703,12 +2763,14 @@ def execute(locals_: list[int]) -> None:
         ~(~(locals_[814] & 0xFFF3FFF3) & locals_[778] & 0x300C300C) ^ ~(locals_[784] & 0xFFF3FFF3) & locals_[814] & 0x300C300C
     ) & 0xFFFFFFFF
     locals_[580] = (locals_[787] >> 6 & ~(locals_[790] >> 6) ^ locals_[790] >> 6) & 0xFFFFFFFF
-    locals_[800] = (locals_[796] << 0xC) & 0xFFFFFFFF
-    locals_[301] = (locals_[403] << 0xC) & 0xFFFFFFFF
-    locals_[810] = (~((locals_[403] & locals_[795]) << 0xC & ~locals_[800]) ^ ~locals_[301] & locals_[800]) & 0xFFFFFFFF
+    locals_[800] = (locals_[796] << 0xC & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[301] = (locals_[403] << 0xC & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[810] = (
+        ~((locals_[403] & locals_[795]) << 0xC & 0xFFFFFFFF & ~locals_[800]) ^ ~locals_[301] & locals_[800]
+    ) & 0xFFFFFFFF
     locals_[721] = (locals_[790] ^ locals_[787]) & 0xFFFFFFFF
     locals_[331] = (locals_[721] >> 6) & 0xFFFFFFFF
-    locals_[802] = ((locals_[699] ^ locals_[776]) << 8) & 0xFFFFFFFF
+    locals_[802] = ((locals_[699] ^ locals_[776]) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[375] = (locals_[802] ^ 0xFF) & 0xFFFFFFFF
     locals_[796] = (locals_[796] >> 6) & 0xFFFFFFFF
     locals_[812] = (~locals_[796]) & 0xFFFFFFFF
@@ -2725,11 +2787,15 @@ def execute(locals_: list[int]) -> None:
         )
         ^ locals_[707]
     ) & 0xFFFFFFFF
-    locals_[774] = ((locals_[774] & locals_[772]) << 2 & ~locals_[769] ^ ~(locals_[774] << 2) & locals_[769]) & 0xFFFFFFFF
-    locals_[462] = (locals_[699] << 8) & 0xFFFFFFFF
-    locals_[776] = ((locals_[776] << 8 & ~locals_[462] ^ locals_[462]) & locals_[760] << 8 ^ locals_[462]) & 0xFFFFFFFF
-    locals_[749] = (~((locals_[699] & locals_[760]) << 4) ^ locals_[749]) & 0xFFFFFFFF
-    locals_[802] = (~(locals_[760] << 8 & ~locals_[462]) ^ locals_[802]) & 0xFFFFFFFF
+    locals_[774] = (
+        (locals_[774] & locals_[772]) << 2 & 0xFFFFFFFF & ~locals_[769] ^ ~(locals_[774] << 2 & 0xFFFFFFFF) & locals_[769]
+    ) & 0xFFFFFFFF
+    locals_[462] = (locals_[699] << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[776] = (
+        ((locals_[776] << 8 & 0xFFFFFFFF) & ~locals_[462] ^ locals_[462]) & (locals_[760] << 8 & 0xFFFFFFFF) ^ locals_[462]
+    ) & 0xFFFFFFFF
+    locals_[749] = (~((locals_[699] & locals_[760]) << 4 & 0xFFFFFFFF) ^ locals_[749]) & 0xFFFFFFFF
+    locals_[802] = (~((locals_[760] << 8 & 0xFFFFFFFF) & ~locals_[462]) ^ locals_[802]) & 0xFFFFFFFF
     locals_[696] = (
         (locals_[707] & locals_[811] ^ locals_[648] ^ locals_[805]) & locals_[708]
         ^ (~(locals_[708] & locals_[811]) ^ locals_[696] ^ locals_[707] ^ locals_[805]) & locals_[642]
@@ -2739,14 +2805,18 @@ def execute(locals_: list[int]) -> None:
     locals_[636] = (locals_[636] & 0xC000C0) & 0xFFFFFFFF
     locals_[733] = (~(locals_[813] & ~locals_[778] & locals_[784] & 0xC000C00)) & 0xFFFFFFFF
     locals_[642] = (~((locals_[707] ^ locals_[642]) & locals_[708] & locals_[811]) ^ locals_[805] ^ locals_[642]) & 0xFFFFFFFF
-    locals_[811] = (~(locals_[733] << 4)) & 0xFFFFFFFF
-    locals_[462] = (((locals_[813] & locals_[778] ^ locals_[816]) & 0xC000C00) << 4) & 0xFFFFFFFF
-    locals_[90] = (~(locals_[732] << 4) & locals_[462] & locals_[811]) & 0xFFFFFFFF
-    locals_[650] = (~(~(locals_[805] << 6) & locals_[708] << 6) ^ locals_[648] << 6) & 0xFFFFFFFF
-    locals_[769] = ((locals_[708] ^ locals_[805]) << 6 ^ ~(locals_[708] << 6) & locals_[648] << 6) & 0xFFFFFFFF
-    locals_[760] = ((locals_[708] & locals_[805] ^ locals_[648]) << 6) & 0xFFFFFFFF
-    locals_[301] = (~(~(locals_[301] & ~locals_[800]) & locals_[795] << 0xC) ^ locals_[301]) & 0xFFFFFFFF
-    locals_[699] = (~locals_[462] & locals_[732] << 4 & locals_[811] ^ 0xF) & 0xFFFFFFFF
+    locals_[811] = (~(locals_[733] << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[462] = (((locals_[813] & locals_[778] ^ locals_[816]) & 0xC000C00) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[90] = (~(locals_[732] << 4 & 0xFFFFFFFF) & locals_[462] & locals_[811]) & 0xFFFFFFFF
+    locals_[650] = (
+        ~(~(locals_[805] << 6 & 0xFFFFFFFF) & (locals_[708] << 6 & 0xFFFFFFFF)) ^ (locals_[648] << 6 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    locals_[769] = (
+        (locals_[708] ^ locals_[805]) << 6 & 0xFFFFFFFF ^ ~(locals_[708] << 6 & 0xFFFFFFFF) & (locals_[648] << 6 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    locals_[760] = ((locals_[708] & locals_[805] ^ locals_[648]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[301] = (~(~(locals_[301] & ~locals_[800]) & (locals_[795] << 0xC & 0xFFFFFFFF)) ^ locals_[301]) & 0xFFFFFFFF
+    locals_[699] = (~locals_[462] & (locals_[732] << 4 & 0xFFFFFFFF) & locals_[811] ^ 0xF) & 0xFFFFFFFF
     locals_[805] = (
         ~(
             (
@@ -2778,13 +2848,15 @@ def execute(locals_: list[int]) -> None:
         ^ ~locals_[650] & locals_[760]
     ) & 0xFFFFFFFF
     locals_[462] = (locals_[462] ^ locals_[811]) & 0xFFFFFFFF
-    locals_[648] = (locals_[732] << 2) & 0xFFFFFFFF
+    locals_[648] = (locals_[732] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[811] = (~(locals_[720] & 0xC000C0) ^ locals_[814] & 0xC000C0) & 0xFFFFFFFF
-    locals_[813] = (locals_[811] << 8) & 0xFFFFFFFF
-    locals_[814] = (~(~(~locals_[813] & locals_[636] << 8) & locals_[778] << 8) ^ locals_[813]) & 0xFFFFFFFF
-    locals_[403] = ((locals_[778] ^ locals_[636]) << 8 ^ 0xFF) & 0xFFFFFFFF
-    locals_[733] = (locals_[733] << 2) & 0xFFFFFFFF
-    locals_[708] = ((locals_[732] << 2 ^ ~locals_[733]) & 0xFFFFFFFC) & 0xFFFFFFFF
+    locals_[813] = (locals_[811] << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[814] = (
+        ~(~(~locals_[813] & (locals_[636] << 8 & 0xFFFFFFFF)) & (locals_[778] << 8 & 0xFFFFFFFF)) ^ locals_[813]
+    ) & 0xFFFFFFFF
+    locals_[403] = ((locals_[778] ^ locals_[636]) << 8 & 0xFFFFFFFF ^ 0xFF) & 0xFFFFFFFF
+    locals_[733] = (locals_[733] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[708] = (((locals_[732] << 2 & 0xFFFFFFFF) ^ ~locals_[733]) & 0xFFFFFFFC) & 0xFFFFFFFF
     locals_[772] = ((locals_[777] ^ locals_[790]) >> 10) & 0xFFFFFFFF
     locals_[787] = ((locals_[787] >> 10 & ~locals_[772] ^ ~(locals_[790] >> 10)) & 0x3FFFFF) & 0xFFFFFFFF
     locals_[650] = (
@@ -2796,14 +2868,16 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[699] ^ locals_[704]) & locals_[462]
         ^ locals_[704]
     ) & 0xFFFFFFFF
-    locals_[800] = (~(locals_[795] << 0xC) ^ locals_[800]) & 0xFFFFFFFF
+    locals_[800] = (~(locals_[795] << 0xC & 0xFFFFFFFF) ^ locals_[800]) & 0xFFFFFFFF
     locals_[816] = (~locals_[301]) & 0xFFFFFFFF
     locals_[720] = ((locals_[816] ^ locals_[810]) & locals_[800]) & 0xFFFFFFFF
     locals_[774] = (
         (locals_[776] ^ locals_[375]) & locals_[802] ^ locals_[816] & locals_[810] ^ locals_[720] ^ locals_[301] ^ locals_[776]
     ) & 0xFFFFFFFF
     locals_[769] = (
-        ~(~(locals_[636] << 8) & locals_[778] << 8) & locals_[813] ^ (locals_[778] & locals_[636]) << 8 ^ 0xFF
+        ~(~(locals_[636] << 8 & 0xFFFFFFFF) & (locals_[778] << 8 & 0xFFFFFFFF)) & locals_[813]
+        ^ (locals_[778] & locals_[636]) << 8 & 0xFFFFFFFF
+        ^ 0xFF
     ) & 0xFFFFFFFF
     locals_[709] = (locals_[777] >> 10 & ~(locals_[790] >> 10)) & 0xFFFFFFFF
     locals_[796] = (~locals_[793] ^ locals_[796]) & 0xFFFFFFFF
@@ -2814,7 +2888,7 @@ def execute(locals_: list[int]) -> None:
         & locals_[799]
         ^ locals_[808]
     ) & 0xFFFFFFFF
-    locals_[733] = (~(locals_[732] << 2) & locals_[733]) & 0xFFFFFFFF
+    locals_[733] = (~(locals_[732] << 2 & 0xFFFFFFFF) & locals_[733]) & 0xFFFFFFFF
     locals_[812] = (~locals_[648]) & 0xFFFFFFFF
     locals_[760] = (
         ~(
@@ -3547,8 +3621,10 @@ def execute(locals_: list[int]) -> None:
     locals_[790] = (~locals_[699]) & 0xFFFFFFFF
     locals_[753] = ((~(~locals_[799] & locals_[787]) & locals_[795] ^ locals_[799]) & 0xFFFF ^ locals_[799]) & 0xFFFFFFFF
     locals_[777] = (~locals_[812] & 0xFFFF) & 0xFFFFFFFF
-    locals_[462] = (locals_[790] << 0x10) & 0xFFFFFFFF
-    locals_[807] = (~(~((locals_[777] & locals_[790]) << 0x10) & locals_[760] << 0x10) ^ locals_[462]) & 0xFFFFFFFF
+    locals_[462] = (locals_[790] << 0x10 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[807] = (
+        ~(~((locals_[777] & locals_[790]) << 0x10 & 0xFFFFFFFF) & (locals_[760] << 0x10 & 0xFFFFFFFF)) ^ locals_[462]
+    ) & 0xFFFFFFFF
     locals_[812] = ((~((~locals_[749] ^ locals_[761]) & locals_[768]) ^ locals_[636]) & locals_[787]) & 0xFFFFFFFF
     locals_[812] = (
         ~(((~(locals_[720] & locals_[768]) ^ locals_[795]) & locals_[761] & locals_[636] ^ locals_[812]) & locals_[799])
@@ -3560,7 +3636,9 @@ def execute(locals_: list[int]) -> None:
     locals_[761] = (
         (locals_[636] ^ locals_[799] ^ locals_[816]) & locals_[768] ^ (locals_[799] ^ locals_[816]) & locals_[636] ^ locals_[799]
     ) & 0xFFFFFFFF
-    locals_[768] = (~(~(~locals_[462] & locals_[777] << 0x10) & locals_[760] << 0x10) ^ locals_[462]) & 0xFFFFFFFF
+    locals_[768] = (
+        ~(~(~locals_[462] & (locals_[777] << 0x10 & 0xFFFFFFFF)) & (locals_[760] << 0x10 & 0xFFFFFFFF)) ^ locals_[462]
+    ) & 0xFFFFFFFF
     locals_[816] = (locals_[776] ^ ~locals_[761]) & 0xFFFFFFFF
     locals_[778] = (
         (~((locals_[704] ^ locals_[816]) & locals_[301]) ^ locals_[776]) & locals_[812]
@@ -3571,9 +3649,9 @@ def execute(locals_: list[int]) -> None:
     locals_[787] = (
         (~(~locals_[787] & locals_[795]) & 0xFFFF ^ locals_[787]) & locals_[799] ^ ~(locals_[795] & 0xFFFF) & locals_[787]
     ) & 0xFFFFFFFF
-    locals_[799] = ((locals_[749] ^ locals_[753]) << 0xF) & 0xFFFFFFFF
-    locals_[795] = ((locals_[749] & locals_[753]) << 0xF & ~(locals_[787] << 0xF) ^ 0x7FFF) & 0xFFFFFFFF
-    locals_[462] = (~(locals_[777] << 0x10) ^ locals_[462]) & 0xFFFFFFFF
+    locals_[799] = ((locals_[749] ^ locals_[753]) << 0xF & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[795] = ((locals_[749] & locals_[753]) << 0xF & 0xFFFFFFFF & ~(locals_[787] << 0xF & 0xFFFFFFFF) ^ 0x7FFF) & 0xFFFFFFFF
+    locals_[462] = (~(locals_[777] << 0x10 & 0xFFFFFFFF) ^ locals_[462]) & 0xFFFFFFFF
     locals_[808] = ((locals_[787] ^ locals_[749]) >> 1) & 0xFFFFFFFF
     locals_[720] = (~locals_[812]) & 0xFFFFFFFF
     locals_[784] = (
@@ -3586,7 +3664,7 @@ def execute(locals_: list[int]) -> None:
     locals_[805] = (
         ~((~locals_[800] & locals_[636] ^ locals_[800]) & locals_[787] >> 1) ^ ~locals_[636] & locals_[800]
     ) & 0xFFFFFFFF
-    locals_[753] = ((locals_[753] & (locals_[787] ^ locals_[749])) << 0xF ^ 0x7FFF) & 0xFFFFFFFF
+    locals_[753] = ((locals_[753] & (locals_[787] ^ locals_[749])) << 0xF & 0xFFFFFFFF ^ 0x7FFF) & 0xFFFFFFFF
     locals_[800] = (~(locals_[787] >> 1) & locals_[636] ^ locals_[800]) & 0xFFFFFFFF
     locals_[636] = (locals_[790] & ~locals_[760]) & 0xFFFFFFFF
     locals_[749] = (~((locals_[790] ^ ~locals_[760]) & locals_[777]) ^ locals_[800] ^ locals_[636]) & 0xFFFFFFFF
@@ -3699,13 +3777,18 @@ def execute(locals_: list[int]) -> None:
     locals_[761] = (((locals_[720] ^ 0x3000300) & locals_[462] ^ locals_[720] ^ 0x3000300) & locals_[709]) & 0xFFFFFFFF
     locals_[636] = (locals_[709] & ~locals_[462]) & 0xFFFFFFFF
     locals_[760] = (~(locals_[636] & 0xCC00CC00) ^ locals_[462] & locals_[816] & 0xCC00CC00) & 0xFFFFFFFF
-    locals_[699] = (~(~((locals_[812] ^ locals_[331]) << 4) & locals_[704] << 4) ^ locals_[812] << 4) & 0xFFFFFFFF
-    locals_[790] = (~(locals_[331] << 4) & ~(locals_[704] << 4) & locals_[812] << 4) & 0xFFFFFFFF
+    locals_[699] = (
+        ~(~((locals_[812] ^ locals_[331]) << 4 & 0xFFFFFFFF) & (locals_[704] << 4 & 0xFFFFFFFF))
+        ^ (locals_[812] << 4 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    locals_[790] = (
+        ~(locals_[331] << 4 & 0xFFFFFFFF) & ~(locals_[704] << 4 & 0xFFFFFFFF) & (locals_[812] << 4 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[720] = ((locals_[462] ^ locals_[636]) & 0x3000300 ^ locals_[720]) & 0xFFFFFFFF
     locals_[753] = ((locals_[704] & (locals_[812] ^ locals_[331])) >> 10) & 0xFFFFFFFF
     locals_[777] = (~(locals_[776] & locals_[462] & 0x300030) ^ locals_[709] & 0xC000C) & 0xFFFFFFFF
     locals_[778] = (~(locals_[812] >> 10) ^ locals_[331] >> 10) & 0xFFFFFFFF
-    locals_[704] = ((locals_[704] ^ locals_[331]) << 4) & 0xFFFFFFFF
+    locals_[704] = ((locals_[704] ^ locals_[331]) << 4 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[799] = (~(locals_[709] & locals_[462] & locals_[816] & 0xC000C00)) & 0xFFFFFFFF
     locals_[795] = (~(locals_[709] & 0xC000C) & locals_[462] & locals_[816] & 0x3C003C) & 0xFFFFFFFF
     locals_[784] = ((locals_[331] & locals_[812]) >> 10 ^ 0xFFC00000) & 0xFFFFFFFF
@@ -3723,7 +3806,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[708] & locals_[768] & locals_[800]
         ^ locals_[768]
     ) & 0xFFFFFFFF
-    locals_[707] = (~(locals_[795] << 8) & locals_[777] << 8) & 0xFFFFFFFF
+    locals_[707] = (~(locals_[795] << 8 & 0xFFFFFFFF) & (locals_[777] << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[812] = (locals_[331] >> 2) & 0xFFFFFFFF
     locals_[648] = (~(~((locals_[777] & locals_[795]) >> 2) & locals_[812]) ^ locals_[795] >> 2) & 0xFFFFFFFF
     locals_[636] = (~locals_[800] ^ locals_[802]) & 0xFFFFFFFF
@@ -3734,8 +3817,8 @@ def execute(locals_: list[int]) -> None:
         ^ ~locals_[708] & locals_[800]
         ^ locals_[708]
     ) & 0xFFFFFFFF
-    locals_[800] = ((locals_[795] ^ locals_[777]) << 8) & 0xFFFFFFFF
-    locals_[768] = (~(locals_[331] << 8) & ~locals_[800] & 0xFFFFFF00) & 0xFFFFFFFF
+    locals_[800] = ((locals_[795] ^ locals_[777]) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[768] = (~(locals_[331] << 8 & 0xFFFFFFFF) & ~locals_[800] & 0xFFFFFF00) & 0xFFFFFFFF
     locals_[636] = (~locals_[732]) & 0xFFFFFFFF
     locals_[403] = (
         ~(
@@ -3779,15 +3862,15 @@ def execute(locals_: list[int]) -> None:
     locals_[462] = (
         ((locals_[403] ^ 0xFFF3FFF3) & locals_[709] ^ locals_[403] & 0xC000C) & 0xC00CC00C ^ ~(locals_[636] & 0xC000C000)
     ) & 0xFFFFFFFF
-    locals_[739] = (locals_[739] << 2) & 0xFFFFFFFF
-    locals_[732] = (~locals_[739] & locals_[720] << 2 ^ locals_[761] << 2) & 0xFFFFFFFF
+    locals_[739] = (locals_[739] << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
+    locals_[732] = (~locals_[739] & (locals_[720] << 2 & 0xFFFFFFFF) ^ (locals_[761] << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
     locals_[708] = ((locals_[720] ^ locals_[761]) >> 6) & 0xFFFFFFFF
     locals_[301] = ((locals_[709] ^ locals_[301]) & 0x3000300) & 0xFFFFFFFF
     locals_[580] = (~((locals_[787] & locals_[749]) >> 2) & 0x3FFFFFFF) & 0xFFFFFFFF
     locals_[810] = (locals_[636] & 0xC000C0) & 0xFFFFFFFF
     locals_[721] = (((locals_[749] ^ locals_[787]) & locals_[301]) >> 2) & 0xFFFFFFFF
-    locals_[812] = (~(locals_[720] << 2)) & 0xFFFFFFFF
-    locals_[375] = ((locals_[720] & locals_[761]) << 2 ^ locals_[812] & locals_[739]) & 0xFFFFFFFF
+    locals_[812] = (~(locals_[720] << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[375] = ((locals_[720] & locals_[761]) << 2 & 0xFFFFFFFF ^ locals_[812] & locals_[739]) & 0xFFFFFFFF
     locals_[720] = (~(locals_[749] >> 2) ^ locals_[787] >> 2) & 0xFFFFFFFF
     locals_[666] = ((~locals_[403] & locals_[709] & 0x30003 ^ locals_[636]) & 0x330033) & 0xFFFFFFFF
     locals_[645] = ((locals_[301] ^ locals_[749]) >> 6) & 0xFFFFFFFF
@@ -3797,7 +3880,7 @@ def execute(locals_: list[int]) -> None:
     ) & 0xFFFFFFFF
     locals_[646] = (locals_[403] & locals_[816] & 0x300030) & 0xFFFFFFFF
     locals_[696] = ((~locals_[403] & locals_[709] ^ locals_[636]) & 0x300030) & 0xFFFFFFFF
-    locals_[642] = ((locals_[696] & locals_[666]) << 2) & 0xFFFFFFFF
+    locals_[642] = ((locals_[696] & locals_[666]) << 2 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[802] = (~(~(~(locals_[749] >> 6) & locals_[802]) & locals_[301] >> 6) ^ locals_[802]) & 0xFFFFFFFF
     locals_[650] = (
         (~(locals_[708] & (~locals_[721] ^ locals_[720])) ^ locals_[331] & (~locals_[721] ^ locals_[720])) & locals_[580]
@@ -3843,8 +3926,10 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[816]
         ^ locals_[776]
     ) & 0xFFFFFFFF
-    locals_[795] = (locals_[666] << 2 ^ ~(locals_[696] << 2)) & 0xFFFFFFFF
-    locals_[708] = (~(~(locals_[646] << 2) & locals_[696] << 2) ^ (locals_[646] & locals_[666]) << 2) & 0xFFFFFFFF
+    locals_[795] = ((locals_[666] << 2 & 0xFFFFFFFF) ^ ~(locals_[696] << 2 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[708] = (
+        ~(~(locals_[646] << 2 & 0xFFFFFFFF) & (locals_[696] << 2 & 0xFFFFFFFF)) ^ (locals_[646] & locals_[666]) << 2 & 0xFFFFFFFF
+    ) & 0xFFFFFFFF
     locals_[709] = (
         ((locals_[403] ^ 0xFF3FFF3F) & locals_[709] ^ locals_[403] & 0xC000C0) & 0xCC00CC0 ^ ~(locals_[636] & 0xC000C00)
     ) & 0xFFFFFFFF
@@ -3863,10 +3948,15 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[797]
         ^ locals_[795]
     ) & 0xFFFFFFFF
-    locals_[670] = (~(locals_[808] << 4) ^ locals_[709] << 4) & 0xFFFFFFFF
-    locals_[301] = (~(locals_[733] << 0xC) & locals_[776] << 0xC ^ locals_[462] << 0xC) & 0xFFFFFFFF
-    locals_[721] = (~(locals_[776] << 0xC) & locals_[733] << 0xC ^ (locals_[462] & locals_[776]) << 0xC) & 0xFFFFFFFF
-    locals_[737] = ((locals_[776] & locals_[733] ^ locals_[462]) << 0xC) & 0xFFFFFFFF
+    locals_[670] = (~(locals_[808] << 4 & 0xFFFFFFFF) ^ (locals_[709] << 4 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[301] = (
+        ~(locals_[733] << 0xC & 0xFFFFFFFF) & (locals_[776] << 0xC & 0xFFFFFFFF) ^ (locals_[462] << 0xC & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
+    locals_[721] = (
+        ~(locals_[776] << 0xC & 0xFFFFFFFF) & (locals_[733] << 0xC & 0xFFFFFFFF)
+        ^ (locals_[462] & locals_[776]) << 0xC & 0xFFFFFFFF
+    ) & 0xFFFFFFFF
+    locals_[737] = ((locals_[776] & locals_[733] ^ locals_[462]) << 0xC & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[821] = (
         (
             ~((~locals_[768] ^ locals_[737] ^ locals_[721]) & locals_[301])
@@ -3878,8 +3968,8 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[800]
     ) & 0xFFFFFFFF
     locals_[720] = (
-        ((locals_[810] & locals_[808]) << 4 & ~(locals_[709] << 4) ^ locals_[670])
-        & (((locals_[810] ^ locals_[709]) & locals_[808]) << 4 ^ 0xF)
+        ((locals_[810] & locals_[808]) << 4 & 0xFFFFFFFF & ~(locals_[709] << 4 & 0xFFFFFFFF) ^ locals_[670])
+        & (((locals_[810] ^ locals_[709]) & locals_[808]) << 4 & 0xFFFFFFFF ^ 0xF)
     ) & 0xFFFFFFFF
     locals_[636] = (~locals_[720]) & 0xFFFFFFFF
     locals_[738] = (
@@ -3887,9 +3977,9 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[720] ^ locals_[760] ^ locals_[670]) & locals_[799]
         ^ locals_[760]
     ) & 0xFFFFFFFF
-    locals_[739] = (~(locals_[812] & locals_[761] << 2) ^ locals_[739]) & 0xFFFFFFFF
-    locals_[812] = (~(locals_[709] << 8) & locals_[810] << 8) & 0xFFFFFFFF
-    locals_[761] = (locals_[808] << 8 ^ locals_[812]) & 0xFFFFFFFF
+    locals_[739] = (~(locals_[812] & (locals_[761] << 2 & 0xFFFFFFFF)) ^ locals_[739]) & 0xFFFFFFFF
+    locals_[812] = (~(locals_[709] << 8 & 0xFFFFFFFF) & (locals_[810] << 8 & 0xFFFFFFFF)) & 0xFFFFFFFF
+    locals_[761] = ((locals_[808] << 8 & 0xFFFFFFFF) ^ locals_[812]) & 0xFFFFFFFF
     locals_[818] = (
         (
             (~locals_[797] ^ locals_[713] ^ locals_[642]) & locals_[648]
@@ -3908,7 +3998,7 @@ def execute(locals_: list[int]) -> None:
         ^ (~locals_[802] ^ locals_[787]) & locals_[784]
         ^ locals_[787]
     ) & 0xFFFFFFFF
-    locals_[698] = ((locals_[696] ^ locals_[666]) << 6) & 0xFFFFFFFF
+    locals_[698] = ((locals_[696] ^ locals_[666]) << 6 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[816] = (~locals_[776] ^ locals_[733]) & 0xFFFFFFFF
     locals_[749] = (locals_[630] & locals_[816]) & 0xFFFFFFFF
     locals_[630] = (
@@ -3937,7 +4027,7 @@ def execute(locals_: list[int]) -> None:
         ^ (locals_[778] & locals_[753] ^ ~locals_[802] & locals_[645]) & locals_[784]
         ^ locals_[802]
     ) & 0xFFFFFFFF
-    locals_[805] = ((locals_[808] & locals_[709] ^ locals_[810]) << 8) & 0xFFFFFFFF
+    locals_[805] = ((locals_[808] & locals_[709] ^ locals_[810]) << 8 & 0xFFFFFFFF) & 0xFFFFFFFF
     locals_[670] = (
         (locals_[720] ^ locals_[793] ^ locals_[670]) & locals_[799]
         ^ (locals_[636] ^ locals_[793] ^ locals_[670]) & locals_[760]
@@ -3994,7 +4084,7 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[645]
         ^ locals_[636]
     ) & 0xFFFFFFFF
-    locals_[812] = ((locals_[808] ^ locals_[709]) << 8 ^ ~locals_[812]) & 0xFFFFFFFF
+    locals_[812] = ((locals_[808] ^ locals_[709]) << 8 & 0xFFFFFFFF ^ ~locals_[812]) & 0xFFFFFFFF
     locals_[713] = (
         ~(
             (
@@ -4032,7 +4122,10 @@ def execute(locals_: list[int]) -> None:
         ^ ~((locals_[670] ^ locals_[90]) & locals_[650]) & locals_[331]
         ^ locals_[807]
     ) & 0xFFFFFFFF
-    locals_[704] = (~(~(~(locals_[696] << 6) & locals_[666] << 6) & locals_[646] << 6) ^ locals_[696] << 6) & 0xFFFFFFFF
+    locals_[704] = (
+        ~(~(~(locals_[696] << 6 & 0xFFFFFFFF) & (locals_[666] << 6 & 0xFFFFFFFF)) & (locals_[646] << 6 & 0xFFFFFFFF))
+        ^ (locals_[696] << 6 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[816] = ((~locals_[776] ^ locals_[777]) & locals_[403]) & 0xFFFFFFFF
     locals_[797] = (
         ((locals_[636] ^ locals_[743] ^ locals_[777]) & locals_[776] ^ locals_[743] ^ locals_[777]) & locals_[403]
@@ -4041,7 +4134,9 @@ def execute(locals_: list[int]) -> None:
         ^ locals_[743]
         ^ locals_[777]
     ) & 0xFFFFFFFF
-    locals_[761] = (~((locals_[696] & locals_[666]) << 6) & locals_[646] << 6 ^ locals_[666] << 6) & 0xFFFFFFFF
+    locals_[761] = (
+        ~((locals_[696] & locals_[666]) << 6 & 0xFFFFFFFF) & (locals_[646] << 6 & 0xFFFFFFFF) ^ (locals_[666] << 6 & 0xFFFFFFFF)
+    ) & 0xFFFFFFFF
     locals_[720] = (locals_[698] ^ ~locals_[761]) & 0xFFFFFFFF
     locals_[709] = (
         ~(
