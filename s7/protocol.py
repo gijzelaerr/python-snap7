@@ -154,6 +154,11 @@ class Ids(IntEnum):
     DB_VALUE_ACTUAL = 2550
     CONTROLLER_AREA_VALUE_ACTUAL = 2551
 
+    # SecurityKey struct IDs (from tkh-software/s7plus.net S7Ids.cs)
+    STRUCT_SECURITY_KEY = 1800
+    SECURITY_KEY_ID = 1825
+    SESSION_KEY = 1830
+
     # ObjectQualifier structure IDs
     OBJECT_QUALIFIER = 1256
     PARENT_RID = 1257
