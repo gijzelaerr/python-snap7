@@ -12,27 +12,19 @@ from __future__ import annotations
 
 import struct
 
-from .data import (
-    FP_BIG_CONTEXT_INIT,
-    FP_DATA1,
-    FP_DATA2,
+from .data import FP_DATA1, FP_DATA2
+from .data._constants import (
+    FP_BIG_CONTEXT_INIT_INTS,
     FP_MUTATIONS,
-    FP_XOR_MAGIC,
+    FP_XOR_MAGIC_INTS,
 )
 
 FINGERPRINT_LENGTH = 8
 _SMALL_CTX_LEN = 272
-_BIG_CTX_LEN_DWORDS = 47
 _NUM_MUTATIONS = 20
 _U32 = 0xFFFFFFFF
 
-
-def _load_big_context_init() -> list[int]:
-    return list(struct.unpack("<47I", FP_BIG_CONTEXT_INIT))
-
-
-def _load_xor_magic() -> list[int]:
-    return list(struct.unpack("<20I", FP_XOR_MAGIC))
+_OP = {"+": int.__add__, "*": int.__mul__, "^": int.__xor__}
 
 
 def _load_collection(data: bytes) -> list[list[int]]:
@@ -46,26 +38,8 @@ def _load_collection(data: bytes) -> list[list[int]]:
     return result
 
 
-def _load_mutations() -> list[list[tuple[int, int, int]]]:
-    result = []
-    offset = 0
-    for _ in range(_NUM_MUTATIONS):
-        n_ops = struct.unpack_from("<I", FP_MUTATIONS, offset)[0]
-        offset += 4
-        ops = []
-        for _ in range(n_ops):
-            idx, op, _pad, val = struct.unpack_from("<BBH I", FP_MUTATIONS, offset)
-            ops.append((idx, op, val))
-            offset += 8
-        result.append(ops)
-    return result
-
-
-_BIG_CTX_INIT = _load_big_context_init()
-_XOR_MAGIC = _load_xor_magic()
 _DATA1 = _load_collection(FP_DATA1)
 _DATA2 = _load_collection(FP_DATA2)
-_MUTATIONS = _load_mutations()
 
 
 def fingerprint_challenge(destination: bytearray, challenge: bytes) -> None:
@@ -75,13 +49,12 @@ def fingerprint_challenge(destination: bytearray, challenge: bytes) -> None:
         raise ValueError("challenge must be at least 18 bytes")
 
     small_ctx = bytearray(_SMALL_CTX_LEN)
-    big_ctx = list(_BIG_CTX_INIT)
+    big_ctx = list(FP_BIG_CONTEXT_INIT_INTS)
 
-    # Initialize: copy challenge[2:18] into small context
     small_ctx[:16] = challenge[2:18]
 
     for i in range(_NUM_MUTATIONS):
-        _sub_procedure(_DATA1[i], _XOR_MAGIC[i], _DATA2[i], small_ctx, big_ctx)
+        _sub_procedure(_DATA1[i], FP_XOR_MAGIC_INTS[i], _DATA2[i], small_ctx, big_ctx)
         _mutate(big_ctx, i)
 
     _final_fingerprint(destination, small_ctx)
@@ -147,13 +120,8 @@ def _sub_procedure(
 
 
 def _mutate(big_ctx: list[int], mutation_index: int) -> None:
-    for idx, op, val in _MUTATIONS[mutation_index]:
-        if op == 0:  # +=
-            big_ctx[idx] = (big_ctx[idx] + val) & _U32
-        elif op == 1:  # *=
-            big_ctx[idx] = (big_ctx[idx] * val) & _U32
-        elif op == 2:  # ^=
-            big_ctx[idx] = (big_ctx[idx] ^ val) & _U32
+    for idx, op, val in FP_MUTATIONS[mutation_index]:
+        big_ctx[idx] = _OP[op](big_ctx[idx], val) & _U32
 
 
 def _final_fingerprint(fp: bytearray, sc: bytearray) -> None:

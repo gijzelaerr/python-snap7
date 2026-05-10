@@ -13,7 +13,8 @@ import struct
 
 from . import big_int_operations, transform12
 from .big_int_transforms import big_int_addition
-from .data import TRANSFORM7_COUNTS, TRANSFORM7_DATA, TRANSFORM7_INDEXES
+from .data import TRANSFORM7_DATA
+from .data._constants import TRANSFORM7_COUNTS_INTS, TRANSFORM7_INDEXES_INTS
 from .monolith_wrappers import (
     monolith3_with_copy,
     monolith4_with_copy,
@@ -25,15 +26,6 @@ from .monolith_wrappers import (
 DESTINATION_SIZE = 72
 
 _WORK_SIZE = 600 * 4
-
-
-def _read_int_array(data: bytes) -> list[int]:
-    n = len(data) // 4
-    return list(struct.unpack(f"<{n}i", data))
-
-
-_T7_INDEXES = _read_int_array(TRANSFORM7_INDEXES)
-_T7_COUNTS = _read_int_array(TRANSFORM7_COUNTS)
 
 
 def execute(
@@ -121,14 +113,14 @@ def execute(
         prng2_index = (0x9F - i) >> 5
         bit_pos = (0xFFFFFFFF - i) & 0x1F
         t12_idx = ((prng2_dwords[prng2_index] >> bit_pos) & 1) + i * 2
-        transform12.execute(ctx, _T7_INDEXES[t12_idx], _T7_COUNTS[t12_idx])
+        transform12.execute(ctx, TRANSFORM7_INDEXES_INTS[t12_idx], TRANSFORM7_COUNTS_INTS[t12_idx])
 
     # -- Transform12 dispatch loop 2: i = 0xA0..0xF8 (prng1 bits from work buffer) --
     for i in range(0xA0, 0xF9):
         dword_index = ((i - 0xA0) >> 5) + 0xC
         w_dword = struct.unpack_from("<I", w, dword_index * 4)[0]
         t12_idx = ((w_dword >> (i & 0x1F)) & 1) + i * 2
-        transform12.execute(ctx, _T7_INDEXES[t12_idx], _T7_COUNTS[t12_idx])
+        transform12.execute(ctx, TRANSFORM7_INDEXES_INTS[t12_idx], TRANSFORM7_COUNTS_INTS[t12_idx])
 
     # -- PrepareFinalize on four context regions --
     big_int_operations.prepare_finalize(cv[0x918:])
