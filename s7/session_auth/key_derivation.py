@@ -14,6 +14,7 @@ which is part of the Family-0 transforms and arrives in a later slice.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import struct
 
 
@@ -99,3 +100,30 @@ def derive_legitimation_challenge_key(session_key: bytes) -> bytes:
 
     digest = hashlib.sha256(session_key[:24] + b"MISTRUST").digest()
     return digest[4:28]
+
+
+def derive_session_key(key: bytes, challenge: bytes) -> bytes:
+    """Derive the 24-byte session key from key2 and the PLC challenge.
+
+    Layout: ``HMAC-SHA256(key[:24], fingerprint || challenge[2:18])[:24]``
+    where ``fingerprint`` is the 8-byte HarpoFingerprint of the challenge.
+
+    Args:
+        key: 24-byte symmetric key (key2 from the authenticator).
+        challenge: At least 18-byte PLC challenge.
+
+    Returns:
+        24 bytes — the session key for packet integrity.
+    """
+    if len(key) < 24:
+        raise ValueError(f"key must be at least 24 bytes, got {len(key)}")
+    if len(challenge) < 18:
+        raise ValueError(f"challenge must be at least 18 bytes, got {len(challenge)}")
+
+    from .family0.fingerprint import fingerprint_challenge
+
+    fp = bytearray(8)
+    fingerprint_challenge(fp, challenge)
+
+    source = bytes(fp) + challenge[2:18]
+    return hmac.new(key[:24], source, hashlib.sha256).digest()[:24]
