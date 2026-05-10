@@ -884,8 +884,7 @@ class S7CommPlusConnection:
                             if len(blob_data) == 20:
                                 self._session_challenge = blob_data
                                 logger.info(
-                                    f"Session challenge captured (attr {attr_id}, {len(blob_data)} bytes): "
-                                    f"{blob_data.hex()}"
+                                    f"Session challenge captured (attr {attr_id}, {len(blob_data)} bytes): {blob_data.hex()}"
                                 )
                     else:
                         offset = self._skip_typed_value(payload, offset, datatype, _flags)
@@ -1009,19 +1008,17 @@ class S7CommPlusConnection:
 
         try:
             from .session_auth.keys import get_public_key, parse_fingerprint
+
             family, _key_id = parse_fingerprint(self._public_key_fingerprint)
 
             public_key = get_public_key(self._public_key_fingerprint)
             if public_key is None:
-                logger.info(
-                    f"SessionKey auth: no matching public key for {self._public_key_fingerprint}"
-                )
+                logger.info(f"SessionKey auth: no matching public key for {self._public_key_fingerprint}")
                 return None
 
             from .session_auth.legacy_auth import authenticate_real_plc
-            blob, session_key = authenticate_real_plc(
-                self._session_challenge, public_key, family
-            )
+
+            blob, session_key = authenticate_real_plc(self._session_challenge, public_key, family)
             self._session_auth_public_key = public_key
             self._session_auth_family = family
             logger.info(f"SessionKey auth blob generated ({len(blob)} bytes)")
@@ -1151,6 +1148,7 @@ class S7CommPlusConnection:
         # Determine key flags from family
         from .session_auth.keys import KeyFamily
         from .session_auth.blob_metadata import get_symmetric_key_flags, get_public_key_flags
+
         family = self._session_auth_family if hasattr(self, "_session_auth_family") else KeyFamily.S7_1500
         sym_flags = get_symmetric_key_flags(family)
         pub_flags = get_public_key_flags(family)
@@ -1179,19 +1177,19 @@ class S7CommPlusConnection:
         def _key_descriptor(key_id: bytes, flags: int) -> bytes:
             key_id_int = int.from_bytes(key_id, byteorder="little", signed=False)
             out = _struct_begin(Ids.SECURITY_KEY_ID)
-            out += _attr(34) + _ulint_val(key_id_int)   # KeyId
-            out += _attr(35) + _udint_val(flags)         # KeyFlags
-            out += _attr(36) + _udint_val(0)             # InternalFlags
+            out += _attr(34) + _ulint_val(key_id_int)  # KeyId
+            out += _attr(35) + _udint_val(flags)  # KeyFlags
+            out += _attr(36) + _udint_val(0)  # InternalFlags
             out += _STRUCT_END
             return out
 
         # Build the outer Struct(1800)
         result = _struct_begin(Ids.STRUCT_SECURITY_KEY)
-        result += _attr(9) + _udint_val(0)               # Version
-        result += _attr(10) + _uint_val(0)                # SecurityLevel
-        result += _attr(11) + _key_descriptor(public_key_id, pub_flags)   # PublicKey
-        result += _attr(12) + _key_descriptor(symmetric_key_id, sym_flags) # SymmetricKey
-        result += _attr(13) + _blob_val(blob)             # EncryptedKey
+        result += _attr(9) + _udint_val(0)  # Version
+        result += _attr(10) + _uint_val(0)  # SecurityLevel
+        result += _attr(11) + _key_descriptor(public_key_id, pub_flags)  # PublicKey
+        result += _attr(12) + _key_descriptor(symmetric_key_id, sym_flags)  # SymmetricKey
+        result += _attr(13) + _blob_val(blob)  # EncryptedKey
         result += _STRUCT_END
 
         return result

@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from ..blob_metadata import write_metadata
 from ..keys import KeyFamily
-from .import (
+from . import (
     checksum_transform,
     key_derivation_transform,
     lut_generator,
@@ -76,13 +76,13 @@ class RealPlcAuthenticator:
         offset = 0
 
         # Copy starting IV
-        blob[offset:offset + 16] = self._iv
+        blob[offset : offset + 16] = self._iv
         offset += 16
 
         # Encrypt 16 bytes of challenge (skip first 2)
         ct_block = self._aes_ecb_encrypt(bytes(self._iv))
         ct_block = _xor_bytes(ct_block, challenge[2:18])
-        blob[offset:offset + 16] = ct_block
+        blob[offset : offset + 16] = ct_block
         offset += 16
         self._encrypted_bytes += 16
 
@@ -92,8 +92,8 @@ class RealPlcAuthenticator:
         # Encrypt full 16-byte blocks of key2
         for i in range(len(self._key2) // 16):
             ct_block = self._aes_ecb_encrypt(bytes(self._iv))
-            ct_block = _xor_bytes(ct_block, bytes(self._key2[i * 16:(i + 1) * 16]))
-            blob[offset:offset + 16] = ct_block
+            ct_block = _xor_bytes(ct_block, bytes(self._key2[i * 16 : (i + 1) * 16]))
+            blob[offset : offset + 16] = ct_block
             offset += 16
             self._encrypted_bytes += 16
 
@@ -107,7 +107,9 @@ class RealPlcAuthenticator:
         leftover_start = len(self._key2) - leftover
 
         ct_block = bytearray(self._aes_ecb_encrypt(bytes(self._iv)))
-        ct_block = bytearray(_xor_bytes(bytes(ct_block[:leftover]), bytes(self._key2[leftover_start:leftover_start + leftover])))
+        ct_block = bytearray(
+            _xor_bytes(bytes(ct_block[:leftover]), bytes(self._key2[leftover_start : leftover_start + leftover]))
+        )
 
         blob[:leftover] = ct_block[:leftover]
         self._encrypted_bytes += leftover
@@ -131,7 +133,7 @@ class RealPlcAuthenticator:
         enc = cipher.encryptor()
         encrypted_checksum = enc.update(bytes(self._checksum)) + enc.finalize()
 
-        blob[offset:offset + 16] = encrypted_checksum
+        blob[offset : offset + 16] = encrypted_checksum
         offset += 16
 
         return offset

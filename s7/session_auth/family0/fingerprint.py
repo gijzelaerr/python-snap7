@@ -32,7 +32,7 @@ def _load_collection(data: bytes) -> list[list[int]]:
     offset = 80
     result = []
     for length in lengths:
-        values = list(struct.unpack(f"<{length}H", data[offset:offset + length * 2]))
+        values = list(struct.unpack(f"<{length}H", data[offset : offset + length * 2]))
         result.append(values)
         offset += length * 2
     return result
@@ -110,8 +110,7 @@ def _sub_procedure(
             data2_byte = 0
 
         f_val = (
-            (((data2_byte >> _pwvar_mask(pw_var1 & 0xFF)) ^ static5) & 0xF) << t5
-            | ((0xF0 >> t5) & small_ctx[ctx_buffer_index])
+            (((data2_byte >> _pwvar_mask(pw_var1 & 0xFF)) ^ static5) & 0xF) << t5 | ((0xF0 >> t5) & small_ctx[ctx_buffer_index])
         ) & 0xFF
 
         small_ctx[ctx_buffer_index] = f_val
@@ -126,17 +125,10 @@ def _mutate(big_ctx: list[int], mutation_index: int) -> None:
 
 def _final_fingerprint(fp: bytearray, sc: bytearray) -> None:
     fp[0] = ((sc[93] << 4) | (sc[224] >> 4)) & 0xFF
-    fp[1] = ((((fp[1] ^ sc[189]) & 0xF ^ sc[189]) ^ sc[53]) & 0xF
-             ^ ((fp[1] ^ sc[189]) & 0xF ^ sc[189])) & 0xFF
-    fp[2] = (((fp[2] & 0xF | sc[119] << 4) ^ sc[86]) & 0xF
-             ^ (fp[2] & 0xF | sc[119] << 4)) & 0xFF
-    fp[3] = (((fp[3] ^ sc[83]) & 0xF ^ sc[83]) & 0xF0
-             | (sc[33] >> 4)) & 0xFF
-    fp[4] = ((((fp[4] ^ sc[229]) & 0xF ^ sc[229]) ^ sc[58]) & 0xF
-             ^ ((fp[4] ^ sc[229]) & 0xF ^ sc[229])) & 0xFF
-    fp[5] = ((((fp[5] ^ sc[69]) & 0xF ^ sc[69]) ^ sc[165]) & 0xF
-             ^ ((fp[5] ^ sc[69]) & 0xF ^ sc[69])) & 0xFF
-    fp[6] = (((fp[6] ^ sc[63]) & 0xF ^ sc[63]) & 0xF0
-             | (sc[89] >> 4)) & 0xFF
-    fp[7] = ((((fp[7] ^ sc[172]) & 0xF ^ sc[172]) ^ sc[247]) & 0xF
-             ^ ((fp[7] ^ sc[172]) & 0xF ^ sc[172])) & 0xFF
+    fp[1] = ((((fp[1] ^ sc[189]) & 0xF ^ sc[189]) ^ sc[53]) & 0xF ^ ((fp[1] ^ sc[189]) & 0xF ^ sc[189])) & 0xFF
+    fp[2] = (((fp[2] & 0xF | sc[119] << 4) ^ sc[86]) & 0xF ^ (fp[2] & 0xF | sc[119] << 4)) & 0xFF
+    fp[3] = (((fp[3] ^ sc[83]) & 0xF ^ sc[83]) & 0xF0 | (sc[33] >> 4)) & 0xFF
+    fp[4] = ((((fp[4] ^ sc[229]) & 0xF ^ sc[229]) ^ sc[58]) & 0xF ^ ((fp[4] ^ sc[229]) & 0xF ^ sc[229])) & 0xFF
+    fp[5] = ((((fp[5] ^ sc[69]) & 0xF ^ sc[69]) ^ sc[165]) & 0xF ^ ((fp[5] ^ sc[69]) & 0xF ^ sc[69])) & 0xFF
+    fp[6] = (((fp[6] ^ sc[63]) & 0xF ^ sc[63]) & 0xF0 | (sc[89] >> 4)) & 0xFF
+    fp[7] = ((((fp[7] ^ sc[172]) & 0xF ^ sc[172]) ^ sc[247]) & 0xF ^ ((fp[7] ^ sc[172]) & 0xF ^ sc[172])) & 0xFF

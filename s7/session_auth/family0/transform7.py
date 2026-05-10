@@ -71,7 +71,7 @@ def execute(
 
     monolith5_with_copy(cv[0x450:], wv[0x18:], wv[0x4E0:], wv[0x180:], wv[0x138:])
 
-    big_int_addition(cv[0x450:], bytes(ctx[0x450:0x450 + 24]), bytes(w[0x18:0x18 + 24]))
+    big_int_addition(cv[0x450:], bytes(ctx[0x450 : 0x450 + 24]), bytes(w[0x18 : 0x18 + 24]))
 
     monolith3_with_copy(wv[0x498:], wv[0x768:], wv[0x180:], wv[0x138:], wv[0x30:])
 
@@ -90,7 +90,7 @@ def execute(
     monolith4_with_copy(wv[0x600:], wv[0x3C0:], wv[0x450:])
     monolith5_with_copy(cv[0x690:], wv[0x18:], wv[0x600:], wv[0x3C0:], wv[0x450:])
 
-    big_int_addition(cv[0x690:], bytes(ctx[0x690:0x690 + 24]), bytes(w[0x18:0x18 + 24]))
+    big_int_addition(cv[0x690:], bytes(ctx[0x690 : 0x690 + 24]), bytes(w[0x18 : 0x18 + 24]))
 
     monolith4_with_copy(wv[0x378:], wv[0x330:], wv[0x690:])
     monolith6_with_copy(wv[0x2E8:], wv[0x258:], wv[0x378:], wv[0x3C0:], wv[0x450:])
@@ -98,7 +98,7 @@ def execute(
     monolith4_with_copy(wv[0x408:], wv[0x2E8:], wv[0x258:])
     monolith5_with_copy(cv[0x480:], wv[0x18:], wv[0x408:], wv[0x2E8:], wv[0x258:])
 
-    big_int_addition(cv[0x480:], bytes(ctx[0x480:0x480 + 24]), bytes(w[0x18:0x18 + 24]))
+    big_int_addition(cv[0x480:], bytes(ctx[0x480 : 0x480 + 24]), bytes(w[0x18 : 0x18 + 24]))
 
     # RotateRight30 on first 6 uints of work buffer
     big_int_operations.rotate_right_30(w)
@@ -106,7 +106,7 @@ def execute(
     monolith3_with_copy(wv[0xA8:], wv[0x60:], data, data, wv)
     monolith5_with_copy(cv[0x8D0:], wv[0x18:], data, wv[0xA8:], wv[0x60:])
 
-    big_int_addition(cv[0x8D0:], bytes(ctx[0x8D0:0x8D0 + 24]), bytes(w[0x18:0x18 + 24]))
+    big_int_addition(cv[0x8D0:], bytes(ctx[0x8D0 : 0x8D0 + 24]), bytes(w[0x18 : 0x18 + 24]))
 
     # -- Transform12 dispatch loop 1: i = 0..0x9F (prng2 bits) --
     for i in range(0xA0):

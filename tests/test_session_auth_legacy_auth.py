@@ -16,11 +16,30 @@ from s7.session_auth.keys import KeyFamily
 
 
 def test_fingerprint_challenge_vector() -> None:
-    challenge = bytes([
-        184, 13, 177, 179, 217, 72, 76, 110,
-        66, 64, 64, 63, 99, 198, 181, 1,
-        44, 197, 46, 127,
-    ])
+    challenge = bytes(
+        [
+            184,
+            13,
+            177,
+            179,
+            217,
+            72,
+            76,
+            110,
+            66,
+            64,
+            64,
+            63,
+            99,
+            198,
+            181,
+            1,
+            44,
+            197,
+            46,
+            127,
+        ]
+    )
     expected = bytes([0xE2, 0x87, 0xC1, 0xCB, 0x65, 0x9B, 0x9E, 0xDF])
     fp = bytearray(8)
     fingerprint_challenge(fp, challenge)
@@ -57,12 +76,9 @@ def _make_deterministic_urandom(fill_sequence: list[int]):
             "4bbc 3dde 0d15 d69d b765 46f4 491c a34f"
             "ef12 f959 ec90 0f00 5f36 dd38 9040 761e"
             "f2b8 56d6",
-            "65c4 f179 980a 43cb 60e1 194b a500 f5b9"
-            "d04f 374b 5637 4866",
+            "65c4 f179 980a 43cb 60e1 194b a500 f5b9d04f 374b 5637 4866",
             "dddd dddd dddd dddd dddd dddd dddd dddd dddd dddd",
-            "8456 a269 9612 2216 c921 c571 ff11 e0be"
-            "fafd b1d7 0b5d 4bc8 390f 5b0c c273 ec14"
-            "2a03 f2a0 4e6f 1593",
+            "8456 a269 9612 2216 c921 c571 ff11 e0befafd b1d7 0b5d 4bc8 390f 5b0c c273 ec142a03 f2a0 4e6f 1593",
             [0x35, 0x35, 0x25, 0x2D, 0x2D],
             KeyFamily.S7_1500,
             id="s7_1500",
@@ -81,13 +97,9 @@ def _make_deterministic_urandom(fill_sequence: list[int]):
             "4bbc 3dde 0d15 d69d b765 46f4 491c a34f"
             "ef12 f959 791f 2d0e 30de 7be5 af11 234c"
             "6007 e47e",
-            "f18c e220 f7ba 1754 42cf 1c4d ddb5 9e82"
-            "eafa 62d5 dd09 6e1a",
-            "5a5d 5ab4 4355 1d9f 2e68 0adf c44b 1634"
-            "68e4 2736",
-            "e0e1 f04a 5ca3 f901 4817 8689 bd0c 930a"
-            "b9db 867b 4f0a b109 6239 59aa 3231 6b78"
-            "80ed 1b4f 9a9b 189f",
+            "f18c e220 f7ba 1754 42cf 1c4d ddb5 9e82eafa 62d5 dd09 6e1a",
+            "5a5d 5ab4 4355 1d9f 2e68 0adf c44b 163468e4 2736",
+            "e0e1 f04a 5ca3 f901 4817 8689 bd0c 930ab9db 867b 4f0a b109 6239 59aa 3231 6b7880ed 1b4f 9a9b 189f",
             [0x35, 0x35, 0x25, 0x2D, 0x2D],
             KeyFamily.S7_1200,
             id="s7_1200",

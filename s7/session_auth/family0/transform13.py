@@ -21,9 +21,9 @@ _STATIC_MASK = bytes.fromhex("FFFFFFFFFFFFFFFFFFFFFFFF00000000")[:12]
 
 def execute(destination: bytearray, source: bytes) -> None:
     if len(destination) < DESTINATION_SIZE:
-        raise ValueError(f"destination too small")
+        raise ValueError("destination too small")
     if len(source) < SOURCE_SIZE:
-        raise ValueError(f"source too small")
+        raise ValueError("source too small")
 
     shared = struct.unpack("<36I", SHARED_DATA)
 
