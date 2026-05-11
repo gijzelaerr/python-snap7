@@ -867,27 +867,30 @@ class S7CommPlusConnection:
                         offset += 2
                         offset = self._skip_typed_value(payload, offset, datatype, _flags)
 
+                elif attr_id == 303 and self._session_challenge is None:
+                    # ServerSessionChallenge: 20-byte USINT array
+                    if offset + 2 > len(payload):
+                        break
+                    _flags = payload[offset]
+                    datatype = payload[offset + 1]
+                    offset += 2
+                    is_array = bool(_flags & 0x10)
+                    if is_array and datatype == DataType.USINT:
+                        count, consumed = decode_uint32_vlq(payload, offset)
+                        offset += consumed
+                        self._session_challenge = bytes(payload[offset : offset + count])
+                        offset += count
+                        logger.info(f"Session challenge captured ({count} bytes): {self._session_challenge.hex()}")
+                    else:
+                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
+
                 else:
                     if offset + 2 > len(payload):
                         break
                     _flags = payload[offset]
                     datatype = payload[offset + 1]
                     offset += 2
-                    # Capture 20-byte BLOB/array as the session challenge
-                    if datatype == DataType.BLOB and self._session_challenge is None:
-                        value_start = offset
-                        offset = self._skip_typed_value(payload, value_start, datatype, _flags)
-                        blob_length = offset - value_start
-                        if blob_length > 0:
-                            length, consumed = decode_uint32_vlq(payload, value_start)
-                            blob_data = bytes(payload[value_start + consumed : value_start + consumed + length])
-                            if len(blob_data) == 20:
-                                self._session_challenge = blob_data
-                                logger.info(
-                                    f"Session challenge captured (attr {attr_id}, {len(blob_data)} bytes): {blob_data.hex()}"
-                                )
-                    else:
-                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
+                    offset = self._skip_typed_value(payload, offset, datatype, _flags)
 
             elif tag == ElementID.START_OF_OBJECT:
                 offset += 1
