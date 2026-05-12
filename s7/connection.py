@@ -509,6 +509,12 @@ class S7CommPlusConnection:
         response = response_frame[consumed : consumed + data_length]
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
+        # V254 (0xFE) frames have no standard 14-byte response header —
+        # the entire frame is raw PObject data.
+        if version == ProtocolVersion.SYSTEM_EVENT:
+            logger.debug("  V254 frame: returning raw data as payload")
+            return bytes(response)
+
         if len(response) < 14:
             from snap7.error import S7ConnectionError
 
