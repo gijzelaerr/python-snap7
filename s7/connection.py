@@ -1156,14 +1156,17 @@ class S7CommPlusConnection:
         sym_flags = get_symmetric_key_flags(family)
         pub_flags = get_public_key_flags(family)
 
-        def _attr(attr_id: int) -> bytes:
-            return bytes([0xA3]) + encode_uint32_vlq(attr_id)
+        # Inside a Struct, attributes are VLQ(absolute_id) + flags + type + value.
+        # No 0xA3 tag prefix — that's only for PObject tree attributes.
+        # Struct(1800): 1801=Version 1802=SecurityLevel 1803=PublicKey
+        #               1804=SymmetricKey 1805=EncryptedKey
+        # Struct(1825): 1826=KeyId 1827=KeyFlags 1828=InternalFlags
 
         def _udint_val(v: int) -> bytes:
             return bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(v)
 
-        def _uint_val(v: int) -> bytes:
-            return bytes([0x00, DataType.UINT]) + struct.pack(">H", v)
+        def _usint_val(v: int) -> bytes:
+            return bytes([0x00, DataType.USINT]) + bytes([v & 0xFF])
 
         def _ulint_val(v: int) -> bytes:
             return bytes([0x00, DataType.ULINT]) + encode_uint64_vlq(v)
@@ -1176,23 +1179,21 @@ class S7CommPlusConnection:
 
         _STRUCT_END = bytes([0x00])
 
-        # Build key descriptor sub-struct (Struct 1825 = SecurityKeyId)
         def _key_descriptor(key_id: bytes, flags: int) -> bytes:
             key_id_int = int.from_bytes(key_id, byteorder="little", signed=False)
             out = _struct_begin(Ids.SECURITY_KEY_ID)
-            out += _attr(34) + _ulint_val(key_id_int)  # KeyId
-            out += _attr(35) + _udint_val(flags)  # KeyFlags
-            out += _attr(36) + _udint_val(0)  # InternalFlags
+            out += encode_uint32_vlq(1826) + _ulint_val(key_id_int)  # KeyId
+            out += encode_uint32_vlq(1827) + _udint_val(flags)  # KeyFlags
+            out += encode_uint32_vlq(1828) + _udint_val(0)  # InternalFlags
             out += _STRUCT_END
             return out
 
-        # Build the outer Struct(1800)
         result = _struct_begin(Ids.STRUCT_SECURITY_KEY)
-        result += _attr(9) + _udint_val(0)  # Version
-        result += _attr(10) + _uint_val(0)  # SecurityLevel
-        result += _attr(11) + _key_descriptor(public_key_id, pub_flags)  # PublicKey
-        result += _attr(12) + _key_descriptor(symmetric_key_id, sym_flags)  # SymmetricKey
-        result += _attr(13) + _blob_val(blob)  # EncryptedKey
+        result += encode_uint32_vlq(1801) + _udint_val(0)  # Version
+        result += encode_uint32_vlq(1802) + _usint_val(0)  # SecurityLevel
+        result += encode_uint32_vlq(1803) + _key_descriptor(public_key_id, pub_flags)  # PublicKey
+        result += encode_uint32_vlq(1804) + _key_descriptor(symmetric_key_id, sym_flags)  # SymmetricKey
+        result += encode_uint32_vlq(1805) + _blob_val(blob)  # EncryptedKey
         result += _STRUCT_END
 
         return result
