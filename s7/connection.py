@@ -1172,7 +1172,7 @@ class S7CommPlusConnection:
             return bytes([0x00, DataType.ULINT]) + encode_uint64_vlq(v)
 
         def _blob_val(data: bytes) -> bytes:
-            return bytes([0x00, DataType.BLOB]) + encode_uint32_vlq(len(data)) + data
+            return bytes([0x00, DataType.BLOB, 0x00]) + encode_uint32_vlq(len(data)) + data
 
         def _struct_begin(struct_id: int) -> bytes:
             return bytes([0x00, DataType.STRUCT]) + struct.pack(">I", struct_id)
@@ -1192,7 +1192,7 @@ class S7CommPlusConnection:
         result += encode_uint32_vlq(1801) + _udint_val(0)  # Version
         result += encode_uint32_vlq(1802) + _usint_val(0)  # SecurityLevel
         result += encode_uint32_vlq(1803) + _key_descriptor(public_key_id, pub_flags)  # PublicKey
-        result += encode_uint32_vlq(1804) + _key_descriptor(symmetric_key_id, sym_flags)  # SymmetricKey
+        result += encode_uint32_vlq(1804) + _key_descriptor(symmetric_key_id, sym_flags | 0x10000)  # SymmetricKey
         result += encode_uint32_vlq(1805) + _blob_val(blob)  # EncryptedKey
         result += _STRUCT_END
 
