@@ -521,12 +521,24 @@ class S7CommPlusConnection:
             logger.debug(f"  IntegrityId ({len(integrity_id_bytes)} bytes): {integrity_id_bytes.hex(' ')}")
         logger.debug(f"  Request payload ({len(payload)} bytes): {payload.hex(' ')}")
 
-        # Determine frame version: V2 data PDUs use V2, but CreateObject uses V1
-        frame_version = self._protocol_version
+        # After SessionKey auth, all data ops use V3 framing with HMAC
+        if self._session_key is not None:
+            frame_version = ProtocolVersion.V3
+        else:
+            frame_version = self._protocol_version
 
-        # Add S7CommPlus frame header and trailer, then send
-        frame = encode_header(frame_version, len(request)) + request
-        frame += struct.pack(">BBH", 0x72, frame_version, 0x0000)
+        if frame_version == ProtocolVersion.V3 and self._session_key is not None:
+            # V3: prepend 32-byte HMAC-SHA256 digest over the request
+            import hmac as _hmac
+            import hashlib
+
+            digest = _hmac.new(self._session_key[:24], request, hashlib.sha256).digest()
+            frame_data = bytes([0x20]) + digest + request
+            frame = encode_header(ProtocolVersion.V3, len(frame_data)) + frame_data
+            frame += struct.pack(">BBH", 0x72, ProtocolVersion.V3, 0x0000)
+        else:
+            frame = encode_header(frame_version, len(request)) + request
+            frame += struct.pack(">BBH", 0x72, frame_version, 0x0000)
 
         logger.debug(f"  Full frame ({len(frame)} bytes): {frame.hex(' ')}")
         self._iso_conn.send_data(frame)
@@ -547,6 +559,19 @@ class S7CommPlusConnection:
         logger.debug(f"  Frame header: version=V{version}, data_length={data_length}, header_size={consumed}")
 
         response = response_frame[consumed : consumed + data_length]
+
+        # V3 responses have a hash-length byte + HMAC prefix before the payload
+        if version == ProtocolVersion.V3 and len(response) > 33:
+            hash_len = response[0]
+            response_hmac = response[1 : 1 + hash_len]
+            response = response[1 + hash_len :]
+            logger.debug(f"  V3 HMAC ({hash_len} bytes): {response_hmac.hex()}")
+
+        # V254 frames have no standard header — return raw data
+        if version == ProtocolVersion.SYSTEM_EVENT:
+            logger.debug(f"  V254 frame: returning raw data ({len(response)} bytes)")
+            return bytes(response)
+
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
         if len(response) < 14:
