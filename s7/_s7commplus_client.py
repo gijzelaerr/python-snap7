@@ -368,7 +368,12 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
+        if self._connection._session_key is not None:
+            payload = _build_explore_payload_v3(Ids.NATIVE_THE_PLC_PROGRAM_RID)
+        else:
+            payload = _build_explore_request(
+                Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER]
+            )
         response = self._connection.send_request(FunctionCode.EXPLORE, payload)
         return _parse_explore_datablocks(response)
 
@@ -397,7 +402,10 @@ class S7CommPlusClient:
             db_rid = db_info.get("rid", 0)
             if db_rid == 0:
                 continue
-            payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+            if self._connection._session_key is not None:
+                payload = _build_explore_payload_v3(db_rid)
+            else:
+                payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
             try:
                 response = self._connection.send_request(FunctionCode.EXPLORE, payload)
                 fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
