@@ -369,7 +369,9 @@ class S7CommPlusClient:
             raise RuntimeError("Not connected")
 
         if self._connection._session_key is not None:
-            payload = _build_explore_payload_v3(Ids.NATIVE_THE_PLC_PROGRAM_RID)
+            # V1-initial PLCs: explore the DB wildcard address (0x8A11FFFF)
+            # matching TIA Portal's browse pattern
+            payload = _build_explore_payload_v3(0x8A11FFFF)
         else:
             payload = _build_explore_request(
                 Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER]
