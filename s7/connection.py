@@ -264,7 +264,10 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            # V1: No further authentication needed after CreateObject
+            # Step 7: Post-auth legitimation for V1-initial PLCs with SessionKey
+            if self._session_key is not None and self._session_setup_ok:
+                self._post_auth_legitimation()
+
             self._connected = True
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
@@ -1157,6 +1160,72 @@ class S7CommPlusConnection:
                 logger.info("Session setup completed successfully")
                 return True
         return False
+
+    def _post_auth_legitimation(self) -> None:
+        """Perform the post-SessionKey legitimation handshake.
+
+        V1-initial PLCs require this exchange after the SessionKey blob
+        is accepted before they'll allow data operations. Matches TIA
+        Portal's frames 18-30 in the ProgramBlocks pcap.
+
+        Steps:
+        1. SET_VARIABLE: write USINT(5) to address 323 on the session
+        2. GET_VAR_SUBSTREAMED: read legitimation blob from object 50, address 7920
+        3. GET_VAR_SUBSTREAMED: read from session object, address 1842
+        4. GET_VAR_SUBSTREAMED: read legitimation blob again from object 50
+        """
+        oq = encode_object_qualifier()
+
+        # Step 1: SET_VARIABLE to session, address 323, value USINT=5
+        sv_payload = struct.pack(">I", self._session_id)
+        sv_payload += encode_uint32_vlq(1)  # ItemCount
+        sv_payload += encode_uint32_vlq(323)  # Address
+        sv_payload += bytes([0x00, 0x02, 0x05])  # flags=0, USINT, value=5
+        sv_payload += oq
+        sv_payload += bytes([0x00])  # separator
+        sv_payload += encode_uint32_vlq(self._sequence_number)
+        sv_payload += struct.pack(">I", 0)
+
+        logger.debug("Post-auth legitimation: SET_VARIABLE to address 323")
+        self.send_request(FunctionCode.SET_VARIABLE, sv_payload)
+
+        # Step 2: GET_VAR_SUBSTREAMED from object 50, address 7920
+        gvs1 = struct.pack(">I", 50)  # object 50
+        gvs1 += bytes([0x20, 0x04])
+        gvs1 += encode_uint32_vlq(1)
+        gvs1 += encode_uint32_vlq(7920)  # address
+        gvs1 += oq + bytes([0x00])
+        gvs1 += encode_uint32_vlq(1) + encode_uint32_vlq(1)
+        gvs1 += struct.pack(">I", 0)
+
+        logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from object 50, address 7920")
+        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs1)
+
+        # Step 3: GET_VAR_SUBSTREAMED from session, address 1842
+        gvs2 = struct.pack(">I", self._session_id)
+        gvs2 += bytes([0x20, 0x04])
+        gvs2 += encode_uint32_vlq(1)
+        gvs2 += encode_uint32_vlq(1842)  # address
+        gvs2 += oq + bytes([0x00])
+        gvs2 += encode_uint32_vlq(1) + encode_uint32_vlq(2)
+        gvs2 += struct.pack(">I", 0)
+
+        logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from session, address 1842")
+        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs2)
+
+        # Step 4: GET_VAR_SUBSTREAMED from object 50 again
+        gvs3 = struct.pack(">I", 50)
+        gvs3 += bytes([0x20, 0x04])
+        gvs3 += encode_uint32_vlq(1)
+        gvs3 += encode_uint32_vlq(7920)
+        gvs3 += oq + bytes([0x00])
+        gvs3 += encode_uint32_vlq(1) + encode_uint32_vlq(3)
+        gvs3 += struct.pack(">I", 0)
+
+        logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from object 50, address 7920 (2nd)")
+        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs3)
+
+        logger.info("Post-auth legitimation completed")
 
     def _encode_security_key_struct(self, blob: bytes) -> bytes:
         """Encode the SecurityKey PObject struct (Struct 1800) wrapping the auth blob.
