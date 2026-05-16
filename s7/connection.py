@@ -265,10 +265,10 @@ class S7CommPlusConnection:
                 logger.info("V2 IntegrityId tracking enabled")
 
             # Step 7: Post-auth legitimation for V1-initial PLCs with SessionKey
+            self._connected = True
+
             if self._session_key is not None and self._session_setup_ok:
                 self._post_auth_legitimation()
-
-            self._connected = True
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
