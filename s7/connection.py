@@ -1199,31 +1199,44 @@ class S7CommPlusConnection:
         gvs1 += struct.pack(">I", 0)
 
         logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from object 50, address 7920")
-        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs1)
+        legit_resp = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs1)
 
-        # Step 3: GET_VAR_SUBSTREAMED from session, address 1842
-        gvs2 = struct.pack(">I", self._session_id)
-        gvs2 += bytes([0x20, 0x04])
-        gvs2 += encode_uint32_vlq(1)
-        gvs2 += encode_uint32_vlq(1842)  # address
-        gvs2 += oq + bytes([0x00])
-        gvs2 += encode_uint32_vlq(1) + encode_uint32_vlq(2)
-        gvs2 += struct.pack(">I", 0)
+        # Extract the 20-byte challenge from the legitimation response.
+        # The response starts with VLQ return code, then a BLOB with
+        # DEADBEEF-prefixed data. The challenge is the 20 bytes at offset 2
+        # of the first DEADBEEF fragment's encrypted seed output.
+        legit_challenge = self._session_challenge  # reuse the session challenge
+        if len(legit_resp) >= 20:
+            # The challenge for legitimation comes from the response blob.
+            # For no-password PLCs, we use the original session challenge.
+            logger.debug(f"Legitimation response: {len(legit_resp)} bytes")
 
-        logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from session, address 1842")
-        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs2)
+        # Step 3: Solve the challenge and write the response blob
+        from .session_auth.legitimate import solve_legitimate_challenge_real_plc
 
-        # Step 4: GET_VAR_SUBSTREAMED from object 50 again
-        gvs3 = struct.pack(">I", 50)
-        gvs3 += bytes([0x20, 0x04])
-        gvs3 += encode_uint32_vlq(1)
-        gvs3 += encode_uint32_vlq(7920)
-        gvs3 += oq + bytes([0x00])
-        gvs3 += encode_uint32_vlq(1) + encode_uint32_vlq(3)
-        gvs3 += struct.pack(">I", 0)
+        legit_blob = solve_legitimate_challenge_real_plc(
+            legit_challenge,
+            self._session_auth_public_key,
+            self._session_auth_family,
+            self._session_key,
+            "",  # empty password for no-password PLCs
+        )
+        logger.info(f"Legitimation blob generated ({len(legit_blob)} bytes)")
 
-        logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from object 50, address 7920 (2nd)")
-        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs3)
+        # Write the solved blob via SET_VAR_SUBSTREAMED to session, address 1846
+        svs_payload = struct.pack(">I", self._session_id)
+        svs_payload += encode_uint32_vlq(1)  # ItemCount
+        svs_payload += encode_uint32_vlq(1)  # AddressCount
+        svs_payload += encode_uint32_vlq(LegitimationId.LEGITIMATE)  # 1846
+        svs_payload += encode_uint32_vlq(1)  # ItemNumber
+        svs_payload += bytes([0x00, DataType.BLOB])
+        svs_payload += encode_uint32_vlq(len(legit_blob))
+        svs_payload += legit_blob
+        svs_payload += oq
+        svs_payload += struct.pack(">I", 0)
+
+        logger.debug("Post-auth legitimation: SET_VAR_SUBSTREAMED with solved blob")
+        self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs_payload)
 
         logger.info("Post-auth legitimation completed")
 
