@@ -1165,53 +1165,40 @@ class S7CommPlusConnection:
         """Perform the post-SessionKey legitimation handshake.
 
         V1-initial PLCs require this exchange after the SessionKey blob
-        is accepted before they'll allow data operations. Matches TIA
-        Portal's frames 18-30 in the ProgramBlocks pcap.
+        is accepted before they'll allow data operations.
 
-        Steps:
-        1. SET_VARIABLE: write USINT(5) to address 323 on the session
-        2. GET_VAR_SUBSTREAMED: read legitimation blob from object 50, address 7920
-        3. GET_VAR_SUBSTREAMED: read from session object, address 1842
-        4. GET_VAR_SUBSTREAMED: read legitimation blob again from object 50
+        Matches the HarpoS7 PoC flow:
+        1. GET_VAR_SUBSTREAMED: read 20-byte challenge from address 303
+        2. Solve the challenge cryptographically
+        3. SET_VAR_SUBSTREAMED: write solved 248-byte blob to address 1846
         """
         oq = encode_object_qualifier()
 
-        # Step 1: SET_VARIABLE to session, address 323, value USINT=5
-        sv_payload = struct.pack(">I", self._session_id)
-        sv_payload += encode_uint32_vlq(1)  # ItemCount
-        sv_payload += encode_uint32_vlq(323)  # Address
-        sv_payload += bytes([0x00, 0x02, 0x05])  # flags=0, USINT, value=5
-        sv_payload += oq
-        sv_payload += bytes([0x00])  # separator
-        sv_payload += encode_uint32_vlq(self._sequence_number)
-        sv_payload += struct.pack(">I", 0)
+        # Step 1: Read legitimation challenge from session, address 303
+        gvs = struct.pack(">I", self._session_id)
+        gvs += bytes([0x20, 0x04])
+        gvs += encode_uint32_vlq(1)
+        gvs += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)  # 303
+        gvs += oq + bytes([0x00])
+        gvs += encode_uint32_vlq(1) + encode_uint32_vlq(1)
+        gvs += struct.pack(">I", 0)
 
-        logger.debug("Post-auth legitimation: SET_VARIABLE to address 323")
-        self.send_request(FunctionCode.SET_VARIABLE, sv_payload)
+        logger.debug("Post-auth legitimation: reading challenge from address 303")
+        challenge_resp = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs)
 
-        # Step 2: GET_VAR_SUBSTREAMED from object 50, address 7920
-        gvs1 = struct.pack(">I", 50)  # object 50
-        gvs1 += bytes([0x20, 0x04])
-        gvs1 += encode_uint32_vlq(1)
-        gvs1 += encode_uint32_vlq(7920)  # address
-        gvs1 += oq + bytes([0x00])
-        gvs1 += encode_uint32_vlq(1) + encode_uint32_vlq(1)
-        gvs1 += struct.pack(">I", 0)
+        # Extract the 20-byte challenge from the response.
+        # Response format: VLQ return code + BLOB data. The challenge
+        # is the first 20 bytes after the return code and BLOB header.
+        legit_challenge = self._session_challenge
+        if len(challenge_resp) >= 22:
+            offset = 0
+            retval, c = decode_uint32_vlq(challenge_resp, offset)
+            offset += c
+            if offset + 20 <= len(challenge_resp):
+                legit_challenge = bytes(challenge_resp[offset : offset + 20])
+                logger.info(f"Legitimation challenge: {legit_challenge.hex()}")
 
-        logger.debug("Post-auth legitimation: GET_VAR_SUBSTREAMED from object 50, address 7920")
-        legit_resp = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs1)
-
-        # Extract the 20-byte challenge from the legitimation response.
-        # The response starts with VLQ return code, then a BLOB with
-        # DEADBEEF-prefixed data. The challenge is the 20 bytes at offset 2
-        # of the first DEADBEEF fragment's encrypted seed output.
-        legit_challenge = self._session_challenge  # reuse the session challenge
-        if len(legit_resp) >= 20:
-            # The challenge for legitimation comes from the response blob.
-            # For no-password PLCs, we use the original session challenge.
-            logger.debug(f"Legitimation response: {len(legit_resp)} bytes")
-
-        # Step 3: Solve the challenge and write the response blob
+        # Step 2: Solve the challenge
         from .session_auth.legitimate import solve_legitimate_challenge_real_plc
 
         legit_blob = solve_legitimate_challenge_real_plc(
@@ -1223,20 +1210,21 @@ class S7CommPlusConnection:
         )
         logger.info(f"Legitimation blob generated ({len(legit_blob)} bytes)")
 
-        # Write the solved blob via SET_VAR_SUBSTREAMED to session, address 1846
-        svs_payload = struct.pack(">I", self._session_id)
-        svs_payload += encode_uint32_vlq(1)  # ItemCount
-        svs_payload += encode_uint32_vlq(1)  # AddressCount
-        svs_payload += encode_uint32_vlq(LegitimationId.LEGITIMATE)  # 1846
-        svs_payload += encode_uint32_vlq(1)  # ItemNumber
-        svs_payload += bytes([0x00, DataType.BLOB])
-        svs_payload += encode_uint32_vlq(len(legit_blob))
-        svs_payload += legit_blob
-        svs_payload += oq
-        svs_payload += struct.pack(">I", 0)
+        # Step 3: Write solved blob via SET_VAR_SUBSTREAMED to address 1846
+        # Format matches HarpoS7 PoC SetVarSubStreamedRequest template
+        svs = struct.pack(">I", self._session_id)
+        svs += bytes([0x20, 0x04])
+        svs += encode_uint32_vlq(1)
+        svs += encode_uint32_vlq(LegitimationId.LEGITIMATE)  # 1846
+        svs += oq + bytes([0x00])
+        svs += encode_uint32_vlq(1)
+        svs += bytes([0x00, DataType.BLOB, 0x00])  # extra 0x00 before VLQ length
+        svs += encode_uint32_vlq(len(legit_blob))
+        svs += legit_blob
+        svs += struct.pack(">I", 0) + bytes([0x00])
 
-        logger.debug("Post-auth legitimation: SET_VAR_SUBSTREAMED with solved blob")
-        self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs_payload)
+        logger.debug("Post-auth legitimation: writing solved blob to address 1846")
+        self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
 
         logger.info("Post-auth legitimation completed")
 
