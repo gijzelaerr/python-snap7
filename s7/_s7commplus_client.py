@@ -96,6 +96,7 @@ class S7CommPlusClient:
             tls_cert=tls_cert,
             tls_key=tls_key,
             tls_ca=tls_ca,
+            password=password or "",
         )
 
         if password is not None and self._connection.tls_active:

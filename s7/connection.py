@@ -161,6 +161,9 @@ class S7CommPlusConnection:
         # TLS OMS exporter secret (for legitimation key derivation)
         self._oms_secret: Optional[bytes] = None
 
+        # Password for post-auth legitimation (V1-initial PLCs)
+        self._connect_password: str = ""
+
     @property
     def connected(self) -> bool:
         return self._connected
@@ -207,6 +210,7 @@ class S7CommPlusConnection:
         tls_cert: Optional[str] = None,
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
+        password: str = "",
     ) -> None:
         """Establish S7CommPlus connection.
 
@@ -225,6 +229,7 @@ class S7CommPlusConnection:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
+        self._connect_password = password
         try:
             # Step 1: COTP connection (same TSAP for all S7CommPlus versions)
             self._iso_conn.connect(timeout)
@@ -268,7 +273,7 @@ class S7CommPlusConnection:
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
-                self._post_auth_legitimation()
+                self._post_auth_legitimation(password=self._connect_password)
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -1161,7 +1166,7 @@ class S7CommPlusConnection:
                 return True
         return False
 
-    def _post_auth_legitimation(self) -> None:
+    def _post_auth_legitimation(self, password: str = "") -> None:
         """Perform the post-SessionKey legitimation handshake.
 
         V1-initial PLCs require this exchange after the SessionKey blob
@@ -1206,7 +1211,7 @@ class S7CommPlusConnection:
             self._session_auth_public_key,
             self._session_auth_family,
             self._session_key,
-            "",  # empty password for no-password PLCs
+            password,
         )
         logger.info(f"Legitimation blob generated ({len(legit_blob)} bytes)")
 
