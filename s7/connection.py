@@ -1226,7 +1226,8 @@ class S7CommPlusConnection:
         svs += bytes([0x00, DataType.BLOB, 0x00])  # extra 0x00 before VLQ length
         svs += encode_uint32_vlq(len(legit_blob))
         svs += legit_blob
-        svs += struct.pack(">I", 0) + bytes([0x00])
+        svs += encode_uint32_vlq(self._sequence_number)
+        svs += struct.pack(">I", 0)
 
         logger.debug("Post-auth legitimation: writing solved blob to address 1846")
         self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
