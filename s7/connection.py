@@ -1232,6 +1232,21 @@ class S7CommPlusConnection:
         logger.debug("Post-auth legitimation: writing solved blob to address 1846")
         self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
 
+        # Step 4: Read from object 50, address 7920 to finalize legitimation.
+        # TIA Portal does this after the SET_VAR_SUB (which returns an expected
+        # "error" code). This read activates the legitimation on the PLC.
+        gvs_final = struct.pack(">I", 50)
+        gvs_final += bytes([0x20, 0x04])
+        gvs_final += encode_uint32_vlq(1)
+        gvs_final += encode_uint32_vlq(7920)
+        gvs_final += oq + bytes([0x00])
+        gvs_final += encode_uint32_vlq(1)
+        gvs_final += encode_uint32_vlq(self._sequence_number)
+        gvs_final += struct.pack(">I", 0)
+
+        logger.debug("Post-auth legitimation: finalizing (GET_VAR_SUB object 50, addr 7920)")
+        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs_final)
+
         logger.info("Post-auth legitimation completed")
 
     def _encode_security_key_struct(self, blob: bytes) -> bytes:
