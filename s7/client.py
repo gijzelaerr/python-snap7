@@ -309,6 +309,11 @@ class Client:
         S7CommPlus LID-based access.  For classic tags (byte-offset),
         delegates to the legacy client.
 
+        .. note:: When reading symbolic I/Q/M tags on S7-1200 PLCs, see
+           :meth:`~s7._s7commplus_client.S7CommPlusClient.read_symbolic`
+           for known caveats (PAQ error at zero, TCP RST per connection,
+           stale BOOL LIDs).
+
         Args:
             tag: A :class:`~snap7.tags.Tag` instance or address string.
 

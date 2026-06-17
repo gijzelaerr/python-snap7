@@ -210,6 +210,21 @@ class S7CommPlusClient:
         between downloads. Symbolic access navigates the PLC's symbol tree
         using LIDs (Local IDs) discovered via :meth:`browse`.
 
+        .. note:: **I/Q/M area caveats** (observed on S7-1200 FW V4.5):
+
+           - **Physical PAQ LIDs return error when value is 0x00.**
+             Reading a physical Q-byte LID (e.g. QB0) when all outputs are
+             OFF raises ``RuntimeError`` instead of returning ``b"\\x00"``.
+             Callers should catch the exception and treat it as zero.
+           - **TCP RST after first I/Q/M read.** The PLC sends a TCP RST
+             after the first successful I/Q/M ``GetMultiVariables`` per
+             connection. DB reads are unaffected. Workaround: reconnect
+             before each I/Q/M read.
+           - **Symbolic BOOL LIDs can be stale vs. physical PAQ.** A
+             symbolic BOOL tag written via ``SetMultiVariables`` may not
+             reflect later forced writes to the physical address. For
+             reliable output state, read the physical byte LID instead.
+
         Args:
             access_area: Access area ID. For DBs this is
                 ``0x8A0E0000 + db_number``.
@@ -234,7 +249,13 @@ class S7CommPlusClient:
 
         .. warning:: This method is **experimental** and may change.
 
-        See :meth:`read_symbolic` for context on when to use symbolic access.
+        See :meth:`read_symbolic` for context on when to use symbolic access
+        and I/Q/M area caveats.
+
+        .. note:: Writing a symbolic BOOL tag does **not** update the
+           physical PAQ byte on some S7-1200 firmware versions. A
+           subsequent read of the physical byte LID may show a different
+           value than the symbolic BOOL LID.
 
         Args:
             access_area: Access area ID.
