@@ -654,13 +654,12 @@ def _build_symbolic_read_payload(access_area: int, lids: list[int], symbol_crc: 
     are unreliable.  The PLC navigates its symbol tree using the LIDs.
 
     For DBs, ``access_sub_area`` is ``DB_VALUE_ACTUAL``.  For controller
-    areas (M/I/Q), it's ``CONTROLLER_AREA_VALUE_ACTUAL``.
+    areas (M/I/Q), it's ``CONTROLLER_AREA_SYMBOLIC_SUB_AREA`` (3736/0xE98).
     """
-    # Determine sub-area based on access_area
     if access_area >= 0x8A0E0000:
         access_sub_area = Ids.DB_VALUE_ACTUAL
     else:
-        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+        access_sub_area = Ids.CONTROLLER_AREA_SYMBOLIC_SUB_AREA
 
     addr_bytes, field_count = encode_item_address(
         access_area=access_area,
@@ -684,7 +683,7 @@ def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes
     if access_area >= 0x8A0E0000:
         access_sub_area = Ids.DB_VALUE_ACTUAL
     else:
-        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+        access_sub_area = Ids.CONTROLLER_AREA_SYMBOLIC_SUB_AREA
 
     addr_bytes, field_count = encode_item_address(
         access_area=access_area,

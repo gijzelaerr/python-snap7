@@ -9,10 +9,12 @@ from s7._s7commplus_client import (
     _parse_read_response,
     _build_write_payload,
     _parse_write_response,
+    _build_symbolic_read_payload,
+    _build_symbolic_write_payload,
 )
 from s7.codec import encode_pvalue_blob
 from s7.connection import S7CommPlusConnection, _element_size
-from s7.protocol import DataType, ElementID, ObjectId
+from s7.protocol import DataType, ElementID, Ids, ObjectId
 from s7.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -457,3 +459,41 @@ class TestClientErrorPaths:
         with S7CommPlusClient() as client:
             assert client.connected is False
         # Should not raise
+
+
+# -- Symbolic sub_area tests --
+
+
+def _extract_sub_area(payload: bytes) -> int:
+    """Parse a symbolic payload and return the access_sub_area VLQ value."""
+    offset = 4  # skip LinkId (4 bytes)
+    _, consumed = decode_uint32_vlq(payload, offset)  # item count
+    offset += consumed
+    _, consumed = decode_uint32_vlq(payload, offset)  # field count
+    offset += consumed
+    _, consumed = decode_uint32_vlq(payload, offset)  # symbol_crc
+    offset += consumed
+    _, consumed = decode_uint32_vlq(payload, offset)  # access_area
+    offset += consumed
+    _, consumed = decode_uint32_vlq(payload, offset)  # num_lids
+    offset += consumed
+    sub_area, _ = decode_uint32_vlq(payload, offset)  # access_sub_area
+    return sub_area
+
+
+class TestSymbolicSubArea:
+    def test_read_db_uses_db_value_actual(self) -> None:
+        payload = _build_symbolic_read_payload(access_area=0x8A0E0001, lids=[1])
+        assert _extract_sub_area(payload) == Ids.DB_VALUE_ACTUAL
+
+    def test_read_iqm_uses_symbolic_sub_area(self) -> None:
+        payload = _build_symbolic_read_payload(access_area=Ids.NATIVE_THE_Q_AREA_RID, lids=[20])
+        assert _extract_sub_area(payload) == Ids.CONTROLLER_AREA_SYMBOLIC_SUB_AREA
+
+    def test_write_db_uses_db_value_actual(self) -> None:
+        payload = _build_symbolic_write_payload(access_area=0x8A0E0001, lids=[1], data=b"\x01")
+        assert _extract_sub_area(payload) == Ids.DB_VALUE_ACTUAL
+
+    def test_write_iqm_uses_symbolic_sub_area(self) -> None:
+        payload = _build_symbolic_write_payload(access_area=Ids.NATIVE_THE_M_AREA_RID, lids=[5], data=b"\xff")
+        assert _extract_sub_area(payload) == Ids.CONTROLLER_AREA_SYMBOLIC_SUB_AREA

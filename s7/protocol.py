@@ -153,6 +153,7 @@ class Ids(IntEnum):
     # Data block access sub-areas
     DB_VALUE_ACTUAL = 2550
     CONTROLLER_AREA_VALUE_ACTUAL = 2551
+    CONTROLLER_AREA_SYMBOLIC_SUB_AREA = 3736
 
     # ObjectQualifier structure IDs
     OBJECT_QUALIFIER = 1256
