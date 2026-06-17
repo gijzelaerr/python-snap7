@@ -314,11 +314,12 @@ class TestSkipTypedValue:
         assert new_offset == len(data)
 
     def test_struct(self, conn: S7CommPlusConnection) -> None:
-        # Struct with 2 USINT sub-values
-        vlq_count = encode_uint32_vlq(2)
-        sub1 = bytes([0x00, DataType.USINT, 0x0A])  # flags + type + value
-        sub2 = bytes([0x00, DataType.USINT, 0x14])
-        data = vlq_count + sub1 + sub2
+        # Normal-mode struct: UInt32 struct-id, then members [VLQ key][flags+type+value],
+        # terminated by a 0x00 list-terminator byte (member keys never start with 0x00).
+        struct_id = struct.pack(">I", 0x0000002A)
+        member1 = encode_uint32_vlq(1) + bytes([0x00, DataType.USINT, 0x0A])
+        member2 = encode_uint32_vlq(2) + bytes([0x00, DataType.USINT, 0x14])
+        data = struct_id + member1 + member2 + bytes([0x00])
         new_offset = conn._skip_typed_value(data, 0, DataType.STRUCT, 0x00)
         assert new_offset == len(data)
 
@@ -367,13 +368,17 @@ class TestParseCreateObjectResponse:
         conn = S7CommPlusConnection("127.0.0.1")
         payload = self._build_create_response_with_session_version(3, DataType.UDINT)
         conn._parse_create_object_response(payload)
-        assert conn._server_session_version == 3
+        # ServerSessionVersion is captured as the raw typed value (flags+datatype+value)
+        # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
+        assert conn._server_session_version_raw == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
+        assert conn._server_session_version == conn._server_session_version_raw
 
     def test_parse_dword_version(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
         payload = self._build_create_response_with_session_version(2, DataType.DWORD)
         conn._parse_create_object_response(payload)
-        assert conn._server_session_version == 2
+        assert conn._server_session_version_raw == bytes([0x00, DataType.DWORD]) + encode_uint32_vlq(2)
+        assert conn._server_session_version == conn._server_session_version_raw
 
     def test_version_not_found(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
@@ -399,7 +404,7 @@ class TestParseCreateObjectResponse:
         payload += bytes([0x00, DataType.UDINT])
         payload += encode_uint32_vlq(1)
         conn._parse_create_object_response(bytes(payload))
-        assert conn._server_session_version == 1
+        assert conn._server_session_version_raw == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(1)
 
     def test_with_start_of_object(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
@@ -418,7 +423,7 @@ class TestParseCreateObjectResponse:
         payload += bytes([0x00, DataType.UDINT])
         payload += encode_uint32_vlq(3)
         conn._parse_create_object_response(bytes(payload))
-        assert conn._server_session_version == 3
+        assert conn._server_session_version_raw == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
 
 
 # -- Client error path tests --

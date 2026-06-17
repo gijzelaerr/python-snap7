@@ -111,7 +111,10 @@ class S7CommPlusConnection:
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
         self._connected = False
-        self._server_session_version: Optional[int] = None
+        # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
+        # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
+        self._server_session_version: Optional[bytes] = None
+        self._server_session_version_raw: Optional[bytes] = None
         self._session_setup_ok: bool = False
 
         # V2+ IntegrityId tracking
@@ -200,6 +203,10 @@ class S7CommPlusConnection:
             # Step 4: CreateObject (S7CommPlus session setup)
             # CreateObject always uses V1 framing
             self._create_session()
+
+            # After CreateObject (V1), data PDUs over TLS use ProtocolVersion V2 (matches C# driver)
+            if self._tls_active:
+                self._protocol_version = ProtocolVersion.V2
 
             # Step 5: Session setup - echo ServerSessionVersion back to PLC
             if self._server_session_version is not None:
@@ -459,7 +466,7 @@ class S7CommPlusConnection:
             0x0000,  # Reserved
             seq_num,
             self._session_id,
-            0x36,  # Transport flags
+            0x34 if function_code == FunctionCode.GET_MULTI_VARIABLES else 0x36,  # Transport flags (0x34 for reads)
         )
 
         # For V2+ with IntegrityId enabled, insert IntegrityId after header
@@ -473,7 +480,12 @@ class S7CommPlusConnection:
             integrity_id_bytes = encode_uint32_vlq(integrity_id)
             logger.debug(f"  IntegrityId: {'read' if is_read else 'write'}={integrity_id}")
 
-        request = request_header + integrity_id_bytes + payload
+        # The IntegrityId is spliced in just before the payload's trailing UInt32 (i.e. at
+        # the end), not right after the header.
+        if integrity_id_bytes and len(payload) >= 4:
+            request = request_header + payload[:-4] + integrity_id_bytes + payload[-4:]
+        else:
+            request = request_header + integrity_id_bytes + payload
 
         logger.debug(f"=== SEND REQUEST === function_code=0x{function_code:04X} seq={seq_num} session=0x{self._session_id:08X}")
         logger.debug(f"  Request header (14 bytes): {request_header.hex(' ')}")
@@ -509,29 +521,24 @@ class S7CommPlusConnection:
         response = response_frame[consumed : consumed + data_length]
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Response too short")
 
-        # Parse response header for debug
+        # Parse the 10-byte response header for debug (responses carry no SessionId)
         resp_opcode = response[0]
         resp_func = struct.unpack_from(">H", response, 3)[0]
         resp_seq = struct.unpack_from(">H", response, 7)[0]
-        resp_session = struct.unpack_from(">I", response, 9)[0]
-        resp_transport = response[13]
+        resp_transport = response[9]
         logger.debug(
             f"  Response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
-            f"seq={resp_seq} session=0x{resp_session:08X} transport=0x{resp_transport:02X}"
+            f"seq={resp_seq} transport=0x{resp_transport:02X}"
         )
 
-        # For V2+ responses, skip IntegrityId in response before returning payload
-        resp_offset = 14
-        if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
-            if resp_offset < len(response):
-                resp_integrity_id, iid_consumed = decode_uint32_vlq(response, resp_offset)
-                resp_offset += iid_consumed
-                logger.debug(f"  Response IntegrityId: {resp_integrity_id}")
+        # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses have
+        # NO SessionId field (requests do, making their header 14 bytes). Integrity is at the END.
+        resp_offset = 10
 
         resp_payload = response[resp_offset:]
         logger.debug(f"  Response payload ({len(resp_payload)} bytes): {resp_payload.hex(' ')}")
@@ -636,10 +643,12 @@ class S7CommPlusConnection:
         # AttributeId: None (0)
         request += encode_uint32_vlq(0)
 
-        # Attribute: ServerSessionClientRID (300) = RID 0x80c3c901
+        # Attribute: ServerSessionClientRID (300) = RID 0x80c3c901.
+        # PValue on the wire is DatatypeFlags(1) + Datatype(1) + value; encode_typed_value emits
+        # only Datatype+value (by codec contract), so prepend the flags byte here at the call site.
         request += bytes([ElementID.ATTRIBUTE])
         request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
-        request += encode_typed_value(DataType.RID, 0x80C3C901)
+        request += bytes([0x00]) + encode_typed_value(DataType.RID, 0x80C3C901)
 
         # Nested object: ClassSubscriptions
         request += bytes([ElementID.START_OF_OBJECT])
@@ -679,8 +688,25 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response too short")
 
-        # Extract session ID from response header
-        self._session_id = struct.unpack_from(">I", response, 9)[0]
+        # Parse response body: ReturnValue(UInt64 VLQ) + ObjectIdCount + ObjectIds(VLQ).
+        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
+        body = response[14:]
+        boff = 0
+        while boff < len(body) and (body[boff] & 0x80):  # skip ReturnValue VLQ
+            boff += 1
+        boff += 1
+        obj_count = body[boff] if boff < len(body) else 0
+        boff += 1
+        object_ids = []
+        for _ in range(obj_count):
+            oid, _c = decode_uint32_vlq(body, boff)
+            boff += _c
+            object_ids.append(oid)
+        if object_ids:
+            self._session_id = object_ids[0]
+        else:
+            self._session_id = struct.unpack_from(">I", response, 9)[0]
+        self._resp_object_start = boff
         self._protocol_version = version
 
         # Parse and log the full response header
@@ -696,7 +722,7 @@ class S7CommPlusConnection:
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
         # Parse response payload to extract ServerSessionVersion
-        self._parse_create_object_response(response[14:])
+        self._parse_create_object_response(response[14 + self._resp_object_start :])
 
     def _parse_create_object_response(self, payload: bytes) -> None:
         """Parse CreateObject response payload to extract ServerSessionVersion.
@@ -720,27 +746,21 @@ class S7CommPlusConnection:
                 offset += consumed
 
                 if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    # Next bytes are the typed value: flags + datatype + VLQ value
+                    # ServerSessionVersion is a Struct (0x17) on real S7-1500 PLCs;
+                    # capture the raw typed value (flags+datatype+data) to echo back.
                     if offset + 2 > len(payload):
                         break
+                    value_start = offset
                     _flags = payload[offset]
                     datatype = payload[offset + 1]
-                    offset += 2
-                    if datatype == DataType.UDINT:
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
-                    elif datatype == DataType.DWORD:
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
-                    else:
-                        # Skip unknown type - try to continue scanning
-                        logger.debug(f"ServerSessionVersion has unexpected type {datatype:#04x}")
+                    end = self._skip_typed_value(payload, offset + 2, datatype, _flags)
+                    self._server_session_version_raw = bytes(payload[value_start:end])
+                    self._server_session_version = self._server_session_version_raw
+                    offset = end
+                    logger.info(
+                        f"ServerSessionVersion captured: type={datatype:#04x}, {len(self._server_session_version_raw)} bytes"
+                    )
+                    return
                 else:
                     # Skip this attribute's value - we don't parse it, just advance
                     # Try to skip the typed value (flags + datatype + value)
@@ -830,9 +850,15 @@ class S7CommPlusConnection:
             length, consumed = decode_uint32_vlq(data, offset)
             return offset + consumed + length
         elif datatype == DataType.STRUCT:
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            for _ in range(count):
+            # Normal-mode struct: UInt32 struct-id, then members [VLQ key][typed value],
+            # terminated by a 0x00 list-terminator byte (keys always start with high bit set).
+            offset += 4  # struct id (UInt32, not VLQ)
+            while offset < len(data):
+                if data[offset] == 0x00:
+                    offset += 1
+                    break
+                _key, consumed = decode_uint32_vlq(data, offset)
+                offset += consumed
                 if offset + 2 > len(data):
                     break
                 sub_flags = data[offset]
@@ -884,9 +910,8 @@ class S7CommPlusConnection:
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
         # Value: ItemNumber = 1 (VLQ)
         payload += encode_uint32_vlq(1)
-        # PValue: flags=0x00, type=UDInt, VLQ-encoded value
-        payload += bytes([0x00, DataType.UDINT])
-        payload += encode_uint32_vlq(self._server_session_version)
+        # PValue: echo the ServerSessionVersion typed value verbatim (it is a Struct)
+        payload += self._server_session_version_raw
         # Fill byte
         payload += bytes([0x00])
         # ObjectQualifier
@@ -910,7 +935,7 @@ class S7CommPlusConnection:
         version, data_length, consumed = decode_header(response_frame)
         response = response_frame[consumed : consumed + data_length]
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("SetupSession response too short")
@@ -918,8 +943,8 @@ class S7CommPlusConnection:
         resp_func = struct.unpack_from(">H", response, 3)[0]
         logger.debug(f"SetupSession response: function=0x{resp_func:04X}")
 
-        # Parse return value from payload
-        resp_payload = response[14:]
+        # Parse return value from payload (data responses use a 10-byte header)
+        resp_payload = response[10:]
         if len(resp_payload) >= 1:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value != 0:

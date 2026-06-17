@@ -49,6 +49,20 @@ _COTP_CC = 0xD0
 _COTP_DT = 0xF0
 
 
+def _element_size(datatype: int) -> int:
+    """Return the fixed byte size for an array element, or 0 for variable-length."""
+    if datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
+        return 1
+    elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
+        return 2
+    elif datatype in (DataType.REAL, DataType.RID):
+        return 4
+    elif datatype in (DataType.LREAL, DataType.TIMESTAMP):
+        return 8
+    else:
+        return 0
+
+
 class S7CommPlusAsyncClient:
     """Pure async S7CommPlus client without legacy fallback.
 
@@ -72,7 +86,10 @@ class S7CommPlusAsyncClient:
         # TLS state
         self._tls_active: bool = False
         self._oms_secret: Optional[bytes] = None
-        self._server_session_version: Optional[int] = None
+        # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
+        # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
+        self._server_session_version: Optional[bytes] = None
+        self._server_session_version_raw: Optional[bytes] = None
         self._session_setup_ok: bool = False
 
     @property
@@ -144,6 +161,11 @@ class S7CommPlusAsyncClient:
 
             # Step 4: S7CommPlus session setup (CreateObject)
             await self._create_session()
+
+            # After CreateObject (which always uses V1 framing), data PDUs over TLS
+            # use ProtocolVersion V2 on a real S7-1500 (matches the C# reference driver).
+            if self._tls_active:
+                self._protocol_version = ProtocolVersion.V2
 
             # Step 5: Version-specific validation
             if self._protocol_version >= ProtocolVersion.V3:
@@ -376,6 +398,7 @@ class S7CommPlusAsyncClient:
         self._tls_active = False
         self._oms_secret = None
         self._server_session_version = None
+        self._server_session_version_raw = None
         self._session_setup_ok = False
 
         if self._writer:
@@ -484,7 +507,7 @@ class S7CommPlusAsyncClient:
                 0x0000,
                 seq_num,
                 self._session_id,
-                0x36,
+                0x34 if function_code == FunctionCode.GET_MULTI_VARIABLES else 0x36,
             )
 
             integrity_id_bytes = b""
@@ -493,7 +516,12 @@ class S7CommPlusAsyncClient:
                 integrity_id = self._integrity_id_read if is_read else self._integrity_id_write
                 integrity_id_bytes = encode_uint32_vlq(integrity_id)
 
-            request = request_header + integrity_id_bytes + payload
+            # For V2+ the IntegrityId is spliced in just before the payload's trailing
+            # UInt32 (i.e. at the end), not right after the header.
+            if integrity_id_bytes and len(payload) >= 4:
+                request = request_header + payload[:-4] + integrity_id_bytes + payload[-4:]
+            else:
+                request = request_header + integrity_id_bytes + payload
 
             frame = encode_header(self._protocol_version, len(request)) + request
             frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
@@ -510,16 +538,13 @@ class S7CommPlusAsyncClient:
             version, data_length, consumed = decode_header(response_data)
             response = response_data[consumed : consumed + data_length]
 
-            if len(response) < 14:
+            if len(response) < 10:
                 raise RuntimeError("Response too short")
 
-            resp_offset = 14
-            if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
-                if resp_offset < len(response):
-                    _resp_iid, iid_consumed = decode_uint32_vlq(response, resp_offset)
-                    resp_offset += iid_consumed
-
-            return response[resp_offset:]
+            # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
+            # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
+            # IntegrityId travels at the END of the payload and is ignored by the parsers.
+            return response[10:]
 
     async def _cotp_connect(self, local_tsap: int, remote_tsap: bytes) -> None:
         """Perform COTP Connection Request / Confirm handshake."""
@@ -601,7 +626,7 @@ class S7CommPlusAsyncClient:
 
         request += bytes([ElementID.ATTRIBUTE])
         request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
-        request += encode_typed_value(DataType.RID, 0x80C3C901)
+        request += bytes([0x00]) + encode_typed_value(DataType.RID, 0x80C3C901)
 
         request += bytes([ElementID.START_OF_OBJECT])
         request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
@@ -624,10 +649,27 @@ class S7CommPlusAsyncClient:
         if len(response) < 14:
             raise RuntimeError("CreateObject response too short")
 
-        self._session_id = struct.unpack_from(">I", response, 9)[0]
+        # Parse response body: ReturnValue(VLQ) + ObjectIdCount + ObjectIds(VLQ).
+        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
+        body = response[14:]
+        boff = 0
+        while boff < len(body) and (body[boff] & 0x80):  # skip ReturnValue VLQ
+            boff += 1
+        boff += 1
+        obj_count = body[boff] if boff < len(body) else 0
+        boff += 1
+        object_ids = []
+        for _ in range(obj_count):
+            oid, _c = decode_uint32_vlq(body, boff)
+            boff += _c
+            object_ids.append(oid)
+        if object_ids:
+            self._session_id = object_ids[0]
+        else:
+            self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
-        self._parse_create_object_response(response[14:])
+        self._parse_create_object_response(response[14 + boff :])
 
     def _parse_create_object_response(self, payload: bytes) -> None:
         """Parse CreateObject response to extract ServerSessionVersion (attribute 306)."""
@@ -643,26 +685,29 @@ class S7CommPlusAsyncClient:
                 offset += consumed
 
                 if attr_id == ObjectId.SERVER_SESSION_VERSION:
+                    # Capture the raw typed value (flags+datatype+data) to echo back —
+                    # real S7-1500 PLCs send ServerSessionVersion as a Struct (0x17).
+                    if offset + 2 > len(payload):
+                        break
+                    value_start = offset
+                    _flags = payload[offset]
+                    datatype = payload[offset + 1]
+                    end = self._skip_typed_value(payload, offset + 2, datatype, _flags)
+                    self._server_session_version_raw = bytes(payload[value_start:end])
+                    self._server_session_version = self._server_session_version_raw
+                    offset = end
+                    logger.info(
+                        f"ServerSessionVersion captured: type={datatype:#04x}, {len(self._server_session_version_raw)} bytes"
+                    )
+                    return
+                else:
+                    # Skip this attribute's typed value (flags + datatype + value)
                     if offset + 2 > len(payload):
                         break
                     _flags = payload[offset]
                     datatype = payload[offset + 1]
                     offset += 2
-                    if datatype in (DataType.UDINT, DataType.DWORD):
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
-                else:
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    _dt = payload[offset + 1]
-                    offset += 2
-                    if offset < len(payload):
-                        _, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
+                    offset = self._skip_typed_value(payload, offset, datatype, _flags)
 
             elif tag == ElementID.START_OF_OBJECT:
                 offset += 1
@@ -685,6 +730,72 @@ class S7CommPlusAsyncClient:
 
         logger.debug("ServerSessionVersion not found in CreateObject response")
 
+    def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
+        """Skip over a typed value in the PObject tree (best-effort). Returns new offset."""
+        is_array = bool(flags & 0x10)
+
+        if is_array:
+            if offset >= len(data):
+                return offset
+            count, consumed = decode_uint32_vlq(data, offset)
+            offset += consumed
+            elem_size = _element_size(datatype)
+            if elem_size > 0:
+                offset += count * elem_size
+            else:
+                for _ in range(count):
+                    if offset >= len(data):
+                        break
+                    _, consumed = decode_uint32_vlq(data, offset)
+                    offset += consumed
+            return offset
+
+        if datatype == DataType.NULL:
+            return offset
+        elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
+            return offset + 1
+        elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
+            return offset + 2
+        elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
+            _, consumed = decode_uint32_vlq(data, offset)
+            return offset + consumed
+        elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
+            _, consumed = decode_uint64_vlq(data, offset)
+            return offset + consumed
+        elif datatype == DataType.REAL:
+            return offset + 4
+        elif datatype == DataType.LREAL:
+            return offset + 8
+        elif datatype == DataType.TIMESTAMP:
+            return offset + 8
+        elif datatype == DataType.TIMESPAN:
+            _, consumed = decode_uint64_vlq(data, offset)
+            return offset + consumed
+        elif datatype == DataType.RID:
+            return offset + 4
+        elif datatype in (DataType.BLOB, DataType.WSTRING):
+            length, consumed = decode_uint32_vlq(data, offset)
+            return offset + consumed + length
+        elif datatype == DataType.STRUCT:
+            # Normal-mode struct: UInt32 struct-id, then members [VLQ key][typed value],
+            # terminated by a 0x00 list-terminator byte (keys always start with high bit set).
+            offset += 4  # struct id (UInt32, not VLQ)
+            while offset < len(data):
+                if data[offset] == 0x00:
+                    offset += 1
+                    break
+                _key, consumed = decode_uint32_vlq(data, offset)
+                offset += consumed
+                if offset + 2 > len(data):
+                    break
+                sub_flags = data[offset]
+                sub_type = data[offset + 1]
+                offset += 2
+                offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
+            return offset
+        else:
+            return offset
+
     async def _setup_session(self) -> bool:
         """Echo ServerSessionVersion back to the PLC via SetMultiVariables."""
         if self._server_session_version is None:
@@ -696,8 +807,8 @@ class S7CommPlusAsyncClient:
         payload += encode_uint32_vlq(1)
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
         payload += encode_uint32_vlq(1)
-        payload += bytes([0x00, DataType.UDINT])
-        payload += encode_uint32_vlq(self._server_session_version)
+        # PValue: echo the ServerSessionVersion typed value verbatim (it may be a Struct)
+        payload += self._server_session_version_raw
         payload += bytes([0x00])
         payload += encode_object_qualifier()
         payload += struct.pack(">I", 0)
