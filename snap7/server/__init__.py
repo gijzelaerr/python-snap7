@@ -1272,30 +1272,16 @@ class Server:
 
                     return {"function_code": function_code, "item_count": item_count, "address_spec": parsed_addr}
         elif function_code == S7Function.PLC_CONTROL:
-            # Parse PLC control parameters
-            # Format varies: simple start or PI service (compress/copy_ram_to_rom)
-            if len(param_data) >= 2:
-                # Check for restart type (simple start)
-                restart_type = param_data[1]
-                if restart_type in (1, 2):
-                    return {"function_code": function_code, "restart_type": restart_type}
-
-            # Check for PI service (compress/copy_ram_to_rom)
-            # Format: func(1) + reserved(7) + pi_len(1) + pi_service
-            # Or: func(1) + reserved(6) + file_id_len(1) + pi_len(1) + file_id + pi_service
-            if len(param_data) >= 10:
-                # Look for PI service
-                pi_len = param_data[8]
-                if pi_len > 0 and len(param_data) >= 9 + pi_len:
-                    pi_service = param_data[9 : 9 + pi_len]
-                    # Check for file_id (copy_ram_to_rom)
-                    file_id_len = param_data[7]
-                    file_id = b""
-                    if file_id_len > 0 and len(param_data) >= 9 + file_id_len + pi_len:
-                        # Reparse with file_id
-                        file_id = param_data[9 : 9 + file_id_len]
-                        pi_service = param_data[9 + file_id_len : 9 + file_id_len + pi_len]
-                    return {"function_code": function_code, "pi_service": pi_service, "file_id": file_id}
+            if b"P_PROGRAM" in param_data:
+                restart_type = 2 if b"C " in param_data else 1
+                return {"function_code": function_code, "restart_type": restart_type, "pi_service": b"P_PROGRAM"}
+            elif b"_MSZL" in param_data:
+                file_id = b"P" if b"P_MSZL" in param_data else b""
+                return {"function_code": function_code, "pi_service": b"_MSZL", "file_id": file_id}
+            elif b"_DELE" in param_data:
+                return {"function_code": function_code, "pi_service": b"_DELE"}
+            if len(param_data) >= 2 and param_data[1] in (1, 2):
+                return {"function_code": function_code, "restart_type": param_data[1]}
 
         return {"function_code": function_code}
 
