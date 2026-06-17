@@ -38,9 +38,12 @@ Version-specific authentication after step 6::
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
 
+import ctypes
+import ctypes.util
 import logging
 import ssl
 import struct
+import sys
 from typing import Optional, Type
 from types import TracebackType
 
@@ -60,6 +63,45 @@ from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
 logger = logging.getLogger(__name__)
+
+# Classic ECDHE groups every S7-1200/1500 supports. OpenSSL >= 3.5 advertises a
+# post-quantum hybrid (X25519MLKEM768) by default, whose large ClientHello key_share
+# the PLCs reject (the connection is dropped during the handshake). We restrict the
+# PLC TLS context to these classic groups.
+_DEFAULT_TLS_GROUPS = "x25519:secp256r1:secp384r1"
+
+# OpenSSL control code for SSL_CTX_set1_groups_list (openssl/ssl.h: SSL_CTRL_SET_GROUPS_LIST).
+_SSL_CTRL_SET_GROUPS_LIST = 92
+
+
+def _restrict_tls_groups(ctx: ssl.SSLContext, groups: str = _DEFAULT_TLS_GROUPS) -> bool:
+    """Restrict the TLS key-exchange groups of ``ctx`` to ``groups`` (a colon list).
+
+    Python's ``ssl`` module exposes no API for the TLS 1.3 supported_groups list, so we
+    call OpenSSL's ``SSL_CTX_set1_groups_list`` through ctypes, reaching the ``SSL_CTX *``
+    stored as the first member of CPython's ``PySSLContext`` (right after ``PyObject_HEAD``).
+
+    Best-effort: returns ``True`` on success, or ``False`` (leaving OpenSSL's defaults) on
+    an unexpected interpreter layout or any failure.
+    """
+    if sys.implementation.name != "cpython" or ctypes.sizeof(ctypes.c_void_p) != 8:
+        return False
+    try:
+        libssl = ctypes.CDLL(ctypes.util.find_library("ssl") or "libssl.so")
+        libssl.SSL_CTX_ctrl.restype = ctypes.c_long
+        libssl.SSL_CTX_ctrl.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_long, ctypes.c_char_p]
+        # PySSLContext layout: PyObject_HEAD (16 bytes on 64-bit CPython) then `SSL_CTX *ctx`.
+        ssl_ctx = ctypes.c_void_p.from_address(id(ctx) + 16).value
+        if not ssl_ctx:
+            return False
+        rc = libssl.SSL_CTX_ctrl(ssl_ctx, _SSL_CTRL_SET_GROUPS_LIST, 0, groups.encode("ascii"))
+        if rc == 1:
+            logger.debug(f"TLS groups restricted to: {groups}")
+            return True
+        return False
+    except Exception as e:  # pragma: no cover - platform-dependent fallback
+        logger.debug(f"Could not restrict TLS groups in-code: {e}")
+        return False
 
 
 def _element_size(datatype: int) -> int:
@@ -1082,6 +1124,8 @@ class S7CommPlusConnection:
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        # Restrict to classic ECDHE groups; PLCs reject OpenSSL >= 3.5's PQ-hybrid default.
+        _restrict_tls_groups(ctx)
 
         # TLS 1.3 ciphersuites are configured differently from TLS 1.2
         if hasattr(ctx, "set_ciphersuites"):

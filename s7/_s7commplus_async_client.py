@@ -26,6 +26,7 @@ from .protocol import (
 )
 from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
+from .connection import _restrict_tls_groups
 from ._s7commplus_client import (
     _build_read_payload,
     _parse_read_response,
@@ -231,6 +232,8 @@ class S7CommPlusAsyncClient:
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        # Restrict to classic ECDHE groups; PLCs reject OpenSSL >= 3.5's PQ-hybrid default.
+        _restrict_tls_groups(ctx)
 
         if hasattr(ctx, "set_ciphersuites"):
             ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")

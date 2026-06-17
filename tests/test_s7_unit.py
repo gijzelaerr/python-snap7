@@ -11,7 +11,7 @@ from s7._s7commplus_client import (
     _parse_write_response,
 )
 from s7.codec import encode_pvalue_blob
-from s7.connection import S7CommPlusConnection, _element_size
+from s7.connection import S7CommPlusConnection, _element_size, _restrict_tls_groups
 from s7.protocol import DataType, ElementID, ObjectId
 from s7.vlq import (
     encode_uint32_vlq,
@@ -457,3 +457,32 @@ class TestClientErrorPaths:
         with S7CommPlusClient() as client:
             assert client.connected is False
         # Should not raise
+
+
+class TestRestrictTlsGroups:
+    """Test the in-code TLS supported_groups restriction."""
+
+    def test_restrict_classic_groups(self) -> None:
+        import ssl
+        import sys
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        result = _restrict_tls_groups(ctx, "x25519:secp256r1:secp384r1")
+        # On CPython 64-bit the OpenSSL ctrl succeeds; elsewhere it falls back to False.
+        if sys.implementation.name == "cpython" and ctypes_pointer_size_is_8():
+            assert result is True
+        # The context must remain usable regardless of the outcome.
+        assert ctx.wrap_bio(ssl.MemoryBIO(), ssl.MemoryBIO(), server_side=False) is not None
+
+    def test_restrict_invalid_groups_returns_false(self) -> None:
+        import ssl
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        # A bogus group name makes SSL_CTX_set1_groups_list fail -> best-effort False.
+        assert _restrict_tls_groups(ctx, "not_a_real_group") is False
+
+
+def ctypes_pointer_size_is_8() -> bool:
+    import ctypes
+
+    return ctypes.sizeof(ctypes.c_void_p) == 8
