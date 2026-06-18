@@ -83,8 +83,12 @@ class S7CommPlusAsyncClient:
         self._integrity_id_write: int = 0
         self._with_integrity_id: bool = False
 
-        # TLS state
+        # TLS state — TLS records are tunneled inside COTP DT frames via MemoryBIO
+        # (TPKT/COTP headers stay unencrypted), mirroring the sync S7CommPlusConnection.
         self._tls_active: bool = False
+        self._ssl_object: Optional[ssl.SSLObject] = None
+        self._incoming_bio: Optional[ssl.MemoryBIO] = None
+        self._outgoing_bio: Optional[ssl.MemoryBIO] = None
         self._oms_secret: Optional[bytes] = None
         # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
@@ -266,33 +270,54 @@ class S7CommPlusAsyncClient:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-        transport = self._writer.transport
-        loop = asyncio.get_event_loop()
-        new_transport = await loop.start_tls(
-            transport,
-            transport.get_protocol(),
-            ctx,
-            server_hostname=self._host,
+        # BIO-based TLS: encrypt/decrypt in memory so the TLS records can be tunneled
+        # through COTP DT frames (TPKT/COTP stay unencrypted) — `start_tls` would instead
+        # wrap the whole TCP stream, encrypting TPKT/COTP too, which the PLC rejects.
+        self._incoming_bio = ssl.MemoryBIO()
+        self._outgoing_bio = ssl.MemoryBIO()
+        self._ssl_object = ctx.wrap_bio(
+            self._incoming_bio,
+            self._outgoing_bio,
+            server_side=False,
+            server_hostname=self._host if ctx.check_hostname else None,
         )
 
-        self._writer._transport = new_transport
+        await self._do_tls_handshake()
         self._tls_active = True
 
-        if new_transport is None:
-            from snap7.error import S7ConnectionError
+        try:
+            self._oms_secret = self._ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
+            logger.debug("OMS exporter secret extracted from TLS session")
+        except (AttributeError, ssl.SSLError) as e:
+            logger.warning(f"Could not extract OMS exporter secret: {e}")
+            self._oms_secret = None
 
-            raise S7ConnectionError("TLS handshake failed: no transport returned")
+        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
 
-        ssl_object = new_transport.get_extra_info("ssl_object")
-        if ssl_object is not None:
+    async def _do_tls_handshake(self) -> None:
+        """Perform the TLS handshake, tunneling records through COTP DT frames."""
+        assert self._ssl_object is not None
+        while True:
             try:
-                self._oms_secret = ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
-                logger.debug("OMS exporter secret extracted from TLS session")
-            except (AttributeError, ssl.SSLError) as e:
-                logger.warning(f"Could not extract OMS exporter secret: {e}")
-                self._oms_secret = None
+                self._ssl_object.do_handshake()
+                break
+            except ssl.SSLWantReadError:
+                await self._tls_flush_outgoing()
+                await self._tls_read_incoming()
+        await self._tls_flush_outgoing()
 
-        logger.info("TLS 1.3 activated on async COTP connection")
+    async def _tls_flush_outgoing(self) -> None:
+        """Send all pending outgoing TLS bytes as COTP DT frames."""
+        assert self._outgoing_bio is not None
+        data = self._outgoing_bio.read()
+        if data:
+            await self._send_cotp_raw(data)
+
+    async def _tls_read_incoming(self) -> None:
+        """Read one COTP DT frame and feed its payload to the TLS BIO."""
+        assert self._incoming_bio is not None
+        data = await self._recv_cotp_raw()
+        self._incoming_bio.write(data)
 
     async def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC."""
@@ -396,6 +421,9 @@ class S7CommPlusAsyncClient:
         self._integrity_id_read = 0
         self._integrity_id_write = 0
         self._tls_active = False
+        self._ssl_object = None
+        self._incoming_bio = None
+        self._outgoing_bio = None
         self._oms_secret = None
         self._server_session_version = None
         self._server_session_version_raw = None
@@ -854,7 +882,28 @@ class S7CommPlusAsyncClient:
             pass
 
     async def _send_cotp_dt(self, data: bytes) -> None:
-        """Send data wrapped in COTP DT + TPKT."""
+        """Send an S7CommPlus frame, routing through TLS (tunneled in COTP) when active."""
+        if self._tls_active:
+            assert self._ssl_object is not None
+            self._ssl_object.write(data)
+            await self._tls_flush_outgoing()
+        else:
+            await self._send_cotp_raw(data)
+
+    async def _recv_cotp_dt(self) -> bytes:
+        """Receive an S7CommPlus frame, decrypting from the TLS tunnel when active."""
+        if self._tls_active:
+            assert self._ssl_object is not None
+            while True:
+                try:
+                    return self._ssl_object.read(65536)
+                except ssl.SSLWantReadError:
+                    await self._tls_read_incoming()
+        else:
+            return await self._recv_cotp_raw()
+
+    async def _send_cotp_raw(self, data: bytes) -> None:
+        """Send raw bytes wrapped in COTP DT + TPKT (no TLS)."""
         if self._writer is None:
             raise RuntimeError("Not connected")
 
@@ -863,8 +912,8 @@ class S7CommPlusAsyncClient:
         self._writer.write(tpkt)
         await self._writer.drain()
 
-    async def _recv_cotp_dt(self) -> bytes:
-        """Receive TPKT + COTP DT and return the payload."""
+    async def _recv_cotp_raw(self) -> bytes:
+        """Receive one TPKT + COTP DT frame and return the payload (no TLS)."""
         if self._reader is None:
             raise RuntimeError("Not connected")
 
