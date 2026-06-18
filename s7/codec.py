@@ -466,14 +466,45 @@ def decode_pvalue_to_bytes(data: bytes, offset: int) -> tuple[bytes, int]:
         consumed += length
         return bytes(raw), consumed
     elif datatype == DataType.STRUCT:
-        # Struct: read count, then nested PValues
-        count, c = decode_uint32_vlq(data, offset + consumed)
-        consumed += c
+        # Struct value. Mirrors ValueStruct.Deserialize in the C# reference driver
+        # (thomas-v2/S7CommPlusDriver, Core/PValue.cs).
+        #
+        # The leading struct id is a fixed UInt32 (not VLQ). Two transmission forms:
+        #
+        #  * Packed struct — for system datatypes (DTL, optimized-DB structs, ...) whose
+        #    members are sent as one opaque blob. Detected by the id falling in the ranges
+        #    0x90000000..0x9fffffff or 0x02000000..0x02ffffff. Layout: UInt64 interface
+        #    timestamp, VLQ transport flags, VLQ element count (a second count follows when
+        #    the Count2Present flag, bit 10, is set), then `count` raw bytes. We return those
+        #    raw bytes verbatim — the caller interprets them using the struct's member layout.
+        #
+        #  * Normal struct — members as [VLQ key][PValue], terminated by a key of 0.
+        struct_id = int.from_bytes(data[offset + consumed : offset + consumed + 4], "big")
+        consumed += 4
+
+        if (0x90000000 < struct_id < 0x9FFFFFFF) or (0x02000000 < struct_id < 0x02FFFFFF):
+            consumed += 8  # PackedStructInterfaceTimestamp (UInt64, fixed)
+            transport_flags, c = decode_uint32_vlq(data, offset + consumed)
+            consumed += c
+            count, c = decode_uint32_vlq(data, offset + consumed)
+            consumed += c
+            if transport_flags & 0x400:  # Count2Present: a second count follows
+                count, c = decode_uint32_vlq(data, offset + consumed)
+                consumed += c
+            raw = data[offset + consumed : offset + consumed + count]
+            consumed += count
+            return bytes(raw), consumed
+
+        # Normal struct: concatenate member values, stopping at the 0 key terminator.
         result = bytearray()
-        for _ in range(count):
+        key, c = decode_uint32_vlq(data, offset + consumed)
+        consumed += c
+        while key > 0:
             val_bytes, c = decode_pvalue_to_bytes(data, offset + consumed)
             consumed += c
             result += val_bytes
+            key, c = decode_uint32_vlq(data, offset + consumed)
+            consumed += c
         return bytes(result), consumed
     else:
         raise ValueError(f"Unsupported PValue datatype: {datatype:#04x}")

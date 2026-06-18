@@ -538,14 +538,64 @@ class TestDecodePValue:
         result, consumed = decode_pvalue_to_bytes(data, 0)
         assert result == text
 
-    def test_struct_nested(self) -> None:
-        # Struct with 2 USINT elements
-        vlq_count = encode_uint32_vlq(2)
-        elem1 = bytes([0x00, DataType.USINT, 0x0A])
-        elem2 = bytes([0x00, DataType.USINT, 0x14])
-        data = bytes([0x00, DataType.STRUCT]) + vlq_count + elem1 + elem2
+    def test_struct_normal(self) -> None:
+        # Normal struct: UInt32 id, then [VLQ key][PValue] members, 0-key terminated.
+        struct_id = struct.pack(">I", 0x00000001)
+        member1 = encode_uint32_vlq(1) + bytes([0x00, DataType.USINT, 0x0A])
+        member2 = encode_uint32_vlq(2) + bytes([0x00, DataType.USINT, 0x14])
+        terminator = encode_uint32_vlq(0)
+        data = bytes([0x00, DataType.STRUCT]) + struct_id + member1 + member2 + terminator
         result, consumed = decode_pvalue_to_bytes(data, 0)
         assert result == bytes([0x0A, 0x14])
+        assert consumed == len(data)
+
+    def test_struct_packed(self) -> None:
+        # Packed struct (system datatype): id in 0x90000000..0x9fffffff, then UInt64 interface
+        # timestamp, VLQ transport flags, VLQ element count, then raw member bytes returned
+        # verbatim. Mirrors a real S7-1500 read of a struct node with three Int members.
+        struct_id = struct.pack(">I", 0x91080009)
+        timestamp = bytes.fromhex("58936099d03e9bd4")
+        transport_flags = encode_uint32_vlq(0x03)
+        members = struct.pack(">3h", 100, 200, 300)  # three Int members
+        count = encode_uint32_vlq(len(members))
+        data = bytes([0x00, DataType.STRUCT]) + struct_id + timestamp + transport_flags + count + members
+        result, consumed = decode_pvalue_to_bytes(data, 0)
+        assert result == members
+        assert consumed == len(data)
+
+    def test_struct_packed_count2_present(self) -> None:
+        # When the Count2Present transport flag (bit 10) is set, a second count follows.
+        struct_id = struct.pack(">I", 0x91080009)
+        timestamp = bytes(8)
+        transport_flags = encode_uint32_vlq(0x402)  # AlwaysSet | Count2Present
+        members = bytes([0xAA, 0xBB])
+        data = (
+            bytes([0x00, DataType.STRUCT])
+            + struct_id
+            + timestamp
+            + transport_flags
+            + encode_uint32_vlq(999)  # first count (ignored when Count2Present)
+            + encode_uint32_vlq(len(members))  # second count is the real one
+            + members
+        )
+        result, consumed = decode_pvalue_to_bytes(data, 0)
+        assert result == members
+        assert consumed == len(data)
+
+    def test_struct_id_boundary_is_normal(self) -> None:
+        # The packed-struct ranges are *exclusive* of their bounds, matching the C# reference
+        # (ValueStruct.Deserialize: ``Value > 0x90000000 && Value < 0x9fffffff``). The bound
+        # values 0x90000000 and 0x02000000 are base sentinels — real type-ids are base + n
+        # (e.g. TI_BOOL = 0x02000000 + 1), so the bounds themselves are never packed structs
+        # and must be parsed as normal structs. Guards against a `<=` regression.
+        for boundary in (0x90000000, 0x9FFFFFFF, 0x02000000, 0x02FFFFFF):
+            struct_id = struct.pack(">I", boundary)
+            member = encode_uint32_vlq(1) + bytes([0x00, DataType.USINT, 0x07])
+            terminator = encode_uint32_vlq(0)
+            data = bytes([0x00, DataType.STRUCT]) + struct_id + member + terminator
+            result, consumed = decode_pvalue_to_bytes(data, 0)
+            assert result == bytes([0x07]), f"id {boundary:#010x} must parse as a normal struct"
+            assert consumed == len(data)
 
     def test_unsupported_type(self) -> None:
         data = bytes([0x00, 0xFF])
