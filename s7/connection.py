@@ -55,25 +55,18 @@ from .protocol import (
     S7COMMPLUS_REMOTE_TSAP,
     READ_FUNCTION_CODES,
 )
-from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
+from .codec import (
+    encode_header,
+    decode_header,
+    encode_typed_value,
+    encode_object_qualifier,
+    parse_create_object_session_id,
+    parse_server_session_version,
+)
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
 logger = logging.getLogger(__name__)
-
-
-def _element_size(datatype: int) -> int:
-    """Return the fixed byte size for an array element, or 0 for variable-length."""
-    if datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
-        return 1
-    elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
-        return 2
-    elif datatype in (DataType.REAL, DataType.RID):
-        return 4
-    elif datatype in (DataType.LREAL, DataType.TIMESTAMP):
-        return 8
-    else:
-        return 0
 
 
 class S7CommPlusConnection:
@@ -105,13 +98,17 @@ class S7CommPlusConnection:
         )
 
         self._ssl_context: Optional[ssl.SSLContext] = None
-        self._ssl_socket: Optional[ssl.SSLSocket] = None
+        self._ssl_object: Optional[ssl.SSLObject] = None
+        self._incoming_bio: Optional[ssl.MemoryBIO] = None
+        self._outgoing_bio: Optional[ssl.MemoryBIO] = None
         self._session_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
         self._connected = False
-        self._server_session_version: Optional[int] = None
+        # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
+        # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
+        self._server_session_version: Optional[bytes] = None
         self._session_setup_ok: bool = False
 
         # V2+ IntegrityId tracking
@@ -200,6 +197,10 @@ class S7CommPlusConnection:
             # Step 4: CreateObject (S7CommPlus session setup)
             # CreateObject always uses V1 framing
             self._create_session()
+
+            # After CreateObject (V1), data PDUs over TLS use ProtocolVersion V2 (matches C# driver)
+            if self._tls_active:
+                self._protocol_version = ProtocolVersion.V2
 
             # Step 5: Session setup - echo ServerSessionVersion back to PLC
             if self._server_session_version is not None:
@@ -418,7 +419,9 @@ class S7CommPlusConnection:
         self._connected = False
         self._session_setup_ok = False
         self._tls_active = False
-        self._ssl_socket = None
+        self._ssl_object = None
+        self._incoming_bio = None
+        self._outgoing_bio = None
         self._oms_secret = None
         self._session_id = 0
         self._sequence_number = 0
@@ -432,16 +435,16 @@ class S7CommPlusConnection:
     def send_request(self, function_code: int, payload: bytes = b"") -> bytes:
         """Send an S7CommPlus request and receive the response.
 
-        For V2+ with IntegrityId tracking enabled, the IntegrityId is
-        appended after the 14-byte request header (as a VLQ uint32).
-        Read vs write counters are selected based on the function code.
+        For V2+ with IntegrityId tracking enabled, the IntegrityId is spliced into
+        the request payload just before its trailing fill bytes. Read vs write
+        counters are selected based on the function code.
 
         Args:
             function_code: S7CommPlus function code
             payload: Request payload (after the 14-byte request header)
 
         Returns:
-            Response payload (after the 14-byte response header)
+            Response payload (after the 10-byte response header)
         """
         if not self._connected:
             from snap7.error import S7ConnectionError
@@ -459,7 +462,7 @@ class S7CommPlusConnection:
             0x0000,  # Reserved
             seq_num,
             self._session_id,
-            0x36,  # Transport flags
+            0x34 if function_code == FunctionCode.GET_MULTI_VARIABLES else 0x36,  # Transport flags (0x34 for reads)
         )
 
         # For V2+ with IntegrityId enabled, insert IntegrityId after header
@@ -473,7 +476,12 @@ class S7CommPlusConnection:
             integrity_id_bytes = encode_uint32_vlq(integrity_id)
             logger.debug(f"  IntegrityId: {'read' if is_read else 'write'}={integrity_id}")
 
-        request = request_header + integrity_id_bytes + payload
+        # The IntegrityId is spliced in just before the payload's trailing UInt32 (i.e. at
+        # the end), not right after the header.
+        if integrity_id_bytes and len(payload) >= 4:
+            request = request_header + payload[:-4] + integrity_id_bytes + payload[-4:]
+        else:
+            request = request_header + integrity_id_bytes + payload
 
         logger.debug(f"=== SEND REQUEST === function_code=0x{function_code:04X} seq={seq_num} session=0x{self._session_id:08X}")
         logger.debug(f"  Request header (14 bytes): {request_header.hex(' ')}")
@@ -489,7 +497,7 @@ class S7CommPlusConnection:
         frame += struct.pack(">BBH", 0x72, frame_version, 0x0000)
 
         logger.debug(f"  Full frame ({len(frame)} bytes): {frame.hex(' ')}")
-        self._iso_conn.send_data(frame)
+        self._send_s7_data(frame)
 
         # Increment the appropriate IntegrityId counter after sending
         if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
@@ -499,7 +507,7 @@ class S7CommPlusConnection:
                 self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
         # Receive response
-        response_frame = self._iso_conn.receive_data()
+        response_frame = self._recv_s7_data()
         logger.debug(f"=== RECV RESPONSE === raw frame ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse frame header, use data_length to exclude trailer
@@ -509,29 +517,24 @@ class S7CommPlusConnection:
         response = response_frame[consumed : consumed + data_length]
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Response too short")
 
-        # Parse response header for debug
+        # Parse the 10-byte response header for debug (responses carry no SessionId)
         resp_opcode = response[0]
         resp_func = struct.unpack_from(">H", response, 3)[0]
         resp_seq = struct.unpack_from(">H", response, 7)[0]
-        resp_session = struct.unpack_from(">I", response, 9)[0]
-        resp_transport = response[13]
+        resp_transport = response[9]
         logger.debug(
             f"  Response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
-            f"seq={resp_seq} session=0x{resp_session:08X} transport=0x{resp_transport:02X}"
+            f"seq={resp_seq} transport=0x{resp_transport:02X}"
         )
 
-        # For V2+ responses, skip IntegrityId in response before returning payload
-        resp_offset = 14
-        if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
-            if resp_offset < len(response):
-                resp_integrity_id, iid_consumed = decode_uint32_vlq(response, resp_offset)
-                resp_offset += iid_consumed
-                logger.debug(f"  Response IntegrityId: {resp_integrity_id}")
+        # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses have
+        # NO SessionId field (requests do, making their header 14 bytes). Integrity is at the END.
+        resp_offset = 10
 
         resp_payload = response[resp_offset:]
         logger.debug(f"  Response payload ({len(resp_payload)} bytes): {resp_payload.hex(' ')}")
@@ -575,10 +578,10 @@ class S7CommPlusConnection:
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
 
         logger.debug(f"=== InitSSL === sending ({len(frame)} bytes): {frame.hex(' ')}")
-        self._iso_conn.send_data(frame)
+        self._send_s7_data(frame)
 
         # Receive InitSSL response
-        response_frame = self._iso_conn.receive_data()
+        response_frame = self._recv_s7_data()
         logger.debug(f"=== InitSSL === received ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse S7CommPlus frame header
@@ -636,10 +639,12 @@ class S7CommPlusConnection:
         # AttributeId: None (0)
         request += encode_uint32_vlq(0)
 
-        # Attribute: ServerSessionClientRID (300) = RID 0x80c3c901
+        # Attribute: ServerSessionClientRID (300) = RID 0x80c3c901.
+        # PValue on the wire is DatatypeFlags(1) + Datatype(1) + value; encode_typed_value emits
+        # only Datatype+value (by codec contract), so prepend the flags byte here at the call site.
         request += bytes([ElementID.ATTRIBUTE])
         request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
-        request += encode_typed_value(DataType.RID, 0x80C3C901)
+        request += bytes([0x00]) + encode_typed_value(DataType.RID, 0x80C3C901)
 
         # Nested object: ClassSubscriptions
         request += bytes([ElementID.START_OF_OBJECT])
@@ -661,10 +666,10 @@ class S7CommPlusConnection:
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
 
         logger.debug(f"=== CreateObject === sending ({len(frame)} bytes): {frame.hex(' ')}")
-        self._iso_conn.send_data(frame)
+        self._send_s7_data(frame)
 
         # Receive response
-        response_frame = self._iso_conn.receive_data()
+        response_frame = self._recv_s7_data()
         logger.debug(f"=== CreateObject === received ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse S7CommPlus frame header
@@ -679,8 +684,14 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response too short")
 
-        # Extract session ID from response header
-        self._session_id = struct.unpack_from(">I", response, 9)[0]
+        # Parse response body: ReturnValue(UInt64 VLQ) + ObjectIdCount + ObjectIds(VLQ).
+        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
+        body = response[14:]
+        object_ids, obj_end = parse_create_object_session_id(body)
+        if object_ids:
+            self._session_id = object_ids[0]
+        else:
+            self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
         # Parse and log the full response header
@@ -696,153 +707,11 @@ class S7CommPlusConnection:
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
         # Parse response payload to extract ServerSessionVersion
-        self._parse_create_object_response(response[14:])
-
-    def _parse_create_object_response(self, payload: bytes) -> None:
-        """Parse CreateObject response payload to extract ServerSessionVersion.
-
-        The response contains a PObject tree with attributes. We scan for
-        attribute 306 (ServerSessionVersion) which must be echoed back to
-        complete the session handshake.
-
-        Args:
-            payload: Response payload after the 14-byte response header
-        """
-        offset = 0
-        while offset < len(payload):
-            tag = payload[offset]
-
-            if tag == ElementID.ATTRIBUTE:
-                offset += 1
-                if offset >= len(payload):
-                    break
-                attr_id, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-
-                if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    # Next bytes are the typed value: flags + datatype + VLQ value
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    offset += 2
-                    if datatype == DataType.UDINT:
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
-                    elif datatype == DataType.DWORD:
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
-                    else:
-                        # Skip unknown type - try to continue scanning
-                        logger.debug(f"ServerSessionVersion has unexpected type {datatype:#04x}")
-                else:
-                    # Skip this attribute's value - we don't parse it, just advance
-                    # Try to skip the typed value (flags + datatype + value)
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    offset += 2
-                    offset = self._skip_typed_value(payload, offset, datatype, _flags)
-
-            elif tag == ElementID.START_OF_OBJECT:
-                offset += 1
-                # Skip RelationId (4 bytes fixed) + ClassId (VLQ) + ClassFlags (VLQ) + AttributeId (VLQ)
-                if offset + 4 > len(payload):
-                    break
-                offset += 4  # RelationId
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassId
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassFlags
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # AttributeId
-
-            elif tag == ElementID.TERMINATING_OBJECT:
-                offset += 1
-
-            elif tag == 0x00:
-                # Null terminator / padding
-                offset += 1
-
-            else:
-                # Unknown tag - try to skip
-                offset += 1
-
-        logger.debug("ServerSessionVersion not found in CreateObject response")
-
-    def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
-        """Skip over a typed value in the PObject tree.
-
-        Best-effort: advances offset past common value types.
-        Returns new offset.
-        """
-        is_array = bool(flags & 0x10)
-
-        if is_array:
-            if offset >= len(data):
-                return offset
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            # For fixed-size types, skip count * size
-            elem_size = _element_size(datatype)
-            if elem_size > 0:
-                offset += count * elem_size
-            else:
-                # Variable-length: skip each VLQ element
-                for _ in range(count):
-                    if offset >= len(data):
-                        break
-                    _, consumed = decode_uint32_vlq(data, offset)
-                    offset += consumed
-            return offset
-
-        if datatype == DataType.NULL:
-            return offset
-        elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
-            return offset + 1
-        elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
-            return offset + 2
-        elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
-            _, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed
-        elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
-            _, consumed = decode_uint64_vlq(data, offset)
-            return offset + consumed
-        elif datatype == DataType.REAL:
-            return offset + 4
-        elif datatype == DataType.LREAL:
-            return offset + 8
-        elif datatype == DataType.TIMESTAMP:
-            return offset + 8
-        elif datatype == DataType.TIMESPAN:
-            _, consumed = decode_uint64_vlq(data, offset)  # int64 VLQ
-            return offset + consumed
-        elif datatype == DataType.RID:
-            return offset + 4
-        elif datatype in (DataType.BLOB, DataType.WSTRING):
-            length, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed + length
-        elif datatype == DataType.STRUCT:
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            for _ in range(count):
-                if offset + 2 > len(data):
-                    break
-                sub_flags = data[offset]
-                sub_type = data[offset + 1]
-                offset += 2
-                offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
-            return offset
+        self._server_session_version = parse_server_session_version(response[14 + obj_end :])
+        if self._server_session_version is not None:
+            logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
         else:
-            # Unknown type - can't skip reliably
-            return offset
+            logger.debug("ServerSessionVersion not found in CreateObject response")
 
     def _setup_session(self) -> bool:
         """Send SetMultiVariables to echo ServerSessionVersion back to the PLC.
@@ -884,9 +753,8 @@ class S7CommPlusConnection:
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
         # Value: ItemNumber = 1 (VLQ)
         payload += encode_uint32_vlq(1)
-        # PValue: flags=0x00, type=UDInt, VLQ-encoded value
-        payload += bytes([0x00, DataType.UDINT])
-        payload += encode_uint32_vlq(self._server_session_version)
+        # PValue: echo the ServerSessionVersion typed value verbatim (it is a Struct)
+        payload += self._server_session_version
         # Fill byte
         payload += bytes([0x00])
         # ObjectQualifier
@@ -901,16 +769,16 @@ class S7CommPlusConnection:
         frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
 
         logger.debug(f"=== SetupSession === sending ({len(frame)} bytes): {frame.hex(' ')}")
-        self._iso_conn.send_data(frame)
+        self._send_s7_data(frame)
 
         # Receive response
-        response_frame = self._iso_conn.receive_data()
+        response_frame = self._recv_s7_data()
         logger.debug(f"=== SetupSession === received ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         version, data_length, consumed = decode_header(response_frame)
         response = response_frame[consumed : consumed + data_length]
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("SetupSession response too short")
@@ -918,8 +786,8 @@ class S7CommPlusConnection:
         resp_func = struct.unpack_from(">H", response, 3)[0]
         logger.debug(f"SetupSession response: function=0x{resp_func:04X}")
 
-        # Parse return value from payload
-        resp_payload = response[14:]
+        # Parse return value from payload (data responses use a 10-byte header)
+        resp_payload = response[10:]
         if len(resp_payload) >= 1:
             return_value, _ = decode_uint64_vlq(resp_payload, 0)
             if return_value != 0:
@@ -948,11 +816,11 @@ class S7CommPlusConnection:
 
         frame = encode_header(self._protocol_version, len(request)) + request
         frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
-        self._iso_conn.send_data(frame)
+        self._send_s7_data(frame)
 
         # Best-effort receive
         try:
-            self._iso_conn.receive_data()
+            self._recv_s7_data()
         except Exception:
             pass
 
@@ -962,17 +830,55 @@ class S7CommPlusConnection:
         self._sequence_number = (self._sequence_number + 1) & 0xFFFF
         return seq
 
+    def _send_s7_data(self, data: bytes) -> None:
+        """Send an S7CommPlus frame, routing through TLS when active."""
+        if self._tls_active:
+            self._ssl_object.write(data)  # type: ignore[union-attr]
+            self._tls_flush_outgoing()
+        else:
+            self._iso_conn.send_data(data)
+
+    def _recv_s7_data(self) -> bytes:
+        """Receive an S7CommPlus frame, routing through TLS when active."""
+        if self._tls_active:
+            while True:
+                try:
+                    return self._ssl_object.read(65536)  # type: ignore[union-attr]
+                except ssl.SSLWantReadError:
+                    self._tls_read_incoming()
+        else:
+            return self._iso_conn.receive_data()
+
+    def _tls_flush_outgoing(self) -> None:
+        """Send all pending TLS records through COTP framing."""
+        data = self._outgoing_bio.read()  # type: ignore[union-attr]
+        if data:
+            self._iso_conn.send_data(data)
+
+    def _tls_read_incoming(self) -> None:
+        """Read a COTP frame and feed its payload to the TLS BIO."""
+        data = self._iso_conn.receive_data()
+        self._incoming_bio.write(data)  # type: ignore[union-attr]
+
     def _activate_tls(
         self,
         tls_cert: Optional[str] = None,
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 over the COTP connection.
+        """Activate TLS 1.3 tunneled inside COTP data frames.
 
-        Called after InitSSL and before CreateObject. Wraps the underlying
-        TCP socket with TLS and extracts the OMS exporter secret for
-        legitimation key derivation.
+        The S7CommPlus protocol transports TLS records as the payload
+        of COTP DT frames — TPKT and COTP headers stay unencrypted on
+        the wire. This differs from a standard ``ssl.wrap_socket`` call
+        which would encrypt everything (including TPKT/COTP), which
+        Siemens PLCs reject.
+
+        Uses ``ssl.MemoryBIO`` + ``ssl.SSLObject`` to encrypt/decrypt
+        without wrapping the TCP socket, keeping TPKT/COTP framing
+        intact via ``ISOTCPConnection.send_data/receive_data``.
+
+        Called after InitSSL and before CreateObject.
 
         Args:
             tls_cert: Path to client TLS certificate (PEM)
@@ -985,29 +891,45 @@ class S7CommPlusConnection:
             ca_path=tls_ca,
         )
 
-        # Wrap the raw TCP socket used by ISOTCPConnection
-        raw_socket = self._iso_conn.socket
-        if raw_socket is None:
-            from snap7.error import S7ConnectionError
+        # BIO-based TLS: encrypt/decrypt bytes without touching the
+        # TCP socket, so TPKT/COTP framing stays unencrypted.
+        self._incoming_bio = ssl.MemoryBIO()
+        self._outgoing_bio = ssl.MemoryBIO()
+        self._ssl_object = ctx.wrap_bio(
+            self._incoming_bio,
+            self._outgoing_bio,
+            server_side=False,
+            server_hostname=self.host if ctx.check_hostname else None,
+        )
 
-            raise S7ConnectionError("Cannot activate TLS: no TCP socket")
+        # TLS handshake — records tunnel through COTP frames
+        self._do_tls_handshake()
 
-        self._ssl_socket = ctx.wrap_socket(raw_socket, server_hostname=self.host)
-
-        # Replace the socket in ISOTCPConnection so all subsequent
-        # send_data/receive_data calls go through TLS
-        self._iso_conn.socket = self._ssl_socket
         self._tls_active = True
 
         # Extract OMS exporter secret for legitimation key derivation
         try:
-            self._oms_secret = self._ssl_socket.export_keying_material("EXPERIMENTAL_OMS", 32, None)
+            self._oms_secret = self._ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
             logger.debug("OMS exporter secret extracted from TLS session")
         except (AttributeError, ssl.SSLError) as e:
             logger.warning(f"Could not extract OMS exporter secret: {e}")
             self._oms_secret = None
 
-        logger.info("TLS 1.3 activated on COTP connection")
+        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
+
+    def _do_tls_handshake(self) -> None:
+        """Perform TLS handshake, tunneling records through COTP."""
+        while True:
+            try:
+                self._ssl_object.do_handshake()  # type: ignore[union-attr]
+                break
+            except ssl.SSLWantReadError:
+                self._tls_flush_outgoing()
+                self._tls_read_incoming()
+            except ssl.SSLWantWriteError:
+                # Rare with MemoryBIO, but the SSLObject can ask to write before reading.
+                self._tls_flush_outgoing()
+        self._tls_flush_outgoing()
 
     def _setup_ssl_context(
         self,

@@ -365,65 +365,76 @@ class S7CommPlusServer:
 
             # Step 2: S7CommPlus session
             session_id = 0
-            tls_activated = False
             # Per-client IntegrityId tracking (V2+)
             integrity_id_read = 0
             integrity_id_write = 0
+            # Per-client TLS state (None until activated). Like a real S7-1500, TLS records
+            # are tunneled inside COTP DT frames — the TPKT/COTP headers stay unencrypted.
+            tls: dict[str, Any] = {"obj": None, "in": None, "out": None}
+
+            def recv_app_frame() -> Optional[bytes]:
+                raw = self._recv_s7commplus_frame(client_sock)
+                if raw is None or tls["obj"] is None:
+                    return raw
+                tls["in"].write(raw)
+                while True:
+                    try:
+                        return tls["obj"].read(65536)
+                    except ssl.SSLWantReadError:
+                        more = self._recv_s7commplus_frame(client_sock)
+                        if more is None:
+                            return None
+                        tls["in"].write(more)
+
+            def send_app_frame(data: bytes) -> None:
+                frame = encode_header(self._protocol_version, len(data)) + data
+                frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
+                if tls["obj"] is None:
+                    self._send_cotp_dt_raw(client_sock, frame)
+                else:
+                    tls["obj"].write(frame)
+                    out = tls["out"].read()
+                    if out:
+                        self._send_cotp_dt_raw(client_sock, out)
 
             while self._running:
                 try:
-                    # Receive TPKT + COTP DT + S7CommPlus data
-                    data = self._recv_s7commplus_frame(client_sock)
+                    data = recv_app_frame()
                     if data is None:
                         break
 
-                    # Process the S7CommPlus request
-                    response = self._process_request(data, session_id, integrity_id_read, integrity_id_write)
+                    # Decode the request function code once (used for TLS + IntegrityId).
+                    func_code = None
+                    try:
+                        _, _, hdr_consumed = decode_header(data)
+                        payload = data[hdr_consumed:]
+                        if len(payload) >= 14:
+                            func_code = struct.unpack_from(">H", payload, 3)[0]
+                    except (ValueError, struct.error):
+                        pass
 
+                    response = self._process_request(data, session_id, integrity_id_read, integrity_id_write)
                     if response is not None:
-                        # Check if session ID was assigned
                         if session_id == 0 and len(response) >= 14:
                             session_id = struct.unpack_from(">I", response, 9)[0]
+                        send_app_frame(response)
 
-                        self._send_s7commplus_frame(client_sock, response)
-
-                    # After InitSSL response, activate TLS if configured
+                    # Activate TLS right after the InitSSL response, tunneled inside COTP.
                     if (
-                        not tls_activated
+                        tls["obj"] is None
                         and self._use_tls
                         and self._ssl_context is not None
-                        and data is not None
-                        and len(data) >= 8
+                        and func_code == FunctionCode.INIT_SSL
                     ):
-                        # Check if this was an InitSSL request
-                        try:
-                            _, _, hdr_consumed = decode_header(data)
-                            payload = data[hdr_consumed:]
-                            if len(payload) >= 14:
-                                func_code = struct.unpack_from(">H", payload, 3)[0]
-                                if func_code == FunctionCode.INIT_SSL:
-                                    client_sock = self._ssl_context.wrap_socket(client_sock, server_side=True)
-                                    tls_activated = True
-                                    logger.debug(f"TLS activated for client {address}")
-                        except (ValueError, struct.error):
-                            pass
+                        tls["obj"], tls["in"], tls["out"] = self._server_tls_handshake(client_sock)
+                        logger.debug(f"TLS activated (COTP-tunneled) for client {address}")
 
-                    # Update IntegrityId counters based on function code (V2+)
-                    if self._protocol_version >= ProtocolVersion.V2 and session_id != 0:
-                        try:
-                            _, _, hdr_consumed = decode_header(data)
-                            payload = data[hdr_consumed:]
-                            if len(payload) >= 14:
-                                func_code = struct.unpack_from(">H", payload, 3)[0]
-                                if func_code in READ_FUNCTION_CODES:
-                                    integrity_id_read = (integrity_id_read + 1) & 0xFFFFFFFF
-                                elif func_code not in (
-                                    FunctionCode.INIT_SSL,
-                                    FunctionCode.CREATE_OBJECT,
-                                ):
-                                    integrity_id_write = (integrity_id_write + 1) & 0xFFFFFFFF
-                        except (ValueError, struct.error):
-                            pass
+                    # Update IntegrityId counters based on function code (V2+).
+                    if self._protocol_version >= ProtocolVersion.V2 and session_id != 0 and func_code is not None:
+                        if func_code in READ_FUNCTION_CODES:
+                            integrity_id_read = (integrity_id_read + 1) & 0xFFFFFFFF
+                        elif func_code not in (FunctionCode.INIT_SSL, FunctionCode.CREATE_OBJECT):
+                            integrity_id_write = (integrity_id_write + 1) & 0xFFFFFFFF
 
                 except socket.timeout:
                     continue
@@ -438,6 +449,29 @@ class S7CommPlusServer:
             except Exception:
                 pass
             logger.info(f"Client disconnected: {address}")
+
+    def _server_tls_handshake(self, sock: socket.socket) -> tuple[Any, Any, Any]:
+        """Perform the server-side TLS handshake, tunneling records through COTP DT frames."""
+        assert self._ssl_context is not None
+        in_bio = ssl.MemoryBIO()
+        out_bio = ssl.MemoryBIO()
+        ssl_obj = self._ssl_context.wrap_bio(in_bio, out_bio, server_side=True)
+        while True:
+            try:
+                ssl_obj.do_handshake()
+                break
+            except ssl.SSLWantReadError:
+                out = out_bio.read()
+                if out:
+                    self._send_cotp_dt_raw(sock, out)
+                rec = self._recv_s7commplus_frame(sock)
+                if rec is None:
+                    raise ConnectionError("client closed during TLS handshake")
+                in_bio.write(rec)
+        out = out_bio.read()
+        if out:
+            self._send_cotp_dt_raw(sock, out)
+        return ssl_obj, in_bio, out_bio
 
     def _handle_cotp_connect(self, sock: socket.socket) -> bool:
         """Handle COTP Connection Request / Confirm."""
@@ -506,16 +540,12 @@ class S7CommPlusServer:
         except Exception:
             return None
 
-    def _send_s7commplus_frame(self, sock: socket.socket, data: bytes) -> None:
-        """Send an S7CommPlus frame wrapped in TPKT/COTP."""
-        # S7CommPlus header (4 bytes) + data + trailer (4 bytes)
-        s7plus_frame = encode_header(self._protocol_version, len(data)) + data
-        s7plus_frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
+    def _send_cotp_dt_raw(self, sock: socket.socket, data: bytes) -> None:
+        """Send raw bytes wrapped in a COTP DT + TPKT frame (no TLS, no S7CommPlus header).
 
-        # COTP DT header
-        cotp_dt = struct.pack(">BBB", 2, 0xF0, 0x80) + s7plus_frame
-
-        # TPKT
+        Carries either a plaintext S7CommPlus frame or, once TLS is active, a TLS record.
+        """
+        cotp_dt = struct.pack(">BBB", 2, 0xF0, 0x80) + data
         tpkt = struct.pack(">BBH", 3, 0, 4 + len(cotp_dt)) + cotp_dt
         sock.sendall(tpkt)
 
@@ -550,18 +580,11 @@ class S7CommPlusServer:
         seq_num = struct.unpack_from(">H", payload, 7)[0]
         req_session_id = struct.unpack_from(">I", payload, 9)[0]
 
-        # For V2+, skip IntegrityId after the 14-byte header
-        request_offset = 14
-        if (
-            self._protocol_version >= ProtocolVersion.V2
-            and session_id != 0
-            and function_code not in (FunctionCode.INIT_SSL, FunctionCode.CREATE_OBJECT)
-        ):
-            if request_offset < len(payload):
-                _req_iid, iid_consumed = decode_uint32_vlq(payload, request_offset)
-                request_offset += iid_consumed
-
-        request_data = payload[request_offset:]
+        # The request header is 14 bytes (opcode + reserved + function + reserved
+        # + seqnr + SessionId + transport).  For V2+ the IntegrityId travels at the
+        # *end* of the payload (just before the trailing UInt32), where the request
+        # parsers harmlessly ignore it -- so the data simply starts after the header.
+        request_data = payload[14:]
 
         if function_code == FunctionCode.INIT_SSL:
             return self._handle_init_ssl(seq_num)
@@ -578,39 +601,31 @@ class S7CommPlusServer:
         else:
             return self._build_error_response(seq_num, req_session_id, function_code)
 
-    def _build_response_header(
-        self,
-        function_code: int,
-        seq_num: int,
-        session_id: int,
-        include_integrity_id: bool = False,
-        integrity_id: int = 0,
-    ) -> bytes:
-        """Build a 14-byte response header, optionally with IntegrityId (V2+).
+    def _build_response_header(self, function_code: int, seq_num: int) -> bytes:
+        """Build a 10-byte S7CommPlus data-response header.
+
+        Unlike requests (which carry a 4-byte SessionId, giving a 14-byte
+        header), real S7-1500 *responses* omit the SessionId field, so the
+        data header is 10 bytes: opcode + reserved + function + reserved +
+        seqnr + transport.  For V2+, the IntegrityId travels at the *end* of
+        the payload (appended by the individual handlers), not in the header.
 
         Args:
             function_code: Response function code
             seq_num: Sequence number echoed from request
-            session_id: Session ID
-            include_integrity_id: If True, append VLQ IntegrityId after header
-            integrity_id: IntegrityId value to include
 
         Returns:
-            Response header bytes (14 bytes, or 14+VLQ for V2+)
+            Response header bytes (10 bytes)
         """
-        header = struct.pack(
-            ">BHHHHIB",
+        return struct.pack(
+            ">BHHHHB",
             Opcode.RESPONSE,
             0x0000,
             function_code,
             0x0000,
             seq_num,
-            session_id,
             0x00,
         )
-        if include_integrity_id:
-            header += encode_uint32_vlq(integrity_id)
-        return header
 
     def _handle_init_ssl(self, seq_num: int) -> bytes:
         """Handle InitSSL -- respond to SSL initialization (V1 emulation, no real TLS)."""
@@ -653,6 +668,11 @@ class S7CommPlusServer:
         # Return code: success
         response += encode_uint32_vlq(0)
 
+        # ObjectIds block: a real S7-1500 returns the usable session id here as
+        # ObjectIds[0] (NOT in the response header).  Emit a single id.
+        response += bytes([0x01])  # ObjectId count
+        response += encode_uint32_vlq(session_id)
+
         # Object with session info
         response += bytes([ElementID.START_OF_OBJECT])
         response += struct.pack(">I", 0x00000001)  # Relation ID
@@ -660,15 +680,15 @@ class S7CommPlusServer:
         response += encode_uint32_vlq(0x00000000)  # Class flags
         response += encode_uint32_vlq(0x00000000)  # Attribute ID
 
-        # Session ID attribute
+        # Session ID attribute (PValue on the wire = flags + datatype + value)
         response += bytes([ElementID.ATTRIBUTE])
         response += encode_uint32_vlq(0x0131)  # ServerSession ID attribute
-        response += encode_typed_value(DataType.UDINT, session_id)
+        response += bytes([0x00]) + encode_typed_value(DataType.UDINT, session_id)
 
         # Protocol version attribute
         response += bytes([ElementID.ATTRIBUTE])
         response += encode_uint32_vlq(0x0132)  # Protocol version attribute
-        response += encode_typed_value(DataType.USINT, self._protocol_version)
+        response += bytes([0x00]) + encode_typed_value(DataType.USINT, self._protocol_version)
 
         # ServerSessionVersion attribute (306) - required for session setup handshake
         from .protocol import ObjectId
@@ -688,16 +708,7 @@ class S7CommPlusServer:
     def _handle_delete_object(self, seq_num: int, session_id: int) -> bytes:
         """Handle DeleteObject -- close a session."""
         response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.DELETE_OBJECT,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
+        response += self._build_response_header(FunctionCode.DELETE_OBJECT, seq_num)
         response += encode_uint32_vlq(0)  # Return code: success
         response += struct.pack(">I", 0)
         return bytes(response)
@@ -705,16 +716,7 @@ class S7CommPlusServer:
     def _handle_explore(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle Explore -- return the object tree (registered data blocks)."""
         response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.EXPLORE,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
+        response += self._build_response_header(FunctionCode.EXPLORE, seq_num)
         response += encode_uint32_vlq(0)  # Return code: success
 
         # Return list of data blocks as objects using standard S7CommPlus IDs
@@ -779,16 +781,7 @@ class S7CommPlusServer:
         Reference: thomas-v2/S7CommPlusDriver/Core/GetMultiVariablesRequest.cs
         """
         response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.GET_MULTI_VARIABLES,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
+        response += self._build_response_header(FunctionCode.GET_MULTI_VARIABLES, seq_num)
 
         # Parse request payload
         items = _server_parse_read_request(request_data)
@@ -829,16 +822,7 @@ class S7CommPlusServer:
         Reference: thomas-v2/S7CommPlusDriver/Core/SetMultiVariablesRequest.cs
         """
         response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.SET_MULTI_VARIABLES,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
+        response += self._build_response_header(FunctionCode.SET_MULTI_VARIABLES, seq_num)
 
         # Parse request payload
         items, values = _server_parse_write_request(request_data)
@@ -871,16 +855,7 @@ class S7CommPlusServer:
     def _build_error_response(self, seq_num: int, session_id: int, function_code: int) -> bytes:
         """Build a generic error response for unsupported function codes."""
         response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.ERROR,
-            0x0000,
-            seq_num,
-            session_id,
-            0x00,
-        )
+        response += self._build_response_header(FunctionCode.ERROR, seq_num)
         response += encode_uint32_vlq(0x04B1)  # Error function code
         response += struct.pack(">I", 0)
         return bytes(response)

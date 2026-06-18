@@ -24,7 +24,14 @@ from .protocol import (
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
 )
-from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
+from .codec import (
+    encode_header,
+    decode_header,
+    encode_typed_value,
+    encode_object_qualifier,
+    parse_create_object_session_id,
+    parse_server_session_version,
+)
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from ._s7commplus_client import (
     _build_read_payload,
@@ -69,10 +76,16 @@ class S7CommPlusAsyncClient:
         self._integrity_id_write: int = 0
         self._with_integrity_id: bool = False
 
-        # TLS state
+        # TLS state — TLS records are tunneled inside COTP DT frames via MemoryBIO
+        # (TPKT/COTP headers stay unencrypted), mirroring the sync S7CommPlusConnection.
         self._tls_active: bool = False
+        self._ssl_object: Optional[ssl.SSLObject] = None
+        self._incoming_bio: Optional[ssl.MemoryBIO] = None
+        self._outgoing_bio: Optional[ssl.MemoryBIO] = None
         self._oms_secret: Optional[bytes] = None
-        self._server_session_version: Optional[int] = None
+        # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
+        # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
+        self._server_session_version: Optional[bytes] = None
         self._session_setup_ok: bool = False
 
     @property
@@ -144,6 +157,11 @@ class S7CommPlusAsyncClient:
 
             # Step 4: S7CommPlus session setup (CreateObject)
             await self._create_session()
+
+            # After CreateObject (which always uses V1 framing), data PDUs over TLS
+            # use ProtocolVersion V2 on a real S7-1500 (matches the C# reference driver).
+            if self._tls_active:
+                self._protocol_version = ProtocolVersion.V2
 
             # Step 5: Version-specific validation
             if self._protocol_version >= ProtocolVersion.V3:
@@ -244,33 +262,57 @@ class S7CommPlusAsyncClient:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-        transport = self._writer.transport
-        loop = asyncio.get_event_loop()
-        new_transport = await loop.start_tls(
-            transport,
-            transport.get_protocol(),
-            ctx,
-            server_hostname=self._host,
+        # BIO-based TLS: encrypt/decrypt in memory so the TLS records can be tunneled
+        # through COTP DT frames (TPKT/COTP stay unencrypted) — `start_tls` would instead
+        # wrap the whole TCP stream, encrypting TPKT/COTP too, which the PLC rejects.
+        self._incoming_bio = ssl.MemoryBIO()
+        self._outgoing_bio = ssl.MemoryBIO()
+        self._ssl_object = ctx.wrap_bio(
+            self._incoming_bio,
+            self._outgoing_bio,
+            server_side=False,
+            server_hostname=self._host if ctx.check_hostname else None,
         )
 
-        self._writer._transport = new_transport
+        await self._do_tls_handshake()
         self._tls_active = True
 
-        if new_transport is None:
-            from snap7.error import S7ConnectionError
+        try:
+            self._oms_secret = self._ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
+            logger.debug("OMS exporter secret extracted from TLS session")
+        except (AttributeError, ssl.SSLError) as e:
+            logger.warning(f"Could not extract OMS exporter secret: {e}")
+            self._oms_secret = None
 
-            raise S7ConnectionError("TLS handshake failed: no transport returned")
+        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
 
-        ssl_object = new_transport.get_extra_info("ssl_object")
-        if ssl_object is not None:
+    async def _do_tls_handshake(self) -> None:
+        """Perform the TLS handshake, tunneling records through COTP DT frames."""
+        assert self._ssl_object is not None
+        while True:
             try:
-                self._oms_secret = ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
-                logger.debug("OMS exporter secret extracted from TLS session")
-            except (AttributeError, ssl.SSLError) as e:
-                logger.warning(f"Could not extract OMS exporter secret: {e}")
-                self._oms_secret = None
+                self._ssl_object.do_handshake()
+                break
+            except ssl.SSLWantReadError:
+                await self._tls_flush_outgoing()
+                await self._tls_read_incoming()
+            except ssl.SSLWantWriteError:
+                # Rare with MemoryBIO, but the SSLObject can ask to write before reading.
+                await self._tls_flush_outgoing()
+        await self._tls_flush_outgoing()
 
-        logger.info("TLS 1.3 activated on async COTP connection")
+    async def _tls_flush_outgoing(self) -> None:
+        """Send all pending outgoing TLS bytes as COTP DT frames."""
+        assert self._outgoing_bio is not None
+        data = self._outgoing_bio.read()
+        if data:
+            await self._send_cotp_raw(data)
+
+    async def _tls_read_incoming(self) -> None:
+        """Read one COTP DT frame and feed its payload to the TLS BIO."""
+        assert self._incoming_bio is not None
+        data = await self._recv_cotp_raw()
+        self._incoming_bio.write(data)
 
     async def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC."""
@@ -374,6 +416,9 @@ class S7CommPlusAsyncClient:
         self._integrity_id_read = 0
         self._integrity_id_write = 0
         self._tls_active = False
+        self._ssl_object = None
+        self._incoming_bio = None
+        self._outgoing_bio = None
         self._oms_secret = None
         self._server_session_version = None
         self._session_setup_ok = False
@@ -484,7 +529,7 @@ class S7CommPlusAsyncClient:
                 0x0000,
                 seq_num,
                 self._session_id,
-                0x36,
+                0x34 if function_code == FunctionCode.GET_MULTI_VARIABLES else 0x36,
             )
 
             integrity_id_bytes = b""
@@ -493,7 +538,12 @@ class S7CommPlusAsyncClient:
                 integrity_id = self._integrity_id_read if is_read else self._integrity_id_write
                 integrity_id_bytes = encode_uint32_vlq(integrity_id)
 
-            request = request_header + integrity_id_bytes + payload
+            # For V2+ the IntegrityId is spliced in just before the payload's trailing
+            # UInt32 (i.e. at the end), not right after the header.
+            if integrity_id_bytes and len(payload) >= 4:
+                request = request_header + payload[:-4] + integrity_id_bytes + payload[-4:]
+            else:
+                request = request_header + integrity_id_bytes + payload
 
             frame = encode_header(self._protocol_version, len(request)) + request
             frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
@@ -510,16 +560,13 @@ class S7CommPlusAsyncClient:
             version, data_length, consumed = decode_header(response_data)
             response = response_data[consumed : consumed + data_length]
 
-            if len(response) < 14:
+            if len(response) < 10:
                 raise RuntimeError("Response too short")
 
-            resp_offset = 14
-            if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
-                if resp_offset < len(response):
-                    _resp_iid, iid_consumed = decode_uint32_vlq(response, resp_offset)
-                    resp_offset += iid_consumed
-
-            return response[resp_offset:]
+            # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
+            # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
+            # IntegrityId travels at the END of the payload and is ignored by the parsers.
+            return response[10:]
 
     async def _cotp_connect(self, local_tsap: int, remote_tsap: bytes) -> None:
         """Perform COTP Connection Request / Confirm handshake."""
@@ -601,7 +648,7 @@ class S7CommPlusAsyncClient:
 
         request += bytes([ElementID.ATTRIBUTE])
         request += encode_uint32_vlq(ObjectId.SERVER_SESSION_CLIENT_RID)
-        request += encode_typed_value(DataType.RID, 0x80C3C901)
+        request += bytes([0x00]) + encode_typed_value(DataType.RID, 0x80C3C901)
 
         request += bytes([ElementID.START_OF_OBJECT])
         request += struct.pack(">I", ObjectId.GET_NEW_RID_ON_SERVER)
@@ -624,66 +671,21 @@ class S7CommPlusAsyncClient:
         if len(response) < 14:
             raise RuntimeError("CreateObject response too short")
 
-        self._session_id = struct.unpack_from(">I", response, 9)[0]
+        # Parse response body: ReturnValue(VLQ) + ObjectIdCount + ObjectIds(VLQ).
+        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
+        body = response[14:]
+        object_ids, obj_end = parse_create_object_session_id(body)
+        if object_ids:
+            self._session_id = object_ids[0]
+        else:
+            self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
-        self._parse_create_object_response(response[14:])
-
-    def _parse_create_object_response(self, payload: bytes) -> None:
-        """Parse CreateObject response to extract ServerSessionVersion (attribute 306)."""
-        offset = 0
-        while offset < len(payload):
-            tag = payload[offset]
-
-            if tag == ElementID.ATTRIBUTE:
-                offset += 1
-                if offset >= len(payload):
-                    break
-                attr_id, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-
-                if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    offset += 2
-                    if datatype in (DataType.UDINT, DataType.DWORD):
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = value
-                        logger.info(f"ServerSessionVersion = {value}")
-                        return
-                else:
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    _dt = payload[offset + 1]
-                    offset += 2
-                    if offset < len(payload):
-                        _, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-
-            elif tag == ElementID.START_OF_OBJECT:
-                offset += 1
-                if offset + 4 > len(payload):
-                    break
-                offset += 4
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-
-            elif tag == ElementID.TERMINATING_OBJECT:
-                offset += 1
-            elif tag == 0x00:
-                offset += 1
-            else:
-                offset += 1
-
-        logger.debug("ServerSessionVersion not found in CreateObject response")
+        self._server_session_version = parse_server_session_version(response[14 + obj_end :])
+        if self._server_session_version is not None:
+            logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
+        else:
+            logger.debug("ServerSessionVersion not found in CreateObject response")
 
     async def _setup_session(self) -> bool:
         """Echo ServerSessionVersion back to the PLC via SetMultiVariables."""
@@ -696,8 +698,8 @@ class S7CommPlusAsyncClient:
         payload += encode_uint32_vlq(1)
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
         payload += encode_uint32_vlq(1)
-        payload += bytes([0x00, DataType.UDINT])
-        payload += encode_uint32_vlq(self._server_session_version)
+        # PValue: echo the ServerSessionVersion typed value verbatim (it may be a Struct)
+        payload += self._server_session_version
         payload += bytes([0x00])
         payload += encode_object_qualifier()
         payload += struct.pack(">I", 0)
@@ -743,7 +745,28 @@ class S7CommPlusAsyncClient:
             pass
 
     async def _send_cotp_dt(self, data: bytes) -> None:
-        """Send data wrapped in COTP DT + TPKT."""
+        """Send an S7CommPlus frame, routing through TLS (tunneled in COTP) when active."""
+        if self._tls_active:
+            assert self._ssl_object is not None
+            self._ssl_object.write(data)
+            await self._tls_flush_outgoing()
+        else:
+            await self._send_cotp_raw(data)
+
+    async def _recv_cotp_dt(self) -> bytes:
+        """Receive an S7CommPlus frame, decrypting from the TLS tunnel when active."""
+        if self._tls_active:
+            assert self._ssl_object is not None
+            while True:
+                try:
+                    return self._ssl_object.read(65536)
+                except ssl.SSLWantReadError:
+                    await self._tls_read_incoming()
+        else:
+            return await self._recv_cotp_raw()
+
+    async def _send_cotp_raw(self, data: bytes) -> None:
+        """Send raw bytes wrapped in COTP DT + TPKT (no TLS)."""
         if self._writer is None:
             raise RuntimeError("Not connected")
 
@@ -752,8 +775,8 @@ class S7CommPlusAsyncClient:
         self._writer.write(tpkt)
         await self._writer.drain()
 
-    async def _recv_cotp_dt(self) -> bytes:
-        """Receive TPKT + COTP DT and return the payload."""
+    async def _recv_cotp_raw(self) -> bytes:
+        """Receive one TPKT + COTP DT frame and return the payload (no TLS)."""
         if self._reader is None:
             raise RuntimeError("Not connected")
 

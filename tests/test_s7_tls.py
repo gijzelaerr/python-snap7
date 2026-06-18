@@ -238,3 +238,85 @@ class TestAsyncClientV2WithTLS:
 
         assert not client.connected
         assert not client.tls_active
+
+
+class TestSyncTLSBioPlumbing:
+    """Unit tests for the sync client's MemoryBIO-based TLS-in-COTP routing.
+
+    Exercises _do_tls_handshake / _send_s7_data / _recv_s7_data / _tls_flush_outgoing /
+    _tls_read_incoming against a self-connected server SSLObject — no socket, no PLC.
+    """
+
+    def _make_connected_pair(self):
+        import ssl
+        from s7.connection import S7CommPlusConnection
+
+        cert_path, key_path = _generate_self_signed_cert()
+
+        server_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_ctx.load_cert_chain(cert_path, key_path)
+        server_in, server_out = ssl.MemoryBIO(), ssl.MemoryBIO()
+        server_ssl = server_ctx.wrap_bio(server_in, server_out, server_side=True)
+
+        client_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        client_ctx.check_hostname = False
+        client_ctx.verify_mode = ssl.CERT_NONE
+
+        conn = S7CommPlusConnection("127.0.0.1", 102)
+        conn._incoming_bio = ssl.MemoryBIO()
+        conn._outgoing_bio = ssl.MemoryBIO()
+        conn._ssl_object = client_ctx.wrap_bio(conn._incoming_bio, conn._outgoing_bio)
+
+        # Loopback iso layer: ciphertext the client "sends" goes into the server's
+        # incoming BIO; bytes the client "receives" are popped from inbox.
+        class _Loop:
+            def __init__(self) -> None:
+                self.inbox: list[bytes] = []
+
+            def send_data(self, data: bytes) -> None:
+                server_in.write(data)
+
+            def receive_data(self) -> bytes:
+                return self.inbox.pop(0)
+
+        conn._iso_conn = _Loop()  # type: ignore[assignment]
+
+        # Deterministic handshake pump (mirrors the BIO mechanism without blocking I/O).
+        client_done = server_done = False
+        for _ in range(40):
+            try:
+                conn._ssl_object.do_handshake()
+                client_done = True
+            except ssl.SSLWantReadError:
+                pass
+            out = conn._outgoing_bio.read()
+            if out:
+                server_in.write(out)
+            try:
+                server_ssl.do_handshake()
+                server_done = True
+            except ssl.SSLWantReadError:
+                pass
+            out = server_out.read()
+            if out:
+                conn._incoming_bio.write(out)
+            if client_done and server_done:
+                break
+        assert client_done and server_done, "TLS handshake did not complete over MemoryBIO"
+
+        conn._tls_active = True
+        return conn, server_ssl, server_out
+
+    def test_send_routes_encrypted_through_cotp_layer(self) -> None:
+        conn, server_ssl, _server_out = self._make_connected_pair()
+        frame = struct.pack(">BBH", 0x72, 0x02, 4) + b"\xde\xad\xbe\xef"
+        conn._send_s7_data(frame)
+        # The server decrypts exactly what the client sent through the BIO plumbing.
+        assert server_ssl.read(65536) == frame
+
+    def test_recv_routes_decrypted_from_cotp_layer(self) -> None:
+        conn, server_ssl, server_out = self._make_connected_pair()
+        payload = b"\x72\x02\x00\x00pushed-frame"
+        server_ssl.write(payload)
+        conn._iso_conn.inbox.append(server_out.read())  # queue ciphertext for the client
+        assert conn._recv_s7_data() == payload

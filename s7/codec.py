@@ -13,9 +13,9 @@ Reference: thomas-v2/S7CommPlusDriver/Core/S7p.cs
 """
 
 import struct
-from typing import Any
+from typing import Any, Optional
 
-from .protocol import PROTOCOL_ID, DataType, Ids
+from .protocol import PROTOCOL_ID, DataType, ElementID, Ids, ObjectId
 from .vlq import (
     encode_uint32_vlq,
     decode_uint32_vlq,
@@ -493,3 +493,144 @@ def _pvalue_element_size(datatype: int) -> int:
         return 4
     else:
         return 0  # Variable-length (VLQ encoded)
+
+
+# -- PObject-tree parsing shared by the sync (S7CommPlusConnection) and async clients --
+
+
+def skip_typed_value(data: bytes, offset: int, datatype: int, flags: int) -> int:
+    """Skip over a typed value in the PObject tree (best-effort). Returns the new offset."""
+    is_array = bool(flags & 0x10)
+
+    if is_array:
+        if offset >= len(data):
+            return offset
+        count, consumed = decode_uint32_vlq(data, offset)
+        offset += consumed
+        elem_size = _pvalue_element_size(datatype)
+        if elem_size > 0:
+            offset += count * elem_size
+        else:
+            # Variable-length: skip each VLQ element.
+            for _ in range(count):
+                if offset >= len(data):
+                    break
+                _, consumed = decode_uint32_vlq(data, offset)
+                offset += consumed
+        return offset
+
+    if datatype == DataType.NULL:
+        return offset
+    elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
+        return offset + 1
+    elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
+        return offset + 2
+    elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
+        _, consumed = decode_uint32_vlq(data, offset)
+        return offset + consumed
+    elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
+        _, consumed = decode_uint64_vlq(data, offset)
+        return offset + consumed
+    elif datatype == DataType.REAL:
+        return offset + 4
+    elif datatype == DataType.LREAL:
+        return offset + 8
+    elif datatype == DataType.TIMESTAMP:
+        return offset + 8
+    elif datatype == DataType.TIMESPAN:
+        _, consumed = decode_uint64_vlq(data, offset)  # int64 VLQ
+        return offset + consumed
+    elif datatype == DataType.RID:
+        return offset + 4
+    elif datatype in (DataType.BLOB, DataType.WSTRING):
+        length, consumed = decode_uint32_vlq(data, offset)
+        return offset + consumed + length
+    elif datatype == DataType.STRUCT:
+        # Normal-mode struct: UInt32 struct-id, then members [VLQ key][typed value],
+        # terminated by a 0x00 list-terminator byte (keys always start with high bit set).
+        offset += 4  # struct id (UInt32, not VLQ)
+        while offset < len(data):
+            if data[offset] == 0x00:
+                offset += 1
+                break
+            _key, consumed = decode_uint32_vlq(data, offset)
+            offset += consumed
+            if offset + 2 > len(data):
+                break
+            sub_flags = data[offset]
+            sub_type = data[offset + 1]
+            offset += 2
+            offset = skip_typed_value(data, offset, sub_type, sub_flags)
+        return offset
+    else:
+        # Unknown type — can't skip reliably.
+        return offset
+
+
+def parse_create_object_session_id(body: bytes) -> tuple[list[int], int]:
+    """Parse a CreateObject response body (after the 14-byte response header).
+
+    Body layout: ReturnValue (UInt64 VLQ) + ObjectIdCount (1 byte) + ObjectIds (UInt32 VLQ
+    each). The usable session id is ``ObjectIds[0]`` (not the header SessionId field).
+
+    Returns ``(object_ids, offset)`` where ``offset`` points just past the ObjectIds.
+    """
+    _return_value, consumed = decode_uint64_vlq(body, 0)
+    boff = consumed
+    obj_count = body[boff] if boff < len(body) else 0
+    boff += 1
+    object_ids: list[int] = []
+    for _ in range(obj_count):
+        oid, c = decode_uint32_vlq(body, boff)
+        boff += c
+        object_ids.append(oid)
+    return object_ids, boff
+
+
+def parse_server_session_version(payload: bytes) -> Optional[bytes]:
+    """Scan a CreateObject response payload for the ServerSessionVersion attribute (306).
+
+    Returns the raw typed value (flags + datatype + data) to echo back during session
+    setup, or ``None`` if the attribute is not present. Real S7-1500 PLCs send it as a
+    Struct (0x17).
+    """
+    offset = 0
+    while offset < len(payload):
+        tag = payload[offset]
+
+        if tag == ElementID.ATTRIBUTE:
+            offset += 1
+            if offset >= len(payload):
+                break
+            attr_id, consumed = decode_uint32_vlq(payload, offset)
+            offset += consumed
+
+            if offset + 2 > len(payload):
+                break
+            flags = payload[offset]
+            datatype = payload[offset + 1]
+
+            if attr_id == ObjectId.SERVER_SESSION_VERSION:
+                value_start = offset
+                end = skip_typed_value(payload, offset + 2, datatype, flags)
+                return bytes(payload[value_start:end])
+            else:
+                offset = skip_typed_value(payload, offset + 2, datatype, flags)
+
+        elif tag == ElementID.START_OF_OBJECT:
+            offset += 1
+            if offset + 4 > len(payload):
+                break
+            offset += 4  # RelationId (fixed)
+            for _ in range(3):  # ClassId, ClassFlags, AttributeId (each VLQ)
+                _, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed
+
+        elif tag == ElementID.TERMINATING_OBJECT:
+            offset += 1
+        elif tag == 0x00:
+            offset += 1  # null terminator / padding
+        else:
+            offset += 1  # unknown tag — skip
+
+    return None
