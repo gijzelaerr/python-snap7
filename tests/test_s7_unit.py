@@ -9,7 +9,10 @@ from s7._s7commplus_client import (
     _parse_read_response,
     _build_write_payload,
     _parse_write_response,
+    _build_explore_request,
+    _parse_explore_datablocks,
 )
+from s7.connection import S7CommPlusConnection
 from s7.codec import encode_pvalue_blob
 from s7.codec import _pvalue_element_size as _element_size
 from s7.codec import skip_typed_value, parse_server_session_version
@@ -453,3 +456,99 @@ class TestClientErrorPaths:
         with S7CommPlusClient() as client:
             assert client.connected is False
         # Should not raise
+
+
+class TestExploreDatablocks:
+    """Test the EXPLORE(thePLCProgram) request format and DB-list parser."""
+
+    def test_build_explore_request_format(self) -> None:
+        # ExploreId as a fixed UInt32, then the marker bytes, address count + ids,
+        # and a 5-byte trailer (UInt32 fill + filler byte) for the IntegrityId splice.
+        from s7.protocol import Ids
+
+        payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [233, 2521])
+        assert payload[:4] == struct.pack(">I", Ids.NATIVE_THE_PLC_PROGRAM_RID)
+        assert payload[4] == 0  # ExploreRequestId
+        assert payload[5:9] == bytes([1, 1, 0, 0])  # recursive, unknown, parents, following
+        assert payload.endswith(bytes(5))  # UInt32 fill + filler byte
+
+    def test_parse_explore_datablocks(self) -> None:
+        from s7.protocol import Ids
+
+        r = bytearray()
+        r += encode_uint64_vlq(0)  # ReturnValue
+        # A DataBlock object: ClassId DB_CLASS_RID, RelationId in the DB area.
+        r += bytes([ElementID.START_OF_OBJECT])
+        r += struct.pack(">I", Ids.DB_ACCESS_AREA_BASE | 42)
+        r += encode_uint32_vlq(Ids.DB_CLASS_RID)
+        r += encode_uint32_vlq(0)  # ClassFlags
+        r += encode_uint32_vlq(0)  # AttributeId
+        r += bytes([ElementID.ATTRIBUTE])
+        r += encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+        name = b"DataBlock_1"  # single-byte WString content, as a real S7-1500 sends
+        r += bytes([0x00, DataType.WSTRING]) + encode_uint32_vlq(len(name)) + name
+        r += bytes([ElementID.TERMINATING_OBJECT])
+        # A non-DB object (different ClassId) must be ignored.
+        r += bytes([ElementID.START_OF_OBJECT])
+        r += struct.pack(">I", 0x00000003)
+        r += encode_uint32_vlq(2520)  # PLCProgram class, not a DB
+        r += encode_uint32_vlq(0)
+        r += encode_uint32_vlq(0)
+        r += bytes([ElementID.TERMINATING_OBJECT])
+
+        dbs = _parse_explore_datablocks(bytes(r))
+        assert len(dbs) == 1
+        assert dbs[0]["number"] == 42
+        assert dbs[0]["rid"] == Ids.DB_ACCESS_AREA_BASE | 42
+        assert dbs[0]["name"] == "DataBlock_1"
+
+
+class TestReassembledPayload:
+    """Test S7CommPlusConnection._recv_reassembled_payload (multi-PDU fragment reassembly)."""
+
+    @staticmethod
+    def _frag(data: bytes) -> bytes:
+        return bytes([0x72, 0x02, (len(data) >> 8) & 0xFF, len(data) & 0xFF]) + data
+
+    _TRAILER = bytes([0x72, 0x02, 0x00, 0x00])
+
+    def _conn_yielding(self, chunks: list[bytes]) -> S7CommPlusConnection:
+        conn = S7CommPlusConnection("127.0.0.1", 102)
+        it = iter(chunks)
+
+        def fake_recv() -> bytes:
+            return next(it, b"")
+
+        conn._recv_s7_data = fake_recv  # type: ignore[method-assign]
+        return conn
+
+    def test_single_fragment(self) -> None:
+        conn = self._conn_yielding([self._frag(b"abc") + self._TRAILER])
+        assert conn._recv_reassembled_payload() == b"abc"
+
+    def test_multiple_fragments_split_across_reads(self) -> None:
+        conn = self._conn_yielding([self._frag(b"abc"), self._frag(b"de"), self._TRAILER])
+        assert conn._recv_reassembled_payload() == b"abcde"
+
+    def test_bad_fragment_header_raises(self) -> None:
+        from snap7.error import S7ConnectionError
+
+        conn = self._conn_yielding([bytes([0x99, 0x02, 0x00, 0x01]) + b"x"])
+        with pytest.raises(S7ConnectionError, match="fragment header"):
+            conn._recv_reassembled_payload()
+
+    def test_closed_connection_raises(self) -> None:
+        from snap7.error import S7ConnectionError
+
+        conn = self._conn_yielding([])  # immediate EOF
+        with pytest.raises(S7ConnectionError, match="closed during"):
+            conn._recv_reassembled_payload()
+
+    def test_fragment_count_cap(self) -> None:
+        from snap7.error import S7ConnectionError
+
+        chunks = [self._frag(b"a"), self._frag(b"b"), self._frag(b"c"), self._TRAILER]
+        conn = self._conn_yielding(chunks)
+        conn._MAX_REASSEMBLED_FRAGMENTS = 2
+        with pytest.raises(S7ConnectionError, match="exceeds limits"):
+            conn._recv_reassembled_payload()

@@ -719,11 +719,13 @@ class S7CommPlusServer:
         response += self._build_response_header(FunctionCode.EXPLORE, seq_num)
         response += encode_uint32_vlq(0)  # Return code: success
 
-        # Return list of data blocks as objects using standard S7CommPlus IDs
+        # Return list of data blocks as objects using the real S7-1500 IDs:
+        # a DataBlock object has ClassId DB_CLASS_RID and a RelationId in the DB area
+        # (0x8A0E0000 | number), which is how the client recovers the DB number.
         for db_num, db in sorted(self._data_blocks.items()):
             response += bytes([ElementID.START_OF_OBJECT])
-            response += struct.pack(">I", db.object_id)  # Relation ID
-            response += encode_uint32_vlq(0x00000100)  # Class: DataBlock
+            response += struct.pack(">I", Ids.DB_ACCESS_AREA_BASE | (db_num & 0xFFFF))  # Relation ID
+            response += encode_uint32_vlq(Ids.DB_CLASS_RID)  # Class: DataBlock
             response += encode_uint32_vlq(0x00000000)  # Class flags
             response += encode_uint32_vlq(0x00000000)  # Attribute ID
 

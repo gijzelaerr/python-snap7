@@ -262,7 +262,7 @@ class S7CommPlusClient:
             raise RuntimeError("Not connected")
 
         payload = _build_explore_payload(explore_id)
-        response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return response
 
     def set_plc_operating_state(self, state: int) -> None:
@@ -293,7 +293,7 @@ class S7CommPlusClient:
 
         # Read the CPU exec unit object to get the running state
         payload = _build_explore_request(Ids.NATIVE_THE_CPU_EXEC_UNIT_RID, [])
-        response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         # Parse for operating state attribute — return "RUN" as default
         # since a responding PLC is typically running
         return "RUN" if response else "UNKNOWN"
@@ -366,7 +366,7 @@ class S7CommPlusClient:
             raise RuntimeError("Not connected")
 
         payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
-        response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return _parse_explore_datablocks(response)
 
     def browse(self) -> list[dict[str, Any]]:
@@ -396,7 +396,7 @@ class S7CommPlusClient:
                 continue
             payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
             try:
-                response = self._connection.send_request(FunctionCode.EXPLORE, payload)
+                response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
                 fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
                 variables.extend(fields)
             except Exception:
@@ -748,118 +748,98 @@ def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:
         Encoded EXPLORE payload.
     """
     payload = bytearray()
-    payload += encode_uint32_vlq(explore_id)
+    payload += struct.pack(">I", explore_id)  # ExploreId (fixed UInt32, not VLQ)
     payload += encode_uint32_vlq(0)  # ExploreRequestId (0 = none)
-    payload += encode_uint32_vlq(1)  # ExploreChildsRecursive
-    payload += encode_uint32_vlq(0)  # ExploreParents
-    payload += encode_uint32_vlq(len(attribute_ids))
+    payload += bytes([1])  # ExploreChildsRecursive
+    payload += bytes([1])  # unknown (the C# reference driver always sends 1 here)
+    payload += bytes([0])  # ExploreParents
+    payload += bytes([0])  # number of following filter objects (none)
+    payload += encode_uint32_vlq(len(attribute_ids))  # AddressList count
     for attr_id in attribute_ids:
         payload += encode_uint32_vlq(attr_id)
-    payload += struct.pack(">I", 0)
+    # Trailer: UInt32 fill + a single filler byte. For V2+, send_request(integrity_tail=5)
+    # splices the IntegrityId in just before these 5 bytes.
+    payload += struct.pack(">I", 0) + bytes([0])
     return bytes(payload)
 
 
 def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
-    """Parse an EXPLORE response to extract datablock info.
+    """Parse an EXPLORE(thePLCProgram) response to extract datablock info.
 
-    Walks the tagged object stream looking for objects with
-    ObjectVariableTypeName (233) and Block_BlockNumber (2521) attributes.
+    Walks the PObject tree (StartOfObject / Attribute / TerminatingObject) keeping a
+    stack of ``[relation_id, class_id, name]``. A DataBlock is an object whose ClassId
+    is ``DB_CLASS_RID`` and whose RelationId is a DB area id (``relid >> 16 == 0x8A0E``);
+    its number is ``relid & 0xFFFF`` and its name comes from the ObjectVariableTypeName
+    attribute. Mirrors the C# reference driver's Browse step 1.
 
     Returns:
         List of dicts: ``{"name": str, "number": int, "rid": int}``
     """
-    from .vlq import decode_uint32_vlq as _vlq32
-
     datablocks: list[dict[str, Any]] = []
     offset = 0
-    current_name = ""
-    current_number = 0
-    current_rid = 0
-    depth = 0
 
-    # Skip return code VLQ at start of response
+    # ReturnValue (UInt64 VLQ) at the start of the response.
     if offset < len(response):
-        _, consumed = _vlq32(response, offset)
+        _, consumed = decode_uint64_vlq(response, offset)
         offset += consumed
 
+    stack: list[list[Any]] = []  # each entry: [relation_id, class_id, name]
     while offset < len(response):
         tag = response[offset]
-        offset += 1
 
-        if tag == 0xA1:  # START_OF_OBJECT
-            depth += 1
+        if tag == ElementID.START_OF_OBJECT:
+            offset += 1
             if offset + 4 > len(response):
                 break
-            rid = struct.unpack(">I", response[offset : offset + 4])[0]
+            relid = struct.unpack_from(">I", response, offset)[0]
             offset += 4
-            # Skip classId, reserved, reserved (3 VLQ values)
-            for _ in range(3):
-                if offset >= len(response):
-                    break
-                _, consumed = _vlq32(response, offset)
-                offset += consumed
-            if depth == 1:
-                current_rid = rid
-                current_name = ""
-                current_number = 0
-
-        elif tag == 0xA2:  # TERMINATING_OBJECT
-            if depth == 1 and current_name and current_number > 0:
-                datablocks.append({"name": current_name, "number": current_number, "rid": current_rid})
-            depth = max(0, depth - 1)
-
-        elif tag == 0xA3:  # ATTRIBUTE
-            if offset >= len(response):
-                break
-            attr_id, consumed = _vlq32(response, offset)
+            class_id, consumed = decode_uint32_vlq(response, offset)
             offset += consumed
-            if offset + 2 > len(response):
+            _class_flags, consumed = decode_uint32_vlq(response, offset)  # ClassFlags
+            offset += consumed
+            _attr_id, consumed = decode_uint32_vlq(response, offset)  # AttributeId
+            offset += consumed
+            stack.append([relid, class_id, ""])
+
+        elif tag == ElementID.TERMINATING_OBJECT:
+            offset += 1
+            if stack:
+                relid, class_id, name = stack.pop()
+                if class_id == Ids.DB_CLASS_RID and (relid >> 16) == 0x8A0E:
+                    datablocks.append({"name": name, "number": relid & 0xFFFF, "rid": relid})
+
+        elif tag == ElementID.ATTRIBUTE:
+            offset += 1
+            attr_id, consumed = decode_uint32_vlq(response, offset)
+            offset += consumed
+            try:
+                value, consumed = decode_pvalue_to_bytes(response, offset)
+            except (ValueError, IndexError):
                 break
-            flags = response[offset]
-            datatype = response[offset + 1]
-            offset += 2
+            offset += consumed
+            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and stack:
+                # Block names arrive as a WString. On the S7-1500 the ASCII range is
+                # transmitted one byte per character (no null high-bytes), so the
+                # presence of a null byte distinguishes the two encodings:
+                #   * null present  -> genuine UTF-16-BE (ASCII chars carry a 0x00 high byte)
+                #   * no null       -> packed one-byte-per-char ASCII (decode as latin-1)
+                # Note we can't simply "try UTF-16 first on even length": an even-length
+                # one-byte-per-char ASCII name would then be mis-paired into wrong glyphs.
+                # PLC symbol names are identifiers and never contain an embedded null, so
+                # the null-byte test is unambiguous in practice.
+                try:
+                    if b"\x00" in value:
+                        name = value.decode("utf-16-be", errors="replace")
+                    else:
+                        name = value.decode("latin-1", errors="replace")
+                    stack[-1][2] = name.rstrip("\x00")
+                except Exception:
+                    pass
 
-            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype in (0x13, 0x15):  # S7STRING or WSTRING
-                if offset >= len(response):
-                    break
-                str_len, consumed = _vlq32(response, offset)
-                offset += consumed
-                if offset + str_len <= len(response):
-                    if depth == 1:
-                        try:
-                            current_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
-                        except Exception:
-                            current_name = ""
-                    offset += str_len
-                    continue
-
-            if attr_id == Ids.BLOCK_BLOCK_NUMBER and datatype in (0x03, 0x04, 0x0C):  # UINT/UDINT/DWORD
-                if offset >= len(response):
-                    break
-                val, consumed = _vlq32(response, offset)
-                offset += consumed
-                if depth == 1:
-                    current_number = val
-                continue
-
-            # Skip unknown attribute value
-            if flags & 0x10:  # array
-                if offset >= len(response):
-                    break
-                count, consumed = _vlq32(response, offset)
-                offset += consumed
-                offset += count  # rough skip
-            else:
-                if offset >= len(response):
-                    break
-                _, consumed = _vlq32(response, offset)
-                offset += consumed
-
-        elif tag == 0x00:  # terminator
-            continue
         else:
-            # Skip unknown tags
-            continue
+            # Response-preamble fields before the first object, or unhandled element
+            # tags (e.g. Relation): advance one byte and keep scanning.
+            offset += 1
 
     return datablocks
 

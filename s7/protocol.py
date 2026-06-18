@@ -185,6 +185,7 @@ class Ids(IntEnum):
     CLASS_OMS_TYPE_INFO_CONTAINER = 534
     OBJECT_OMS_TYPE_INFO_CONTAINER = 537
     PLC_PROGRAM_CLASS_RID = 2520
+    DB_CLASS_RID = 2574  # ClassId of a DataBlock object in an EXPLORE response
 
     # Subscription classes (for data change notifications)
     CLASS_SUBSCRIPTIONS = 255
