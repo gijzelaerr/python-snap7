@@ -152,6 +152,63 @@ with the ``s7commplus`` extra:
    ``browse()`` and other CommPlus-only operations are not yet
    supported on those firmwares — see issue #710.
 
+TLS handshake fails on OpenSSL 3.5+ (post-quantum key share)
+-------------------------------------------------------------
+
+On systems with **OpenSSL ≥ 3.5** (e.g. Debian 13 and other recent
+distributions) the TLS 1.3 ``ClientHello`` advertises a post-quantum
+hybrid key-exchange group, ``X25519MLKEM768``, by default. Its key
+share is roughly 1.2 KB, and the S7-1500's TLS stack rejects the
+oversized ``ClientHello`` — it drops the connection mid-handshake, so
+``connect(use_tls=True)`` fails with a *connection reset by peer*.
+
+The PLC mandates TLS 1.3 (it refuses TLS 1.2 outright), and CPython's
+``ssl`` module exposes no API to restrict the TLS 1.3
+``supported_groups`` list. The fix is to restrict the offered groups
+through OpenSSL's own configuration — via the ``OPENSSL_CONF``
+environment variable — to the classic ECDHE curves that every
+S7-1200/1500 supports.
+
+1. Create an OpenSSL configuration file, e.g. ``s7-openssl.cnf``:
+
+   .. code-block:: ini
+
+      # Restrict the TLS key-exchange groups to classic ECDHE curves so the
+      # ClientHello stays small enough for the S7-1500 to accept.
+      openssl_conf = openssl_init
+
+      [openssl_init]
+      ssl_conf = ssl_configuration
+
+      [ssl_configuration]
+      system_default = system_default_sect
+
+      [system_default_sect]
+      Groups = x25519:secp256r1:secp384r1
+
+2. Point ``OPENSSL_CONF`` at it **before** the Python process starts.
+   OpenSSL reads this configuration once, when it initialises, so
+   setting the variable from inside Python (e.g. via ``os.environ``)
+   after ``ssl`` is imported is too late — it must be set in the
+   environment:
+
+   .. code-block:: bash
+
+      # for a single run
+      OPENSSL_CONF=/path/to/s7-openssl.cnf python your_script.py
+
+      # or for the whole shell session
+      export OPENSSL_CONF=/path/to/s7-openssl.cnf
+
+With the groups restricted to classic curves, the TLS 1.3 handshake no
+longer offers ``X25519MLKEM768`` and the S7-1500 completes it normally.
+
+.. note::
+
+   This only affects OpenSSL ≥ 3.5. On older OpenSSL releases the
+   default key-exchange groups are already classic ECDHE curves, so no
+   extra configuration is needed.
+
 PLC Password Authentication
 ----------------------------
 
