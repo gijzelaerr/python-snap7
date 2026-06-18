@@ -11,7 +11,8 @@ from s7._s7commplus_client import (
     _parse_write_response,
 )
 from s7.codec import encode_pvalue_blob
-from s7.connection import S7CommPlusConnection, _element_size
+from s7.codec import _pvalue_element_size as _element_size
+from s7.codec import skip_typed_value, parse_server_session_version
 from s7.protocol import DataType, ElementID, ObjectId
 from s7.vlq import (
     encode_uint32_vlq,
@@ -201,156 +202,156 @@ class TestConnectionElementSize:
 
 
 class TestSkipTypedValue:
-    """Test S7CommPlusConnection._skip_typed_value with constructed byte buffers."""
+    """Test codec.skip_typed_value with constructed byte buffers."""
 
-    @pytest.fixture()
-    def conn(self) -> S7CommPlusConnection:
-        return S7CommPlusConnection("127.0.0.1")
+    def test_null(self) -> None:
+        assert skip_typed_value(b"", 0, DataType.NULL, 0x00) == 0
 
-    def test_null(self, conn: S7CommPlusConnection) -> None:
-        assert conn._skip_typed_value(b"", 0, DataType.NULL, 0x00) == 0
-
-    def test_bool(self, conn: S7CommPlusConnection) -> None:
+    def test_bool(self) -> None:
         data = bytes([0x01])
-        assert conn._skip_typed_value(data, 0, DataType.BOOL, 0x00) == 1
+        assert skip_typed_value(data, 0, DataType.BOOL, 0x00) == 1
 
-    def test_usint(self, conn: S7CommPlusConnection) -> None:
+    def test_usint(self) -> None:
         data = bytes([42])
-        assert conn._skip_typed_value(data, 0, DataType.USINT, 0x00) == 1
+        assert skip_typed_value(data, 0, DataType.USINT, 0x00) == 1
 
-    def test_byte(self, conn: S7CommPlusConnection) -> None:
+    def test_byte(self) -> None:
         data = bytes([0xAB])
-        assert conn._skip_typed_value(data, 0, DataType.BYTE, 0x00) == 1
+        assert skip_typed_value(data, 0, DataType.BYTE, 0x00) == 1
 
-    def test_sint(self, conn: S7CommPlusConnection) -> None:
+    def test_sint(self) -> None:
         data = bytes([0xD6])
-        assert conn._skip_typed_value(data, 0, DataType.SINT, 0x00) == 1
+        assert skip_typed_value(data, 0, DataType.SINT, 0x00) == 1
 
-    def test_uint(self, conn: S7CommPlusConnection) -> None:
+    def test_uint(self) -> None:
         data = struct.pack(">H", 1000)
-        assert conn._skip_typed_value(data, 0, DataType.UINT, 0x00) == 2
+        assert skip_typed_value(data, 0, DataType.UINT, 0x00) == 2
 
-    def test_word(self, conn: S7CommPlusConnection) -> None:
+    def test_word(self) -> None:
         data = struct.pack(">H", 0xBEEF)
-        assert conn._skip_typed_value(data, 0, DataType.WORD, 0x00) == 2
+        assert skip_typed_value(data, 0, DataType.WORD, 0x00) == 2
 
-    def test_int(self, conn: S7CommPlusConnection) -> None:
+    def test_int(self) -> None:
         data = struct.pack(">h", -1000)
-        assert conn._skip_typed_value(data, 0, DataType.INT, 0x00) == 2
+        assert skip_typed_value(data, 0, DataType.INT, 0x00) == 2
 
-    def test_udint(self, conn: S7CommPlusConnection) -> None:
+    def test_udint(self) -> None:
         vlq = encode_uint32_vlq(100000)
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.UDINT, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.UDINT, 0x00)
         assert new_offset == len(vlq)
 
-    def test_dword(self, conn: S7CommPlusConnection) -> None:
+    def test_dword(self) -> None:
         vlq = encode_uint32_vlq(0xDEADBEEF)
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.DWORD, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.DWORD, 0x00)
         assert new_offset == len(vlq)
 
-    def test_aid(self, conn: S7CommPlusConnection) -> None:
+    def test_aid(self) -> None:
         vlq = encode_uint32_vlq(306)
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.AID, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.AID, 0x00)
         assert new_offset == len(vlq)
 
-    def test_dint(self, conn: S7CommPlusConnection) -> None:
+    def test_dint(self) -> None:
         vlq = encode_int32_vlq(-100000)
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.DINT, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.DINT, 0x00)
         assert new_offset == len(vlq)
 
-    def test_ulint(self, conn: S7CommPlusConnection) -> None:
+    def test_ulint(self) -> None:
         vlq = encode_uint64_vlq(2**40)
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.ULINT, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.ULINT, 0x00)
         assert new_offset == len(vlq)
 
-    def test_lword(self, conn: S7CommPlusConnection) -> None:
+    def test_lword(self) -> None:
         vlq = encode_uint64_vlq(0xCAFE)
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.LWORD, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.LWORD, 0x00)
         assert new_offset == len(vlq)
 
-    def test_lint(self, conn: S7CommPlusConnection) -> None:
+    def test_lint(self) -> None:
         from s7.vlq import encode_int64_vlq
 
         vlq = encode_int64_vlq(-(2**40))
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.LINT, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.LINT, 0x00)
         assert new_offset == len(vlq)
 
-    def test_real(self, conn: S7CommPlusConnection) -> None:
+    def test_real(self) -> None:
         data = struct.pack(">f", 3.14)
-        assert conn._skip_typed_value(data, 0, DataType.REAL, 0x00) == 4
+        assert skip_typed_value(data, 0, DataType.REAL, 0x00) == 4
 
-    def test_lreal(self, conn: S7CommPlusConnection) -> None:
+    def test_lreal(self) -> None:
         data = struct.pack(">d", 2.718)
-        assert conn._skip_typed_value(data, 0, DataType.LREAL, 0x00) == 8
+        assert skip_typed_value(data, 0, DataType.LREAL, 0x00) == 8
 
-    def test_timestamp(self, conn: S7CommPlusConnection) -> None:
+    def test_timestamp(self) -> None:
         data = struct.pack(">Q", 0x0001020304050607)
-        assert conn._skip_typed_value(data, 0, DataType.TIMESTAMP, 0x00) == 8
+        assert skip_typed_value(data, 0, DataType.TIMESTAMP, 0x00) == 8
 
-    def test_timespan(self, conn: S7CommPlusConnection) -> None:
+    def test_timespan(self) -> None:
         from s7.vlq import encode_int64_vlq
 
         vlq = encode_int64_vlq(5000)
         # TIMESPAN uses uint64_vlq for skipping in _skip_typed_value
-        new_offset = conn._skip_typed_value(vlq, 0, DataType.TIMESPAN, 0x00)
+        new_offset = skip_typed_value(vlq, 0, DataType.TIMESPAN, 0x00)
         assert new_offset == len(vlq)
 
-    def test_rid(self, conn: S7CommPlusConnection) -> None:
+    def test_rid(self) -> None:
         data = struct.pack(">I", 0x12345678)
-        assert conn._skip_typed_value(data, 0, DataType.RID, 0x00) == 4
+        assert skip_typed_value(data, 0, DataType.RID, 0x00) == 4
 
-    def test_blob(self, conn: S7CommPlusConnection) -> None:
+    def test_blob(self) -> None:
         blob_data = bytes([1, 2, 3, 4])
         vlq_len = encode_uint32_vlq(len(blob_data))
         data = vlq_len + blob_data
-        new_offset = conn._skip_typed_value(data, 0, DataType.BLOB, 0x00)
+        new_offset = skip_typed_value(data, 0, DataType.BLOB, 0x00)
         assert new_offset == len(data)
 
-    def test_wstring(self, conn: S7CommPlusConnection) -> None:
+    def test_wstring(self) -> None:
         text = "hello".encode("utf-8")
         vlq_len = encode_uint32_vlq(len(text))
         data = vlq_len + text
-        new_offset = conn._skip_typed_value(data, 0, DataType.WSTRING, 0x00)
+        new_offset = skip_typed_value(data, 0, DataType.WSTRING, 0x00)
         assert new_offset == len(data)
 
-    def test_struct(self, conn: S7CommPlusConnection) -> None:
+    def test_struct(self) -> None:
         # Normal-mode struct: UInt32 struct-id, then members [VLQ key][flags+type+value],
         # terminated by a 0x00 list-terminator byte (member keys never start with 0x00).
         struct_id = struct.pack(">I", 0x0000002A)
         member1 = encode_uint32_vlq(1) + bytes([0x00, DataType.USINT, 0x0A])
         member2 = encode_uint32_vlq(2) + bytes([0x00, DataType.USINT, 0x14])
         data = struct_id + member1 + member2 + bytes([0x00])
-        new_offset = conn._skip_typed_value(data, 0, DataType.STRUCT, 0x00)
+        new_offset = skip_typed_value(data, 0, DataType.STRUCT, 0x00)
         assert new_offset == len(data)
 
-    def test_unknown_type(self, conn: S7CommPlusConnection) -> None:
+    def test_unknown_type(self) -> None:
         # Unknown type should return same offset (can't skip)
-        assert conn._skip_typed_value(bytes([0xFF]), 0, 0xFF, 0x00) == 0
+        assert skip_typed_value(bytes([0xFF]), 0, 0xFF, 0x00) == 0
 
     # -- Array tests --
 
-    def test_array_fixed_size(self, conn: S7CommPlusConnection) -> None:
+    def test_array_fixed_size(self) -> None:
         count_vlq = encode_uint32_vlq(3)
         elements = bytes([10, 20, 30])
         data = count_vlq + elements
-        new_offset = conn._skip_typed_value(data, 0, DataType.USINT, 0x10)
+        new_offset = skip_typed_value(data, 0, DataType.USINT, 0x10)
         assert new_offset == len(data)
 
-    def test_array_variable_length(self, conn: S7CommPlusConnection) -> None:
+    def test_array_variable_length(self) -> None:
         count_vlq = encode_uint32_vlq(2)
         elem1 = encode_uint32_vlq(100)
         elem2 = encode_uint32_vlq(200)
         data = count_vlq + elem1 + elem2
-        new_offset = conn._skip_typed_value(data, 0, DataType.UDINT, 0x10)
+        new_offset = skip_typed_value(data, 0, DataType.UDINT, 0x10)
         assert new_offset == len(data)
 
-    def test_array_empty_data(self, conn: S7CommPlusConnection) -> None:
+    def test_array_empty_data(self) -> None:
         # Edge case: array flag but no data
-        assert conn._skip_typed_value(b"", 0, DataType.USINT, 0x10) == 0
+        assert skip_typed_value(b"", 0, DataType.USINT, 0x10) == 0
 
 
 class TestParseCreateObjectResponse:
-    """Test _parse_create_object_response with constructed payloads."""
+    """Test parse_server_session_version with constructed payloads.
+
+    Returns the raw typed value (flags + datatype + value) to echo back verbatim —
+    real S7-1500 PLCs send ServerSessionVersion as a Struct — or None if absent.
+    """
 
     def _build_create_response_with_session_version(self, version: int, datatype: int = DataType.UDINT) -> bytes:
         """Build a minimal CreateObject response containing ServerSessionVersion."""
@@ -365,33 +366,24 @@ class TestParseCreateObjectResponse:
         return bytes(payload)
 
     def test_parse_udint_version(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
         payload = self._build_create_response_with_session_version(3, DataType.UDINT)
-        conn._parse_create_object_response(payload)
-        # ServerSessionVersion is captured as the raw typed value (flags+datatype+value)
-        # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
-        assert conn._server_session_version_raw == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
-        assert conn._server_session_version == conn._server_session_version_raw
+        result = parse_server_session_version(payload)
+        assert result == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
 
     def test_parse_dword_version(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
         payload = self._build_create_response_with_session_version(2, DataType.DWORD)
-        conn._parse_create_object_response(payload)
-        assert conn._server_session_version_raw == bytes([0x00, DataType.DWORD]) + encode_uint32_vlq(2)
-        assert conn._server_session_version == conn._server_session_version_raw
+        result = parse_server_session_version(payload)
+        assert result == bytes([0x00, DataType.DWORD]) + encode_uint32_vlq(2)
 
     def test_version_not_found(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
         # Build payload with a different attribute, not ServerSessionVersion
         payload = bytearray()
         payload += bytes([ElementID.ATTRIBUTE])
         payload += encode_uint32_vlq(999)  # Some other attribute ID
         payload += bytes([0x00, DataType.USINT, 42])
-        conn._parse_create_object_response(bytes(payload))
-        assert conn._server_session_version is None
+        assert parse_server_session_version(bytes(payload)) is None
 
     def test_with_preceding_attributes(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
         payload = bytearray()
         # First attribute: some random one with a UINT value
         payload += bytes([ElementID.ATTRIBUTE])
@@ -403,11 +395,10 @@ class TestParseCreateObjectResponse:
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
         payload += bytes([0x00, DataType.UDINT])
         payload += encode_uint32_vlq(1)
-        conn._parse_create_object_response(bytes(payload))
-        assert conn._server_session_version_raw == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(1)
+        result = parse_server_session_version(bytes(payload))
+        assert result == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(1)
 
     def test_with_start_of_object(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
         payload = bytearray()
         # StartOfObject tag (needs RelationId + ClassId + ClassFlags + AttributeId)
         payload += bytes([ElementID.START_OF_OBJECT])
@@ -422,8 +413,8 @@ class TestParseCreateObjectResponse:
         payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
         payload += bytes([0x00, DataType.UDINT])
         payload += encode_uint32_vlq(3)
-        conn._parse_create_object_response(bytes(payload))
-        assert conn._server_session_version_raw == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
+        result = parse_server_session_version(bytes(payload))
+        assert result == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
 
 
 # -- Client error path tests --

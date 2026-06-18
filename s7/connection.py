@@ -55,25 +55,18 @@ from .protocol import (
     S7COMMPLUS_REMOTE_TSAP,
     READ_FUNCTION_CODES,
 )
-from .codec import encode_header, decode_header, encode_typed_value, encode_object_qualifier
+from .codec import (
+    encode_header,
+    decode_header,
+    encode_typed_value,
+    encode_object_qualifier,
+    parse_create_object_session_id,
+    parse_server_session_version,
+)
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
 logger = logging.getLogger(__name__)
-
-
-def _element_size(datatype: int) -> int:
-    """Return the fixed byte size for an array element, or 0 for variable-length."""
-    if datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
-        return 1
-    elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
-        return 2
-    elif datatype in (DataType.REAL, DataType.RID):
-        return 4
-    elif datatype in (DataType.LREAL, DataType.TIMESTAMP):
-        return 8
-    else:
-        return 0
 
 
 class S7CommPlusConnection:
@@ -116,7 +109,6 @@ class S7CommPlusConnection:
         # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
         self._server_session_version: Optional[bytes] = None
-        self._server_session_version_raw: Optional[bytes] = None
         self._session_setup_ok: bool = False
 
         # V2+ IntegrityId tracking
@@ -695,22 +687,11 @@ class S7CommPlusConnection:
         # Parse response body: ReturnValue(UInt64 VLQ) + ObjectIdCount + ObjectIds(VLQ).
         # The usable session id is ObjectIds[0] (NOT the header SessionId field).
         body = response[14:]
-        boff = 0
-        while boff < len(body) and (body[boff] & 0x80):  # skip ReturnValue VLQ
-            boff += 1
-        boff += 1
-        obj_count = body[boff] if boff < len(body) else 0
-        boff += 1
-        object_ids = []
-        for _ in range(obj_count):
-            oid, _c = decode_uint32_vlq(body, boff)
-            boff += _c
-            object_ids.append(oid)
+        object_ids, obj_end = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
         else:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
-        self._resp_object_start = boff
         self._protocol_version = version
 
         # Parse and log the full response header
@@ -726,153 +707,11 @@ class S7CommPlusConnection:
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
         # Parse response payload to extract ServerSessionVersion
-        self._parse_create_object_response(response[14 + self._resp_object_start :])
-
-    def _parse_create_object_response(self, payload: bytes) -> None:
-        """Parse CreateObject response payload to extract ServerSessionVersion.
-
-        The response contains a PObject tree with attributes. We scan for
-        attribute 306 (ServerSessionVersion) which must be echoed back to
-        complete the session handshake.
-
-        Args:
-            payload: Response payload after the 14-byte response header
-        """
-        offset = 0
-        while offset < len(payload):
-            tag = payload[offset]
-
-            if tag == ElementID.ATTRIBUTE:
-                offset += 1
-                if offset >= len(payload):
-                    break
-                attr_id, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-
-                if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    # ServerSessionVersion is a Struct (0x17) on real S7-1500 PLCs;
-                    # capture the raw typed value (flags+datatype+data) to echo back.
-                    if offset + 2 > len(payload):
-                        break
-                    value_start = offset
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    end = self._skip_typed_value(payload, offset + 2, datatype, _flags)
-                    self._server_session_version_raw = bytes(payload[value_start:end])
-                    self._server_session_version = self._server_session_version_raw
-                    offset = end
-                    logger.info(
-                        f"ServerSessionVersion captured: type={datatype:#04x}, {len(self._server_session_version_raw)} bytes"
-                    )
-                    return
-                else:
-                    # Skip this attribute's value - we don't parse it, just advance
-                    # Try to skip the typed value (flags + datatype + value)
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    offset += 2
-                    offset = self._skip_typed_value(payload, offset, datatype, _flags)
-
-            elif tag == ElementID.START_OF_OBJECT:
-                offset += 1
-                # Skip RelationId (4 bytes fixed) + ClassId (VLQ) + ClassFlags (VLQ) + AttributeId (VLQ)
-                if offset + 4 > len(payload):
-                    break
-                offset += 4  # RelationId
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassId
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassFlags
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # AttributeId
-
-            elif tag == ElementID.TERMINATING_OBJECT:
-                offset += 1
-
-            elif tag == 0x00:
-                # Null terminator / padding
-                offset += 1
-
-            else:
-                # Unknown tag - try to skip
-                offset += 1
-
-        logger.debug("ServerSessionVersion not found in CreateObject response")
-
-    def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
-        """Skip over a typed value in the PObject tree.
-
-        Best-effort: advances offset past common value types.
-        Returns new offset.
-        """
-        is_array = bool(flags & 0x10)
-
-        if is_array:
-            if offset >= len(data):
-                return offset
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            # For fixed-size types, skip count * size
-            elem_size = _element_size(datatype)
-            if elem_size > 0:
-                offset += count * elem_size
-            else:
-                # Variable-length: skip each VLQ element
-                for _ in range(count):
-                    if offset >= len(data):
-                        break
-                    _, consumed = decode_uint32_vlq(data, offset)
-                    offset += consumed
-            return offset
-
-        if datatype == DataType.NULL:
-            return offset
-        elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
-            return offset + 1
-        elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
-            return offset + 2
-        elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
-            _, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed
-        elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
-            _, consumed = decode_uint64_vlq(data, offset)
-            return offset + consumed
-        elif datatype == DataType.REAL:
-            return offset + 4
-        elif datatype == DataType.LREAL:
-            return offset + 8
-        elif datatype == DataType.TIMESTAMP:
-            return offset + 8
-        elif datatype == DataType.TIMESPAN:
-            _, consumed = decode_uint64_vlq(data, offset)  # int64 VLQ
-            return offset + consumed
-        elif datatype == DataType.RID:
-            return offset + 4
-        elif datatype in (DataType.BLOB, DataType.WSTRING):
-            length, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed + length
-        elif datatype == DataType.STRUCT:
-            # Normal-mode struct: UInt32 struct-id, then members [VLQ key][typed value],
-            # terminated by a 0x00 list-terminator byte (keys always start with high bit set).
-            offset += 4  # struct id (UInt32, not VLQ)
-            while offset < len(data):
-                if data[offset] == 0x00:
-                    offset += 1
-                    break
-                _key, consumed = decode_uint32_vlq(data, offset)
-                offset += consumed
-                if offset + 2 > len(data):
-                    break
-                sub_flags = data[offset]
-                sub_type = data[offset + 1]
-                offset += 2
-                offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
-            return offset
+        self._server_session_version = parse_server_session_version(response[14 + obj_end :])
+        if self._server_session_version is not None:
+            logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
         else:
-            # Unknown type - can't skip reliably
-            return offset
+            logger.debug("ServerSessionVersion not found in CreateObject response")
 
     def _setup_session(self) -> bool:
         """Send SetMultiVariables to echo ServerSessionVersion back to the PLC.
@@ -915,7 +754,7 @@ class S7CommPlusConnection:
         # Value: ItemNumber = 1 (VLQ)
         payload += encode_uint32_vlq(1)
         # PValue: echo the ServerSessionVersion typed value verbatim (it is a Struct)
-        payload += self._server_session_version_raw
+        payload += self._server_session_version
         # Fill byte
         payload += bytes([0x00])
         # ObjectQualifier
@@ -1087,6 +926,9 @@ class S7CommPlusConnection:
             except ssl.SSLWantReadError:
                 self._tls_flush_outgoing()
                 self._tls_read_incoming()
+            except ssl.SSLWantWriteError:
+                # Rare with MemoryBIO, but the SSLObject can ask to write before reading.
+                self._tls_flush_outgoing()
         self._tls_flush_outgoing()
 
     def _setup_ssl_context(
