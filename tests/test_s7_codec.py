@@ -37,6 +37,7 @@ from s7.codec import (
 )
 from s7.protocol import PROTOCOL_ID, DataType, Opcode, FunctionCode, Ids
 from s7.vlq import encode_uint32_vlq, encode_int32_vlq, encode_uint64_vlq, encode_int64_vlq
+from s7._s7commplus_client import _build_symbolic_read_payload, _build_symbolic_write_payload
 
 
 class TestFrameHeader:
@@ -355,6 +356,35 @@ class TestItemAddress:
         # First bytes should be VLQ(0x1234) which is non-zero
         assert addr_bytes[0] != 0
         assert field_count == 4
+
+
+class TestControllerAreaSubArea:
+    """Regression: I/Q/M symbolic access must use ControllerArea_ValueActual (3736).
+
+    The earlier value 2551 was DB_InitialChanged, not a controller-area sub-area,
+    so the PLC rejected every I/Q/M symbolic read/write.
+    """
+
+    # IArea/QArea/MArea native-object RIDs (all < 0x8A0E0000 → controller-area path)
+    IAREA_RID = 0x50
+
+    def test_constant_value(self) -> None:
+        assert Ids.CONTROLLER_AREA_VALUE_ACTUAL == 3736
+        assert Ids.CONTROLLER_AREA_VALUE_ACTUAL != Ids.DB_VALUE_ACTUAL
+
+    def test_read_payload_uses_controller_sub_area(self) -> None:
+        payload = _build_symbolic_read_payload(self.IAREA_RID, lids=[0x124])
+        assert encode_uint32_vlq(3736) in payload
+        assert encode_uint32_vlq(2551) not in payload
+
+    def test_write_payload_uses_controller_sub_area(self) -> None:
+        payload = _build_symbolic_write_payload(self.IAREA_RID, lids=[0x124], data=b"\x01")
+        assert encode_uint32_vlq(3736) in payload
+        assert encode_uint32_vlq(2551) not in payload
+
+    def test_db_area_still_uses_db_sub_area(self) -> None:
+        payload = _build_symbolic_read_payload(0x8A0E012C, lids=[0x4E, 0x69])
+        assert encode_uint32_vlq(Ids.DB_VALUE_ACTUAL) in payload
 
 
 class TestPValueBlob:

@@ -152,7 +152,11 @@ class Ids(IntEnum):
 
     # Data block access sub-areas
     DB_VALUE_ACTUAL = 2550
-    CONTROLLER_AREA_VALUE_ACTUAL = 2551
+    # Symbolic (LID-based) access to controller areas (I/Q/M). The previous value
+    # 2551 was wrong: 2551 is DB_InitialChanged, not a controller-area sub-area, so
+    # the PLC rejected every I/Q/M symbolic read/write. ControllerArea_ValueActual
+    # is 3736 (0xE98). Ref: thomas-v2/S7CommPlusDriver/Core/Ids.cs.
+    CONTROLLER_AREA_VALUE_ACTUAL = 3736
 
     # ObjectQualifier structure IDs
     OBJECT_QUALIFIER = 1256
