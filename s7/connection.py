@@ -602,10 +602,7 @@ class S7CommPlusConnection:
             del buf[:frag_len]
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
-                raise S7ConnectionError(
-                    f"Reassembled response exceeds limits "
-                    f"({len(data)} bytes, {fragments} fragments)"
-                )
+                raise S7ConnectionError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
             # The next 4 bytes are either the trailer (0x72 ver 0x0000) or the next
             # fragment's header (0x72 ver len>0).
             ensure(4)
