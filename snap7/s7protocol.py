@@ -103,6 +103,15 @@ def get_return_code_description(return_code: int) -> str:
     return "Unknown error"
 
 
+# PLC control PI service parameter byte sequences (from snap7 C library).
+# Stop: function(0x29) + 5 reserved + PI length(9) + "P_PROGRAM"
+_STOP_PARAMS = bytes.fromhex("29000000000009") + b"P_PROGRAM"
+# Hot start: function(0x28) + 7 reserved + block count(0) + pad(0) + PI length(9) + "P_PROGRAM"
+_HOT_START_PARAMS = bytes.fromhex("28000000000000fd000009") + b"P_PROGRAM"
+# Cold start: same as hot start but with block "C " before PI service
+_COLD_START_PARAMS = bytes.fromhex("28000000000000fd0002432009") + b"P_PROGRAM"
+
+
 class S7Protocol:
     """
     S7 protocol implementation.
@@ -381,7 +390,7 @@ class S7Protocol:
 
     def build_plc_control_request(self, operation: str) -> bytes:
         """
-        Build PLC control request.
+        Build PLC control request using the S7 PI service PDU format.
 
         Args:
             operation: Control operation ('stop', 'hot_start', 'cold_start')
@@ -389,26 +398,16 @@ class S7Protocol:
         Returns:
             Complete S7 PDU for PLC control
         """
-        # Map operations to S7 control codes
-        control_codes = {
-            "stop": 0x29,  # PLC_STOP
-            "hot_start": 0x28,  # PLC_CONTROL (warm restart)
-            "cold_start": 0x28,  # PLC_CONTROL (cold restart)
+        params: dict[str, bytes] = {
+            "stop": _STOP_PARAMS,
+            "hot_start": _HOT_START_PARAMS,
+            "cold_start": _COLD_START_PARAMS,
         }
 
-        if operation not in control_codes:
+        if operation not in params:
             raise ValueError(f"Unknown PLC control operation: {operation}")
 
-        function_code = control_codes[operation]
-
-        # Build control-specific parameters
-        if operation == "stop":
-            # Simple stop command
-            param_data = struct.pack(">B", function_code)
-        else:
-            # Start commands with restart type
-            restart_type = 1 if operation == "hot_start" else 2  # 1=warm, 2=cold
-            param_data = struct.pack(">BB", function_code, restart_type)
+        param_data = params[operation]
 
         header = struct.pack(
             ">BBHHHH",

@@ -13,6 +13,9 @@ from snap7.s7protocol import (
     S7UserDataGroup,
     S7UserDataSubfunction,
     get_return_code_description,
+    _STOP_PARAMS,
+    _HOT_START_PARAMS,
+    _COLD_START_PARAMS,
 )
 from snap7.error import S7ProtocolError
 
@@ -535,3 +538,43 @@ class TestValidatePDUReference:
 
         with pytest.raises(S7PacketLostError):
             self.proto.validate_pdu_reference(7)
+
+
+class TestPlcControlParams:
+    """Verify PLC control PDUs use the correct PI service format."""
+
+    def test_stop_params_match_c_library(self) -> None:
+        expected = bytes.fromhex("29000000000009") + b"P_PROGRAM"
+        assert _STOP_PARAMS == expected
+        assert len(_STOP_PARAMS) == 16
+
+    def test_hot_start_params_match_c_library(self) -> None:
+        expected = bytes.fromhex("28000000000000fd000009") + b"P_PROGRAM"
+        assert _HOT_START_PARAMS == expected
+        assert len(_HOT_START_PARAMS) == 20
+
+    def test_cold_start_params_match_c_library(self) -> None:
+        expected = bytes.fromhex("28000000000000fd0002432009") + b"P_PROGRAM"
+        assert _COLD_START_PARAMS == expected
+        assert len(_COLD_START_PARAMS) == 22
+
+    def test_stop_request_contains_p_program(self) -> None:
+        proto = S7Protocol()
+        request = proto.build_plc_control_request("stop")
+        assert b"P_PROGRAM" in request
+
+    def test_hot_start_request_contains_p_program(self) -> None:
+        proto = S7Protocol()
+        request = proto.build_plc_control_request("hot_start")
+        assert b"P_PROGRAM" in request
+
+    def test_cold_start_contains_cold_flag(self) -> None:
+        proto = S7Protocol()
+        request = proto.build_plc_control_request("cold_start")
+        assert b"P_PROGRAM" in request
+        assert b"C " in request
+
+    def test_invalid_operation(self) -> None:
+        proto = S7Protocol()
+        with pytest.raises(ValueError, match="Unknown PLC control operation"):
+            proto.build_plc_control_request("invalid")
