@@ -11,6 +11,7 @@ import logging
 import struct
 from typing import Any, Optional
 
+from . import typeinfo
 from .connection import S7CommPlusConnection
 from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
@@ -370,14 +371,15 @@ class S7CommPlusClient:
         return _parse_explore_datablocks(response)
 
     def browse(self) -> list[dict[str, Any]]:
-        """Browse the PLC symbol table via EXPLORE.
+        """Browse the full per-tag symbol tree via EXPLORE + the type-info container.
 
         .. warning:: This method is **experimental** and may change.
 
-        Returns a flat list of variable info dicts with keys:
-        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``bit_size``.
-        Results can be converted to :class:`~snap7.tags.Tag` objects for use
-        with :meth:`~s7.client.Client.read_tag`.
+        Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
+        (the dot-separated hex LID path usable with :meth:`read_tag`), ``data_type``,
+        and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
+        each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
+        then recombine into the symbol tree.
 
         Returns:
             List of variable info dicts.
@@ -385,25 +387,71 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        # Step 1: list datablocks
-        dbs = self.list_datablocks()
+        # Phase A: enumerate data blocks. Phase B/C: resolve each DB's type-info RID
+        # (a LID=1 read — needed for instance DBs whose TI is not their own RID) and seed
+        # a root node per DB.
+        root_nodes: list[typeinfo.Node] = []
+        for db_info in self.list_datablocks():
+            if db_info.get("number", 0) <= 0 or db_info.get("rid", 0) == 0:
+                continue
+            ti_rid = self._read_typeinfo_rid(db_info["rid"])
+            if ti_rid == 0:
+                continue  # load-memory-only DB, skip
+            root_nodes.append(
+                typeinfo.Node(
+                    node_type=typeinfo.NodeType.ROOT, name=db_info["name"], access_id=db_info["rid"], relation_id=ti_rid
+                )
+            )
 
-        # Step 2: for each DB, explore its type info to get field layout
+        # Add the native process areas with their known synthetic type-info ids.
+        for name, access_rid, ti_rid in (
+            ("IArea", Ids.NATIVE_THE_I_AREA_RID, 0x90010000),
+            ("QArea", Ids.NATIVE_THE_Q_AREA_RID, 0x90020000),
+            ("MArea", Ids.NATIVE_THE_M_AREA_RID, 0x90030000),
+            ("S7Timers", Ids.NATIVE_THE_S7_TIMERS_RID, 0x90050000),
+            ("S7Counters", Ids.NATIVE_THE_S7_COUNTERS_RID, 0x90060000),
+        ):
+            root_nodes.append(
+                typeinfo.Node(node_type=typeinfo.NodeType.ROOT, name=name, access_id=access_rid, relation_id=ti_rid)
+            )
+
+        # Phase D: explore the OMS type-info container (a large, multi-fragment PDU).
+        type_objects = self._explore_type_info_container()
+
+        # Phase E: recombine type-info with the DB/area nodes and flatten.
+        typeinfo.build_tree(root_nodes, type_objects)
         variables: list[dict[str, Any]] = []
-        for db_info in dbs:
-            db_rid = db_info.get("rid", 0)
-            if db_rid == 0:
-                continue
-            payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+        for v in typeinfo.build_flat_list(root_nodes):
             try:
-                response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
-                fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
-                variables.extend(fields)
-            except Exception:
-                logger.debug(f"Failed to explore DB {db_info['name']} (rid={db_rid:#x})")
-                continue
-
+                data_type = typeinfo.Softdatatype(v.softdatatype).name
+            except ValueError:
+                data_type = str(v.softdatatype)
+            variables.append(
+                {
+                    "name": v.name,
+                    "access_sequence": v.access_sequence,
+                    "data_type": data_type,
+                    "opt_address": v.opt_address,
+                    "opt_bitoffset": v.opt_bitoffset,
+                    "nonopt_address": v.nonopt_address,
+                    "nonopt_bitoffset": v.nonopt_bitoffset,
+                }
+            )
         return variables
+
+    def _read_typeinfo_rid(self, db_rid: int) -> int:
+        """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
+        try:
+            raw = self.read_symbolic(db_rid, [1], 0)
+        except Exception:
+            return 0
+        return struct.unpack(">I", raw[:4])[0] if len(raw) >= 4 else 0
+
+    def _explore_type_info_container(self) -> list["typeinfo.PObject"]:
+        """EXPLORE the OMS type-info container and return its per-type objects."""
+        payload = _build_explore_request(Ids.OBJECT_OMS_TYPE_INFO_CONTAINER, [])
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
+        return typeinfo.extract_type_info_objects(response)
 
     def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
         """Create a data change subscription.
@@ -767,7 +815,7 @@ def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:
     payload += struct.pack(">I", explore_id)  # ExploreId (fixed UInt32, not VLQ)
     payload += encode_uint32_vlq(0)  # ExploreRequestId (0 = none)
     payload += bytes([1])  # ExploreChildsRecursive
-    payload += bytes([1])  # unknown (the C# reference driver always sends 1 here)
+    payload += bytes([1])  # unknown flag — the protocol always carries 1 here
     payload += bytes([0])  # ExploreParents
     payload += bytes([0])  # number of following filter objects (none)
     payload += encode_uint32_vlq(len(attribute_ids))  # AddressList count
@@ -786,7 +834,7 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
     stack of ``[relation_id, class_id, name]``. A DataBlock is an object whose ClassId
     is ``DB_CLASS_RID`` and whose RelationId is a DB area id (``relid >> 16 == 0x8A0E``);
     its number is ``relid & 0xFFFF`` and its name comes from the ObjectVariableTypeName
-    attribute. Mirrors the C# reference driver's Browse step 1.
+    attribute (the first step of the symbol-tree browse).
 
     Returns:
         List of dicts: ``{"name": str, "number": int, "rid": int}``
@@ -858,106 +906,6 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
             offset += 1
 
     return datablocks
-
-
-def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list[dict[str, Any]]:
-    """Parse an EXPLORE response for a single DB to extract field layout.
-
-    Returns:
-        List of dicts with keys:
-        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``lid``,
-        ``symbol_crc``. ``lid`` and ``symbol_crc`` enable symbolic access
-        for optimized DBs.
-    """
-    from .vlq import decode_uint32_vlq as _vlq32
-
-    fields: list[dict[str, Any]] = []
-    offset = 0
-    field_name = ""
-    byte_offset = 0
-    field_lid = 0
-    field_crc = 0
-
-    # Skip return code VLQ at start of response
-    if offset < len(response):
-        _, consumed = _vlq32(response, offset)
-        offset += consumed
-
-    while offset < len(response):
-        tag = response[offset]
-        offset += 1
-
-        if tag == 0xA1:  # START_OF_OBJECT
-            if offset + 4 > len(response):
-                break
-            # The RID bytes serve as the LID for symbolic access
-            field_lid = struct.unpack(">I", response[offset : offset + 4])[0]
-            offset += 4
-            for _ in range(3):
-                if offset >= len(response):
-                    break
-                _, consumed = _vlq32(response, offset)
-                offset += consumed
-            field_name = ""
-            byte_offset = 0
-            field_crc = 0
-
-        elif tag == 0xA2:  # TERMINATING_OBJECT
-            if field_name:
-                fields.append(
-                    {
-                        "name": f"{db_name}.{field_name}",
-                        "db_number": db_number,
-                        "byte_offset": byte_offset,
-                        "data_type": "BYTE",  # default; refined by type info
-                        "lid": field_lid,
-                        "symbol_crc": field_crc,
-                    }
-                )
-
-        elif tag == 0xA3:  # ATTRIBUTE
-            if offset >= len(response):
-                break
-            attr_id, consumed = _vlq32(response, offset)
-            offset += consumed
-            if offset + 2 > len(response):
-                break
-            flags = response[offset]
-            datatype = response[offset + 1]
-            offset += 2
-
-            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype == 0x13:
-                if offset >= len(response):
-                    break
-                str_len, consumed = _vlq32(response, offset)
-                offset += consumed
-                if offset + str_len <= len(response):
-                    try:
-                        field_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
-                    except Exception:
-                        field_name = ""
-                    offset += str_len
-                    continue
-
-            # Skip attribute value
-            if flags & 0x10:
-                if offset >= len(response):
-                    break
-                count, consumed = _vlq32(response, offset)
-                offset += consumed
-                offset += count
-            else:
-                if offset >= len(response):
-                    break
-                _, consumed = _vlq32(response, offset)
-                offset += consumed
-
-        elif tag == 0x00:
-            continue
-        else:
-            continue
-
-    return fields
 
 
 # ---------------------------------------------------------------------------

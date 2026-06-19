@@ -299,9 +299,9 @@ class TestSkipTypedValue:
         assert new_offset == len(vlq)
 
     def test_dword(self) -> None:
-        vlq = encode_uint32_vlq(0xDEADBEEF)
-        new_offset = skip_typed_value(vlq, 0, DataType.DWORD, 0x00)
-        assert new_offset == len(vlq)
+        # DWORD is fixed 4-byte (not VLQ).
+        data = struct.pack(">I", 0xDEADBEEF)
+        assert skip_typed_value(data, 0, DataType.DWORD, 0x00) == 4
 
     def test_aid(self) -> None:
         vlq = encode_uint32_vlq(306)
@@ -319,9 +319,9 @@ class TestSkipTypedValue:
         assert new_offset == len(vlq)
 
     def test_lword(self) -> None:
-        vlq = encode_uint64_vlq(0xCAFE)
-        new_offset = skip_typed_value(vlq, 0, DataType.LWORD, 0x00)
-        assert new_offset == len(vlq)
+        # LWORD is fixed 8-byte (not VLQ).
+        data = struct.pack(">Q", 0xCAFE)
+        assert skip_typed_value(data, 0, DataType.LWORD, 0x00) == 8
 
     def test_lint(self) -> None:
         from s7.vlq import encode_int64_vlq
