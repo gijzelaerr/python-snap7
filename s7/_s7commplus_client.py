@@ -12,7 +12,7 @@ import struct
 from typing import Any, Optional
 
 from .connection import S7CommPlusConnection
-from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
+from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId, ProtocolVersion
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
     encode_item_address,
@@ -365,6 +365,15 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
+        if self._connection._protocol_version >= ProtocolVersion.V3:
+            # V3 PLCs (FW >= V4.5): EXPLORE 0x8A11FFFF returns a multi-frame
+            # zlib-compressed PlcContentInfo XML blob.  The existing reassemble
+            # path does not strip V3 HMAC prefixes, so we collect frames manually.
+            payload = _build_explore_payload_v3(0x8A11FFFF)
+            first_response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5)
+            response = self._connection.collect_explore_frames(first_response)
+            return _parse_explore_datablocks_xml(response)
+
         payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return _parse_explore_datablocks(response)
@@ -394,9 +403,17 @@ class S7CommPlusClient:
             db_rid = db_info.get("rid", 0)
             if db_rid == 0:
                 continue
-            payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+            is_v3 = self._connection._protocol_version >= ProtocolVersion.V3
+            if is_v3:
+                payload = _build_explore_payload_v3(db_rid)
+            else:
+                payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
             try:
-                response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
+                if is_v3:
+                    first_response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5)
+                    response = self._connection.collect_explore_frames(first_response)
+                else:
+                    response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
                 fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
                 variables.extend(fields)
             except Exception:
@@ -763,6 +780,80 @@ def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:
     return bytes(payload)
 
 
+def _build_explore_payload_v3(explore_id: int) -> bytes:
+    """Build a V3-style EXPLORE payload targeting a specific RID.
+
+    V3 PLCs (FW >= V4.5) use a compact VLQ-encoded format instead of
+    the fixed big-endian layout of _build_explore_request().  The RID
+    0x8A11FFFF triggers the PLC to return a ``PlcContentInfo`` XML blob
+    compressed with zlib (magic ``78 DA``) spanning multiple TPKT frames.
+
+    Args:
+        explore_id: RID to explore (e.g. ``0x8A11FFFF`` for all blocks).
+
+    Returns:
+        Encoded EXPLORE payload.
+    """
+    payload = bytearray()
+    payload += encode_uint32_vlq(explore_id)
+    # Trailing UInt32 fill + filler byte (same tail as _build_explore_request)
+    payload += struct.pack(">I", 0) + bytes([0])
+    return bytes(payload)
+
+
+def _parse_explore_datablocks_xml(response: bytes) -> list[dict[str, Any]]:
+    """Parse a V3 EXPLORE response containing a zlib-compressed PlcContentInfo XML blob.
+
+    On V3 PLCs the ``0x8A11FFFF`` EXPLORE returns a ``PlcContentInfo`` XML
+    document compressed with standard zlib (magic ``78 DA``) embedded inside a
+    large BLOB attribute that spans multiple TPKT frames.  This parser locates
+    the zlib header in the concatenated response, decompresses it, and extracts
+    DB entities.
+
+    Falls back to :func:`_parse_explore_datablocks` when no ``78 DA`` magic is
+    found so that V1/V2 responses are handled transparently.
+
+    Returns:
+        List of dicts: ``{"name": str, "number": int, "rid": int}``
+    """
+    import zlib
+    import xml.etree.ElementTree as ET
+
+    zlib_pos = response.find(b"\x78\xda")
+    if zlib_pos < 0:
+        logger.debug("_parse_explore_datablocks_xml: no zlib magic, falling back to PObject parser")
+        return _parse_explore_datablocks(response)
+
+    try:
+        xml_bytes = zlib.decompress(response[zlib_pos:])
+    except zlib.error as exc:
+        logger.debug(f"_parse_explore_datablocks_xml: zlib error {exc}")
+        return []
+
+    try:
+        root = ET.fromstring(xml_bytes.decode("utf-8"))
+    except Exception as exc:
+        logger.debug(f"_parse_explore_datablocks_xml: XML parse error {exc}")
+        return []
+
+    datablocks: list[dict[str, Any]] = []
+    for entity in root.findall('.//Entity[@Id="Block"]'):
+        header = entity.find("Header")
+        if header is None or header.get("Type") != "DB":
+            continue
+        name = header.get("Name", "")
+        try:
+            number = int(header.get("Number", "0"))
+            rid = int(entity.get("Rid", "0"))
+        except ValueError:
+            continue
+        if name and number > 0:
+            datablocks.append({"name": name, "number": number, "rid": rid})
+
+    logger.debug(f"_parse_explore_datablocks_xml: found {len(datablocks)} DB(s)")
+    return datablocks
+
+
 def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
     """Parse an EXPLORE(thePLCProgram) response to extract datablock info.
 
@@ -910,26 +1001,48 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
             datatype = response[offset + 1]
             offset += 2
 
-            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype == 0x13:
+            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype in (0x13, 0x15):  # S7String / WSTRING
                 if offset >= len(response):
                     break
                 str_len, consumed = _vlq32(response, offset)
                 offset += consumed
                 if offset + str_len <= len(response):
+                    raw_str = response[offset : offset + str_len]
                     try:
-                        field_name = response[offset : offset + str_len].decode("utf-16-be", errors="replace")
+                        # V3 PLCs send UTF-8; V1/V2 send UTF-16-BE.
+                        # UTF-16-BE always contains null bytes for ASCII names;
+                        # UTF-8 ASCII names never do — use that as the discriminator.
+                        if b"\x00" in raw_str:
+                            field_name = raw_str.decode("utf-16-be", errors="replace").rstrip("\x00")
+                        else:
+                            field_name = raw_str.decode("utf-8", errors="replace")
                     except Exception:
                         field_name = ""
                     offset += str_len
                     continue
 
-            # Skip attribute value
-            if flags & 0x10:
+            # Skip attribute value.  V3 PLCs insert an extra 0x00 byte before
+            # the VLQ length of BLOB (0x14) attributes; WSTRING (0x15) skip
+            # must also advance past the string data bytes.
+            if flags & 0x10:  # array
                 if offset >= len(response):
                     break
                 count, consumed = _vlq32(response, offset)
                 offset += consumed
                 offset += count
+            elif datatype == 0x14:  # BLOB — V3 adds an extra 0x00 before VLQ length
+                if offset >= len(response):
+                    break
+                offset += 1  # extra 0x00 byte present in V3 encoding
+                if offset >= len(response):
+                    break
+                blob_len, consumed = _vlq32(response, offset)
+                offset += consumed + blob_len
+            elif datatype in (0x13, 0x15):  # S7String / WSTRING not matched above
+                if offset >= len(response):
+                    break
+                str_len, consumed = _vlq32(response, offset)
+                offset += consumed + str_len
             else:
                 if offset >= len(response):
                     break

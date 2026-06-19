@@ -408,6 +408,56 @@ class S7CommPlusConnection:
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
 
+    def collect_explore_frames(self, first_payload: bytes) -> bytes:
+        """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
+
+        On V3 PLCs (FW >= V4.5) a large EXPLORE response (e.g. RID 0x8A11FFFF)
+        spans multiple TPKT frames.  The first frame is the normal response
+        (already stripped of its 10-byte header by send_request).  Continuation
+        frames carry **no** response header — they are raw BLOB data protected
+        only by a V3 HMAC prefix.  The caller must concatenate them before
+        parsing.
+
+        Detection of the last fragment: a frame whose body (after HMAC strip)
+        is measurably shorter than the first frame body is the last fragment.
+        We use a 5-byte tolerance to absorb minor size jitter.
+
+        Args:
+            first_payload: First EXPLORE response payload, already returned by
+                send_request() (10-byte response header already stripped).
+
+        Returns:
+            All fragment payloads concatenated (first_payload + continuations).
+        """
+        # The first frame body (already header-stripped) was originally
+        # len(first_payload) + 10 bytes on the wire (10-byte response header).
+        # Continuation frames of the same "full" size will be that long after
+        # HMAC strip; a shorter body signals the last fragment.
+        reference_size = len(first_payload) + 10
+        all_data = first_payload
+        while True:
+            try:
+                raw = self._recv_s7_data()
+                if not raw:
+                    break
+                # Strip the 4-byte S7CommPlus fragment header (0x72 ver len:2)
+                if len(raw) < 4 or raw[0] != 0x72:
+                    break
+                frag_len = (raw[2] << 8) | raw[3]
+                body = raw[4 : 4 + frag_len]
+                # V3 non-TLS: strip the HMAC prefix ([hash_len][hash_bytes])
+                if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
+                    hash_len = body[0]
+                    body = body[1 + hash_len :]
+                if not body:
+                    break
+                all_data += body
+                if len(body) < reference_size - 5:
+                    break  # last fragment
+            except Exception:
+                break
+        return all_data
+
     def disconnect(self) -> None:
         """Disconnect from PLC."""
         if self._connected and self._session_id:
