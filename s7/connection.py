@@ -206,7 +206,14 @@ class S7CommPlusConnection:
             if self._server_session_version is not None:
                 self._session_setup_ok = self._setup_session()
             else:
-                logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
+                logger.warning(
+                    "PLC did not provide a scalar ServerSessionVersion attribute. "
+                    "This is the V1-initial S7-1200 firmware band (FW < 4.5 "
+                    "predating TLS) which sends a Struct(314) value and requires "
+                    "the proprietary SessionKey handshake — not yet implemented "
+                    "in python-snap7 (tracked in issue #710). Falling back to "
+                    "legacy PUT/GET: db_read/db_write will work, browse() will not."
+                )
                 self._session_setup_ok = False
 
             # Step 6: Version-specific post-setup
