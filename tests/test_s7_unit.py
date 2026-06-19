@@ -104,6 +104,21 @@ class TestParseReadResponse:
         assert results[0] == data1
         assert results[1] is None  # Error item
 
+    def test_single_byte_scalar_bool_true(self) -> None:
+        response = b"\x01\x00\x00\x04\x00\x00\x00\x00"
+        results = _parse_read_response(response)
+        assert results == [b"\x01"]
+
+    def test_single_byte_scalar_bool_false(self) -> None:
+        response = b"\x00\x00\x00\x04\x00\x00\x00\x00"
+        results = _parse_read_response(response)
+        assert results == [b"\x00"]
+
+    def test_single_byte_scalar_usint(self) -> None:
+        response = b"\x2a\x00\x00\x04\x00\x00\x00\x00"
+        results = _parse_read_response(response)
+        assert results == [b"\x2a"]
+
 
 class TestParseWriteResponse:
     @staticmethod

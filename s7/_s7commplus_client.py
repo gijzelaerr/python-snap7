@@ -455,6 +455,10 @@ class S7CommPlusClient:
 
 # -- Request/response builders (module-level for reuse by async client) --
 
+# S7-1200 wraps a single BOOL/USINT in [value 0x00 | 00 04 00 00 00 00].
+# The leading byte is misread by VLQ as a non-zero return code.
+_SCALAR_RESPONSE_SUFFIX = bytes.fromhex("000400000000")
+
 
 def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
     """Build a GetMultiVariables request payload.
@@ -499,6 +503,12 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
         List of raw bytes per item (None for errored items)
     """
     offset = 0
+
+    # S7-1200 single-byte scalar: [value 0x00 | 00 04 00 00 00 00]
+    if response.endswith(_SCALAR_RESPONSE_SUFFIX):
+        body = response[: -len(_SCALAR_RESPONSE_SUFFIX)]
+        if len(body) == 2 and body[1] == 0x00:
+            return [bytes(body[:1])]
 
     return_value, consumed = decode_uint64_vlq(response, offset)
     offset += consumed
