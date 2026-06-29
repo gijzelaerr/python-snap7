@@ -414,7 +414,8 @@ class S7CommPlusClient:
                     response = self._connection.collect_explore_frames(first_response)
                 else:
                     response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
-                fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
+                fields = _parse_explore_fields(response, db_info["number"], db_info["name"],
+                                               protocol_version=self._connection._protocol_version)
                 variables.extend(fields)
             except Exception:
                 logger.debug(f"Failed to explore DB {db_info['name']} (rid={db_rid:#x})")
@@ -831,6 +832,8 @@ def _parse_explore_datablocks_xml(response: bytes) -> list[dict[str, Any]]:
         return []
 
     try:
+        # ET.fromstring is safe against XXE by default in Python 3.8+: external entities
+        # are not expanded. The XML source is the PLC (trusted local network device).
         root = ET.fromstring(xml_bytes.decode("utf-8"))
     except Exception as exc:
         logger.debug(f"_parse_explore_datablocks_xml: XML parse error {exc}")
@@ -935,8 +938,14 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
     return datablocks
 
 
-def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list[dict[str, Any]]:
+def _parse_explore_fields(response: bytes, db_number: int, db_name: str, protocol_version: int = 0) -> list[dict[str, Any]]:
     """Parse an EXPLORE response for a single DB to extract field layout.
+
+    Args:
+        protocol_version: Protocol version from the connection (0 = V1/unknown).
+            Pass ``ProtocolVersion.V3`` (3) for V3 PLCs so that V3-specific
+            encoding differences (extra 0x00 before BLOB VLQ length) are handled
+            correctly without corrupting V1/V2 responses.
 
     Returns:
         List of dicts with keys:
@@ -1030,10 +1039,11 @@ def _parse_explore_fields(response: bytes, db_number: int, db_name: str) -> list
                 count, consumed = _vlq32(response, offset)
                 offset += consumed
                 offset += count
-            elif datatype == 0x14:  # BLOB — V3 adds an extra 0x00 before VLQ length
+            elif datatype == 0x14:  # BLOB
                 if offset >= len(response):
                     break
-                offset += 1  # extra 0x00 byte present in V3 encoding
+                if protocol_version >= ProtocolVersion.V3:
+                    offset += 1  # V3 inserts an extra 0x00 before the VLQ length
                 if offset >= len(response):
                     break
                 blob_len, consumed = _vlq32(response, offset)
