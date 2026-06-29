@@ -418,9 +418,14 @@ class S7CommPlusConnection:
         only by a V3 HMAC prefix.  The caller must concatenate them before
         parsing.
 
-        Detection of the last fragment: a frame whose body (after HMAC strip)
-        is measurably shorter than the first frame body is the last fragment.
-        We use a 5-byte tolerance to absorb minor size jitter.
+        Termination: a ``frag_len == 0`` frame is the standard S7CommPlus
+        end-of-stream trailer.  As a fallback, a frame whose body (after HMAC
+        strip) is measurably shorter than the first frame body is treated as the
+        last fragment (5-byte tolerance).
+
+        Collection is capped by ``_MAX_REASSEMBLED_FRAGMENTS`` and
+        ``_MAX_REASSEMBLED_BYTES`` to prevent unbounded allocation on malformed
+        or adversarial responses.
 
         Args:
             first_payload: First EXPLORE response payload, already returned by
@@ -435,7 +440,14 @@ class S7CommPlusConnection:
         # HMAC strip; a shorter body signals the last fragment.
         reference_size = len(first_payload) + 10
         all_data = first_payload
+        fragment_count = 0
         while True:
+            if len(all_data) > self._MAX_REASSEMBLED_BYTES or fragment_count >= self._MAX_REASSEMBLED_FRAGMENTS:
+                from snap7.error import S7ConnectionError
+                raise S7ConnectionError(
+                    f"collect_explore_frames: response too large "
+                    f"({len(all_data)} bytes, {fragment_count} fragments)"
+                )
             try:
                 raw = self._recv_s7_data()
                 if not raw:
@@ -444,6 +456,8 @@ class S7CommPlusConnection:
                 if len(raw) < 4 or raw[0] != 0x72:
                     break
                 frag_len = (raw[2] << 8) | raw[3]
+                if frag_len == 0:
+                    break  # standard S7CommPlus end-of-stream trailer
                 body = raw[4 : 4 + frag_len]
                 # V3 non-TLS: strip the HMAC prefix ([hash_len][hash_bytes])
                 if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
@@ -452,8 +466,9 @@ class S7CommPlusConnection:
                 if not body:
                     break
                 all_data += body
+                fragment_count += 1
                 if len(body) < reference_size - 5:
-                    break  # last fragment
+                    break  # fallback: shorter-than-full frame signals last fragment
             except Exception:
                 break
         return all_data
