@@ -97,6 +97,7 @@ class S7CommPlusClient:
             tls_cert=tls_cert,
             tls_key=tls_key,
             tls_ca=tls_ca,
+            password=password or "",
         )
 
         if password is not None and self._connection.tls_active:
@@ -283,7 +284,10 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_explore_payload(explore_id)
+        if self._connection._session_key is not None:
+            payload = _build_explore_payload_v3(explore_id if explore_id else 0x38)
+        else:
+            payload = _build_explore_payload(explore_id)
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return response
 
@@ -387,7 +391,14 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
+        if self._connection._session_key is not None:
+            # V1-initial PLCs: explore the DB wildcard address (0x8A11FFFF)
+            # matching TIA Portal's browse pattern
+            payload = _build_explore_payload_v3(0x8A11FFFF)
+        else:
+            payload = _build_explore_request(
+                Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER]
+            )
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return _parse_explore_datablocks(response)
 
@@ -803,6 +814,19 @@ def _build_explore_payload(explore_id: int = 0) -> bytes:
     payload = bytearray()
     payload += encode_uint32_vlq(explore_id)
     return bytes(payload)
+
+
+def _build_explore_payload_v3(explore_id: int, sequence: int = 10) -> bytes:
+    """Build a V3-style EXPLORE request payload matching TIA Portal format.
+
+    V1-initial PLCs use a 4-byte big-endian InObjectId followed by
+    fixed parameters, rather than the VLQ-based format.
+    """
+    payload = struct.pack(">I", explore_id)
+    payload += bytes([0x00, 0x01, 0x00, 0x01, 0x00, 0x00])
+    payload += bytes([sequence & 0xFF])
+    payload += bytes([0x00, 0x00, 0x00, 0x00, 0x00])
+    return payload
 
 
 def _build_invoke_payload(state: int) -> bytes:

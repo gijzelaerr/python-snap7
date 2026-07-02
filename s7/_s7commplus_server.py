@@ -630,16 +630,7 @@ class S7CommPlusServer:
     def _handle_init_ssl(self, seq_num: int) -> bytes:
         """Handle InitSSL -- respond to SSL initialization (V1 emulation, no real TLS)."""
         response = bytearray()
-        response += struct.pack(
-            ">BHHHHIB",
-            Opcode.RESPONSE,
-            0x0000,
-            FunctionCode.INIT_SSL,
-            0x0000,
-            seq_num,
-            0x00000000,
-            0x00,  # Transport flags
-        )
+        response += self._build_response_header(FunctionCode.INIT_SSL, seq_num)
         response += encode_uint32_vlq(0)  # Return code: success
         response += struct.pack(">I", 0)
         return bytes(response)
@@ -650,10 +641,10 @@ class S7CommPlusServer:
             session_id = self._next_session_id
             self._next_session_id += 1
 
-        # Build CreateObject response
+        # Build CreateObject response — uses a 14-byte header (with SessionId)
+        # unlike other responses which use the 10-byte _build_response_header.
         response = bytearray()
 
-        # Response header
         response += struct.pack(
             ">BHHHHIB",
             Opcode.RESPONSE,
