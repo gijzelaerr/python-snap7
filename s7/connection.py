@@ -759,7 +759,7 @@ class S7CommPlusConnection:
         # Parse response body: ReturnValue(UInt64 VLQ) + ObjectIdCount + ObjectIds(VLQ).
         # The usable session id is ObjectIds[0] (NOT the header SessionId field).
         body = response[14:]
-        object_ids, obj_end = parse_create_object_session_id(body)
+        object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
         else:
@@ -777,6 +777,9 @@ class S7CommPlusConnection:
         )
         logger.debug(f"CreateObject response payload: {response[14:].hex(' ')}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
+
+        if return_value != 0:
+            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
         # Parse response payload to extract ServerSessionVersion
         self._server_session_version = parse_server_session_version(response[14 + obj_end :])
@@ -1020,12 +1023,11 @@ class S7CommPlusConnection:
             Configured SSLContext
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        # S7-1500 FW < V3.0 only supports TLS 1.2; newer firmware negotiates 1.3.
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
 
-        # TLS 1.3 ciphersuites are configured differently from TLS 1.2
         if hasattr(ctx, "set_ciphersuites"):
             ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
-        # If set_ciphersuites not available, TLS 1.3 uses its mandatory defaults
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)

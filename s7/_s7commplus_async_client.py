@@ -821,12 +821,15 @@ class S7CommPlusAsyncClient:
         # Parse response body: ReturnValue(VLQ) + ObjectIdCount + ObjectIds(VLQ).
         # The usable session id is ObjectIds[0] (NOT the header SessionId field).
         body = response[14:]
-        object_ids, obj_end = parse_create_object_session_id(body)
+        object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
         else:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
+
+        if return_value != 0:
+            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
         self._server_session_version = parse_server_session_version(response[14 + obj_end :])
         if self._server_session_version is not None:

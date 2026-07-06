@@ -612,15 +612,15 @@ def skip_typed_value(data: bytes, offset: int, datatype: int, flags: int) -> int
         return offset
 
 
-def parse_create_object_session_id(body: bytes) -> tuple[list[int], int]:
+def parse_create_object_session_id(body: bytes) -> tuple[list[int], int, int]:
     """Parse a CreateObject response body (after the 14-byte response header).
 
     Body layout: ReturnValue (UInt64 VLQ) + ObjectIdCount (1 byte) + ObjectIds (UInt32 VLQ
     each). The usable session id is ``ObjectIds[0]`` (not the header SessionId field).
 
-    Returns ``(object_ids, offset)`` where ``offset`` points just past the ObjectIds.
+    Returns ``(object_ids, offset, return_value)`` where ``offset`` points just past the ObjectIds.
     """
-    _return_value, consumed = decode_uint64_vlq(body, 0)
+    return_value, consumed = decode_uint64_vlq(body, 0)
     boff = consumed
     obj_count = body[boff] if boff < len(body) else 0
     boff += 1
@@ -629,7 +629,7 @@ def parse_create_object_session_id(body: bytes) -> tuple[list[int], int]:
         oid, c = decode_uint32_vlq(body, boff)
         boff += c
         object_ids.append(oid)
-    return object_ids, boff
+    return object_ids, boff, return_value
 
 
 def parse_server_session_version(payload: bytes) -> Optional[bytes]:
