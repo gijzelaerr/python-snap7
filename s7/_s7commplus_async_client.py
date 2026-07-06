@@ -43,7 +43,9 @@ from ._s7commplus_client import (
     _build_explore_payload,
     _build_invoke_payload,
     _build_explore_request,
+    _build_explore_payload_v3,
     _parse_explore_datablocks,
+    _parse_explore_datablocks_xml,
     _parse_explore_fields,
 )
 from .protocol import Ids
@@ -487,6 +489,12 @@ class S7CommPlusAsyncClient:
 
         .. warning:: This method is **experimental** and may change.
         """
+        if self._protocol_version >= ProtocolVersion.V3:
+            payload = _build_explore_payload_v3(0x8A11FFFF)
+            first_response = await self._send_request(FunctionCode.EXPLORE, payload)
+            response = await self._collect_explore_frames(first_response)
+            return _parse_explore_datablocks_xml(response)
+
         payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
         response = await self._send_request(FunctionCode.EXPLORE, payload)
         return _parse_explore_datablocks(response)
@@ -502,16 +510,67 @@ class S7CommPlusAsyncClient:
             db_rid = db_info.get("rid", 0)
             if db_rid == 0:
                 continue
-            payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+            is_v3 = self._protocol_version >= ProtocolVersion.V3
+            if is_v3:
+                payload = _build_explore_payload_v3(db_rid)
+            else:
+                payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
             try:
-                response = await self._send_request(FunctionCode.EXPLORE, payload)
-                fields = _parse_explore_fields(response, db_info["number"], db_info["name"])
+                if is_v3:
+                    first_response = await self._send_request(FunctionCode.EXPLORE, payload)
+                    response = await self._collect_explore_frames(first_response)
+                else:
+                    response = await self._send_request(FunctionCode.EXPLORE, payload)
+                fields = _parse_explore_fields(
+                    response, db_info["number"], db_info["name"], protocol_version=self._protocol_version
+                )
                 variables.extend(fields)
             except Exception:
                 continue
         return variables
 
     # -- Internal methods --
+
+    _MAX_REASSEMBLED_BYTES = 16 * 1024 * 1024
+    _MAX_REASSEMBLED_FRAGMENTS = 4096
+
+    async def _collect_explore_frames(self, first_payload: bytes) -> bytes:
+        """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
+
+        Async equivalent of :meth:`S7CommPlusConnection.collect_explore_frames`.
+        """
+        reference_size = len(first_payload) + 10
+        all_data = first_payload
+        fragment_count = 0
+        while True:
+            if len(all_data) > self._MAX_REASSEMBLED_BYTES or fragment_count >= self._MAX_REASSEMBLED_FRAGMENTS:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    f"collect_explore_frames: response too large ({len(all_data)} bytes, {fragment_count} fragments)"
+                )
+            try:
+                raw = await self._recv_cotp_dt()
+                if not raw:
+                    break
+                if len(raw) < 4 or raw[0] != 0x72:
+                    break
+                frag_len = (raw[2] << 8) | raw[3]
+                if frag_len == 0:
+                    break
+                body = raw[4 : 4 + frag_len]
+                if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
+                    hash_len = body[0]
+                    body = body[1 + hash_len :]
+                if not body:
+                    break
+                all_data += body
+                fragment_count += 1
+                if len(body) < reference_size - 5:
+                    break
+            except Exception:
+                break
+        return all_data
 
     async def _send_request(self, function_code: int, payload: bytes) -> bytes:
         """Send an S7CommPlus request and receive the response."""
