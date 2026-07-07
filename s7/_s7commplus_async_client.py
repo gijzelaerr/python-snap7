@@ -13,8 +13,7 @@ import ssl
 import struct
 from typing import Any, Optional
 
-from .connection import _S7_CIPHERS, _S7_SIGALGS, _set_ctx_sigalgs
-
+from .connection import _S7_CIPHERS
 from .protocol import (
     DataType,
     ElementID,
@@ -258,8 +257,6 @@ class S7CommPlusAsyncClient:
         ctx.set_ecdh_curve("prime256v1")
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
-
-        _set_ctx_sigalgs(ctx, _S7_SIGALGS)
 
         if tls_cert and tls_key:
             ctx.load_cert_chain(tls_cert, tls_key)

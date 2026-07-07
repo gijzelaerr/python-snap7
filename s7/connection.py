@@ -38,12 +38,9 @@ Version-specific authentication after step 6::
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
 
-import ctypes
-import ctypes.util
 import logging
 import ssl
 import struct
-import sys
 from typing import Optional, Type
 from types import TracebackType
 
@@ -71,59 +68,12 @@ from .protocol import DataType
 
 logger = logging.getLogger(__name__)
 
-# S7 PLC compatible signature algorithms — only classic RSA/ECDSA with SHA-2.
-# S7 PLCs have minimal TLS stacks that reject ClientHellos containing modern
-# algorithms (Ed25519, Ed448, RSA-PSS) instead of ignoring them per RFC 5246.
-_S7_SIGALGS = "RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA256:ECDSA+SHA384"
-
 # S7 PLC compatible cipher suites — ECDHE-RSA preferred, RSA-only as fallback.
 # No ECDSA ciphers since PLCs use RSA certificates.  CBC ciphers included for
 # older firmware that doesn't support GCM.
 _S7_CIPHERS = (
     "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
 )
-
-# SSL_CTRL_SET_SIGALGS_LIST = 98  (OpenSSL 1.0.2+)
-# SSL_CTX_set1_sigalgs_list is a macro that calls SSL_CTX_ctrl with this code.
-_SSL_CTRL_SET_SIGALGS_LIST = 98
-
-
-def _set_ctx_sigalgs(ctx: ssl.SSLContext, sigalgs: str) -> bool:
-    """Restrict TLS signature algorithms via OpenSSL's C API.
-
-    Python's ssl module doesn't expose SSL_CTX_set1_sigalgs_list, so this
-    calls SSL_CTX_ctrl directly via ctypes.  Returns True on success, False
-    (with a debug log) on any platform where this isn't possible.
-    """
-    if sys.implementation.name != "cpython":
-        logger.debug("Cannot restrict TLS sigalgs: not CPython")
-        return False
-    try:
-        libssl_name = ctypes.util.find_library("ssl")
-        if not libssl_name:
-            logger.debug("Cannot restrict TLS sigalgs: libssl not found")
-            return False
-        libssl = ctypes.CDLL(libssl_name)
-        ssl_ctx_ctrl = libssl.SSL_CTX_ctrl
-        ssl_ctx_ctrl.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_long, ctypes.c_void_p]
-        ssl_ctx_ctrl.restype = ctypes.c_long
-
-        # CPython stores SSL_CTX* right after PyObject_HEAD (refcount + type ptr)
-        header = ctypes.sizeof(ctypes.c_ssize_t) + ctypes.sizeof(ctypes.c_void_p)
-        ctx_ptr = ctypes.c_void_p.from_address(id(ctx) + header).value
-        if not ctx_ptr:
-            logger.debug("Cannot restrict TLS sigalgs: SSL_CTX pointer is NULL")
-            return False
-
-        ok = ssl_ctx_ctrl(ctypes.c_void_p(ctx_ptr), _SSL_CTRL_SET_SIGALGS_LIST, 0, sigalgs.encode())
-        if ok == 1:
-            logger.debug("TLS signature algorithms restricted to: %s", sigalgs)
-            return True
-        logger.debug("SSL_CTX_ctrl(SET_SIGALGS_LIST) returned %d", ok)
-        return False
-    except Exception:
-        logger.debug("Cannot restrict TLS sigalgs", exc_info=True)
-        return False
 
 
 class S7CommPlusConnection:
@@ -1087,8 +1037,6 @@ class S7CommPlusConnection:
         ctx.set_ecdh_curve("prime256v1")
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
-
-        _set_ctx_sigalgs(ctx, _S7_SIGALGS)
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)
