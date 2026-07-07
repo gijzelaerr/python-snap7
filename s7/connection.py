@@ -1037,6 +1037,7 @@ class S7CommPlusConnection:
         ctx.set_ecdh_curve("prime256v1")
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
+        ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)
