@@ -13,6 +13,8 @@ import ssl
 import struct
 from typing import Any, Optional
 
+from .connection import _S7_CIPHERS, _S7_SIGALGS, _set_ctx_sigalgs
+
 from .protocol import (
     DataType,
     ElementID,
@@ -249,20 +251,15 @@ class S7CommPlusAsyncClient:
             raise S7ConnectionError("Cannot activate TLS: not connected")
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        # S7-1500 PLCs support TLS 1.2; some newer firmware also speaks 1.3,
-        # but many PLCs reject ClientHellos containing TLS 1.3 extensions
-        # (supported_versions, key_share, psk_key_exchange_modes) that they
-        # don't understand. Pin to TLS 1.2 for maximum compatibility.
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
-        # S7 PLCs have a minimal TLS stack that rejects ClientHellos with
-        # unknown cipher suites, signature algorithms, or extensions.
-        # Restrict to ECDHE+AES-GCM (what TIA Portal uses) and secp256r1.
-        ctx.set_ciphers("ECDHE+AESGCM")
+        ctx.set_ciphers(_S7_CIPHERS)
         ctx.set_ecdh_curve("prime256v1")
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
+
+        _set_ctx_sigalgs(ctx, _S7_SIGALGS)
 
         if tls_cert and tls_key:
             ctx.load_cert_chain(tls_cert, tls_key)
