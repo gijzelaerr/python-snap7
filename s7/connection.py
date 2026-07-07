@@ -1030,10 +1030,13 @@ class S7CommPlusConnection:
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
-        # OpenSSL 3.5+ enables post-quantum key exchange (ML-KEM) by default,
-        # producing ~1500-byte ClientHellos that S7-1500 PLCs cannot handle.
-        # Restrict to secp256r1 — supported by all S7 TLS firmware versions.
+        # S7 PLCs have a minimal TLS stack that rejects ClientHellos with
+        # unknown cipher suites, signature algorithms, or extensions.
+        # Restrict to ECDHE+AES-GCM (what TIA Portal uses) and secp256r1.
+        ctx.set_ciphers("ECDHE+AESGCM")
         ctx.set_ecdh_curve("prime256v1")
+        ctx.options |= ssl.OP_NO_TICKET
+        ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)
