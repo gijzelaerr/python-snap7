@@ -7,7 +7,7 @@ S7CommPlus protocol, with support for all protocol versions:
 - V1: Early S7-1200 (FW >= V4.0). Simple session handshake.
 - V2: Adds integrity checking and session authentication.
 - V3: Adds public-key-based key exchange.
-- V3 + TLS: TIA Portal V17+. Standard TLS 1.3 with per-device certificates.
+- V3 + TLS: TIA Portal V17+. TLS 1.2 with per-device certificates.
 
 The wire protocol (VLQ encoding, data types, function codes, object model) is
 the same across all versions -- only the session authentication layer differs.
@@ -941,7 +941,7 @@ class S7CommPlusConnection:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 tunneled inside COTP data frames.
+        """Activate TLS tunneled inside COTP data frames.
 
         The S7CommPlus protocol transports TLS records as the payload
         of COTP DT frames — TPKT and COTP headers stay unencrypted on
@@ -958,7 +958,7 @@ class S7CommPlusConnection:
         Args:
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
-            tls_ca: Path to CA certificate for PLC verification (PEM)
+            tls_ca: Path to PLC CA certificate (PEM)
         """
         ctx = self._setup_ssl_context(
             cert_path=tls_cert,
@@ -990,7 +990,7 @@ class S7CommPlusConnection:
             logger.warning(f"Could not extract OMS exporter secret: {e}")
             self._oms_secret = None
 
-        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
+        logger.info("TLS activated (tunneled inside COTP frames)")
 
     def _do_tls_handshake(self) -> None:
         """Perform TLS handshake, tunneling records through COTP."""
@@ -1023,16 +1023,17 @@ class S7CommPlusConnection:
             Configured SSLContext
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        # S7-1500 FW < V3.0 only supports TLS 1.2; newer firmware negotiates 1.3.
+        # S7-1500 PLCs support TLS 1.2; some newer firmware also speaks 1.3,
+        # but many PLCs reject ClientHellos containing TLS 1.3 extensions
+        # (supported_versions, key_share, psk_key_exchange_modes) that they
+        # don't understand. Pin to TLS 1.2 for maximum compatibility.
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
         # OpenSSL 3.5+ enables post-quantum key exchange (ML-KEM) by default,
         # producing ~1500-byte ClientHellos that S7-1500 PLCs cannot handle.
         # Restrict to secp256r1 — supported by all S7 TLS firmware versions.
         ctx.set_ecdh_curve("prime256v1")
-
-        if hasattr(ctx, "set_ciphersuites"):
-            ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)

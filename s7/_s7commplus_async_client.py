@@ -242,23 +242,24 @@ class S7CommPlusAsyncClient:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 over the COTP connection."""
+        """Activate TLS over the COTP connection."""
         if self._writer is None:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Cannot activate TLS: not connected")
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        # S7-1500 FW < V3.0 only supports TLS 1.2; newer firmware negotiates 1.3.
+        # S7-1500 PLCs support TLS 1.2; some newer firmware also speaks 1.3,
+        # but many PLCs reject ClientHellos containing TLS 1.3 extensions
+        # (supported_versions, key_share, psk_key_exchange_modes) that they
+        # don't understand. Pin to TLS 1.2 for maximum compatibility.
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
         # OpenSSL 3.5+ enables post-quantum key exchange (ML-KEM) by default,
         # producing ~1500-byte ClientHellos that S7-1500 PLCs cannot handle.
         # Restrict to secp256r1 — supported by all S7 TLS firmware versions.
         ctx.set_ecdh_curve("prime256v1")
-
-        if hasattr(ctx, "set_ciphersuites"):
-            ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
 
         if tls_cert and tls_key:
             ctx.load_cert_chain(tls_cert, tls_key)
@@ -291,7 +292,7 @@ class S7CommPlusAsyncClient:
             logger.warning(f"Could not extract OMS exporter secret: {e}")
             self._oms_secret = None
 
-        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
+        logger.info("TLS activated (tunneled inside COTP frames)")
 
     async def _do_tls_handshake(self) -> None:
         """Perform the TLS handshake, tunneling records through COTP DT frames."""
