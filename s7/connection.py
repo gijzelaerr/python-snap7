@@ -68,12 +68,12 @@ from .protocol import DataType
 
 logger = logging.getLogger(__name__)
 
-# S7 PLC compatible cipher suites — ECDHE-RSA preferred, RSA-only as fallback.
-# No ECDSA ciphers since PLCs use RSA certificates.  CBC ciphers included for
-# older firmware that doesn't support GCM.
-_S7_CIPHERS = (
-    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
-)
+# RSA-only cipher suites for S7 PLC compatibility.  ECDHE ciphers are excluded
+# because they force OpenSSL to include ec_point_formats and supported_groups
+# extensions in the ClientHello; S7-1500 PLCs send a bare TCP RST when they see
+# compressed EC point formats (which Python's ssl module always advertises with
+# ECDHE, and there is no API to suppress them).
+_S7_CIPHERS = "AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
 
 
 class S7CommPlusConnection:
@@ -1034,7 +1034,6 @@ class S7CommPlusConnection:
         ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
         ctx.set_ciphers(_S7_CIPHERS)
-        ctx.set_ecdh_curve("prime256v1")
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
         ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
