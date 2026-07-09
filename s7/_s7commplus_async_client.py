@@ -489,7 +489,7 @@ class S7CommPlusAsyncClient:
         .. warning:: This method is **experimental** and may change.
         """
         # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, integrity_id=0)
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, False, self._integrity_id_read)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:

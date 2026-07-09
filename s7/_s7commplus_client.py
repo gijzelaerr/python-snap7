@@ -734,6 +734,7 @@ def _build_symbolic_read_payload(
     access_area: int,
     lids: list[int],
     symbol_crc: int = 0,
+    with_integrity: bool = True,
     integrity_id: int = 1,
 ) -> bytes:
     """Build a GetMultiVariables payload for symbolic (LID-based) access.
@@ -763,7 +764,7 @@ def _build_symbolic_read_payload(
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_object_qualifier()
-    if integrity_id is not None:
+    if with_integrity:
         payload += encode_uint32_vlq(integrity_id)
     payload += struct.pack(">I", 0)
     return bytes(payload)
