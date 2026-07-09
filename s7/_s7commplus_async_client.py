@@ -488,7 +488,8 @@ class S7CommPlusAsyncClient:
 
         .. warning:: This method is **experimental** and may change.
         """
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc)
+        # TODO: Send the correct integrity id once available
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, integrity_id=0)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -815,12 +816,12 @@ class S7CommPlusAsyncClient:
         version, data_length, consumed = decode_header(response_data)
         response = response_data[consumed : consumed + data_length]
 
-        if len(response) < 14:
+        if len(response) < 10:
             raise RuntimeError("CreateObject response too short")
 
-        # Parse response body: ReturnValue(VLQ) + ObjectIdCount + ObjectIds(VLQ).
-        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
-        body = response[14:]
+        # Response header is 10 bytes (opcode+reserved+func+reserved+seq+transport).
+        # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
+        body = response[10:]
         object_ids, obj_end = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
@@ -828,7 +829,7 @@ class S7CommPlusAsyncClient:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
-        self._server_session_version = parse_server_session_version(response[14 + obj_end :])
+        self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
             logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
         else:
