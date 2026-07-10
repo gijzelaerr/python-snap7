@@ -415,6 +415,71 @@ class S7CommPlusConnection:
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
 
+    def collect_explore_frames(self, first_payload: bytes) -> bytes:
+        """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
+
+        On V3 PLCs (FW >= V4.5) a large EXPLORE response (e.g. RID 0x8A11FFFF)
+        spans multiple TPKT frames.  The first frame is the normal response
+        (already stripped of its 10-byte header by send_request).  Continuation
+        frames carry **no** response header — they are raw BLOB data protected
+        only by a V3 HMAC prefix.  The caller must concatenate them before
+        parsing.
+
+        Termination: a ``frag_len == 0`` frame is the standard S7CommPlus
+        end-of-stream trailer.  As a fallback, a frame whose body (after HMAC
+        strip) is measurably shorter than the first frame body is treated as the
+        last fragment (5-byte tolerance).
+
+        Collection is capped by ``_MAX_REASSEMBLED_FRAGMENTS`` and
+        ``_MAX_REASSEMBLED_BYTES`` to prevent unbounded allocation on malformed
+        or adversarial responses.
+
+        Args:
+            first_payload: First EXPLORE response payload, already returned by
+                send_request() (10-byte response header already stripped).
+
+        Returns:
+            All fragment payloads concatenated (first_payload + continuations).
+        """
+        # The first frame body (already header-stripped) was originally
+        # len(first_payload) + 10 bytes on the wire (10-byte response header).
+        # Continuation frames of the same "full" size will be that long after
+        # HMAC strip; a shorter body signals the last fragment.
+        reference_size = len(first_payload) + 10
+        all_data = first_payload
+        fragment_count = 0
+        while True:
+            if len(all_data) > self._MAX_REASSEMBLED_BYTES or fragment_count >= self._MAX_REASSEMBLED_FRAGMENTS:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    f"collect_explore_frames: response too large ({len(all_data)} bytes, {fragment_count} fragments)"
+                )
+            try:
+                raw = self._recv_s7_data()
+                if not raw:
+                    break
+                # Strip the 4-byte S7CommPlus fragment header (0x72 ver len:2)
+                if len(raw) < 4 or raw[0] != 0x72:
+                    break
+                frag_len = (raw[2] << 8) | raw[3]
+                if frag_len == 0:
+                    break  # standard S7CommPlus end-of-stream trailer
+                body = raw[4 : 4 + frag_len]
+                # V3 non-TLS: strip the HMAC prefix ([hash_len][hash_bytes])
+                if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
+                    hash_len = body[0]
+                    body = body[1 + hash_len :]
+                if not body:
+                    break
+                all_data += body
+                fragment_count += 1
+                if len(body) < reference_size - 5:
+                    break  # fallback: shorter-than-full frame signals last fragment
+            except Exception:
+                break
+        return all_data
+
     def disconnect(self) -> None:
         """Disconnect from PLC."""
         if self._connected and self._session_id:
