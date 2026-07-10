@@ -170,7 +170,7 @@ class Client:
 
         # Calculate TSAP values from rack/slot
         # Remote TSAP: rack and slot encoded as per S7 specification
-        self.remote_tsap = 0x0100 | (rack << 5) | slot
+        self.remote_tsap = (self.connection_type << 8) | (rack << 5) | slot
 
         try:
             start_time = time.time()
