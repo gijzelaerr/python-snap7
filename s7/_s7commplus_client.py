@@ -11,8 +11,9 @@ import logging
 import struct
 from typing import Any, Optional
 
+from . import typeinfo
 from .connection import S7CommPlusConnection
-from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId, ProtocolVersion
+from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
     encode_item_address,
@@ -210,6 +211,21 @@ class S7CommPlusClient:
         between downloads. Symbolic access navigates the PLC's symbol tree
         using LIDs (Local IDs) discovered via :meth:`browse`.
 
+        .. note:: **I/Q/M area caveats** (observed on S7-1200 FW V4.5):
+
+           - **Physical PAQ LIDs return error when value is 0x00.**
+             Reading a physical Q-byte LID (e.g. QB0) when all outputs are
+             OFF raises ``RuntimeError`` instead of returning ``b"\\x00"``.
+             Callers should catch the exception and treat it as zero.
+           - **TCP RST after first I/Q/M read.** The PLC sends a TCP RST
+             after the first successful I/Q/M ``GetMultiVariables`` per
+             connection. DB reads are unaffected. Workaround: reconnect
+             before each I/Q/M read.
+           - **Symbolic BOOL LIDs can be stale vs. physical PAQ.** A
+             symbolic BOOL tag written via ``SetMultiVariables`` may not
+             reflect later forced writes to the physical address. For
+             reliable output state, read the physical byte LID instead.
+
         Args:
             access_area: Access area ID. For DBs this is
                 ``0x8A0E0000 + db_number``.
@@ -234,7 +250,13 @@ class S7CommPlusClient:
 
         .. warning:: This method is **experimental** and may change.
 
-        See :meth:`read_symbolic` for context on when to use symbolic access.
+        See :meth:`read_symbolic` for context on when to use symbolic access
+        and I/Q/M area caveats.
+
+        .. note:: Writing a symbolic BOOL tag does **not** update the
+           physical PAQ byte on some S7-1200 firmware versions. A
+           subsequent read of the physical byte LID may show a different
+           value than the symbolic BOOL LID.
 
         Args:
             access_area: Access area ID.
@@ -365,28 +387,20 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        if self._connection._protocol_version >= ProtocolVersion.V3:
-            # V3 PLCs (FW >= V4.5): EXPLORE 0x8A11FFFF returns a multi-frame
-            # zlib-compressed PlcContentInfo XML blob.  The existing reassemble
-            # path does not strip V3 HMAC prefixes, so we collect frames manually.
-            payload = _build_explore_payload_v3(0x8A11FFFF)
-            first_response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5)
-            response = self._connection.collect_explore_frames(first_response)
-            return _parse_explore_datablocks_xml(response)
-
         payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return _parse_explore_datablocks(response)
 
     def browse(self) -> list[dict[str, Any]]:
-        """Browse the PLC symbol table via EXPLORE.
+        """Browse the full per-tag symbol tree via EXPLORE + the type-info container.
 
         .. warning:: This method is **experimental** and may change.
 
-        Returns a flat list of variable info dicts with keys:
-        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``bit_size``.
-        Results can be converted to :class:`~snap7.tags.Tag` objects for use
-        with :meth:`~s7.client.Client.read_tag`.
+        Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
+        (the dot-separated hex LID path usable with :meth:`read_tag`), ``data_type``,
+        and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
+        each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
+        then recombine into the symbol tree.
 
         Returns:
             List of variable info dicts.
@@ -394,34 +408,71 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        # Step 1: list datablocks
-        dbs = self.list_datablocks()
+        # Phase A: enumerate data blocks. Phase B/C: resolve each DB's type-info RID
+        # (a LID=1 read — needed for instance DBs whose TI is not their own RID) and seed
+        # a root node per DB.
+        root_nodes: list[typeinfo.Node] = []
+        for db_info in self.list_datablocks():
+            if db_info.get("number", 0) <= 0 or db_info.get("rid", 0) == 0:
+                continue
+            ti_rid = self._read_typeinfo_rid(db_info["rid"])
+            if ti_rid == 0:
+                continue  # load-memory-only DB, skip
+            root_nodes.append(
+                typeinfo.Node(
+                    node_type=typeinfo.NodeType.ROOT, name=db_info["name"], access_id=db_info["rid"], relation_id=ti_rid
+                )
+            )
 
-        # Step 2: for each DB, explore its type info to get field layout
+        # Add the native process areas with their known synthetic type-info ids.
+        for name, access_rid, ti_rid in (
+            ("IArea", Ids.NATIVE_THE_I_AREA_RID, 0x90010000),
+            ("QArea", Ids.NATIVE_THE_Q_AREA_RID, 0x90020000),
+            ("MArea", Ids.NATIVE_THE_M_AREA_RID, 0x90030000),
+            ("S7Timers", Ids.NATIVE_THE_S7_TIMERS_RID, 0x90050000),
+            ("S7Counters", Ids.NATIVE_THE_S7_COUNTERS_RID, 0x90060000),
+        ):
+            root_nodes.append(
+                typeinfo.Node(node_type=typeinfo.NodeType.ROOT, name=name, access_id=access_rid, relation_id=ti_rid)
+            )
+
+        # Phase D: explore the OMS type-info container (a large, multi-fragment PDU).
+        type_objects = self._explore_type_info_container()
+
+        # Phase E: recombine type-info with the DB/area nodes and flatten.
+        typeinfo.build_tree(root_nodes, type_objects)
         variables: list[dict[str, Any]] = []
-        for db_info in dbs:
-            db_rid = db_info.get("rid", 0)
-            if db_rid == 0:
-                continue
-            is_v3 = self._connection._protocol_version >= ProtocolVersion.V3
-            if is_v3:
-                payload = _build_explore_payload_v3(db_rid)
-            else:
-                payload = _build_explore_request(db_rid, [Ids.OBJECT_VARIABLE_TYPE_NAME])
+        for v in typeinfo.build_flat_list(root_nodes):
             try:
-                if is_v3:
-                    first_response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5)
-                    response = self._connection.collect_explore_frames(first_response)
-                else:
-                    response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
-                fields = _parse_explore_fields(response, db_info["number"], db_info["name"],
-                                               protocol_version=self._connection._protocol_version)
-                variables.extend(fields)
-            except Exception:
-                logger.debug(f"Failed to explore DB {db_info['name']} (rid={db_rid:#x})")
-                continue
-
+                data_type = typeinfo.Softdatatype(v.softdatatype).name
+            except ValueError:
+                data_type = str(v.softdatatype)
+            variables.append(
+                {
+                    "name": v.name,
+                    "access_sequence": v.access_sequence,
+                    "data_type": data_type,
+                    "opt_address": v.opt_address,
+                    "opt_bitoffset": v.opt_bitoffset,
+                    "nonopt_address": v.nonopt_address,
+                    "nonopt_bitoffset": v.nonopt_bitoffset,
+                }
+            )
         return variables
+
+    def _read_typeinfo_rid(self, db_rid: int) -> int:
+        """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
+        try:
+            raw = self.read_symbolic(db_rid, [1], 0)
+        except Exception:
+            return 0
+        return struct.unpack(">I", raw[:4])[0] if len(raw) >= 4 else 0
+
+    def _explore_type_info_container(self) -> list["typeinfo.PObject"]:
+        """EXPLORE the OMS type-info container and return its per-type objects."""
+        payload = _build_explore_request(Ids.OBJECT_OMS_TYPE_INFO_CONTAINER, [])
+        response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
+        return typeinfo.extract_type_info_objects(response)
 
     def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
         """Create a data change subscription.
@@ -473,6 +524,10 @@ class S7CommPlusClient:
 
 # -- Request/response builders (module-level for reuse by async client) --
 
+# S7-1200 wraps a single BOOL/USINT in [value 0x00 | 00 04 00 00 00 00].
+# The leading byte is misread by VLQ as a non-zero return code.
+_SCALAR_RESPONSE_SUFFIX = bytes.fromhex("000400000000")
+
 
 def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
     """Build a GetMultiVariables request payload.
@@ -502,6 +557,7 @@ def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
     for addr in addresses:
         payload += addr
     payload += encode_object_qualifier()
+    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
     return bytes(payload)
@@ -517,6 +573,12 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
         List of raw bytes per item (None for errored items)
     """
     offset = 0
+
+    # S7-1200 single-byte scalar: [value 0x00 | 00 04 00 00 00 00]
+    if response.endswith(_SCALAR_RESPONSE_SUFFIX):
+        body = response[: -len(_SCALAR_RESPONSE_SUFFIX)]
+        if len(body) == 2 and body[1] == 0x00:
+            return [bytes(body[:1])]
 
     return_value, consumed = decode_uint64_vlq(response, offset)
     offset += consumed
@@ -588,6 +650,7 @@ def _build_write_payload(items: list[tuple[int, int, bytes]]) -> bytes:
         payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
     payload += encode_object_qualifier()
+    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
     return bytes(payload)
@@ -640,6 +703,7 @@ def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_object_qualifier()
+    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -661,6 +725,7 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
     payload += encode_object_qualifier()
+    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -693,6 +758,7 @@ def _build_symbolic_read_payload(access_area: int, lids: list[int], symbol_crc: 
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_object_qualifier()
+    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -720,6 +786,7 @@ def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
     payload += encode_object_qualifier()
+    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -769,7 +836,7 @@ def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:
     payload += struct.pack(">I", explore_id)  # ExploreId (fixed UInt32, not VLQ)
     payload += encode_uint32_vlq(0)  # ExploreRequestId (0 = none)
     payload += bytes([1])  # ExploreChildsRecursive
-    payload += bytes([1])  # unknown (the C# reference driver always sends 1 here)
+    payload += bytes([1])  # unknown flag — the protocol always carries 1 here
     payload += bytes([0])  # ExploreParents
     payload += bytes([0])  # number of following filter objects (none)
     payload += encode_uint32_vlq(len(attribute_ids))  # AddressList count
@@ -781,82 +848,6 @@ def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:
     return bytes(payload)
 
 
-def _build_explore_payload_v3(explore_id: int) -> bytes:
-    """Build a V3-style EXPLORE payload targeting a specific RID.
-
-    V3 PLCs (FW >= V4.5) use a compact VLQ-encoded format instead of
-    the fixed big-endian layout of _build_explore_request().  The RID
-    0x8A11FFFF triggers the PLC to return a ``PlcContentInfo`` XML blob
-    compressed with zlib (magic ``78 DA``) spanning multiple TPKT frames.
-
-    Args:
-        explore_id: RID to explore (e.g. ``0x8A11FFFF`` for all blocks).
-
-    Returns:
-        Encoded EXPLORE payload.
-    """
-    payload = bytearray()
-    payload += encode_uint32_vlq(explore_id)
-    # Trailing UInt32 fill + filler byte (same tail as _build_explore_request)
-    payload += struct.pack(">I", 0) + bytes([0])
-    return bytes(payload)
-
-
-def _parse_explore_datablocks_xml(response: bytes) -> list[dict[str, Any]]:
-    """Parse a V3 EXPLORE response containing a zlib-compressed PlcContentInfo XML blob.
-
-    On V3 PLCs the ``0x8A11FFFF`` EXPLORE returns a ``PlcContentInfo`` XML
-    document compressed with standard zlib (magic ``78 DA``) embedded inside a
-    large BLOB attribute that spans multiple TPKT frames.  This parser locates
-    the zlib header in the concatenated response, decompresses it, and extracts
-    DB entities.
-
-    Falls back to :func:`_parse_explore_datablocks` when no ``78 DA`` magic is
-    found so that V1/V2 responses are handled transparently.
-
-    Returns:
-        List of dicts: ``{"name": str, "number": int, "rid": int}``
-    """
-    import zlib
-    import xml.etree.ElementTree as ET
-
-    zlib_pos = response.find(b"\x78\xda")
-    if zlib_pos < 0:
-        logger.debug("_parse_explore_datablocks_xml: no zlib magic, falling back to PObject parser")
-        return _parse_explore_datablocks(response)
-
-    try:
-        xml_bytes = zlib.decompress(response[zlib_pos:])
-    except zlib.error as exc:
-        logger.debug(f"_parse_explore_datablocks_xml: zlib error {exc}")
-        return []
-
-    try:
-        # ET.fromstring is safe against XXE by default in Python 3.8+: external entities
-        # are not expanded. The XML source is the PLC (trusted local network device).
-        root = ET.fromstring(xml_bytes.decode("utf-8"))
-    except Exception as exc:
-        logger.debug(f"_parse_explore_datablocks_xml: XML parse error {exc}")
-        return []
-
-    datablocks: list[dict[str, Any]] = []
-    for entity in root.findall('.//Entity[@Id="Block"]'):
-        header = entity.find("Header")
-        if header is None or header.get("Type") != "DB":
-            continue
-        name = header.get("Name", "")
-        try:
-            number = int(header.get("Number", "0"))
-            rid = int(entity.get("Rid", "0"))
-        except ValueError:
-            continue
-        if name and number > 0:
-            datablocks.append({"name": name, "number": number, "rid": rid})
-
-    logger.debug(f"_parse_explore_datablocks_xml: found {len(datablocks)} DB(s)")
-    return datablocks
-
-
 def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
     """Parse an EXPLORE(thePLCProgram) response to extract datablock info.
 
@@ -864,7 +855,7 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
     stack of ``[relation_id, class_id, name]``. A DataBlock is an object whose ClassId
     is ``DB_CLASS_RID`` and whose RelationId is a DB area id (``relid >> 16 == 0x8A0E``);
     its number is ``relid & 0xFFFF`` and its name comes from the ObjectVariableTypeName
-    attribute. Mirrors the C# reference driver's Browse step 1.
+    attribute (the first step of the symbol-tree browse).
 
     Returns:
         List of dicts: ``{"name": str, "number": int, "rid": int}``
@@ -936,135 +927,6 @@ def _parse_explore_datablocks(response: bytes) -> list[dict[str, Any]]:
             offset += 1
 
     return datablocks
-
-
-def _parse_explore_fields(response: bytes, db_number: int, db_name: str, protocol_version: int = 0) -> list[dict[str, Any]]:
-    """Parse an EXPLORE response for a single DB to extract field layout.
-
-    Args:
-        protocol_version: Protocol version from the connection (0 = V1/unknown).
-            Pass ``ProtocolVersion.V3`` (3) for V3 PLCs so that V3-specific
-            encoding differences (extra 0x00 before BLOB VLQ length) are handled
-            correctly without corrupting V1/V2 responses.
-
-    Returns:
-        List of dicts with keys:
-        ``name``, ``db_number``, ``byte_offset``, ``data_type``, ``lid``,
-        ``symbol_crc``. ``lid`` and ``symbol_crc`` enable symbolic access
-        for optimized DBs.
-    """
-    from .vlq import decode_uint32_vlq as _vlq32
-
-    fields: list[dict[str, Any]] = []
-    offset = 0
-    field_name = ""
-    byte_offset = 0
-    field_lid = 0
-    field_crc = 0
-
-    # Skip return code VLQ at start of response
-    if offset < len(response):
-        _, consumed = _vlq32(response, offset)
-        offset += consumed
-
-    while offset < len(response):
-        tag = response[offset]
-        offset += 1
-
-        if tag == 0xA1:  # START_OF_OBJECT
-            if offset + 4 > len(response):
-                break
-            # The RID bytes serve as the LID for symbolic access
-            field_lid = struct.unpack(">I", response[offset : offset + 4])[0]
-            offset += 4
-            for _ in range(3):
-                if offset >= len(response):
-                    break
-                _, consumed = _vlq32(response, offset)
-                offset += consumed
-            field_name = ""
-            byte_offset = 0
-            field_crc = 0
-
-        elif tag == 0xA2:  # TERMINATING_OBJECT
-            if field_name:
-                fields.append(
-                    {
-                        "name": f"{db_name}.{field_name}",
-                        "db_number": db_number,
-                        "byte_offset": byte_offset,
-                        "data_type": "BYTE",  # default; refined by type info
-                        "lid": field_lid,
-                        "symbol_crc": field_crc,
-                    }
-                )
-
-        elif tag == 0xA3:  # ATTRIBUTE
-            if offset >= len(response):
-                break
-            attr_id, consumed = _vlq32(response, offset)
-            offset += consumed
-            if offset + 2 > len(response):
-                break
-            flags = response[offset]
-            datatype = response[offset + 1]
-            offset += 2
-
-            if attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype in (0x13, 0x15):  # S7String / WSTRING
-                if offset >= len(response):
-                    break
-                str_len, consumed = _vlq32(response, offset)
-                offset += consumed
-                if offset + str_len <= len(response):
-                    raw_str = response[offset : offset + str_len]
-                    try:
-                        # V3 PLCs send UTF-8; V1/V2 send UTF-16-BE.
-                        # UTF-16-BE always contains null bytes for ASCII names;
-                        # UTF-8 ASCII names never do — use that as the discriminator.
-                        if b"\x00" in raw_str:
-                            field_name = raw_str.decode("utf-16-be", errors="replace").rstrip("\x00")
-                        else:
-                            field_name = raw_str.decode("utf-8", errors="replace")
-                    except Exception:
-                        field_name = ""
-                    offset += str_len
-                    continue
-
-            # Skip attribute value.  V3 PLCs insert an extra 0x00 byte before
-            # the VLQ length of BLOB (0x14) attributes; WSTRING (0x15) skip
-            # must also advance past the string data bytes.
-            if flags & 0x10:  # array
-                if offset >= len(response):
-                    break
-                count, consumed = _vlq32(response, offset)
-                offset += consumed
-                offset += count
-            elif datatype == 0x14:  # BLOB
-                if offset >= len(response):
-                    break
-                if protocol_version >= ProtocolVersion.V3:
-                    offset += 1  # V3 inserts an extra 0x00 before the VLQ length
-                if offset >= len(response):
-                    break
-                blob_len, consumed = _vlq32(response, offset)
-                offset += consumed + blob_len
-            elif datatype in (0x13, 0x15):  # S7String / WSTRING not matched above
-                if offset >= len(response):
-                    break
-                str_len, consumed = _vlq32(response, offset)
-                offset += consumed + str_len
-            else:
-                if offset >= len(response):
-                    break
-                _, consumed = _vlq32(response, offset)
-                offset += consumed
-
-        elif tag == 0x00:
-            continue
-        else:
-            continue
-
-    return fields
 
 
 # ---------------------------------------------------------------------------

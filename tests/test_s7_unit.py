@@ -10,13 +10,14 @@ from s7._s7commplus_client import (
     _build_write_payload,
     _parse_write_response,
     _build_explore_request,
-    _build_explore_payload_v3,
     _parse_explore_datablocks,
-    _parse_explore_datablocks_xml,
-    _parse_explore_fields,
+    _build_area_read_payload,
+    _build_area_write_payload,
+    _build_symbolic_read_payload,
+    _build_symbolic_write_payload,
 )
 from s7.connection import S7CommPlusConnection
-from s7.codec import encode_pvalue_blob
+from s7.codec import encode_object_qualifier, encode_pvalue_blob
 from s7.codec import _pvalue_element_size as _element_size
 from s7.codec import skip_typed_value, parse_server_session_version
 from s7.protocol import DataType, ElementID, ObjectId
@@ -107,6 +108,21 @@ class TestParseReadResponse:
         assert results[0] == data1
         assert results[1] is None  # Error item
 
+    def test_single_byte_scalar_bool_true(self) -> None:
+        response = b"\x01\x00\x00\x04\x00\x00\x00\x00"
+        results = _parse_read_response(response)
+        assert results == [b"\x01"]
+
+    def test_single_byte_scalar_bool_false(self) -> None:
+        response = b"\x00\x00\x00\x04\x00\x00\x00\x00"
+        results = _parse_read_response(response)
+        assert results == [b"\x00"]
+
+    def test_single_byte_scalar_usint(self) -> None:
+        response = b"\x2a\x00\x00\x04\x00\x00\x00\x00"
+        results = _parse_read_response(response)
+        assert results == [b"\x2a"]
+
 
 class TestParseWriteResponse:
     @staticmethod
@@ -182,6 +198,42 @@ class TestPayloadAgreement:
         assert isinstance(write_payload, bytes)
 
 
+class TestSequenceNumber:
+    """Verify all payload builders include a SequenceNumber after ObjectQualifier."""
+
+    @staticmethod
+    def _has_sequence_number(payload: bytes) -> bool:
+        oq = encode_object_qualifier()
+        idx = bytes(payload).find(oq)
+        assert idx >= 0, "ObjectQualifier not found in payload"
+        seq_offset = idx + len(oq)
+        return payload[seq_offset : seq_offset + 1] == encode_uint32_vlq(1)
+
+    def test_read_payload_has_sequence_number(self) -> None:
+        payload = _build_read_payload([(1, 0, 4)])
+        assert self._has_sequence_number(payload)
+
+    def test_write_payload_has_sequence_number(self) -> None:
+        payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]))])
+        assert self._has_sequence_number(payload)
+
+    def test_area_read_payload_has_sequence_number(self) -> None:
+        payload = _build_area_read_payload(82, 0, 4)
+        assert self._has_sequence_number(payload)
+
+    def test_area_write_payload_has_sequence_number(self) -> None:
+        payload = _build_area_write_payload(82, 0, b"\x00\x00\x00\x00")
+        assert self._has_sequence_number(payload)
+
+    def test_symbolic_read_payload_has_sequence_number(self) -> None:
+        payload = _build_symbolic_read_payload(0x8A0E0001, [1, 4])
+        assert self._has_sequence_number(payload)
+
+    def test_symbolic_write_payload_has_sequence_number(self) -> None:
+        payload = _build_symbolic_write_payload(0x8A0E0001, [1, 4], b"\x01")
+        assert self._has_sequence_number(payload)
+
+
 # -- Connection unit tests --
 
 
@@ -247,9 +299,9 @@ class TestSkipTypedValue:
         assert new_offset == len(vlq)
 
     def test_dword(self) -> None:
-        vlq = encode_uint32_vlq(0xDEADBEEF)
-        new_offset = skip_typed_value(vlq, 0, DataType.DWORD, 0x00)
-        assert new_offset == len(vlq)
+        # DWORD is fixed 4-byte (not VLQ).
+        data = struct.pack(">I", 0xDEADBEEF)
+        assert skip_typed_value(data, 0, DataType.DWORD, 0x00) == 4
 
     def test_aid(self) -> None:
         vlq = encode_uint32_vlq(306)
@@ -267,9 +319,9 @@ class TestSkipTypedValue:
         assert new_offset == len(vlq)
 
     def test_lword(self) -> None:
-        vlq = encode_uint64_vlq(0xCAFE)
-        new_offset = skip_typed_value(vlq, 0, DataType.LWORD, 0x00)
-        assert new_offset == len(vlq)
+        # LWORD is fixed 8-byte (not VLQ).
+        data = struct.pack(">Q", 0xCAFE)
+        assert skip_typed_value(data, 0, DataType.LWORD, 0x00) == 8
 
     def test_lint(self) -> None:
         from s7.vlq import encode_int64_vlq
@@ -522,7 +574,7 @@ class TestReassembledPayload:
         def fake_recv() -> bytes:
             return next(it, b"")
 
-        conn._recv_s7_data = fake_recv
+        conn._recv_s7_data = fake_recv  # type: ignore[method-assign]
         return conn
 
     def test_single_fragment(self) -> None:
@@ -555,346 +607,3 @@ class TestReassembledPayload:
         conn._MAX_REASSEMBLED_FRAGMENTS = 2
         with pytest.raises(S7ConnectionError, match="exceeds limits"):
             conn._recv_reassembled_payload()
-
-
-# -- V3 multi-frame EXPLORE tests --
-
-
-class TestBuildExplorePayloadV3:
-    def test_basic_encoding(self) -> None:
-        payload = _build_explore_payload_v3(0x8A11FFFF)
-        assert isinstance(payload, bytes)
-        # Should end with 5-byte trailer (UInt32 fill + filler byte)
-        assert payload[-5:] == bytes(5)
-
-    def test_vlq_encodes_rid(self) -> None:
-        payload = _build_explore_payload_v3(0x8A11FFFF)
-        rid_vlq = encode_uint32_vlq(0x8A11FFFF)
-        assert payload.startswith(rid_vlq)
-
-    def test_small_rid(self) -> None:
-        payload = _build_explore_payload_v3(42)
-        rid_vlq = encode_uint32_vlq(42)
-        assert payload.startswith(rid_vlq)
-        assert payload[-5:] == bytes(5)
-
-
-class TestParseExploreDatablocksXml:
-    @staticmethod
-    def _make_xml_response(xml_str: str) -> bytes:
-        """Compress XML and wrap it with a prefix so the zlib magic is found."""
-        import zlib
-
-        compressed = zlib.compress(xml_str.encode("utf-8"))
-        assert compressed[:2] == b"\x78\x9c" or compressed[:2] == b"\x78\xda" or compressed[0] == 0x78
-        # Use best-compression to get 0x78 0xDA magic
-        compressed = zlib.compress(xml_str.encode("utf-8"), level=9)
-        # Prepend some arbitrary bytes to simulate response framing
-        return b"\x00\x01\x02" + compressed
-
-    def test_extracts_datablocks(self) -> None:
-        xml = """<?xml version="1.0"?>
-        <PlcContentInfo>
-            <Entity Id="Block" Rid="2316304385">
-                <Header Type="DB" Name="MyDB" Number="1"/>
-            </Entity>
-            <Entity Id="Block" Rid="2316304386">
-                <Header Type="DB" Name="Recipe" Number="42"/>
-            </Entity>
-            <Entity Id="Block" Rid="99">
-                <Header Type="FC" Name="Func1" Number="5"/>
-            </Entity>
-        </PlcContentInfo>"""
-        response = self._make_xml_response(xml)
-        dbs = _parse_explore_datablocks_xml(response)
-        assert len(dbs) == 2
-        assert dbs[0]["name"] == "MyDB"
-        assert dbs[0]["number"] == 1
-        assert dbs[0]["rid"] == 2316304385
-        assert dbs[1]["name"] == "Recipe"
-        assert dbs[1]["number"] == 42
-
-    def test_fallback_no_zlib_magic(self) -> None:
-        # No 78 DA in the response — falls back to _parse_explore_datablocks
-        response = b"\x00\x01\x02\x03\x04\x05"
-        dbs = _parse_explore_datablocks_xml(response)
-        assert dbs == []
-
-    def test_zlib_decompression_error(self) -> None:
-        # Put the zlib magic but with corrupt data
-        response = b"\x00\x78\xda\xff\xff\xff\xff"
-        dbs = _parse_explore_datablocks_xml(response)
-        assert dbs == []
-
-    def test_malformed_xml(self) -> None:
-        import zlib
-
-        bad_xml = b"this is not xml <<<"
-        compressed = zlib.compress(bad_xml, level=9)
-        response = b"\x00" + compressed
-        dbs = _parse_explore_datablocks_xml(response)
-        assert dbs == []
-
-    def test_empty_xml(self) -> None:
-        xml = """<?xml version="1.0"?><PlcContentInfo></PlcContentInfo>"""
-        response = self._make_xml_response(xml)
-        dbs = _parse_explore_datablocks_xml(response)
-        assert dbs == []
-
-    def test_skips_zero_number(self) -> None:
-        xml = """<?xml version="1.0"?>
-        <PlcContentInfo>
-            <Entity Id="Block" Rid="100">
-                <Header Type="DB" Name="BadDB" Number="0"/>
-            </Entity>
-        </PlcContentInfo>"""
-        response = self._make_xml_response(xml)
-        dbs = _parse_explore_datablocks_xml(response)
-        assert dbs == []
-
-
-class TestParseExploreFieldsV3:
-    """Test _parse_explore_fields with V3-specific encoding."""
-
-    @staticmethod
-    def _build_field_response(
-        field_name: str,
-        name_encoding: str = "utf-8",
-        protocol_version: int = 0,
-        include_blob: bool = False,
-        include_wstring_skip: bool = False,
-    ) -> tuple[bytes, int]:
-        """Build a minimal EXPLORE response with one field.
-
-        Returns (response_bytes, protocol_version).
-        """
-        from s7.vlq import encode_uint32_vlq as vlq
-        from s7.protocol import Ids
-
-        r = bytearray()
-        # ReturnValue VLQ
-        r += vlq(0)
-
-        # StartOfObject
-        r += bytes([0xA1])
-        r += struct.pack(">I", 0x00010001)  # RID / LID
-        r += vlq(100)  # ClassId
-        r += vlq(0)  # ClassFlags
-        r += vlq(0)  # AttributeId
-
-        if include_blob:
-            # Add a BLOB attribute before the name to test V3 skip
-            r += bytes([0xA3])  # ATTRIBUTE
-            r += vlq(999)  # some other attribute id
-            r += bytes([0x00])  # flags
-            r += bytes([0x14])  # BLOB datatype
-            if protocol_version >= 3:
-                r += bytes([0x00])  # V3 extra byte before VLQ length
-            blob_data = b"\xde\xad\xbe\xef"
-            r += vlq(len(blob_data))
-            r += blob_data
-
-        if include_wstring_skip:
-            # Add a WSTRING attribute that's NOT ObjectVariableTypeName
-            r += bytes([0xA3])  # ATTRIBUTE
-            r += vlq(998)  # some other attribute id
-            r += bytes([0x00])  # flags
-            r += bytes([0x13])  # S7String (0x13)
-            skip_str = b"skip_me"
-            r += vlq(len(skip_str))
-            r += skip_str
-
-        # Attribute: ObjectVariableTypeName
-        r += bytes([0xA3])
-        r += vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
-        if name_encoding == "utf-16-be":
-            r += bytes([0x00, 0x13])  # flags=0, S7String
-            encoded_name = field_name.encode("utf-16-be")
-        elif name_encoding == "utf-8":
-            r += bytes([0x00, 0x13])  # flags=0, S7String
-            encoded_name = field_name.encode("utf-8")
-        else:  # wstring type (0x15)
-            r += bytes([0x00, 0x15])  # flags=0, WSTRING
-            encoded_name = field_name.encode("utf-8")
-        r += vlq(len(encoded_name))
-        r += encoded_name
-
-        # TerminatingObject
-        r += bytes([0xA2])
-
-        return bytes(r), protocol_version
-
-    def test_utf8_field_name(self) -> None:
-        response, pv = self._build_field_response("Motor1", name_encoding="utf-8", protocol_version=3)
-        fields = _parse_explore_fields(response, 1, "DB1", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["name"] == "DB1.Motor1"
-
-    def test_utf16be_field_name(self) -> None:
-        response, pv = self._build_field_response("Speed", name_encoding="utf-16-be", protocol_version=0)
-        fields = _parse_explore_fields(response, 1, "DB1", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["name"] == "DB1.Speed"
-
-    def test_wstring_type_0x15(self) -> None:
-        response, pv = self._build_field_response("Valve", name_encoding="wstring", protocol_version=3)
-        fields = _parse_explore_fields(response, 2, "DB2", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["name"] == "DB2.Valve"
-
-    def test_blob_skip_v3(self) -> None:
-        response, pv = self._build_field_response("Temp", name_encoding="utf-8", protocol_version=3, include_blob=True)
-        fields = _parse_explore_fields(response, 1, "DB1", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["name"] == "DB1.Temp"
-
-    def test_blob_skip_v1(self) -> None:
-        # V1/V2: no extra byte before BLOB VLQ length
-        response, pv = self._build_field_response("Sensor", name_encoding="utf-16-be", protocol_version=0, include_blob=True)
-        fields = _parse_explore_fields(response, 1, "DB1", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["name"] == "DB1.Sensor"
-
-    def test_wstring_skip_other_attr(self) -> None:
-        response, pv = self._build_field_response("Pump", name_encoding="utf-8", protocol_version=3, include_wstring_skip=True)
-        fields = _parse_explore_fields(response, 1, "DB1", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["name"] == "DB1.Pump"
-
-    def test_field_metadata(self) -> None:
-        response, pv = self._build_field_response("Level", name_encoding="utf-8")
-        fields = _parse_explore_fields(response, 5, "MyDB", protocol_version=pv)
-        assert len(fields) == 1
-        assert fields[0]["db_number"] == 5
-        assert fields[0]["lid"] == 0x00010001
-        assert fields[0]["data_type"] == "BYTE"
-
-    def test_empty_response(self) -> None:
-        from s7.vlq import encode_uint32_vlq as vlq
-
-        response = vlq(0)  # just the return value
-        fields = _parse_explore_fields(response, 1, "DB1")
-        assert fields == []
-
-
-class TestCollectExploreFrames:
-    """Test S7CommPlusConnection.collect_explore_frames (V3 multi-frame collection)."""
-
-    @staticmethod
-    def _make_frame(version: int, data: bytes) -> bytes:
-        """Build an S7CommPlus fragment: 0x72 <ver> <len:2> <data>."""
-        return bytes([0x72, version, (len(data) >> 8) & 0xFF, len(data) & 0xFF]) + data
-
-    @staticmethod
-    def _make_trailer(version: int) -> bytes:
-        return bytes([0x72, version, 0x00, 0x00])
-
-    @staticmethod
-    def _conn_with_recv(chunks: list[bytes], protocol_version: int = 3) -> S7CommPlusConnection:
-        conn = S7CommPlusConnection("127.0.0.1", 102)
-        conn._protocol_version = protocol_version
-        it = iter(chunks)
-
-        def fake_recv() -> bytes:
-            return next(it, b"")
-
-        conn._recv_s7_data = fake_recv
-        return conn
-
-    def test_single_frame_with_trailer(self) -> None:
-        first_payload = b"first_data"
-        conn = self._conn_with_recv([self._make_trailer(3)], protocol_version=1)
-        result = conn.collect_explore_frames(first_payload)
-        assert result == first_payload
-
-    def test_multi_frame_concatenation(self) -> None:
-        # reference_size = len(first_payload) + 10; short-frame fallback fires when
-        # body < reference_size - 5.  So continuation frames must be >= reference_size - 5
-        # to avoid the short-frame fallback before we see the trailer.
-        first_payload = b"A" * 10  # reference_size = 20
-        frame2_body = b"B" * 20  # >= 15, so not short
-        frame3_body = b"C" * 20
-        conn = self._conn_with_recv(
-            [
-                self._make_frame(1, frame2_body),
-                self._make_frame(1, frame3_body),
-                self._make_trailer(1),
-            ],
-            protocol_version=1,
-        )
-        result = conn.collect_explore_frames(first_payload)
-        assert result == first_payload + frame2_body + frame3_body
-
-    def test_termination_on_frag_len_zero(self) -> None:
-        first_payload = b"data"
-        frame2_body = b"more"
-        conn = self._conn_with_recv(
-            [
-                self._make_frame(1, frame2_body),
-                self._make_trailer(1),  # frag_len == 0
-            ],
-            protocol_version=1,
-        )
-        result = conn.collect_explore_frames(first_payload)
-        assert result == first_payload + frame2_body
-
-    def test_termination_on_short_frame(self) -> None:
-        # First payload is 100 bytes (reference_size = 110 with header).
-        # A frame body shorter than reference_size - 5 = 105 triggers the fallback.
-        first_payload = b"X" * 100
-        # A continuation frame of 10 bytes (much less than 105) should end collection.
-        short_body = b"Z" * 10
-        conn = self._conn_with_recv(
-            [self._make_frame(1, short_body)],
-            protocol_version=1,
-        )
-        result = conn.collect_explore_frames(first_payload)
-        assert result == first_payload + short_body
-
-    def test_hmac_strip_v3(self) -> None:
-        # V3 non-TLS: body starts with [hash_len][hash_bytes]
-        # hash_len=32, then 32 hash bytes, then the actual data
-        hash_data = bytes(32)
-        actual_data = b"real_data"
-        body = bytes([32]) + hash_data + actual_data
-        conn = self._conn_with_recv(
-            [self._make_frame(3, body), self._make_trailer(3)],
-            protocol_version=3,
-        )
-        result = conn.collect_explore_frames(b"first")
-        assert result == b"first" + actual_data
-
-    def test_no_hmac_strip_v1(self) -> None:
-        # V1: body is used as-is (no HMAC stripping)
-        body = b"raw_body_data"
-        conn = self._conn_with_recv(
-            [self._make_frame(1, body), self._make_trailer(1)],
-            protocol_version=1,
-        )
-        result = conn.collect_explore_frames(b"first")
-        assert result == b"first" + body
-
-    def test_empty_recv_stops(self) -> None:
-        conn = self._conn_with_recv([], protocol_version=1)
-        result = conn.collect_explore_frames(b"data")
-        assert result == b"data"
-
-    def test_fragment_count_cap(self) -> None:
-        from snap7.error import S7ConnectionError
-
-        # first_payload is 1 byte → reference_size = 11.  Each frame body must be
-        # >= 6 bytes to avoid the short-frame fallback (11 - 5 = 6).
-        body = b"x" * 10
-        frames = [self._make_frame(1, body) for _ in range(10)]
-        frames.append(self._make_trailer(1))
-        conn = self._conn_with_recv(frames, protocol_version=1)
-        conn._MAX_REASSEMBLED_FRAGMENTS = 3
-        with pytest.raises(S7ConnectionError, match="too large"):
-            conn.collect_explore_frames(b"s")
-
-    def test_bad_frame_header_stops(self) -> None:
-        # Non-0x72 header byte causes break
-        bad_frame = bytes([0x99, 0x01, 0x00, 0x03]) + b"abc"
-        conn = self._conn_with_recv([bad_frame], protocol_version=1)
-        result = conn.collect_explore_frames(b"data")
-        assert result == b"data"

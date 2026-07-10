@@ -261,10 +261,14 @@ def encode_typed_value(datatype: int, value: Any) -> bytes:
         return tag + struct.pack(">B", value)
     elif datatype == DataType.UINT or datatype == DataType.WORD:
         return tag + struct.pack(">H", value)
-    elif datatype == DataType.UDINT or datatype == DataType.DWORD:
+    elif datatype == DataType.UDINT:
         return tag + encode_uint32_vlq(value)
-    elif datatype == DataType.ULINT or datatype == DataType.LWORD:
+    elif datatype == DataType.DWORD:
+        return tag + struct.pack(">I", value)  # fixed 4-byte, not VLQ
+    elif datatype == DataType.ULINT:
         return tag + encode_uint64_vlq(value)
+    elif datatype == DataType.LWORD:
+        return tag + struct.pack(">Q", value)  # fixed 8-byte, not VLQ
     elif datatype == DataType.SINT:
         return tag + struct.pack(">b", value)
     elif datatype == DataType.INT:
@@ -414,10 +418,13 @@ def decode_pvalue_to_bytes(data: bytes, offset: int) -> tuple[bytes, int]:
         return data[offset + consumed : offset + consumed + 1], consumed + 1
     elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
         return data[offset + consumed : offset + consumed + 2], consumed + 2
-    elif datatype in (DataType.UDINT, DataType.DWORD):
+    elif datatype == DataType.UDINT:
         val, c = decode_uint32_vlq(data, offset + consumed)
         consumed += c
         return struct.pack(">I", val), consumed
+    elif datatype == DataType.DWORD:
+        # ValueDWord is a fixed 4-byte big-endian value, not VLQ.
+        return data[offset + consumed : offset + consumed + 4], consumed + 4
     elif datatype in (DataType.DINT,):
         # Signed VLQ
         from .vlq import decode_int32_vlq
@@ -429,10 +436,13 @@ def decode_pvalue_to_bytes(data: bytes, offset: int) -> tuple[bytes, int]:
         return data[offset + consumed : offset + consumed + 4], consumed + 4
     elif datatype == DataType.LREAL:
         return data[offset + consumed : offset + consumed + 8], consumed + 8
-    elif datatype in (DataType.ULINT, DataType.LWORD):
+    elif datatype == DataType.ULINT:
         val, c = decode_uint64_vlq(data, offset + consumed)
         consumed += c
         return struct.pack(">Q", val), consumed
+    elif datatype == DataType.LWORD:
+        # ValueLWord is a fixed 8-byte big-endian value, not VLQ.
+        return data[offset + consumed : offset + consumed + 8], consumed + 8
     elif datatype in (DataType.LINT,):
         from .vlq import decode_int64_vlq
 
@@ -556,12 +566,16 @@ def skip_typed_value(data: bytes, offset: int, datatype: int, flags: int) -> int
         return offset + 1
     elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
         return offset + 2
-    elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
+    elif datatype in (DataType.UDINT, DataType.AID, DataType.DINT):
         _, consumed = decode_uint32_vlq(data, offset)
         return offset + consumed
-    elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
+    elif datatype == DataType.DWORD:
+        return offset + 4  # fixed 4-byte, not VLQ
+    elif datatype in (DataType.ULINT, DataType.LINT):
         _, consumed = decode_uint64_vlq(data, offset)
         return offset + consumed
+    elif datatype == DataType.LWORD:
+        return offset + 8  # fixed 8-byte, not VLQ
     elif datatype == DataType.REAL:
         return offset + 4
     elif datatype == DataType.LREAL:

@@ -469,10 +469,11 @@ class TestDecodePValue:
         assert result == struct.pack(">I", 100000)
 
     def test_dword(self) -> None:
-        vlq = encode_uint32_vlq(0xDEADBEEF)
-        data = bytes([0x00, DataType.DWORD]) + vlq
+        # ValueDWord is fixed 4-byte big-endian (not VLQ).
+        data = bytes([0x00, DataType.DWORD]) + struct.pack(">I", 0xDEADBEEF)
         result, consumed = decode_pvalue_to_bytes(data, 0)
         assert result == struct.pack(">I", 0xDEADBEEF)
+        assert consumed == 6
 
     def test_dint_positive(self) -> None:
         vlq = encode_int32_vlq(12345)
@@ -505,10 +506,11 @@ class TestDecodePValue:
         assert result == struct.pack(">Q", 2**40)
 
     def test_lword(self) -> None:
-        vlq = encode_uint64_vlq(0xCAFEBABE12345678)
-        data = bytes([0x00, DataType.LWORD]) + vlq
+        # ValueLWord is fixed 8-byte big-endian (not VLQ).
+        data = bytes([0x00, DataType.LWORD]) + struct.pack(">Q", 0xCAFEBABE12345678)
         result, consumed = decode_pvalue_to_bytes(data, 0)
         assert result == struct.pack(">Q", 0xCAFEBABE12345678)
+        assert consumed == 10
 
     def test_lint_positive(self) -> None:
         vlq = encode_int64_vlq(2**50)
@@ -626,6 +628,12 @@ class TestDecodePValue:
             result, consumed = decode_pvalue_to_bytes(data, 0)
             assert result == bytes([0x07]), f"id {boundary:#010x} must parse as a normal struct"
             assert consumed == len(data)
+
+    def test_udint_stays_vlq(self) -> None:
+        # UDInt remains VLQ-encoded (regression guard for the DWORD split).
+        data = bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(300)
+        result, consumed = decode_pvalue_to_bytes(data, 0)
+        assert result == struct.pack(">I", 300)
 
     def test_unsupported_type(self) -> None:
         data = bytes([0x00, 0xFF])

@@ -289,12 +289,13 @@ class Client:
 
         .. warning:: This method is **experimental** and may change.
 
-        Returns a flat list of variable info dicts. Can be converted to
-        :class:`~snap7.tags.Tag` objects::
+        Returns a flat list of variable info dicts, one per tag, with keys
+        ``name``, ``access_sequence`` (the dot-separated hex LID path), ``data_type``
+        and the optimized/non-optimized byte+bit offsets::
 
-            from snap7 import Tag
             variables = client.browse()
-            tags = {v["name"]: Tag(Area.DB, v["db_number"], v["byte_offset"], v["data_type"]) for v in variables}
+            for v in variables:
+                print(v["name"], v["access_sequence"], v["data_type"])
 
         Requires S7CommPlus connection.
         """
@@ -308,6 +309,11 @@ class Client:
         For symbolic tags (with ``access_sequence`` set), routes to
         S7CommPlus LID-based access.  For classic tags (byte-offset),
         delegates to the legacy client.
+
+        .. note:: When reading symbolic I/Q/M tags on S7-1200 PLCs, see
+           :meth:`~s7._s7commplus_client.S7CommPlusClient.read_symbolic`
+           for known caveats (PAQ error at zero, TCP RST per connection,
+           stale BOOL LIDs).
 
         Args:
             tag: A :class:`~snap7.tags.Tag` instance or address string.
