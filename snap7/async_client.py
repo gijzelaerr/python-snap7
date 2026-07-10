@@ -394,7 +394,7 @@ class AsyncClient(ClientMixin):
         self.slot = slot
         self._params[Parameter.RemotePort] = tcp_port
 
-        self.remote_tsap = 0x0100 | (rack << 5) | slot
+        self.remote_tsap = (self.connection_type << 8) | (rack << 5) | slot
 
         try:
             start_time = time.time()
