@@ -238,7 +238,8 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc)
+        # TODO: Send the correct integrity id once available
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, False)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
