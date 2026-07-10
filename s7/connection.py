@@ -451,9 +451,9 @@ class S7CommPlusConnection:
         while True:
             if len(all_data) > self._MAX_REASSEMBLED_BYTES or fragment_count >= self._MAX_REASSEMBLED_FRAGMENTS:
                 from snap7.error import S7ConnectionError
+
                 raise S7ConnectionError(
-                    f"collect_explore_frames: response too large "
-                    f"({len(all_data)} bytes, {fragment_count} fragments)"
+                    f"collect_explore_frames: response too large ({len(all_data)} bytes, {fragment_count} fragments)"
                 )
             try:
                 raw = self._recv_s7_data()
