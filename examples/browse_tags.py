@@ -10,13 +10,24 @@ FDICT is used for all three areas (I, Q, M) and is shared by S7-1200 FW V4.5
 Results on S7-1200 CPU 1212C DC/DC/DC, FW V4.5 (40-tag reference project):
   I area (RID=80): 13/13 complete
   Q area (RID=81): 11/11 complete
-  M area (RID=82):  9/15 — 6 structural gaps (see below)
-Score vs TIA Portal export: 33/40 correct, 6 gap, 0 wrong.
+  M area (RID=82): Byte/Word/DWord type resolved via symbolic READ (see below)
 
-Structural limit — M area Byte/Word tags:
-  The EXPLORE blob uses an identical deflate sequence for %MB and %MW
-  addresses, so they cannot be distinguished from the blob alone. The 6
-  affected tags show LogicalAddress='?' but always have a correct ByteOffset.
+M area Byte/Word/DWord — resolved via a symbolic READ:
+  The EXPLORE blob does NOT carry the SIMATIC data type of an M tag: the
+  DataType attribute decodes to a constant (a back-reference to the same
+  preset-dict position for a Byte, a Word and a DWord tag alike — verified
+  with an oracle on tags of known type). So %MB / %MW / %MD cannot be told
+  apart from the blob; those tags only expose a correct ByteOffset.
+
+  A symbolic READ recovers it: reading a tag by its LID returns the value as
+  a fixed-width raw block whose width IS the declared type size — 1 byte for
+  %MB, 2 for %MW, 4 for %MD. _refine_m_widths() does this for every non-Bool
+  M tag (Bool tags are already bit-addressed by EXPLORE). The XML ID attribute
+  equals the read LID. Verified live on an S7-1200 FW V4.1 with controlled
+  tags: Byte=0x12→1B, Word=0x1234→2B, DWord=0x12345678→4B (values exact).
+
+  Safety: if the ID has any unmapped digit ('?') the LID is uncertain and the
+  refinement is skipped — better a '?' than a confident wrong type.
 
 The FDICT is firmware-family specific. On a PLC whose tags reference
 unmapped dictionary positions, some fields decode to '?'.
@@ -35,7 +46,7 @@ import argparse
 import re
 import zlib
 
-from s7._s7commplus_client import _build_explore_payload_v3
+from s7._s7commplus_client import _build_explore_payload_v3, _build_symbolic_read_payload
 from s7.connection import S7CommPlusConnection
 from s7.protocol import FunctionCode
 
@@ -190,14 +201,23 @@ def _build_fdict() -> bytes:
     d[0x7E37] = ord("3")
     d[0x7E38] = ord('"')
 
+    # ID second-digit + closing quote for two-digit M-tag IDs (oracle back-refs
+    # dict[7d20..21]='3"' and dict[7ddb..dc]='4"'). Needed so IDs like 13/14 read
+    # cleanly, which _refine_m_widths() then uses as the LID. Positions were 0.
+    d[0x7D20] = ord("3")
+    d[0x7D21] = ord('"')
+    d[0x7DDB] = ord("4")
+    d[0x7DDC] = ord('"')
+
     return bytes(d)
 
 
 # ── Connection and decompression ────────────────────────────────────────────
 
 
-def _fetch_area(rid: int, fdict: bytes, host: str, port: int, use_tls: bool, password: str) -> bytes | None:
-    """Connect to the PLC, send EXPLORE for the given RID, decompress the blob.
+def _connect(host: str, port: int, use_tls: bool, password: str) -> S7CommPlusConnection:
+    """Open a fresh connection. The PLC resets the TCP session after the first
+    symbolic EXPLORE/READ, so one connection is used per operation.
 
     No unittest.mock is needed: connect() already wraps the optional post-auth
     legitimation in a try/except and only logs a warning if it is skipped
@@ -205,6 +225,12 @@ def _fetch_area(rid: int, fdict: bytes, host: str, port: int, use_tls: bool, pas
     """
     conn = S7CommPlusConnection(host=host, port=port)
     conn.connect(use_tls=use_tls, password=password, timeout=8.0)
+    return conn
+
+
+def _fetch_area(rid: int, fdict: bytes, host: str, port: int, use_tls: bool, password: str) -> bytes | None:
+    """Connect to the PLC, send EXPLORE for the given RID, decompress the blob."""
+    conn = _connect(host, port, use_tls, password)
     try:
         resp = conn.send_request(FunctionCode.EXPLORE, _build_explore_payload_v3(rid))
         full = conn._collect_explore_frames(resp)
@@ -259,6 +285,10 @@ def _extract_tags(data: bytes, area_prefix: str = "") -> list[dict]:
         raw_id = m.group(1)
         # Keep only the leading digits (stop at the first '?')
         leading = re.match(r"^([0-9]+)", raw_id)
+        # Uncertain ID: a '?' after the leading digits means one or more digits
+        # fell in an unmapped FDICT position, so the number read is partial and
+        # NOT safe to use as a LID (a READ would hit the wrong object).
+        id_uncertain = "?" in raw_id
         if leading:
             tag_id = leading.group(1)
             if tag_id in seen_id:
@@ -282,6 +312,8 @@ def _extract_tags(data: bytes, area_prefix: str = "") -> list[dict]:
         post = text[pos : min(len(text), pos + 300)]
 
         tag: dict = {"ID": display_id}
+        if id_uncertain:
+            tag["_id_uncertain"] = True
 
         # DataType: always before the ID (pre-window only)
         dt = list(re.finditer(r'DataType="([A-Za-z]+)"', pre))
@@ -302,17 +334,33 @@ def _extract_tags(data: bytes, area_prefix: str = "") -> list[dict]:
         elif tag_id.startswith("?"):
             continue  # ID and name both unknown: drop
 
+        # Restrict the ByteOffset search to the CURRENT element (stop at the next
+        # tag's 'Name="'). Without this, the 300-char window bleeds into the next
+        # tag and the fallbacks below can latch onto its (possibly truncated) offset.
+        _nxt = post.find('Name="', 6)
+        elem = post[:_nxt] if _nxt > 0 else post
+
         # Find ByteOffset first. Anchor on 'yteOffset=' to handle M-area gap tags
         # where 'B' is in an unknown FDICT position (null → 'yteOffset=').
-        bo = re.search(r'yteOffset="?([0-9]+)"', post)
+        bo = re.search(r'yteOffset="?([0-9]+)"', elem)
+        if not bo:
+            # Fallback 1: if the 'ByteOffset=' label is unmapped, the numeric value
+            # still survives as a literal right before the element close: ="100" />.
+            bo = re.search(r'="([0-9]+)"\s*/>', elem)
+        if not bo:
+            # Fallback 2: the element close itself may be garbled (="104<nulls>).
+            # ByteOffset always follows LogicalAddress in the XML, so anchor after
+            # the last 'Logical' marker and take the first ="N. The ID (also ="N)
+            # sits before 'Logical'; the LogicalAddress value starts with '%'.
+            tail = elem[elem.rfind("Logical") :] if "Logical" in elem else ""
+            bo = re.search(r'="([0-9]{1,5})', tail) if tail else None
         if bo:
             tag["ByteOffset"] = bo.group(1)
 
-        # LogicalAddress: search only before ByteOffset (XML order is always
-        # ...LogicalAddress="..." ByteOffset="..."). Prevents cross-element
-        # contamination from the next element's %I43.X address in the post window.
-        post_la = post[: bo.start()] if bo else post
-        la = re.search(r'LogicalAddress="(%[^"]{1,12})"', post_la)
+        # LogicalAddress: search within the current element only. 'elem' already
+        # stops at the next tag, so the next element's %I43.X address cannot leak
+        # in; there is exactly one LogicalAddress per element (before ByteOffset).
+        la = re.search(r'LogicalAddress="(%[^"]{1,12})"', elem)
         if la:
             raw_la = la.group(1)
             if area_prefix and not raw_la.startswith(area_prefix):
@@ -355,6 +403,70 @@ def _extract_tags(data: bytes, area_prefix: str = "") -> list[dict]:
         tags.append(tag)
 
     return tags
+
+
+# ── M-area type resolution via symbolic READ (route B) ───────────────────────
+#
+# The EXPLORE blob cannot carry the SIMATIC type of an M tag (the DataType
+# attribute is a constant back-reference in the compressed stream — identical for
+# a Byte, a Word and a DWord tag). A symbolic READ recovers it: the PLC returns
+# the value as a fixed-width raw block whose width equals the declared type size.
+
+_READ_TRAILER = bytes.fromhex("000400000000")  # fixed GetMultiVariables trailer
+_WIDTH_TYPE = {1: ("%MB", "Byte"), 2: ("%MW", "Word"), 4: ("%MD", "DWord")}
+
+
+def _read_symbolic_width(lid: int, host: str, port: int, use_tls: bool, password: str) -> int | None:
+    """Symbolic READ of an M tag by LID → value width in bytes = type size.
+
+    The response is  <value bytes, fixed width> 0x00 + trailer(00 04 00 00 00 00).
+    width = len(response) - len(trailer) - 1(pad).  None if the read fails.
+    """
+    try:
+        conn = _connect(host, port, use_tls, password)
+    except Exception:
+        return None
+    try:
+        payload = _build_symbolic_read_payload(access_area=AREAS["M"], lids=[lid])
+        resp = conn.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+    except Exception:
+        return None
+    finally:
+        try:
+            conn.disconnect()
+        except Exception:
+            pass
+    if not resp.endswith(_READ_TRAILER):
+        return None
+    body = resp[: -len(_READ_TRAILER)]
+    if len(body) < 2:  # need at least value(>=1) + pad(1)
+        return None
+    return len(body) - 1
+
+
+def _refine_m_widths(tags: list[dict], host: str, port: int, use_tls: bool, password: str) -> None:
+    """Resolve %MB/%MW/%MD for non-Bool M tags from the width of a symbolic READ.
+
+    Bool tags are bit-addressed (%M<byte>.<bit>) and already correct from EXPLORE.
+    For the rest, the XML ID attribute is the read LID. Skips tags with an
+    uncertain ID so a wrong LID can never produce a confident wrong type.
+    """
+    for t in tags:
+        if re.match(r"%M\d+\.\d", t.get("LogicalAddress", "")):
+            continue  # Bool, bit-addressed: already resolved
+        if t.get("_id_uncertain"):
+            continue  # partial LID → a READ would hit the wrong object
+        bo = t.get("ByteOffset")
+        tid = t.get("ID", "")
+        if bo is None or not tid.isdigit():
+            continue
+        width = _read_symbolic_width(int(tid), host, port, use_tls, password)
+        mapping = _WIDTH_TYPE.get(width)
+        if mapping:
+            prefix, dtype = mapping
+            t["LogicalAddress"] = f"{prefix}{bo}"
+            t["DataType"] = dtype
+            t["_type_source"] = "read"
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -403,6 +515,9 @@ def main():
             continue
 
         tags = _extract_tags(data, area_prefix="%" + area)
+        if area == "M":
+            # Route B: resolve %MB/%MW/%MD of non-Bool M tags via a symbolic READ
+            _refine_m_widths(tags, args.host, args.port, args.tls, args.password)
         total += len(tags)
         print(f"{len(tags)} tags found")
 
@@ -412,9 +527,13 @@ def main():
             for t in tags:
                 name = t.get("Name", "?")
                 dtype = t.get("DataType", "?")
+                if t.get("_type_source") == "read":
+                    dtype += "*"  # type/address recovered via a symbolic READ
                 addr = t.get("LogicalAddress", "?")
                 offset = t.get("ByteOffset", "?")
                 print(f"  {name:<22} {dtype:<8} {addr:<18} {offset:<8} {t['ID']}")
+        if any(t.get("_type_source") == "read" for t in tags):
+            print("  (* %MB/%MW/%MD type/address recovered via a symbolic READ by LID)")
         print()
 
     print(f"Total: {total} tags")
