@@ -239,7 +239,7 @@ class S7CommPlusConnection:
                 self._protocol_version = ProtocolVersion.V2
 
             # Step 5: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None or self._server_session_version is not None:
+            if self._server_session_version is not None:
                 self._session_setup_ok = self._setup_session()
             else:
                 logger.warning(
@@ -1012,7 +1012,7 @@ class S7CommPlusConnection:
                 # Unknown tag - try to skip
                 offset += 1
 
-        if self._server_session_version is None and self._server_session_version is None:
+        if self._server_session_version is None:
             logger.debug("ServerSessionVersion not found in CreateObject response")
 
     def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
@@ -1188,7 +1188,7 @@ class S7CommPlusConnection:
         Returns:
             True if session setup succeeded (return_value == 0).
         """
-        if self._server_session_version is None and self._server_session_version is None:
+        if self._server_session_version is None:
             return False
 
         auth_result = self._try_session_key_auth()
