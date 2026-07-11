@@ -725,7 +725,7 @@ class S7CommPlusConnection:
         version, data_length, consumed = decode_header(response_frame)
         response = response_frame[consumed:]
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("InitSSL response too short")
@@ -816,14 +816,15 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: version=V{version}, data_length={data_length}")
         logger.debug(f"CreateObject response body ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("CreateObject response too short")
 
-        # Parse response body: ReturnValue(UInt64 VLQ) + ObjectIdCount + ObjectIds(VLQ).
-        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
-        body = response[14:]
+        # Response header is 10 bytes (opcode+reserved+func+reserved+seq+transport).
+        # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
+        # The session ID comes from the payload body, not the header.
+        body = response[10:]
         object_ids, obj_end = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
@@ -835,16 +836,16 @@ class S7CommPlusConnection:
         resp_opcode = response[0]
         resp_func = struct.unpack_from(">H", response, 3)[0]
         resp_seq = struct.unpack_from(">H", response, 7)[0]
-        resp_transport = response[13]
+        resp_transport = response[9]
         logger.debug(
             f"CreateObject response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
             f"seq={resp_seq} session=0x{self._session_id:08X} transport=0x{resp_transport:02X}"
         )
-        logger.debug(f"CreateObject response payload: {response[14:].hex(' ')}")
+        logger.debug(f"CreateObject response payload: {response[10:].hex(' ')}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
         # Parse response payload to extract ServerSessionVersion
-        self._server_session_version = parse_server_session_version(response[14 + obj_end :])
+        self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
             logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
         else:
