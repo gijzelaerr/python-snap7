@@ -7,7 +7,7 @@ S7CommPlus protocol, with support for all protocol versions:
 - V1: Early S7-1200 (FW >= V4.0). Simple session handshake.
 - V2: Adds integrity checking and session authentication.
 - V3: Adds public-key-based key exchange.
-- V3 + TLS: TIA Portal V17+. Standard TLS 1.3 with per-device certificates.
+- V3 + TLS: TIA Portal V17+. TLS 1.2 with per-device certificates.
 
 The wire protocol (VLQ encoding, data types, function codes, object model) is
 the same across all versions -- only the session authentication layer differs.
@@ -38,9 +38,13 @@ Version-specific authentication after step 6::
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
 
+import hashlib
+import hmac
 import logging
+import os
 import ssl
 import struct
+import tempfile
 from typing import Optional, Type
 from types import TracebackType
 
@@ -62,6 +66,60 @@ from .codec import encode_header, decode_header, encode_object_qualifier, _pvalu
 from .vlq import encode_uint32_vlq, encode_uint64_vlq, decode_uint32_vlq, decode_uint64_vlq
 
 logger = logging.getLogger(__name__)
+
+# TLS cipher suites for S7 PLC compatibility.
+# ECDHE suites are preferred (forward secrecy); RSA-kx kept as fallback for
+# older firmware.  The key to Siemens PLC compatibility is restricting the
+# offered groups to x25519 via set_ecdh_curve — PLCs RST when they see
+# unsupported groups like x448 or ffdhe*.
+_S7_CIPHERS = (
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
+)
+
+# Siemens PLCs only accept a small set of TLS groups.  X25519 is preferred
+# but unavailable on older OpenSSL/CPython; fall back to prime256v1.
+_S7_PREFERRED_GROUPS = ("X25519", "prime256v1")
+
+
+def _set_s7_groups(ctx: ssl.SSLContext) -> None:
+    for group in _S7_PREFERRED_GROUPS:
+        try:
+            ctx.set_ecdh_curve(group)
+            return
+        except (ssl.SSLError, ValueError):
+            continue
+    logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+
+
+# OMS legitimation derives its session key from the TLS exporter secret
+# (RFC 5705). The label/length are fixed by the S7CommPlus protocol.
+_OMS_EXPORTER_LABEL = b"EXPERIMENTAL_OMS"
+_OMS_EXPORTER_LENGTH = 32
+
+
+def _hkdf_expand_label(secret: bytes, label: bytes, context: bytes, length: int, hashmod) -> bytes:
+    """TLS 1.3 HKDF-Expand-Label (RFC 8446 §7.1)."""
+    full_label = b"tls13 " + label
+    hkdf_label = length.to_bytes(2, "big") + bytes([len(full_label)]) + full_label + bytes([len(context)]) + context
+    out, block, counter = b"", b"", 1
+    while len(out) < length:
+        block = hmac.new(secret, block + hkdf_label + bytes([counter]), hashmod).digest()
+        out += block
+        counter += 1
+    return out[:length]
+
+
+def _tls13_exporter(exporter_master_secret: bytes, label: bytes, length: int, hashmod) -> bytes:
+    """RFC 8446 §7.5 TLS-Exporter with an empty context.
+
+    Computed from the exporter_master_secret because CPython's ssl module
+    does not expose ``export_keying_material``; we capture the secret via the
+    TLS key log instead. Equivalent to ``SSL.export_keying_material`` for a
+    TLS 1.3 session with no context.
+    """
+    empty_hash = hashmod(b"").digest()
+    derived = _hkdf_expand_label(exporter_master_secret, label, empty_hash, hashmod().digest_size, hashmod)
+    return _hkdf_expand_label(derived, b"exporter", empty_hash, length, hashmod)
 
 
 def _strip_paom_string_in_session_version(struct_bytes: bytes) -> bytes:
@@ -463,6 +521,71 @@ class S7CommPlusConnection:
 
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
+
+    def collect_explore_frames(self, first_payload: bytes) -> bytes:
+        """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
+
+        On V3 PLCs (FW >= V4.5) a large EXPLORE response (e.g. RID 0x8A11FFFF)
+        spans multiple TPKT frames.  The first frame is the normal response
+        (already stripped of its 10-byte header by send_request).  Continuation
+        frames carry **no** response header — they are raw BLOB data protected
+        only by a V3 HMAC prefix.  The caller must concatenate them before
+        parsing.
+
+        Termination: a ``frag_len == 0`` frame is the standard S7CommPlus
+        end-of-stream trailer.  As a fallback, a frame whose body (after HMAC
+        strip) is measurably shorter than the first frame body is treated as the
+        last fragment (5-byte tolerance).
+
+        Collection is capped by ``_MAX_REASSEMBLED_FRAGMENTS`` and
+        ``_MAX_REASSEMBLED_BYTES`` to prevent unbounded allocation on malformed
+        or adversarial responses.
+
+        Args:
+            first_payload: First EXPLORE response payload, already returned by
+                send_request() (10-byte response header already stripped).
+
+        Returns:
+            All fragment payloads concatenated (first_payload + continuations).
+        """
+        # The first frame body (already header-stripped) was originally
+        # len(first_payload) + 10 bytes on the wire (10-byte response header).
+        # Continuation frames of the same "full" size will be that long after
+        # HMAC strip; a shorter body signals the last fragment.
+        reference_size = len(first_payload) + 10
+        all_data = first_payload
+        fragment_count = 0
+        while True:
+            if len(all_data) > self._MAX_REASSEMBLED_BYTES or fragment_count >= self._MAX_REASSEMBLED_FRAGMENTS:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    f"collect_explore_frames: response too large ({len(all_data)} bytes, {fragment_count} fragments)"
+                )
+            try:
+                raw = self._recv_s7_data()
+                if not raw:
+                    break
+                # Strip the 4-byte S7CommPlus fragment header (0x72 ver len:2)
+                if len(raw) < 4 or raw[0] != 0x72:
+                    break
+                frag_len = (raw[2] << 8) | raw[3]
+                if frag_len == 0:
+                    break  # standard S7CommPlus end-of-stream trailer
+                body = raw[4 : 4 + frag_len]
+                # V3 non-TLS: strip the HMAC prefix ([hash_len][hash_bytes])
+                if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
+                    hash_len = body[0]
+                    body = body[1 + hash_len :]
+                if not body:
+                    break
+                all_data += body
+                fragment_count += 1
+                if len(body) < reference_size - 5:
+                    break  # fallback: shorter-than-full frame signals last fragment
+            except Exception:
+                break
+        return all_data
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
@@ -892,6 +1015,9 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: return_value={return_value} object_ids={[hex(i) for i in object_ids]}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
+        if return_value != 0:
+            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+
         # Parse remaining payload (the ResponseObject tree) for ServerSessionVersion
         self._parse_create_object_response(response[offset:])
 
@@ -1146,9 +1272,6 @@ class S7CommPlusConnection:
                 offset += 2
                 offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
             return offset
-
-        else:
-            logger.debug("ServerSessionVersion not found in CreateObject response")
 
     def _try_session_key_auth(self) -> Optional[tuple[bytes, bytes]]:
         """Attempt to generate the SecurityKey authentication blob.
@@ -1506,7 +1629,7 @@ class S7CommPlusConnection:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 tunneled inside COTP data frames.
+        """Activate TLS tunneled inside COTP data frames.
 
         The S7CommPlus protocol transports TLS records as the payload
         of COTP DT frames — TPKT and COTP headers stay unencrypted on
@@ -1523,13 +1646,22 @@ class S7CommPlusConnection:
         Args:
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
-            tls_ca: Path to CA certificate for PLC verification (PEM)
+            tls_ca: Path to PLC CA certificate (PEM)
         """
         ctx = self._setup_ssl_context(
             cert_path=tls_cert,
             key_path=tls_key,
             ca_path=tls_ca,
         )
+
+        # CPython's ssl cannot export RFC 5705 keying material, which OMS
+        # legitimation needs. Capture the TLS 1.3 exporter_master_secret via
+        # the key log (written during the handshake) and derive it ourselves
+        # in _derive_oms_secret. The key log is a private 0600 temp file,
+        # removed immediately after the handshake.
+        keylog_fd, keylog_path = tempfile.mkstemp(prefix="s7-tls-keylog-")
+        os.close(keylog_fd)
+        ctx.keylog_filename = keylog_path
 
         # BIO-based TLS: encrypt/decrypt bytes without touching the
         # TCP socket, so TPKT/COTP framing stays unencrypted.
@@ -1542,20 +1674,57 @@ class S7CommPlusConnection:
             server_hostname=self.host if ctx.check_hostname else None,
         )
 
-        # TLS handshake — records tunnel through COTP frames
-        self._do_tls_handshake()
-
-        self._tls_active = True
-
-        # Extract OMS exporter secret for legitimation key derivation
         try:
-            self._oms_secret = self._ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
-            logger.debug("OMS exporter secret extracted from TLS session")
-        except (AttributeError, ssl.SSLError) as e:
-            logger.warning(f"Could not extract OMS exporter secret: {e}")
-            self._oms_secret = None
+            # TLS handshake — records tunnel through COTP frames
+            self._do_tls_handshake()
+            self._tls_active = True
 
-        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
+            # Derive OMS exporter secret for legitimation key derivation
+            self._oms_secret = self._derive_oms_secret(keylog_path)
+            if self._oms_secret is not None:
+                logger.debug("OMS exporter secret derived (%d bytes)", len(self._oms_secret))
+        finally:
+            try:
+                os.unlink(keylog_path)
+            except OSError:
+                pass
+
+        logger.info("TLS activated (tunneled inside COTP frames)")
+
+    def _derive_oms_secret(self, keylog_path: str) -> Optional[bytes]:
+        """Derive the OMS exporter secret (RFC 5705) for legitimation.
+
+        CPython's ssl module has no ``export_keying_material``, so we read the
+        TLS 1.3 ``exporter_master_secret`` from the session key log and run the
+        RFC 8446 exporter derivation ourselves (stdlib hmac/hashlib only).
+        Returns None (legitimation unavailable, anonymous reads still work) if
+        the session isn't TLS 1.3 or the secret can't be recovered.
+        """
+        cipher = self._ssl_object.cipher() if self._ssl_object else None
+        if not cipher or cipher[1] != "TLSv1.3":
+            logger.warning(
+                "OMS exporter derivation needs TLS 1.3 (session is %s)",
+                cipher[1] if cipher else "unknown",
+            )
+            return None
+        hashmod = hashlib.sha384 if cipher[0].endswith("SHA384") else hashlib.sha256
+
+        exporter_master_secret = None
+        try:
+            with open(keylog_path, "r") as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) == 3 and parts[0] == "EXPORTER_SECRET":
+                        exporter_master_secret = bytes.fromhex(parts[2])
+        except OSError as e:
+            logger.warning("Could not read TLS key log: %s", e)
+            return None
+
+        if exporter_master_secret is None:
+            logger.warning("EXPORTER_SECRET not found in TLS key log")
+            return None
+
+        return _tls13_exporter(exporter_master_secret, _OMS_EXPORTER_LABEL, _OMS_EXPORTER_LENGTH, hashmod)
 
     def _do_tls_handshake(self) -> None:
         """Perform TLS handshake, tunneling records through COTP."""
@@ -1588,12 +1757,13 @@ class S7CommPlusConnection:
             Configured SSLContext
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
 
-        # TLS 1.3 ciphersuites are configured differently from TLS 1.2
-        if hasattr(ctx, "set_ciphersuites"):
-            ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
-        # If set_ciphersuites not available, TLS 1.3 uses its mandatory defaults
+        ctx.set_ciphers(_S7_CIPHERS)
+        _set_s7_groups(ctx)
+        ctx.options |= ssl.OP_NO_TICKET
+        ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
+        ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)

@@ -152,29 +152,30 @@ with the ``s7commplus`` extra:
    ``browse()`` and other CommPlus-only operations are not yet
    supported on those firmwares — see issue #710.
 
-TLS handshake fails on OpenSSL 3.5+ (post-quantum key share)
--------------------------------------------------------------
+TLS handshake rejected by the PLC (connection reset)
+------------------------------------------------------
 
-On systems with **OpenSSL ≥ 3.5** (e.g. Debian 13 and other recent
-distributions) the TLS 1.3 ``ClientHello`` advertises a post-quantum
-hybrid key-exchange group, ``X25519MLKEM768``, by default. Its key
-share is roughly 1.2 KB, and the S7-1500's TLS stack rejects the
-oversized ``ClientHello`` — it drops the connection mid-handshake, so
-``connect(use_tls=True)`` fails with a *connection reset by peer*.
+S7 PLCs have a minimal TLS stack that rejects ``ClientHello`` messages
+containing features it does not recognise. Two common causes:
 
-The PLC mandates TLS 1.3 (it refuses TLS 1.2 outright), and CPython's
-``ssl`` module exposes no API to restrict the TLS 1.3
-``supported_groups`` list. The fix is to restrict the offered groups
-through OpenSSL's own configuration — via the ``OPENSSL_CONF``
-environment variable — to the classic ECDHE curves that every
-S7-1200/1500 supports.
+* **Post-quantum key share (OpenSSL ≥ 3.5)** — the default
+  ``ClientHello`` advertises the ``X25519MLKEM768`` hybrid group whose
+  ~1.2 KB key share the PLC drops.
+* **Modern signature algorithms** — OpenSSL advertises Ed25519, Ed448,
+  and RSA-PSS variants in the ``signature_algorithms`` extension.
+  Instead of ignoring unknown algorithms (as TLS 1.2 requires), the PLC
+  treats them as a fatal error and sends a TCP RST.
+
+CPython's ``ssl`` module exposes no API for either the
+``supported_groups`` or ``signature_algorithms`` lists. The fix is to
+restrict both through OpenSSL's own configuration via the
+``OPENSSL_CONF`` environment variable.
 
 1. Create an OpenSSL configuration file, e.g. ``s7-openssl.cnf``:
 
    .. code-block:: ini
 
-      # Restrict the TLS key-exchange groups to classic ECDHE curves so the
-      # ClientHello stays small enough for the S7-1500 to accept.
+      # Restrict TLS parameters for S7 PLC compatibility.
       openssl_conf = openssl_init
 
       [openssl_init]
@@ -184,7 +185,10 @@ S7-1200/1500 supports.
       system_default = system_default_sect
 
       [system_default_sect]
+      # Classic ECDHE curves only — no post-quantum groups.
       Groups = x25519:secp256r1:secp384r1
+      # Classic signature algorithms only — no Ed25519, Ed448, or RSA-PSS.
+      SignatureAlgorithms = RSA+SHA256:RSA+SHA384:RSA+SHA512:ECDSA+SHA256:ECDSA+SHA384
 
 2. Point ``OPENSSL_CONF`` at it **before** the Python process starts.
    OpenSSL reads this configuration once, when it initialises, so
@@ -200,14 +204,9 @@ S7-1200/1500 supports.
       # or for the whole shell session
       export OPENSSL_CONF=/path/to/s7-openssl.cnf
 
-With the groups restricted to classic curves, the TLS 1.3 handshake no
-longer offers ``X25519MLKEM768`` and the S7-1500 completes it normally.
-
-.. note::
-
-   This only affects OpenSSL ≥ 3.5. On older OpenSSL releases the
-   default key-exchange groups are already classic ECDHE curves, so no
-   extra configuration is needed.
+With both settings applied, the ``ClientHello`` contains only
+algorithms that S7 PLCs understand and the handshake completes
+normally.
 
 PLC Password Authentication
 ----------------------------

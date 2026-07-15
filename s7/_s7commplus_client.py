@@ -278,7 +278,8 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc)
+        # TODO: Send the correct integrity id once available
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, False)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -840,7 +841,13 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
     return bytes(payload)
 
 
-def _build_symbolic_read_payload(access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
+def _build_symbolic_read_payload(
+    access_area: int,
+    lids: list[int],
+    symbol_crc: int = 0,
+    with_integrity: bool = True,
+    integrity_id: int = 1,
+) -> bytes:
     """Build a GetMultiVariables payload for symbolic (LID-based) access.
 
     Used for optimized block access on S7-1200/1500 where byte offsets
@@ -868,7 +875,8 @@ def _build_symbolic_read_payload(access_area: int, lids: list[int], symbol_crc: 
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_object_qualifier()
-    payload += encode_uint32_vlq(1)
+    if with_integrity:
+        payload += encode_uint32_vlq(integrity_id)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
