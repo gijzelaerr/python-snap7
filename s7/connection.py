@@ -77,6 +77,20 @@ _S7_CIPHERS = (
     "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
 )
 
+# Siemens PLCs only accept a small set of TLS groups.  X25519 is preferred
+# but unavailable on older OpenSSL/CPython; fall back to prime256v1.
+_S7_PREFERRED_GROUPS = ("X25519", "prime256v1")
+
+
+def _set_s7_groups(ctx: ssl.SSLContext) -> None:
+    for group in _S7_PREFERRED_GROUPS:
+        try:
+            ctx.set_ecdh_curve(group)
+            return
+        except (ssl.SSLError, ValueError):
+            continue
+    logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+
 
 class S7CommPlusConnection:
     """S7CommPlus connection with multi-version support.
@@ -1101,7 +1115,7 @@ class S7CommPlusConnection:
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
 
         ctx.set_ciphers(_S7_CIPHERS)
-        ctx.set_ecdh_curve("X25519")
+        _set_s7_groups(ctx)
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
         ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)

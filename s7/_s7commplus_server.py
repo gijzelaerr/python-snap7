@@ -41,7 +41,7 @@ from .protocol import (
     READ_FUNCTION_CODES,
     SoftDataType,
 )
-from .connection import _S7_CIPHERS
+from .connection import _S7_CIPHERS, _set_s7_groups
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, encode_uint64_vlq
 from .codec import (
     encode_header,
@@ -294,7 +294,7 @@ class S7CommPlusServer:
             self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             self._ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
             self._ssl_context.set_ciphers(_S7_CIPHERS)
-            self._ssl_context.set_ecdh_curve("X25519")
+            _set_s7_groups(self._ssl_context)
             self._ssl_context.load_cert_chain(tls_cert, tls_key)
             if tls_ca:
                 self._ssl_context.load_verify_locations(tls_ca)
