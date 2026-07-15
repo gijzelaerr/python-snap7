@@ -293,9 +293,8 @@ class S7CommPlusServer:
                 raise ValueError("TLS requires tls_cert and tls_key")
             self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             self._ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
-            # Accept the same RSA-only ciphers the client uses (static RSA key exchange
-            # is excluded from the OpenSSL 3.x defaults but required by S7 PLCs).
             self._ssl_context.set_ciphers(_S7_CIPHERS)
+            self._ssl_context.set_ecdh_curve("X25519")
             self._ssl_context.load_cert_chain(tls_cert, tls_key)
             if tls_ca:
                 self._ssl_context.load_verify_locations(tls_ca)
