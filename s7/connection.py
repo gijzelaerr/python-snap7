@@ -7,7 +7,7 @@ S7CommPlus protocol, with support for all protocol versions:
 - V1: Early S7-1200 (FW >= V4.0). Simple session handshake.
 - V2: Adds integrity checking and session authentication.
 - V3: Adds public-key-based key exchange.
-- V3 + TLS: TIA Portal V17+. Standard TLS 1.3 with per-device certificates.
+- V3 + TLS: TIA Portal V17+. TLS 1.2 with per-device certificates.
 
 The wire protocol (VLQ encoding, data types, function codes, object model) is
 the same across all versions -- only the session authentication layer differs.
@@ -67,6 +67,29 @@ from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .protocol import DataType
 
 logger = logging.getLogger(__name__)
+
+# TLS cipher suites for S7 PLC compatibility.
+# ECDHE suites are preferred (forward secrecy); RSA-kx kept as fallback for
+# older firmware.  The key to Siemens PLC compatibility is restricting the
+# offered groups to x25519 via set_ecdh_curve — PLCs RST when they see
+# unsupported groups like x448 or ffdhe*.
+_S7_CIPHERS = (
+    "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
+)
+
+# Siemens PLCs only accept a small set of TLS groups.  X25519 is preferred
+# but unavailable on older OpenSSL/CPython; fall back to prime256v1.
+_S7_PREFERRED_GROUPS = ("X25519", "prime256v1")
+
+
+def _set_s7_groups(ctx: ssl.SSLContext) -> None:
+    for group in _S7_PREFERRED_GROUPS:
+        try:
+            ctx.set_ecdh_curve(group)
+            return
+        except (ssl.SSLError, ValueError):
+            continue
+    logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
 
 
 class S7CommPlusConnection:
@@ -825,7 +848,7 @@ class S7CommPlusConnection:
         # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
         # The session ID comes from the payload body, not the header.
         body = response[10:]
-        object_ids, obj_end = parse_create_object_session_id(body)
+        object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
         else:
@@ -843,6 +866,9 @@ class S7CommPlusConnection:
         )
         logger.debug(f"CreateObject response payload: {response[10:].hex(' ')}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
+
+        if return_value != 0:
+            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
         # Parse response payload to extract ServerSessionVersion
         self._server_session_version = parse_server_session_version(response[10 + obj_end :])
@@ -1004,7 +1030,7 @@ class S7CommPlusConnection:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 tunneled inside COTP data frames.
+        """Activate TLS tunneled inside COTP data frames.
 
         The S7CommPlus protocol transports TLS records as the payload
         of COTP DT frames — TPKT and COTP headers stay unencrypted on
@@ -1021,7 +1047,7 @@ class S7CommPlusConnection:
         Args:
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
-            tls_ca: Path to CA certificate for PLC verification (PEM)
+            tls_ca: Path to PLC CA certificate (PEM)
         """
         ctx = self._setup_ssl_context(
             cert_path=tls_cert,
@@ -1053,7 +1079,7 @@ class S7CommPlusConnection:
             logger.warning(f"Could not extract OMS exporter secret: {e}")
             self._oms_secret = None
 
-        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
+        logger.info("TLS activated (tunneled inside COTP frames)")
 
     def _do_tls_handshake(self) -> None:
         """Perform TLS handshake, tunneling records through COTP."""
@@ -1086,12 +1112,13 @@ class S7CommPlusConnection:
             Configured SSLContext
         """
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
 
-        # TLS 1.3 ciphersuites are configured differently from TLS 1.2
-        if hasattr(ctx, "set_ciphersuites"):
-            ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
-        # If set_ciphersuites not available, TLS 1.3 uses its mandatory defaults
+        ctx.set_ciphers(_S7_CIPHERS)
+        _set_s7_groups(ctx)
+        ctx.options |= ssl.OP_NO_TICKET
+        ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
+        ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
 
         if cert_path and key_path:
             ctx.load_cert_chain(cert_path, key_path)

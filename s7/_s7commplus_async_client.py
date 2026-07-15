@@ -13,6 +13,7 @@ import ssl
 import struct
 from typing import Any, Optional
 
+from .connection import _S7_CIPHERS
 from .protocol import (
     DataType,
     ElementID,
@@ -242,17 +243,20 @@ class S7CommPlusAsyncClient:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
     ) -> None:
-        """Activate TLS 1.3 over the COTP connection."""
+        """Activate TLS over the COTP connection."""
         if self._writer is None:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Cannot activate TLS: not connected")
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
-        if hasattr(ctx, "set_ciphersuites"):
-            ctx.set_ciphersuites("TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256")
+        ctx.set_ciphers(_S7_CIPHERS)
+        ctx.options |= ssl.OP_NO_TICKET
+        ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
+        ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
 
         if tls_cert and tls_key:
             ctx.load_cert_chain(tls_cert, tls_key)
@@ -285,7 +289,7 @@ class S7CommPlusAsyncClient:
             logger.warning(f"Could not extract OMS exporter secret: {e}")
             self._oms_secret = None
 
-        logger.info("TLS 1.3 activated (tunneled inside COTP frames)")
+        logger.info("TLS activated (tunneled inside COTP frames)")
 
     async def _do_tls_handshake(self) -> None:
         """Perform the TLS handshake, tunneling records through COTP DT frames."""
@@ -822,12 +826,15 @@ class S7CommPlusAsyncClient:
         # Response header is 10 bytes (opcode+reserved+func+reserved+seq+transport).
         # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
         body = response[10:]
-        object_ids, obj_end = parse_create_object_session_id(body)
+        object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
         else:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
+
+        if return_value != 0:
+            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
         self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
