@@ -105,11 +105,7 @@ _OMS_EXPORTER_LENGTH = 32
 def _hkdf_expand_label(secret: bytes, label: bytes, context: bytes, length: int, hashmod) -> bytes:
     """TLS 1.3 HKDF-Expand-Label (RFC 8446 §7.1)."""
     full_label = b"tls13 " + label
-    hkdf_label = (
-        length.to_bytes(2, "big")
-        + bytes([len(full_label)]) + full_label
-        + bytes([len(context)]) + context
-    )
+    hkdf_label = length.to_bytes(2, "big") + bytes([len(full_label)]) + full_label + bytes([len(context)]) + context
     out, block, counter = b"", b"", 1
     while len(out) < length:
         block = hmac.new(secret, block + hkdf_label + bytes([counter]), hashmod).digest()
@@ -127,9 +123,7 @@ def _tls13_exporter(exporter_master_secret: bytes, label: bytes, length: int, ha
     TLS 1.3 session with no context.
     """
     empty_hash = hashmod(b"").digest()
-    derived = _hkdf_expand_label(
-        exporter_master_secret, label, empty_hash, hashmod().digest_size, hashmod
-    )
+    derived = _hkdf_expand_label(exporter_master_secret, label, empty_hash, hashmod().digest_size, hashmod)
     return _hkdf_expand_label(derived, b"exporter", empty_hash, length, hashmod)
 
 
@@ -1166,9 +1160,7 @@ class S7CommPlusConnection:
             logger.warning("EXPORTER_SECRET not found in TLS key log")
             return None
 
-        return _tls13_exporter(
-            exporter_master_secret, _OMS_EXPORTER_LABEL, _OMS_EXPORTER_LENGTH, hashmod
-        )
+        return _tls13_exporter(exporter_master_secret, _OMS_EXPORTER_LABEL, _OMS_EXPORTER_LENGTH, hashmod)
 
     def _do_tls_handshake(self) -> None:
         """Perform TLS handshake, tunneling records through COTP."""
