@@ -249,7 +249,7 @@ class TestSyncTLSBioPlumbing:
 
     def _make_connected_pair(self):
         import ssl
-        from s7.connection import S7CommPlusConnection
+        from s7.connection import S7CommPlusConnection, _BioTLS
 
         cert_path, key_path = _generate_self_signed_cert()
 
@@ -263,9 +263,9 @@ class TestSyncTLSBioPlumbing:
         client_ctx.verify_mode = ssl.CERT_NONE
 
         conn = S7CommPlusConnection("127.0.0.1", 102)
-        conn._incoming_bio = ssl.MemoryBIO()
-        conn._outgoing_bio = ssl.MemoryBIO()
-        conn._ssl_object = client_ctx.wrap_bio(conn._incoming_bio, conn._outgoing_bio)
+        tls = _BioTLS.__new__(_BioTLS)
+        tls._init_stdlib(client_ctx, None)
+        conn._tls = tls
 
         # Loopback iso layer: ciphertext the client "sends" goes into the server's
         # incoming BIO; bytes the client "receives" are popped from inbox.
@@ -285,11 +285,11 @@ class TestSyncTLSBioPlumbing:
         client_done = server_done = False
         for _ in range(40):
             try:
-                conn._ssl_object.do_handshake()
+                tls.do_handshake()
                 client_done = True
             except ssl.SSLWantReadError:
                 pass
-            out = conn._outgoing_bio.read()
+            out = tls.bio_read()
             if out:
                 server_in.write(out)
             try:
@@ -299,7 +299,7 @@ class TestSyncTLSBioPlumbing:
                 pass
             out = server_out.read()
             if out:
-                conn._incoming_bio.write(out)
+                tls.bio_write(out)
             if client_done and server_done:
                 break
         assert client_done and server_done, "TLS handshake did not complete over MemoryBIO"

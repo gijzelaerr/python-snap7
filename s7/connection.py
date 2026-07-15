@@ -92,6 +92,101 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
     logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
 
 
+class _BioTLS:
+    """Thin wrapper over BIO-based TLS — either stdlib or pyOpenSSL.
+
+    Provides a uniform interface for write/read/handshake/export_keying_material
+    so the connection code doesn't branch on the backend.
+    """
+
+    def __init__(self, ctx: ssl.SSLContext, hostname: Optional[str]) -> None:
+        self._backend: str = "stdlib"
+        try:
+            self._init_pyopenssl(ctx, hostname)
+        except Exception:
+            self._init_stdlib(ctx, hostname)
+
+    def _init_stdlib(self, ctx: ssl.SSLContext, hostname: Optional[str]) -> None:
+        self._backend = "stdlib"
+        self._in_bio = ssl.MemoryBIO()
+        self._out_bio = ssl.MemoryBIO()
+        self._obj = ctx.wrap_bio(
+            self._in_bio,
+            self._out_bio,
+            server_side=False,
+            server_hostname=hostname,
+        )
+
+    def _init_pyopenssl(self, ctx: ssl.SSLContext, hostname: Optional[str]) -> None:
+        from OpenSSL.SSL import Context, Connection, SSLv23_METHOD, WantReadError  # type: ignore[import-untyped]
+
+        pyctx = Context(SSLv23_METHOD)
+        pyctx.set_min_proto_version(ctx.minimum_version)
+        pyctx.set_cipher_list(_S7_CIPHERS.encode())
+        for group in _S7_PREFERRED_GROUPS:
+            try:
+                pyctx.set_tmp_ecdh_curve(group)
+                break
+            except Exception:
+                continue
+        pyctx.set_options(ctx.options)
+        pyctx.set_verify(0x00, lambda *a: True)
+        conn = Connection(pyctx, None)
+        conn.set_connect_state()
+        if hostname:
+            conn.set_tlsext_host_name(hostname.encode())
+        self._pyopenssl_conn = conn
+        self._pyopenssl_want_read = WantReadError
+        self._backend = "pyopenssl"
+
+    def do_handshake(self) -> None:
+        if self._backend == "pyopenssl":
+            self._pyopenssl_conn.do_handshake()
+        else:
+            self._obj.do_handshake()
+
+    def write(self, data: bytes) -> None:
+        if self._backend == "pyopenssl":
+            self._pyopenssl_conn.write(data)
+        else:
+            self._obj.write(data)
+
+    def read(self, bufsize: int = 65536) -> bytes:
+        if self._backend == "pyopenssl":
+            return self._pyopenssl_conn.read(bufsize)
+        else:
+            return self._obj.read(bufsize)
+
+    def bio_write(self, data: bytes) -> None:
+        if self._backend == "pyopenssl":
+            self._pyopenssl_conn.bio_write(data)
+        else:
+            self._in_bio.write(data)
+
+    def bio_read(self) -> bytes:
+        if self._backend == "pyopenssl":
+            try:
+                return self._pyopenssl_conn.bio_read(65536)
+            except Exception:
+                return b""
+        else:
+            return self._out_bio.read()
+
+    @property
+    def want_read_error(self) -> type:
+        if self._backend == "pyopenssl":
+            return self._pyopenssl_want_read
+        return ssl.SSLWantReadError
+
+    def export_keying_material(self, label: str, length: int) -> Optional[bytes]:
+        if self._backend == "pyopenssl":
+            return self._pyopenssl_conn.export_keying_material(label.encode(), length, False)
+        try:
+            return self._obj.export_keying_material(label, length, None)
+        except (AttributeError, ssl.SSLError):
+            return None
+
+
 class S7CommPlusConnection:
     """S7CommPlus connection with multi-version support.
 
@@ -121,9 +216,7 @@ class S7CommPlusConnection:
         )
 
         self._ssl_context: Optional[ssl.SSLContext] = None
-        self._ssl_object: Optional[ssl.SSLObject] = None
-        self._incoming_bio: Optional[ssl.MemoryBIO] = None
-        self._outgoing_bio: Optional[ssl.MemoryBIO] = None
+        self._tls: Optional[_BioTLS] = None
         self._session_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0  # Detected from PLC response
@@ -180,6 +273,16 @@ class S7CommPlusConnection:
     def oms_secret(self) -> Optional[bytes]:
         """OMS exporter secret from TLS session (for legitimation)."""
         return self._oms_secret
+
+    @property
+    def requires_substreamed(self) -> bool:
+        """Whether data operations must use substreamed function codes.
+
+        V1-initial PLCs with SessionKey auth reject GET_MULTI_VARIABLES
+        (0x054C) and require GET_VAR_SUBSTREAMED (0x0586) /
+        SET_VAR_SUBSTREAMED (0x057C) for all data operations.
+        """
+        return self._session_key is not None
 
     def connect(
         self,
@@ -514,9 +617,7 @@ class S7CommPlusConnection:
         self._connected = False
         self._session_setup_ok = False
         self._tls_active = False
-        self._ssl_object = None
-        self._incoming_bio = None
-        self._outgoing_bio = None
+        self._tls = None
         self._oms_secret = None
         self._session_id = 0
         self._sequence_number = 0
@@ -996,33 +1097,38 @@ class S7CommPlusConnection:
 
     def _send_s7_data(self, data: bytes) -> None:
         """Send an S7CommPlus frame, routing through TLS when active."""
-        if self._tls_active:
-            self._ssl_object.write(data)  # type: ignore[union-attr]
+        if self._tls_active and self._tls is not None:
+            self._tls.write(data)
             self._tls_flush_outgoing()
         else:
             self._iso_conn.send_data(data)
 
     def _recv_s7_data(self) -> bytes:
         """Receive an S7CommPlus frame, routing through TLS when active."""
-        if self._tls_active:
+        if self._tls_active and self._tls is not None:
             while True:
                 try:
-                    return self._ssl_object.read(65536)  # type: ignore[union-attr]
-                except ssl.SSLWantReadError:
-                    self._tls_read_incoming()
+                    return self._tls.read(65536)
+                except Exception as e:
+                    if isinstance(e, self._tls.want_read_error):
+                        self._tls_read_incoming()
+                    else:
+                        raise
         else:
             return self._iso_conn.receive_data()
 
     def _tls_flush_outgoing(self) -> None:
         """Send all pending TLS records through COTP framing."""
-        data = self._outgoing_bio.read()  # type: ignore[union-attr]
+        assert self._tls is not None
+        data = self._tls.bio_read()
         if data:
             self._iso_conn.send_data(data)
 
     def _tls_read_incoming(self) -> None:
         """Read a COTP frame and feed its payload to the TLS BIO."""
+        assert self._tls is not None
         data = self._iso_conn.receive_data()
-        self._incoming_bio.write(data)  # type: ignore[union-attr]
+        self._tls.bio_write(data)
 
     def _activate_tls(
         self,
@@ -1055,44 +1161,38 @@ class S7CommPlusConnection:
             ca_path=tls_ca,
         )
 
-        # BIO-based TLS: encrypt/decrypt bytes without touching the
-        # TCP socket, so TPKT/COTP framing stays unencrypted.
-        self._incoming_bio = ssl.MemoryBIO()
-        self._outgoing_bio = ssl.MemoryBIO()
-        self._ssl_object = ctx.wrap_bio(
-            self._incoming_bio,
-            self._outgoing_bio,
-            server_side=False,
-            server_hostname=self.host if ctx.check_hostname else None,
-        )
+        hostname = self.host if ctx.check_hostname else None
+        self._tls = _BioTLS(ctx, hostname)
+        logger.debug(f"TLS backend: {self._tls._backend}")
 
         # TLS handshake — records tunnel through COTP frames
         self._do_tls_handshake()
 
         self._tls_active = True
 
-        # Extract OMS exporter secret for legitimation key derivation
-        try:
-            self._oms_secret = self._ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
+        self._oms_secret = self._tls.export_keying_material("EXPERIMENTAL_OMS", 32)
+        if self._oms_secret is not None:
             logger.debug("OMS exporter secret extracted from TLS session")
-        except (AttributeError, ssl.SSLError) as e:
-            logger.warning(f"Could not extract OMS exporter secret: {e}")
-            self._oms_secret = None
+        else:
+            logger.warning("Could not extract OMS exporter secret (legitimation will be unavailable)")
 
         logger.info("TLS activated (tunneled inside COTP frames)")
 
     def _do_tls_handshake(self) -> None:
         """Perform TLS handshake, tunneling records through COTP."""
+        assert self._tls is not None
         while True:
             try:
-                self._ssl_object.do_handshake()  # type: ignore[union-attr]
+                self._tls.do_handshake()
                 break
-            except ssl.SSLWantReadError:
-                self._tls_flush_outgoing()
-                self._tls_read_incoming()
-            except ssl.SSLWantWriteError:
-                # Rare with MemoryBIO, but the SSLObject can ask to write before reading.
-                self._tls_flush_outgoing()
+            except Exception as e:
+                if isinstance(e, self._tls.want_read_error):
+                    self._tls_flush_outgoing()
+                    self._tls_read_incoming()
+                elif isinstance(e, ssl.SSLWantWriteError):
+                    self._tls_flush_outgoing()
+                else:
+                    raise
         self._tls_flush_outgoing()
 
     def _setup_ssl_context(
