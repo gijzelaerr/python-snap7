@@ -124,6 +124,9 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
+        if self._connection.requires_substreamed:
+            return self._db_read_substreamed(db_number, start, size)
+
         payload = _build_read_payload([(db_number, start, size)])
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
@@ -132,6 +135,14 @@ class S7CommPlusClient:
         if results[0] is None:
             raise RuntimeError("Read failed: PLC returned error for item")
         return results[0]
+
+    def _db_read_substreamed(self, db_number: int, start: int, size: int) -> bytes:
+        access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
+        payload = _build_substreamed_read_payload(
+            self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, size]
+        )
+        response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
+        return _parse_substreamed_read_response(response)
 
     def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block.
@@ -144,9 +155,20 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
+        if self._connection.requires_substreamed:
+            self._db_write_substreamed(db_number, start, data)
+            return
+
         payload = _build_write_payload([(db_number, start, data)])
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
+
+    def _db_write_substreamed(self, db_number: int, start: int, data: bytes) -> None:
+        access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
+        payload = _build_substreamed_write_payload(
+            self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, len(data)], data
+        )
+        self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
 
     def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
@@ -159,6 +181,9 @@ class S7CommPlusClient:
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
+
+        if self._connection.requires_substreamed:
+            return [self._db_read_substreamed(db, start, size) for db, start, size in items]
 
         payload = _build_read_payload(items)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
@@ -180,6 +205,13 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
+        if self._connection.requires_substreamed:
+            payload = _build_substreamed_read_payload(
+                self._connection.session_id, area_rid, Ids.CONTROLLER_AREA_VALUE_ACTUAL, [start + 1, size]
+            )
+            response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
+            return _parse_substreamed_read_response(response)
+
         payload = _build_area_read_payload(area_rid, start, size)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
@@ -197,6 +229,13 @@ class S7CommPlusClient:
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
+
+        if self._connection.requires_substreamed:
+            payload = _build_substreamed_write_payload(
+                self._connection.session_id, area_rid, Ids.CONTROLLER_AREA_VALUE_ACTUAL, [start + 1, len(data)], data
+            )
+            self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
+            return
 
         payload = _build_area_write_payload(area_rid, start, data)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
@@ -694,6 +733,66 @@ def _parse_write_response(response: bytes) -> None:
     if errors:
         err_str = ", ".join(f"item {nr}: error {val}" for nr, val in errors)
         raise RuntimeError(f"Write failed: {err_str}")
+
+
+def _build_substreamed_read_payload(session_id: int, access_area: int, access_sub_area: int, lids: list[int]) -> bytes:
+    """Build a GET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
+    oq = encode_object_qualifier()
+    payload = bytearray()
+    payload += struct.pack(">I", session_id)
+    payload += bytes([0x20, 0x04])
+    num_fields = 4 + len(lids)
+    payload += encode_uint32_vlq(num_fields)
+    payload += encode_uint32_vlq(0)  # SymbolCRC
+    payload += encode_uint32_vlq(access_area)
+    payload += encode_uint32_vlq(len(lids) + 1)
+    payload += encode_uint32_vlq(access_sub_area)
+    for lid in lids:
+        payload += encode_uint32_vlq(lid)
+    payload += oq
+    payload += bytes([0x00])
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(1)
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_substreamed_write_payload(
+    session_id: int, access_area: int, access_sub_area: int, lids: list[int], data: bytes
+) -> bytes:
+    """Build a SET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
+    oq = encode_object_qualifier()
+    payload = bytearray()
+    payload += struct.pack(">I", session_id)
+    payload += bytes([0x20, 0x04])
+    num_fields = 4 + len(lids)
+    payload += encode_uint32_vlq(num_fields)
+    payload += encode_uint32_vlq(0)  # SymbolCRC
+    payload += encode_uint32_vlq(access_area)
+    payload += encode_uint32_vlq(len(lids) + 1)
+    payload += encode_uint32_vlq(access_sub_area)
+    for lid in lids:
+        payload += encode_uint32_vlq(lid)
+    payload += oq
+    payload += bytes([0x00])
+    payload += encode_uint32_vlq(1)
+    payload += encode_pvalue_blob(data)
+    payload += encode_uint32_vlq(1)
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _parse_substreamed_read_response(response: bytes) -> bytes:
+    """Parse a GET_VAR_SUBSTREAMED response and extract the data bytes."""
+    offset = 0
+    return_value, consumed = decode_uint64_vlq(response, offset)
+    offset += consumed
+    if return_value != 0:
+        raise RuntimeError(f"Substreamed read failed with return value 0x{return_value:X}")
+    if offset >= len(response):
+        raise RuntimeError("Substreamed read response empty")
+    raw_bytes, consumed = decode_pvalue_to_bytes(response, offset)
+    return raw_bytes
 
 
 def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:

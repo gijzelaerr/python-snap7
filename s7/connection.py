@@ -188,6 +188,16 @@ class S7CommPlusConnection:
         return self._session_setup_ok
 
     @property
+    def requires_substreamed(self) -> bool:
+        """Whether data operations must use substreamed function codes.
+
+        V1-initial PLCs with SessionKey auth reject GET_MULTI_VARIABLES
+        (0x054C) and require GET_VAR_SUBSTREAMED (0x0586) /
+        SET_VAR_SUBSTREAMED (0x057C) for all data operations.
+        """
+        return self._session_key is not None
+
+    @property
     def oms_secret(self) -> Optional[bytes]:
         """OMS exporter secret from TLS session (for legitimation)."""
         return self._oms_secret
