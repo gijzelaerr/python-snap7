@@ -724,7 +724,7 @@ class S7CommPlusConnection:
         version, data_length, consumed = decode_header(response_frame)
         response = response_frame[consumed:]
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("InitSSL response too short")
@@ -839,19 +839,19 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: version=V{version}, data_length={data_length}")
         logger.debug(f"CreateObject response body ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("CreateObject response too short")
 
-        # CreateObject response has a 14-byte header (includes SessionId),
-        # unlike other responses which use 10-byte headers.
+        # Response header is 10 bytes: opcode(1)+reserved(2)+func(2)+reserved(2)+seq(2)+transport(1).
+        # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
         resp_opcode = response[0]
         resp_func = struct.unpack_from(">H", response, 3)[0]
         resp_seq = struct.unpack_from(">H", response, 7)[0]
-        resp_transport = response[13]
+        resp_transport = response[9]
 
-        offset = 14
+        offset = 10
         return_value, consumed = decode_uint64_vlq(response, offset)
         offset += consumed
         if offset >= len(response):
