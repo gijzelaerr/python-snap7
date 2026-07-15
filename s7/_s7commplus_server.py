@@ -36,6 +36,8 @@ from .protocol import (
     ElementID,
     FunctionCode,
     Ids,
+    LegitimationId,
+    ObjectId,
     Opcode,
     ProtocolVersion,
     READ_FUNCTION_CODES,
@@ -193,7 +195,12 @@ class S7CommPlusServer:
     - CPU state management
     """
 
-    def __init__(self, protocol_version: int = ProtocolVersion.V1) -> None:
+    def __init__(
+        self,
+        protocol_version: int = ProtocolVersion.V1,
+        public_key_fingerprint: Optional[str] = None,
+        session_challenge: Optional[bytes] = None,
+    ) -> None:
         self._data_blocks: dict[int, DataBlock] = {}
         self._cpu_state = CPUState.RUN
         self._protocol_version = protocol_version
@@ -209,6 +216,13 @@ class S7CommPlusServer:
         # TLS configuration (V2)
         self._ssl_context: Optional[ssl.SSLContext] = None
         self._use_tls: bool = False
+
+        # SessionKey handshake emulation — when both are set, the server
+        # emits them in the CreateObject response and accepts the subsequent
+        # SetMultiVariables (SecurityKey + ServerSessionVersion echo) and
+        # the post-auth legitimation flow (GetVarSubStreamed 303 / SetVarSubStreamed 1846).
+        self._public_key_fingerprint = public_key_fingerprint
+        self._session_challenge = session_challenge
 
     @property
     def cpu_state(self) -> CPUState:
@@ -598,6 +612,10 @@ class S7CommPlusServer:
             return self._handle_get_multi_variables(seq_num, req_session_id, request_data)
         elif function_code == FunctionCode.SET_MULTI_VARIABLES:
             return self._handle_set_multi_variables(seq_num, req_session_id, request_data)
+        elif function_code == FunctionCode.GET_VAR_SUBSTREAMED:
+            return self._handle_get_var_substreamed(seq_num, req_session_id, request_data)
+        elif function_code == FunctionCode.SET_VAR_SUBSTREAMED:
+            return self._handle_set_var_substreamed(seq_num, req_session_id, request_data)
         else:
             return self._build_error_response(seq_num, req_session_id, function_code)
 
@@ -650,10 +668,10 @@ class S7CommPlusServer:
             session_id = self._next_session_id
             self._next_session_id += 1
 
-        # Build CreateObject response
+        # Build CreateObject response — uses a 14-byte header (with SessionId)
+        # unlike other responses which use the 10-byte _build_response_header.
         response = bytearray()
 
-        # Response header
         response += struct.pack(
             ">BHHHHIB",
             Opcode.RESPONSE,
@@ -690,13 +708,38 @@ class S7CommPlusServer:
         response += encode_uint32_vlq(0x0132)  # Protocol version attribute
         response += bytes([0x00]) + encode_typed_value(DataType.USINT, self._protocol_version)
 
-        # ServerSessionVersion attribute (306) - required for session setup handshake
-        from .protocol import ObjectId
+        if self._public_key_fingerprint is not None and self._session_challenge is not None:
+            # SessionKey handshake mode: emit public key fingerprint, session
+            # challenge, and a Struct-type ServerSessionVersion (matching what
+            # real V1-initial S7-1200 PLCs send).
 
-        response += bytes([ElementID.ATTRIBUTE])
-        response += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
-        response += bytes([0x00])  # flags
-        response += encode_typed_value(DataType.UDINT, self._protocol_version)
+            # Public key fingerprint (attribute 233) as WString
+            response += bytes([ElementID.ATTRIBUTE])
+            response += encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+            fp_bytes = self._public_key_fingerprint.encode("utf-16-be")
+            response += bytes([0x00, DataType.WSTRING])
+            response += encode_uint32_vlq(len(fp_bytes))
+            response += fp_bytes
+
+            # Session challenge (attribute 303) as USINT array
+            response += bytes([ElementID.ATTRIBUTE])
+            response += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
+            response += bytes([0x10, DataType.USINT])  # flags=0x10 (array)
+            response += encode_uint32_vlq(len(self._session_challenge))
+            response += self._session_challenge
+
+            # ServerSessionVersion (306) as Struct — triggers the V1-initial
+            # code path in the client (Struct type = session_auth required).
+            # Minimal struct: Struct(314) with element 319 as empty WString.
+            response += bytes([ElementID.ATTRIBUTE])
+            response += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+            response += self._build_server_session_version_struct()
+        else:
+            # Simple mode: ServerSessionVersion as UDINT (V1 without SessionKey)
+            response += bytes([ElementID.ATTRIBUTE])
+            response += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+            response += bytes([0x00])  # flags
+            response += encode_typed_value(DataType.UDINT, self._protocol_version)
 
         response += bytes([ElementID.TERMINATING_OBJECT])
 
@@ -704,6 +747,37 @@ class S7CommPlusServer:
         response += struct.pack(">I", 0)
 
         return bytes(response)
+
+    @staticmethod
+    def _build_server_session_version_struct() -> bytes:
+        """Build a minimal ServerSessionVersion Struct(314) typed value.
+
+        Matches the wire format a real V1-initial S7-1200 PLC emits:
+        flags=0x00, type=STRUCT, structId=VLQ(314), elements..., terminator=0x00.
+
+        Element 319 is the PAOM device string. The client strips it before
+        echoing — here we include a short placeholder so the stripping logic
+        is exercised.
+        """
+        buf = bytearray()
+        buf += bytes([0x00, DataType.STRUCT])
+        buf += encode_uint32_vlq(314)  # Struct ID
+
+        # Element 315: protocol version as UDINT
+        buf += encode_uint32_vlq(315)
+        buf += bytes([0x00, DataType.UDINT])
+        buf += encode_uint32_vlq(ProtocolVersion.V1)
+
+        # Element 319: PAOM device string as WString (will be stripped by client)
+        buf += encode_uint32_vlq(319)
+        paom = "1;6ES7 215-1AG40-0XB0 ;V4.2".encode("utf-8")
+        buf += bytes([0x00, DataType.WSTRING])
+        buf += encode_uint32_vlq(len(paom))
+        buf += paom
+
+        # Struct terminator
+        buf += bytes([0x00])
+        return bytes(buf)
 
     def _handle_delete_object(self, seq_num: int, session_id: int) -> bytes:
         """Handle DeleteObject -- close a session."""
@@ -852,6 +926,42 @@ class S7CommPlusServer:
         # IntegrityId
         response += encode_uint32_vlq(0)
 
+        return bytes(response)
+
+    def _handle_get_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
+        """Handle GetVarSubStreamed — return legitimation challenge or finalization data.
+
+        The client sends this to read a challenge from address 303
+        (ServerSessionRequest) during the post-auth legitimation, and
+        to finalize legitimation via object 50 / address 7920.
+        """
+        response = bytearray()
+        response += self._build_response_header(FunctionCode.GET_VAR_SUBSTREAMED, seq_num)
+        response += encode_uint64_vlq(0)  # ReturnValue: success
+
+        # Return the session challenge as a BLOB if we have one
+        if self._session_challenge is not None:
+            response += bytes([0x00, DataType.BLOB])
+            response += encode_uint32_vlq(len(self._session_challenge))
+            response += self._session_challenge
+        else:
+            response += bytes([0x00, DataType.BLOB])
+            response += encode_uint32_vlq(0)
+
+        response += struct.pack(">I", 0)
+        return bytes(response)
+
+    def _handle_set_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
+        """Handle SetVarSubStreamed — accept legitimation response blob.
+
+        The client writes the solved 248-byte blob to address 1846
+        (Legitimate). The emulated server accepts any blob without
+        cryptographic verification.
+        """
+        response = bytearray()
+        response += self._build_response_header(FunctionCode.SET_VAR_SUBSTREAMED, seq_num)
+        response += encode_uint64_vlq(0)  # ReturnValue: success
+        response += struct.pack(">I", 0)
         return bytes(response)
 
     def _build_error_response(self, seq_num: int, session_id: int, function_code: int) -> bytes:

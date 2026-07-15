@@ -10,10 +10,20 @@ import asyncio
 from s7._s7commplus_server import S7CommPlusServer, CPUState, DataBlock
 from s7._s7commplus_client import S7CommPlusClient
 from s7._s7commplus_async_client import S7CommPlusAsyncClient
-from s7.protocol import ProtocolVersion
+from s7.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
+from s7.vlq import encode_uint32_vlq
 
 # Use a high port to avoid conflicts
 TEST_PORT = 11120
+
+# SessionKey handshake tests use a separate port
+SESSION_KEY_PORT = 11121
+
+# A known S7-1200 public key fingerprint from the bundled key store
+TEST_FINGERPRINT = "01:BD426B091F08731A"
+
+# Fixed 20-byte challenge for deterministic tests
+TEST_CHALLENGE = bytes(range(20))
 
 
 @pytest.fixture()
@@ -302,3 +312,127 @@ class TestAsyncClientServerIntegration:
             assert len(results) == 3
             for r in results:
                 assert isinstance(r, float)
+
+
+class TestSessionKeyServer:
+    """Test the server's SessionKey handshake emulation."""
+
+    def test_session_key_server_construction(self) -> None:
+        srv = S7CommPlusServer(
+            public_key_fingerprint=TEST_FINGERPRINT,
+            session_challenge=TEST_CHALLENGE,
+        )
+        assert srv._public_key_fingerprint == TEST_FINGERPRINT
+        assert srv._session_challenge == TEST_CHALLENGE
+
+    def test_create_object_response_contains_fingerprint_and_challenge(self) -> None:
+        """Verify the CreateObject response includes attributes 233 and 303."""
+        srv = S7CommPlusServer(
+            public_key_fingerprint=TEST_FINGERPRINT,
+            session_challenge=TEST_CHALLENGE,
+        )
+        response = srv._handle_create_object(seq_num=1, request_data=b"")
+
+        # Attribute 233 (fingerprint): 0xA3 + VLQ(233) + 0x00 + 0x15(WSTRING) + VLQ(len) + utf-16-be
+        attr_233_marker = bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+        assert attr_233_marker in response, "Attribute 233 not found"
+        fp_bytes = TEST_FINGERPRINT.encode("utf-16-be")
+        assert fp_bytes in response, "Fingerprint WString content not found"
+
+        # Attribute 303 (challenge): 0xA3 + VLQ(303) + 0x10(array flag) + 0x02(USINT)
+        attr_303_marker = bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
+        assert attr_303_marker in response, "Attribute 303 not found"
+        assert TEST_CHALLENGE in response, "Session challenge bytes not found"
+
+        # ServerSessionVersion (306) as Struct (type 0x17).
+        # Note: attribute 0x0132 appears twice — once for protocol version (USINT)
+        # and once for ServerSessionVersion (Struct). Find the Struct occurrence.
+        attr_306_marker = bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        struct_marker = attr_306_marker + bytes([0x00, DataType.STRUCT])
+        assert struct_marker in response, "ServerSessionVersion should be Struct type for SessionKey mode"
+
+    def test_create_object_response_without_session_key(self) -> None:
+        """Without fingerprint/challenge, ServerSessionVersion should be UDINT."""
+        srv = S7CommPlusServer()
+        response = srv._handle_create_object(seq_num=1, request_data=b"")
+
+        # ServerSessionVersion should be UDINT (not Struct) when SessionKey is disabled.
+        # Search for the specific byte pattern: attr marker + flags(0x00) + UDINT(0x04)
+        attr_306_marker = bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        udint_marker = attr_306_marker + bytes([0x00, DataType.UDINT])
+        struct_marker = attr_306_marker + bytes([0x00, DataType.STRUCT])
+        assert udint_marker in response, "ServerSessionVersion should be UDINT without SessionKey"
+        assert struct_marker not in response, "ServerSessionVersion should not be Struct without SessionKey"
+
+        # Fingerprint attribute 233 should NOT be present
+        attr_233_marker = bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
+        assert attr_233_marker not in response, "Fingerprint should not be in non-SessionKey response"
+
+    def test_get_var_substreamed_returns_challenge(self) -> None:
+        """GetVarSubStreamed should return the session challenge as a BLOB."""
+        srv = S7CommPlusServer(
+            public_key_fingerprint=TEST_FINGERPRINT,
+            session_challenge=TEST_CHALLENGE,
+        )
+        response = srv._handle_get_var_substreamed(seq_num=1, session_id=1, request_data=b"")
+        assert len(response) > 0
+        # The response should contain the challenge bytes
+        assert TEST_CHALLENGE in response
+
+    def test_set_var_substreamed_accepts_blob(self) -> None:
+        """SetVarSubStreamed should accept any blob (legitimation response)."""
+        srv = S7CommPlusServer(
+            public_key_fingerprint=TEST_FINGERPRINT,
+            session_challenge=TEST_CHALLENGE,
+        )
+        response = srv._handle_set_var_substreamed(seq_num=1, session_id=1, request_data=b"\x00" * 248)
+        assert len(response) > 0
+
+
+class TestSessionKeyIntegration:
+    """Integration tests: client connecting to a SessionKey-enabled server.
+
+    When the session_auth module is available (PR #761 branch), the full
+    SessionKey handshake is exercised. When it's not available (master),
+    the client falls back gracefully and the server still works for
+    basic read/write after a partial session setup.
+    """
+
+    @pytest.fixture()
+    def session_key_server(self) -> Generator[S7CommPlusServer, None, None]:
+        srv = S7CommPlusServer(
+            public_key_fingerprint=TEST_FINGERPRINT,
+            session_challenge=TEST_CHALLENGE,
+        )
+        srv.register_db(1, {"temperature": ("Real", 0)})
+        db1 = srv.get_db(1)
+        assert db1 is not None
+        struct.pack_into(">f", db1.data, 0, 23.5)
+        srv.start(port=SESSION_KEY_PORT)
+        time.sleep(0.1)
+        yield srv
+        srv.stop()
+
+    def test_client_connects_to_session_key_server(self, session_key_server: S7CommPlusServer) -> None:
+        """Client connects to server emitting fingerprint + challenge."""
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=SESSION_KEY_PORT)
+        assert client.connected
+        assert client.session_id != 0
+        client.disconnect()
+
+    def test_read_write_with_session_key_server(self, session_key_server: S7CommPlusServer) -> None:
+        """Basic read/write still works against a SessionKey-enabled server."""
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=SESSION_KEY_PORT)
+        try:
+            data = client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 23.5) < 0.001
+
+            client.db_write(1, 0, struct.pack(">f", 42.0))
+            data = client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 42.0) < 0.001
+        finally:
+            client.disconnect()
