@@ -703,15 +703,15 @@ class S7CommPlusServer:
         response += encode_uint32_vlq(0x0131)  # ServerSession ID attribute
         response += bytes([0x00]) + encode_typed_value(DataType.UDINT, session_id)
 
-        # Protocol version attribute
-        response += bytes([ElementID.ATTRIBUTE])
-        response += encode_uint32_vlq(0x0132)  # Protocol version attribute
-        response += bytes([0x00]) + encode_typed_value(DataType.USINT, self._protocol_version)
-
         if self._public_key_fingerprint is not None and self._session_challenge is not None:
             # SessionKey handshake mode: emit public key fingerprint, session
             # challenge, and a Struct-type ServerSessionVersion (matching what
             # real V1-initial S7-1200 PLCs send).
+            #
+            # Note: we intentionally omit the 0x0132 protocol version attribute
+            # here because its numeric value (306 = 0x132) collides with
+            # ServerSessionVersion — the client's parser would match the USINT
+            # first and never see the Struct. Real PLCs don't emit both.
 
             # Public key fingerprint (attribute 233) as WString
             response += bytes([ElementID.ATTRIBUTE])
@@ -735,7 +735,12 @@ class S7CommPlusServer:
             response += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
             response += self._build_server_session_version_struct()
         else:
-            # Simple mode: ServerSessionVersion as UDINT (V1 without SessionKey)
+            # Simple mode: protocol version + ServerSessionVersion as UDINT.
+            # Safe to emit 0x0132 here because there's only one occurrence.
+            response += bytes([ElementID.ATTRIBUTE])
+            response += encode_uint32_vlq(0x0132)  # Protocol version attribute
+            response += bytes([0x00]) + encode_typed_value(DataType.USINT, self._protocol_version)
+
             response += bytes([ElementID.ATTRIBUTE])
             response += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
             response += bytes([0x00])  # flags
@@ -893,14 +898,27 @@ class S7CommPlusServer:
         return bytes(response)
 
     def _handle_set_multi_variables(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
-        """Handle SetMultiVariables -- write variables to data blocks.
+        """Handle SetMultiVariables -- write variables or accept session setup.
+
+        The session setup write (echoing ServerSessionVersion back to the PLC)
+        uses the same function code as DB writes but has a different payload
+        format (address = attribute ID 306, not a DB AccessArea). We detect
+        this by checking whether the first address looks like a session
+        attribute (small VLQ value) rather than a DB address (0x8A0Exxxx).
 
         Reference: thomas-v2/S7CommPlusDriver/Core/SetMultiVariablesRequest.cs
         """
         response = bytearray()
         response += self._build_response_header(FunctionCode.SET_MULTI_VARIABLES, seq_num)
 
-        # Parse request payload
+        if self._is_session_setup_write(request_data):
+            logger.debug("SetMultiVariables: accepting session setup write")
+            response += encode_uint64_vlq(0)  # ReturnValue: success
+            response += encode_uint32_vlq(0)  # Empty error list
+            response += encode_uint32_vlq(0)  # IntegrityId
+            return bytes(response)
+
+        # Parse request payload for DB writes
         items, values = _server_parse_write_request(request_data)
 
         # Write data
@@ -927,6 +945,30 @@ class S7CommPlusServer:
         response += encode_uint32_vlq(0)
 
         return bytes(response)
+
+    @staticmethod
+    def _is_session_setup_write(request_data: bytes) -> bool:
+        """Check if a SetMultiVariables payload is a session setup write.
+
+        Session setup writes address attribute 306 (ServerSessionVersion) or
+        1830 (SessionSetupLegitimation), not a DB AccessArea (0x8A0Exxxx).
+        We detect this by reading past InObjectId + ItemCount + AddressCount
+        and checking the first address VLQ.
+        """
+        if len(request_data) < 8:
+            return False
+        offset = 4  # skip InObjectId (4 bytes fixed)
+        _item_count, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+        _addr_count, consumed = decode_uint32_vlq(request_data, offset)
+        offset += consumed
+        if offset >= len(request_data):
+            return False
+        first_addr, _ = decode_uint32_vlq(request_data, offset)
+        return first_addr in (
+            ObjectId.SERVER_SESSION_VERSION,
+            LegitimationId.SESSION_SETUP_LEGITIMATION,
+        )
 
     def _handle_get_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle GetVarSubStreamed — return legitimation challenge or finalization data.

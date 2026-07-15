@@ -413,16 +413,17 @@ class TestSessionKeyIntegration:
         yield srv
         srv.stop()
 
-    def test_client_connects_to_session_key_server(self, session_key_server: S7CommPlusServer) -> None:
-        """Client connects to server emitting fingerprint + challenge."""
+    def test_client_session_setup_with_struct_version(self, session_key_server: S7CommPlusServer) -> None:
+        """Client parses Struct-type ServerSessionVersion and completes session setup."""
         client = S7CommPlusClient()
         client.connect("127.0.0.1", port=SESSION_KEY_PORT)
         assert client.connected
         assert client.session_id != 0
+        assert client.session_setup_ok
         client.disconnect()
 
-    def test_read_write_with_session_key_server(self, session_key_server: S7CommPlusServer) -> None:
-        """Basic read/write still works against a SessionKey-enabled server."""
+    def test_read_write_after_session_setup(self, session_key_server: S7CommPlusServer) -> None:
+        """Read/write works after successful session setup with SessionKey server."""
         client = S7CommPlusClient()
         client.connect("127.0.0.1", port=SESSION_KEY_PORT)
         try:
