@@ -422,6 +422,71 @@ class S7CommPlusConnection:
                 raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
             logger.debug(f"Legacy legitimation return_value={return_value}")
 
+    def collect_explore_frames(self, first_payload: bytes) -> bytes:
+        """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
+
+        On V3 PLCs (FW >= V4.5) a large EXPLORE response (e.g. RID 0x8A11FFFF)
+        spans multiple TPKT frames.  The first frame is the normal response
+        (already stripped of its 10-byte header by send_request).  Continuation
+        frames carry **no** response header — they are raw BLOB data protected
+        only by a V3 HMAC prefix.  The caller must concatenate them before
+        parsing.
+
+        Termination: a ``frag_len == 0`` frame is the standard S7CommPlus
+        end-of-stream trailer.  As a fallback, a frame whose body (after HMAC
+        strip) is measurably shorter than the first frame body is treated as the
+        last fragment (5-byte tolerance).
+
+        Collection is capped by ``_MAX_REASSEMBLED_FRAGMENTS`` and
+        ``_MAX_REASSEMBLED_BYTES`` to prevent unbounded allocation on malformed
+        or adversarial responses.
+
+        Args:
+            first_payload: First EXPLORE response payload, already returned by
+                send_request() (10-byte response header already stripped).
+
+        Returns:
+            All fragment payloads concatenated (first_payload + continuations).
+        """
+        # The first frame body (already header-stripped) was originally
+        # len(first_payload) + 10 bytes on the wire (10-byte response header).
+        # Continuation frames of the same "full" size will be that long after
+        # HMAC strip; a shorter body signals the last fragment.
+        reference_size = len(first_payload) + 10
+        all_data = first_payload
+        fragment_count = 0
+        while True:
+            if len(all_data) > self._MAX_REASSEMBLED_BYTES or fragment_count >= self._MAX_REASSEMBLED_FRAGMENTS:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    f"collect_explore_frames: response too large ({len(all_data)} bytes, {fragment_count} fragments)"
+                )
+            try:
+                raw = self._recv_s7_data()
+                if not raw:
+                    break
+                # Strip the 4-byte S7CommPlus fragment header (0x72 ver len:2)
+                if len(raw) < 4 or raw[0] != 0x72:
+                    break
+                frag_len = (raw[2] << 8) | raw[3]
+                if frag_len == 0:
+                    break  # standard S7CommPlus end-of-stream trailer
+                body = raw[4 : 4 + frag_len]
+                # V3 non-TLS: strip the HMAC prefix ([hash_len][hash_bytes])
+                if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
+                    hash_len = body[0]
+                    body = body[1 + hash_len :]
+                if not body:
+                    break
+                all_data += body
+                fragment_count += 1
+                if len(body) < reference_size - 5:
+                    break  # fallback: shorter-than-full frame signals last fragment
+            except Exception:
+                break
+        return all_data
+
     def disconnect(self) -> None:
         """Disconnect from PLC."""
         if self._connected and self._session_id:
@@ -667,7 +732,7 @@ class S7CommPlusConnection:
         version, data_length, consumed = decode_header(response_frame)
         response = response_frame[consumed:]
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("InitSSL response too short")
@@ -758,14 +823,15 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: version=V{version}, data_length={data_length}")
         logger.debug(f"CreateObject response body ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 14:
+        if len(response) < 10:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("CreateObject response too short")
 
-        # Parse response body: ReturnValue(UInt64 VLQ) + ObjectIdCount + ObjectIds(VLQ).
-        # The usable session id is ObjectIds[0] (NOT the header SessionId field).
-        body = response[14:]
+        # Response header is 10 bytes (opcode+reserved+func+reserved+seq+transport).
+        # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
+        # The session ID comes from the payload body, not the header.
+        body = response[10:]
         object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
@@ -777,19 +843,19 @@ class S7CommPlusConnection:
         resp_opcode = response[0]
         resp_func = struct.unpack_from(">H", response, 3)[0]
         resp_seq = struct.unpack_from(">H", response, 7)[0]
-        resp_transport = response[13]
+        resp_transport = response[9]
         logger.debug(
             f"CreateObject response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
             f"seq={resp_seq} session=0x{self._session_id:08X} transport=0x{resp_transport:02X}"
         )
-        logger.debug(f"CreateObject response payload: {response[14:].hex(' ')}")
+        logger.debug(f"CreateObject response payload: {response[10:].hex(' ')}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
         if return_value != 0:
             logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
         # Parse response payload to extract ServerSessionVersion
-        self._server_session_version = parse_server_session_version(response[14 + obj_end :])
+        self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
             logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
         else:

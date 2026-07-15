@@ -613,7 +613,7 @@ def skip_typed_value(data: bytes, offset: int, datatype: int, flags: int) -> int
 
 
 def parse_create_object_session_id(body: bytes) -> tuple[list[int], int, int]:
-    """Parse a CreateObject response body (after the 14-byte response header).
+    """Parse a CreateObject response body (after the 10-byte response header).
 
     Body layout: ReturnValue (UInt64 VLQ) + ObjectIdCount (1 byte) + ObjectIds (UInt32 VLQ
     each). The usable session id is ``ObjectIds[0]`` (not the header SessionId field).
