@@ -46,6 +46,51 @@ def test_fingerprint_challenge_vector() -> None:
     assert bytes(fp) == expected
 
 
+def test_fingerprint_lookup_tables_cover_every_computed_block() -> None:
+    """Verify each Data2 table has enough entries for all Data1 operations.
+
+    Regression: HarpoS7 v1.1.2 had a truncated table (Data2Collection[1]
+    was 2 bytes short) causing IndexOutOfRangeException during session key
+    renewal. Fixed in HarpoS7 v1.1.3 (commit 22b9dc0).
+    """
+    import struct
+    from s7commplus.session_auth.family0._generated.data import FP_DATA1, FP_DATA2
+
+    def load_collection(data: bytes) -> list[list[int]]:
+        lengths = list(struct.unpack("<20I", data[:80]))
+        offset = 80
+        result = []
+        for length in lengths:
+            values = list(struct.unpack(f"<{length}H", data[offset : offset + length * 2]))
+            result.append(values)
+            offset += length * 2
+        return result
+
+    data1 = load_collection(FP_DATA1)
+    data2 = load_collection(FP_DATA2)
+
+    for index in range(len(data1)):
+        operations = len(data1[index]) // 3
+        required_entries = operations * 64
+        available_entries = len(data2[index])
+        assert available_entries >= required_entries, (
+            f"Fingerprint table {index} is too short: {available_entries} entries < {required_entries} required"
+        )
+
+
+def test_fingerprint_challenge_legacy_renewal_edge_case() -> None:
+    """Regression test for the truncated lookup table fix.
+
+    This challenge hits the final block of Data2Collection[1] and would
+    throw IndexError with the truncated table. HarpoS7 v1.1.3 fix.
+    """
+    challenge = bytes.fromhex("5B15B4694FC38A775E6778F0770C6E7A3118200D")
+    expected = bytes.fromhex("6AB5811DE6D28746")
+    fp = bytearray(8)
+    fingerprint_challenge(fp, challenge)
+    assert bytes(fp) == expected
+
+
 def _make_deterministic_urandom(fill_sequence: list[int]):
     """Create a mock urandom that fills each call with the next byte
     from the fill sequence, cycling through it."""
