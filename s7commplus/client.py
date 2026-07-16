@@ -96,7 +96,7 @@ class S7CommPlusClient:
             password=password or "",
         )
 
-        if password is not None and self._connection.tls_active:
+        if password is not None and self._connection.tls_active and not self._connection.requires_substreamed:
             logger.info("Performing PLC legitimation (password authentication)")
             self._connection.authenticate(password)
 

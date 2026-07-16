@@ -62,7 +62,7 @@ from .protocol import (
     S7COMMPLUS_REMOTE_TSAP,
     READ_FUNCTION_CODES,
 )
-from .codec import encode_header, decode_header, encode_object_qualifier, _pvalue_element_size
+from .codec import encode_header, decode_header, encode_object_qualifier, skip_typed_value
 from .vlq import encode_uint32_vlq, encode_uint64_vlq, decode_uint32_vlq, decode_uint64_vlq
 
 logger = logging.getLogger(__name__)
@@ -199,6 +199,8 @@ class S7CommPlusConnection:
         # Session key derived from the SessionKey handshake, used for
         # HMAC packet integrity after authentication.
         self._session_key: Optional[bytes] = None
+        self._session_auth_public_key: bytes = b""
+        self._session_auth_family: int = 0
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -421,8 +423,6 @@ class S7CommPlusConnection:
         Returns:
             Challenge bytes from PLC (typically 20 bytes)
         """
-        from .protocol import LegitimationId
-
         # Build GetVarSubStreamed request
         payload = bytearray()
         # InObjectId = session ID
@@ -458,8 +458,6 @@ class S7CommPlusConnection:
         datatype = resp_payload[offset + 1]
         offset += 2
 
-        from .protocol import DataType
-
         if datatype == DataType.BLOB:
             length, consumed = decode_uint32_vlq(resp_payload, offset)
             offset += consumed
@@ -475,8 +473,6 @@ class S7CommPlusConnection:
 
         Uses SetVariable with address Legitimate (1846).
         """
-        from .protocol import LegitimationId, DataType
-
         payload = bytearray()
         # InObjectId = session ID
         payload += struct.pack(">I", self._session_id)
@@ -507,8 +503,6 @@ class S7CommPlusConnection:
 
         Uses SetVariable with address ServerSessionResponse (304).
         """
-        from .protocol import LegitimationId, DataType
-
         payload = bytearray()
         # InObjectId = session ID
         payload += struct.pack(">I", self._session_id)
@@ -1066,7 +1060,7 @@ class S7CommPlusConnection:
                         # Struct(314); capture it verbatim for the V2 setup echo.
                         value_start = offset
                         offset += 2
-                        offset = self._skip_typed_value(payload, offset, DataType.STRUCT, _flags)
+                        offset = skip_typed_value(payload, offset, DataType.STRUCT, _flags)
                         self._server_session_version = bytes(payload[value_start:offset])
                         logger.info(f"ServerSessionVersion struct captured ({len(self._server_session_version)} bytes)")
                     elif datatype in (DataType.UDINT, DataType.DWORD):
@@ -1078,7 +1072,7 @@ class S7CommPlusConnection:
                         logger.info(f"ServerSessionVersion = {value}")
                     else:
                         offset += 2
-                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
+                        offset = skip_typed_value(payload, offset, datatype, _flags)
                         logger.debug(f"ServerSessionVersion has unexpected type {datatype:#04x}")
 
                 elif attr_id == 233:
@@ -1109,7 +1103,7 @@ class S7CommPlusConnection:
                             logger.debug(f"Unparseable ObjectVariableTypeName: {raw!r}")
                     else:
                         offset += 2
-                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
+                        offset = skip_typed_value(payload, offset, datatype, _flags)
 
                 elif attr_id == 303 and self._session_challenge is None:
                     # ServerSessionChallenge: 20-byte USINT array
@@ -1126,7 +1120,7 @@ class S7CommPlusConnection:
                         offset += count
                         logger.info(f"Session challenge captured ({count} bytes): {self._session_challenge.hex()}")
                     else:
-                        offset = self._skip_typed_value(payload, offset, datatype, _flags)
+                        offset = skip_typed_value(payload, offset, datatype, _flags)
 
                 else:
                     if offset + 2 > len(payload):
@@ -1134,7 +1128,7 @@ class S7CommPlusConnection:
                     _flags = payload[offset]
                     datatype = payload[offset + 1]
                     offset += 2
-                    offset = self._skip_typed_value(payload, offset, datatype, _flags)
+                    offset = skip_typed_value(payload, offset, datatype, _flags)
 
             elif tag == ElementID.START_OF_OBJECT:
                 offset += 1
@@ -1162,80 +1156,6 @@ class S7CommPlusConnection:
 
         if self._server_session_version is None:
             logger.debug("ServerSessionVersion not found in CreateObject response")
-
-    def _skip_typed_value(self, data: bytes, offset: int, datatype: int, flags: int) -> int:
-        """Skip over a typed value in the PObject tree.
-
-        Best-effort: advances offset past common value types.
-        Returns new offset.
-        """
-        is_array = bool(flags & 0x10)
-
-        if is_array:
-            if offset >= len(data):
-                return offset
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            # For fixed-size types, skip count * size
-            elem_size = _pvalue_element_size(datatype)
-            if elem_size > 0:
-                offset += count * elem_size
-            else:
-                # Variable-length: skip each VLQ element
-                for _ in range(count):
-                    if offset >= len(data):
-                        break
-                    _, consumed = decode_uint32_vlq(data, offset)
-                    offset += consumed
-            return offset
-
-        if datatype == DataType.NULL:
-            return offset
-        elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
-            return offset + 1
-        elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
-            return offset + 2
-        elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
-            _, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed
-        elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
-            _, consumed = decode_uint64_vlq(data, offset)
-            return offset + consumed
-        elif datatype == DataType.REAL:
-            return offset + 4
-        elif datatype == DataType.LREAL:
-            return offset + 8
-        elif datatype == DataType.TIMESTAMP:
-            return offset + 8
-        elif datatype == DataType.TIMESPAN:
-            _, consumed = decode_uint64_vlq(data, offset)  # int64 VLQ
-            return offset + consumed
-        elif datatype == DataType.RID:
-            return offset + 4
-        elif datatype in (DataType.BLOB, DataType.WSTRING):
-            length, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed + length
-        elif datatype == DataType.STRUCT:
-            # Struct format: 4-byte UInt32 ID, then a sequence of
-            # (VLQ key, nested PValue=flags+dtype+value) pairs, terminated
-            # by a single 0x00 byte.
-            if offset + 4 > len(data):
-                return offset
-            offset += 4
-            while offset < len(data):
-                if data[offset] == 0x00:
-                    offset += 1
-                    break
-                _, consumed = decode_uint32_vlq(data, offset)
-                offset += consumed
-                if offset + 2 > len(data):
-                    return offset
-                sub_flags = data[offset]
-                sub_type = data[offset + 1]
-                offset += 2
-                offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
-            return offset
-        return offset
 
     def _try_session_key_auth(self) -> Optional[tuple[bytes, bytes]]:
         """Attempt to generate the SecurityKey authentication blob.
@@ -1525,9 +1445,7 @@ class S7CommPlusConnection:
         """
         from .session_auth.utils import derive_key_id
 
-        public_key_id = derive_key_id(
-            self._session_auth_public_key if hasattr(self, "_session_auth_public_key") else b"\x00" * 24
-        )
+        public_key_id = derive_key_id(self._session_auth_public_key or b"\x00" * 24)
         # The symmetric key ID is derived from the session key
         symmetric_key_id = derive_key_id(self._session_key or b"\x00" * 24)
 
@@ -1535,7 +1453,7 @@ class S7CommPlusConnection:
         from .session_auth.keys import KeyFamily
         from .session_auth.blob_metadata import get_symmetric_key_flags, get_public_key_flags
 
-        family = self._session_auth_family if hasattr(self, "_session_auth_family") else KeyFamily.S7_1500
+        family = self._session_auth_family if self._session_auth_family else KeyFamily.S7_1500
         sym_flags = get_symmetric_key_flags(family)
         pub_flags = get_public_key_flags(family)
 
