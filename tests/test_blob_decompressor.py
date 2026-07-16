@@ -42,7 +42,7 @@ def test_decompress_with_preset_dict():
 
 
 def test_decompress_unknown_dict_raises():
-    blob = b"\x78\x7d\xDE\xAD\xBE\xEF" + b"\x00" * 10
+    blob = b"\x78\x7d\xde\xad\xbe\xef" + b"\x00" * 10
     with pytest.raises(ValueError, match="Unknown zlib preset dictionary"):
         decompress_blob(blob)
 
