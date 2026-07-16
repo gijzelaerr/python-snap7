@@ -1297,46 +1297,68 @@ class S7CommPlusConnection:
                 return True
         return False
 
+    def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
+        """Build a GET_VAR_SUBSTREAMED payload (reused by activation and legitimation)."""
+        oq = encode_object_qualifier()
+        payload = struct.pack(">I", in_object_id)
+        payload += bytes([0x20, 0x04])
+        payload += encode_uint32_vlq(1)  # field count
+        payload += encode_uint32_vlq(address)
+        payload += oq + bytes([0x00])
+        payload += encode_uint32_vlq(1)
+        payload += encode_uint32_vlq(seq_field)
+        payload += struct.pack(">I", 0)
+        return payload
+
     def _session_activate(self) -> None:
         """Activate the session after SessionKey handshake.
 
-        TIA Portal sends two requests immediately after SetupSession
-        before any data operations or legitimation:
+        TIA Portal sends four requests immediately after SetupSession,
+        identical across every captured session (GH-710, GH-728):
 
-        1. GET_VARIABLE (0x04F2) reading attribute 323 from the session
-        2. GET_VAR_SUBSTREAMED reading from InObjectId=50, address 7920
+        1. SET_VARIABLE (0x04F2) attr 323 = USINT(5) on session
+        2. GET_VAR_SUBSTREAMED InObj=50, addr 7920 (first activation read)
+        3. GET_VAR_SUBSTREAMED InObj=session, addr 1842 (session state)
+        4. GET_VAR_SUBSTREAMED InObj=50, addr 7920 (second activation read)
 
-        Without this sequence, the PLC rejects subsequent requests.
-        Data reads work after this point without password authentication.
+        After this sequence, EXPLORE and data reads work without password.
 
-        Reference: TIA Portal V19 pcap (GH-710 xBiggs capture).
+        Reference: TIA Portal V19 pcaps from GH-710 (xBiggs) and GH-728.
         """
         oq = encode_object_qualifier()
 
         # Step 1: SET_VARIABLE (0x04F2) — write attribute 323 on session
         sv_payload = struct.pack(">I", self._session_id)
-        sv_payload += encode_uint32_vlq(1)  # item count
-        sv_payload += encode_uint32_vlq(323)  # attribute ID
+        sv_payload += encode_uint32_vlq(1)
+        sv_payload += encode_uint32_vlq(323)
         sv_payload += bytes([0x00, DataType.USINT])
-        sv_payload += encode_uint32_vlq(5)  # param value
+        sv_payload += encode_uint32_vlq(5)
         sv_payload += oq
         sv_payload += struct.pack(">I", 0)
 
-        logger.debug("Session activation: SET_VARIABLE attribute 323")
+        logger.debug("Session activation step 1: SET_VARIABLE attr 323")
         self.send_request(FunctionCode.SET_VARIABLE, sv_payload)
 
-        # Step 2: GET_VAR_SUBSTREAMED — read from InObjectId=50, address 7920
-        gvs = struct.pack(">I", 50)  # InObjectId
-        gvs += bytes([0x20, 0x04])
-        gvs += encode_uint32_vlq(1)  # field count
-        gvs += encode_uint32_vlq(7920)  # address
-        gvs += oq + bytes([0x00])
-        gvs += encode_uint32_vlq(1)
-        gvs += encode_uint32_vlq(1)
-        gvs += struct.pack(">I", 0)
+        # Step 2: GET_VAR_SUBSTREAMED InObj=50, addr 7920
+        logger.debug("Session activation step 2: GET_VAR_SUBSTREAMED InObj=50 addr=7920")
+        self.send_request(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            self._build_get_var_substreamed(50, 7920, seq_field=1),
+        )
 
-        logger.debug("Session activation: GET_VAR_SUBSTREAMED InObj=50 addr=7920")
-        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs)
+        # Step 3: GET_VAR_SUBSTREAMED InObj=session, addr 1842
+        logger.debug("Session activation step 3: GET_VAR_SUBSTREAMED InObj=%d addr=1842", self._session_id)
+        self.send_request(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            self._build_get_var_substreamed(self._session_id, 1842, seq_field=2),
+        )
+
+        # Step 4: GET_VAR_SUBSTREAMED InObj=50, addr 7920 (again)
+        logger.debug("Session activation step 4: GET_VAR_SUBSTREAMED InObj=50 addr=7920")
+        self.send_request(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            self._build_get_var_substreamed(50, 7920, seq_field=3),
+        )
 
         logger.info("Session activation completed")
 
@@ -1356,16 +1378,11 @@ class S7CommPlusConnection:
         oq = encode_object_qualifier()
 
         # Step 1: Read legitimation challenge from session, address 303
-        gvs = struct.pack(">I", self._session_id)
-        gvs += bytes([0x20, 0x04])
-        gvs += encode_uint32_vlq(1)
-        gvs += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)  # 303
-        gvs += oq + bytes([0x00])
-        gvs += encode_uint32_vlq(1) + encode_uint32_vlq(1)
-        gvs += struct.pack(">I", 0)
-
         logger.debug("Post-auth legitimation: reading challenge from address 303")
-        challenge_resp = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs)
+        challenge_resp = self.send_request(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            self._build_get_var_substreamed(self._session_id, LegitimationId.SERVER_SESSION_REQUEST),
+        )
 
         # Extract the 20-byte challenge from the response.
         # Response format: VLQ return code + BLOB data. The challenge
@@ -1420,19 +1437,11 @@ class S7CommPlusConnection:
         self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
 
         # Step 4: Read from object 50, address 7920 to finalize legitimation.
-        # TIA Portal does this after the SET_VAR_SUB (which returns an expected
-        # "error" code). This read activates the legitimation on the PLC.
-        gvs_final = struct.pack(">I", 50)
-        gvs_final += bytes([0x20, 0x04])
-        gvs_final += encode_uint32_vlq(1)
-        gvs_final += encode_uint32_vlq(7920)
-        gvs_final += oq + bytes([0x00])
-        gvs_final += encode_uint32_vlq(1)
-        gvs_final += encode_uint32_vlq(self._sequence_number)
-        gvs_final += struct.pack(">I", 0)
-
         logger.debug("Post-auth legitimation: finalizing (GET_VAR_SUB object 50, addr 7920)")
-        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs_final)
+        self.send_request(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            self._build_get_var_substreamed(50, 7920),
+        )
 
         logger.info("Post-auth legitimation completed")
 
