@@ -62,7 +62,7 @@ from .protocol import (
     S7COMMPLUS_REMOTE_TSAP,
     READ_FUNCTION_CODES,
 )
-from .codec import encode_header, decode_header, encode_object_qualifier, skip_typed_value
+from .codec import encode_header, decode_header, encode_object_qualifier, parse_create_object_attributes
 from .vlq import encode_uint32_vlq, encode_uint64_vlq, decode_uint32_vlq, decode_uint64_vlq
 
 logger = logging.getLogger(__name__)
@@ -1024,138 +1024,20 @@ class S7CommPlusConnection:
         if return_value != 0:
             logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
-        # Parse remaining payload (the ResponseObject tree) for ServerSessionVersion
-        self._parse_create_object_response(response[offset:])
-
-    def _parse_create_object_response(self, payload: bytes) -> None:
-        """Parse CreateObject response to capture session-setup attributes.
-
-        Scans the PObject tree for two attributes we need later:
-        - ``306`` (``SERVER_SESSION_VERSION``) — echoed back in the setup write.
-        - ``233`` (``OBJECT_VARIABLE_TYPE_NAME``) — a ``"01:HEX"`` string
-          carrying the PLC's 8-byte OMS session UUID, needed by the V2
-          session-setup legitimation value on V1-initial firmware.
-
-        Args:
-            payload: Response payload after the 14-byte response header
-        """
-        offset = 0
-        while offset < len(payload):
-            tag = payload[offset]
-
-            if tag == ElementID.ATTRIBUTE:
-                offset += 1
-                if offset >= len(payload):
-                    break
-                attr_id, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed
-
-                if attr_id == ObjectId.SERVER_SESSION_VERSION:
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    if datatype == DataType.STRUCT:
-                        # Real S7-1200/1500 PLCs send ServerSessionVersion as
-                        # Struct(314); capture it verbatim for the V2 setup echo.
-                        value_start = offset
-                        offset += 2
-                        offset = skip_typed_value(payload, offset, DataType.STRUCT, _flags)
-                        self._server_session_version = bytes(payload[value_start:offset])
-                        logger.info(f"ServerSessionVersion struct captured ({len(self._server_session_version)} bytes)")
-                    elif datatype in (DataType.UDINT, DataType.DWORD):
-                        value_start = offset
-                        offset += 2
-                        value, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._server_session_version = bytes(payload[value_start:offset])
-                        logger.info(f"ServerSessionVersion = {value}")
-                    else:
-                        offset += 2
-                        offset = skip_typed_value(payload, offset, datatype, _flags)
-                        logger.debug(f"ServerSessionVersion has unexpected type {datatype:#04x}")
-
-                elif attr_id == 233:
-                    # ObjectVariableTypeName: a WString shaped "01:HEX",
-                    # where HEX is the 8-byte fingerprint of the Siemens
-                    # RSA public key the PLC expects for the V2 SessionKey
-                    # handshake (Wireshark s7comm-plus dissector calls
-                    # this "publickeychecksum"). Captured for diagnostics
-                    # and so future code can decide whether the matching
-                    # public key is available.
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    if datatype == DataType.WSTRING:
-                        offset += 2
-                        length, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        raw = bytes(payload[offset : offset + length])
-                        offset += length
-                        try:
-                            text = raw.decode("utf-8")
-                            if len(text) == 19 and text[2] == ":":
-                                self._public_key_fingerprint = text
-                                self._public_key_checksum = bytes.fromhex(text[3:])
-                                logger.info(f"Public key fingerprint captured: {text}")
-                        except (UnicodeDecodeError, ValueError):
-                            logger.debug(f"Unparseable ObjectVariableTypeName: {raw!r}")
-                    else:
-                        offset += 2
-                        offset = skip_typed_value(payload, offset, datatype, _flags)
-
-                elif attr_id == 303 and self._session_challenge is None:
-                    # ServerSessionChallenge: 20-byte USINT array
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    offset += 2
-                    is_array = bool(_flags & 0x10)
-                    if is_array and datatype == DataType.USINT:
-                        count, consumed = decode_uint32_vlq(payload, offset)
-                        offset += consumed
-                        self._session_challenge = bytes(payload[offset : offset + count])
-                        offset += count
-                        logger.info(f"Session challenge captured ({count} bytes): {self._session_challenge.hex()}")
-                    else:
-                        offset = skip_typed_value(payload, offset, datatype, _flags)
-
-                else:
-                    if offset + 2 > len(payload):
-                        break
-                    _flags = payload[offset]
-                    datatype = payload[offset + 1]
-                    offset += 2
-                    offset = skip_typed_value(payload, offset, datatype, _flags)
-
-            elif tag == ElementID.START_OF_OBJECT:
-                offset += 1
-                # Skip RelationId (4 bytes fixed) + ClassId (VLQ) + ClassFlags (VLQ) + AttributeId (VLQ)
-                if offset + 4 > len(payload):
-                    break
-                offset += 4  # RelationId
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassId
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # ClassFlags
-                _, consumed = decode_uint32_vlq(payload, offset)
-                offset += consumed  # AttributeId
-
-            elif tag == ElementID.TERMINATING_OBJECT:
-                offset += 1
-
-            elif tag == 0x00:
-                # Null terminator / padding
-                offset += 1
-
-            else:
-                # Unknown tag - try to skip
-                offset += 1
-
-        if self._server_session_version is None:
+        # Parse remaining payload (the ResponseObject tree) for session attributes
+        attrs = parse_create_object_attributes(response[offset:])
+        self._server_session_version = attrs.server_session_version
+        if self._server_session_version is not None:
+            logger.info(f"ServerSessionVersion captured ({len(self._server_session_version)} bytes)")
+        else:
             logger.debug("ServerSessionVersion not found in CreateObject response")
+        if attrs.public_key_fingerprint is not None:
+            self._public_key_fingerprint = attrs.public_key_fingerprint
+            self._public_key_checksum = bytes.fromhex(attrs.public_key_fingerprint[3:])
+            logger.info(f"Public key fingerprint captured: {attrs.public_key_fingerprint}")
+        if attrs.session_challenge is not None:
+            self._session_challenge = attrs.session_challenge
+            logger.info(f"Session challenge captured ({len(attrs.session_challenge)} bytes): {attrs.session_challenge.hex()}")
 
     def _try_session_key_auth(self) -> Optional[tuple[bytes, bytes]]:
         """Attempt to generate the SecurityKey authentication blob.
