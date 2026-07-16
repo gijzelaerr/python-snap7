@@ -19,8 +19,8 @@ from snap7.client import Client
 from snap7.error import S7ConnectionError
 from snap7.server import Server
 from snap7.type import SrvArea
-from s7.connection import S7CommPlusConnection
-from s7.legitimation import (
+from s7commplus.connection import S7CommPlusConnection
+from s7commplus.legitimation import (
     LegitimationState,
     build_legacy_response,
 )
@@ -158,8 +158,8 @@ class TestLegitimationFailurePaths:
 # S7CommPlus async client
 # ============================================================================
 
-from s7._s7commplus_server import S7CommPlusServer  # noqa: E402
-from s7._s7commplus_async_client import S7CommPlusAsyncClient  # noqa: E402
+from s7commplus.server import S7CommPlusServer  # noqa: E402
+from s7commplus.async_client import S7CommPlusAsyncClient  # noqa: E402
 
 ASYNC_TEST_PORT = 11125
 

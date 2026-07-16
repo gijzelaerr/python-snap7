@@ -1,12 +1,13 @@
-"""Tag-based symbolic addressing example.
+"""Tag-based symbolic addressing example (snap7 legacy client).
 
 Usage:
-    python example/s7_symbols.py 192.168.1.10
+    python example/snap7_symbols.py 192.168.1.10
 """
 
 import sys
 
-from s7 import Client, Tag
+from snap7 import Client
+from snap7.tags import Tag
 
 address = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.10"
 

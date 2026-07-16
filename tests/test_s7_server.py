@@ -7,11 +7,11 @@ from collections.abc import Generator
 import pytest
 import asyncio
 
-from s7._s7commplus_server import S7CommPlusServer, CPUState, DataBlock
-from s7._s7commplus_client import S7CommPlusClient
-from s7._s7commplus_async_client import S7CommPlusAsyncClient
-from s7.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
-from s7.vlq import encode_uint32_vlq
+from s7commplus.server import S7CommPlusServer, CPUState, DataBlock
+from s7commplus.client import S7CommPlusClient
+from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
+from s7commplus.vlq import encode_uint32_vlq
 
 # Use a high port to avoid conflicts
 TEST_PORT = 11120

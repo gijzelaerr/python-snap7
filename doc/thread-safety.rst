@@ -10,7 +10,7 @@ and cause unpredictable errors.
 .. code-block:: python
 
    import threading
-   from s7 import Client
+   from snap7 import Client
 
    def worker(address: str, rack: int, slot: int) -> None:
        client = Client()
@@ -28,7 +28,7 @@ and cause unpredictable errors.
 .. code-block:: python
 
    import threading
-   from s7 import Client
+   from snap7 import Client
 
    client = Client()
    client.connect("192.168.1.10", 0, 1)

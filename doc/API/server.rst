@@ -1,13 +1,14 @@
 Server
 ======
 
-The ``s7.Server`` is the recommended server for testing. It wraps both a
-legacy S7 server and an S7CommPlus server, so test environments can serve
-both protocol stacks simultaneously.
+python-snap7 provides two server implementations:
+
+- ``s7commplus.Server``: S7CommPlus server emulator
+- ``snap7.server.Server``: Legacy S7 server for testing
 
 .. code:: python
 
-   from s7 import Server
+   from s7commplus import Server
 
    server = Server()
    server.start(tcp_port=1102)
@@ -23,10 +24,10 @@ helper:
 
 ----
 
-s7.Server
----------
+s7commplus.Server
+-----------------
 
-.. automodule:: s7.server
+.. automodule:: s7commplus.server
    :members:
 
 snap7.Server (legacy)

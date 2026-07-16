@@ -46,9 +46,9 @@ import argparse
 import re
 import zlib
 
-from s7._s7commplus_client import _build_explore_payload_v3, _build_symbolic_read_payload
-from s7.connection import S7CommPlusConnection
-from s7.protocol import FunctionCode
+from s7commplus.client import _build_explore_payload_v3, _build_symbolic_read_payload
+from s7commplus.connection import S7CommPlusConnection
+from s7commplus.protocol import FunctionCode
 
 AREAS = {"I": 80, "Q": 81, "M": 82}
 

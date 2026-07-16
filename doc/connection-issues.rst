@@ -11,13 +11,13 @@ Connection Issues
 Automatic Reconnection
 ----------------------
 
-The :class:`~snap7.client.Client` (used internally by ``s7.Client``) has
-built-in auto-reconnect with exponential backoff and optional heartbeat
-monitoring. This is the recommended approach for long-running applications:
+The :class:`~snap7.client.Client` has built-in auto-reconnect with exponential
+backoff and optional heartbeat monitoring. This is the recommended approach for
+long-running applications:
 
 .. code-block:: python
 
-   from s7 import Client
+   from snap7 import Client
 
    def on_disconnect():
        print("Connection lost!")
@@ -72,7 +72,7 @@ manually:
 
 .. code-block:: python
 
-   from s7 import Client
+   from snap7 import Client
    import time
    import logging
 
@@ -119,7 +119,7 @@ the underlying connection object:
 
 .. code-block:: python
 
-   from s7 import Client
+   from snap7 import Client
 
    client = Client()
 

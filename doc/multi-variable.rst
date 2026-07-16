@@ -6,8 +6,8 @@ request, which is significantly faster than individual reads.
 
 .. code-block:: python
 
-   from s7 import Client, Area, WordLen
-   from snap7.type import S7DataItem
+   from snap7 import Client
+   from snap7.type import Area, WordLen, S7DataItem
    from ctypes import c_uint8, cast, POINTER
 
    client = Client()

@@ -13,7 +13,8 @@ Basic Server Example
 
 .. code-block:: python
 
-   from s7 import Server, SrvArea
+   from snap7.server import Server
+   from snap7.type import SrvArea
    from ctypes import c_char
 
    # Create and configure the server
@@ -34,7 +35,9 @@ Client-Server Round Trip
 
 .. code-block:: python
 
-   from s7 import Client, Server, SrvArea
+   from snap7 import Client
+   from snap7.server import Server
+   from snap7.type import SrvArea
    from ctypes import c_char
 
    # --- Server setup ---
@@ -66,7 +69,8 @@ Registering Multiple Areas
 
 .. code-block:: python
 
-   from s7 import Server, SrvArea
+   from snap7.server import Server
+   from snap7.type import SrvArea
    from ctypes import c_char
 
    server = Server()

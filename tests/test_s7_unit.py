@@ -3,7 +3,7 @@
 import struct
 import pytest
 
-from s7._s7commplus_client import (
+from s7commplus.client import (
     S7CommPlusClient,
     _build_read_payload,
     _parse_read_response,
@@ -16,12 +16,12 @@ from s7._s7commplus_client import (
     _build_symbolic_read_payload,
     _build_symbolic_write_payload,
 )
-from s7.connection import S7CommPlusConnection
-from s7.codec import encode_object_qualifier, encode_pvalue_blob
-from s7.codec import _pvalue_element_size as _element_size
-from s7.codec import skip_typed_value, parse_server_session_version
-from s7.protocol import DataType, ElementID, ObjectId
-from s7.vlq import (
+from s7commplus.connection import S7CommPlusConnection
+from s7commplus.codec import encode_object_qualifier, encode_pvalue_blob
+from s7commplus.codec import _pvalue_element_size as _element_size
+from s7commplus.codec import skip_typed_value, parse_server_session_version
+from s7commplus.protocol import DataType, ElementID, ObjectId
+from s7commplus.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
     encode_int32_vlq,
@@ -324,7 +324,7 @@ class TestSkipTypedValue:
         assert skip_typed_value(data, 0, DataType.LWORD, 0x00) == 8
 
     def test_lint(self) -> None:
-        from s7.vlq import encode_int64_vlq
+        from s7commplus.vlq import encode_int64_vlq
 
         vlq = encode_int64_vlq(-(2**40))
         new_offset = skip_typed_value(vlq, 0, DataType.LINT, 0x00)
@@ -343,7 +343,7 @@ class TestSkipTypedValue:
         assert skip_typed_value(data, 0, DataType.TIMESTAMP, 0x00) == 8
 
     def test_timespan(self) -> None:
-        from s7.vlq import encode_int64_vlq
+        from s7commplus.vlq import encode_int64_vlq
 
         vlq = encode_int64_vlq(5000)
         # TIMESPAN uses uint64_vlq for skipping in _skip_typed_value
@@ -519,7 +519,7 @@ class TestExploreDatablocks:
     def test_build_explore_request_format(self) -> None:
         # ExploreId as a fixed UInt32, then the marker bytes, address count + ids,
         # and a 5-byte trailer (UInt32 fill + filler byte) for the IntegrityId splice.
-        from s7.protocol import Ids
+        from s7commplus.protocol import Ids
 
         payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [233, 2521])
         assert payload[:4] == struct.pack(">I", Ids.NATIVE_THE_PLC_PROGRAM_RID)
@@ -528,7 +528,7 @@ class TestExploreDatablocks:
         assert payload.endswith(bytes(5))  # UInt32 fill + filler byte
 
     def test_parse_explore_datablocks(self) -> None:
-        from s7.protocol import Ids
+        from s7commplus.protocol import Ids
 
         r = bytearray()
         r += encode_uint64_vlq(0)  # ReturnValue

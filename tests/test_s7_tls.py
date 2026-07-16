@@ -8,9 +8,9 @@ from collections.abc import Generator
 import pytest
 
 from snap7.error import S7ConnectionError
-from s7._s7commplus_async_client import S7CommPlusAsyncClient
-from s7._s7commplus_server import S7CommPlusServer
-from s7.protocol import ProtocolVersion
+from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.server import S7CommPlusServer
+from s7commplus.protocol import ProtocolVersion
 
 TEST_PORT_V2 = 11130
 TEST_PORT_V2_TLS = 11131
@@ -249,7 +249,7 @@ class TestSyncTLSBioPlumbing:
 
     def _make_connected_pair(self):
         import ssl
-        from s7.connection import S7CommPlusConnection
+        from s7commplus.connection import S7CommPlusConnection
 
         cert_path, key_path = _generate_self_signed_cert()
 

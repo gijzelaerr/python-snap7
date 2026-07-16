@@ -1,8 +1,4 @@
-"""Pure S7CommPlus client for S7-1200/1500 PLCs (no legacy fallback).
-
-This is an internal module used by the unified ``s7.Client``.  It provides
-raw S7CommPlus data operations without any fallback logic -- the unified
-client is responsible for deciding when to fall back to legacy S7.
+"""S7CommPlus client for S7-1200/1500 PLCs.
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
@@ -26,9 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 class S7CommPlusClient:
-    """Pure S7CommPlus client without legacy fallback.
+    """S7CommPlus client for S7-1200/1500 PLCs.
 
-    Use ``s7.Client`` for automatic protocol selection.
+    Use ``from s7commplus import Client`` to instantiate.
     """
 
     def __init__(self) -> None:

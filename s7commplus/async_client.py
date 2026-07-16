@@ -1,8 +1,4 @@
-"""Pure async S7CommPlus client for S7-1200/1500 PLCs (no legacy fallback).
-
-This is an internal module used by the unified ``s7.AsyncClient``.  It provides
-raw S7CommPlus data operations without any fallback logic -- the unified
-client is responsible for deciding when to fall back to legacy S7.
+"""Async S7CommPlus client for S7-1200/1500 PLCs.
 
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
@@ -34,7 +30,7 @@ from .codec import (
     parse_server_session_version,
 )
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
-from ._s7commplus_client import (
+from .client import (
     _build_read_payload,
     _parse_read_response,
     _build_write_payload,
@@ -59,9 +55,9 @@ _COTP_DT = 0xF0
 
 
 class S7CommPlusAsyncClient:
-    """Pure async S7CommPlus client without legacy fallback.
+    """Async S7CommPlus client for S7-1200/1500 PLCs.
 
-    Use ``s7.AsyncClient`` for automatic protocol selection.
+    Use ``from s7commplus import AsyncClient`` to instantiate.
     """
 
     def __init__(self) -> None:

@@ -2,8 +2,7 @@ Connecting to PLCs
 ==================
 
 This page shows how to connect to different Siemens PLC models using
-python-snap7. All examples use the recommended ``s7`` package, which works
-with every supported PLC model.
+python-snap7.
 
 .. contents:: On this page
    :local:
@@ -45,9 +44,9 @@ Rack/Slot Reference
 .. warning::
 
    S7-1200 and S7-1500 PLCs ship with PUT/GET communication disabled by
-   default. When using ``s7.Client``, the library automatically tries the
-   S7CommPlus protocol first, which does not require PUT/GET to be enabled.
-   If you need to use the legacy protocol, enable PUT/GET in TIA Portal
+   default. Use ``s7commplus.Client`` to communicate via S7CommPlus, which
+   does not require PUT/GET to be enabled. If you need to use
+   ``snap7.Client`` (legacy protocol), enable PUT/GET in TIA Portal
    under the CPU properties. See :doc:`tia-portal-config` for step-by-step
    instructions.
 
@@ -57,7 +56,7 @@ S7-300
 
 .. code-block:: python
 
-   from s7 import Client
+   from snap7 import Client
 
    client = Client()
    client.connect("192.168.1.10", 0, 2)
@@ -67,35 +66,33 @@ S7-400
 
 .. code-block:: python
 
-   from s7 import Client
+   from snap7 import Client
 
    client = Client()
    client.connect("192.168.1.10", 0, 3)
 
-S7-1200 / S7-1500
-------------------
+S7-1200 / S7-1500 (S7CommPlus)
+-------------------------------
 
 .. code-block:: python
 
-   from s7 import Client
+   from s7commplus import Client
+
+   client = Client()
+   client.connect("192.168.1.10")
+
+S7-1200 / S7-1500 (Legacy PUT/GET)
+------------------------------------
+
+If PUT/GET access is enabled in TIA Portal, you can also use the legacy
+protocol:
+
+.. code-block:: python
+
+   from snap7 import Client
 
    client = Client()
    client.connect("192.168.1.10", 0, 1)
-   print(client.protocol)  # Protocol.S7COMMPLUS or Protocol.LEGACY
-
-The client automatically tries S7CommPlus first and falls back to legacy S7
-when needed. You can also force a specific protocol:
-
-.. code-block:: python
-
-   from s7 import Client, Protocol
-
-   client = Client()
-   # Force legacy S7 only (requires PUT/GET enabled)
-   client.connect("192.168.1.10", 0, 1, protocol=Protocol.LEGACY)
-
-   # Force S7CommPlus (raises on failure)
-   client.connect("192.168.1.10", 0, 1, protocol=Protocol.S7COMMPLUS)
 
 See :doc:`API/client` for details on TLS and password authentication.
 
@@ -108,12 +105,11 @@ session. Pass ``use_tls=True`` to ``connect`` to activate it:
 
 .. code-block:: python
 
-   from s7 import Client, Protocol
+   from s7commplus import Client
 
    client = Client()
    client.connect(
-       "192.168.1.10", rack=0, slot=1,
-       protocol=Protocol.S7COMMPLUS,
+       "192.168.1.10",
        use_tls=True,
    )
    data = client.db_read(1, 0, 4)
@@ -127,8 +123,7 @@ production. To verify the PLC against a CA bundle, pass ``tls_ca``:
 .. code-block:: python
 
    client.connect(
-       "192.168.1.10", rack=0, slot=1,
-       protocol=Protocol.S7COMMPLUS,
+       "192.168.1.10",
        use_tls=True,
        tls_ca="/path/to/plc-ca.pem",
    )
@@ -216,12 +211,11 @@ disabled in TIA Portal), call ``authenticate`` after ``connect``:
 
 .. code-block:: python
 
-   from s7 import Client, Protocol
+   from s7commplus import Client
 
    client = Client()
    client.connect(
-       "192.168.1.10", rack=0, slot=1,
-       protocol=Protocol.S7COMMPLUS,
+       "192.168.1.10",
        use_tls=True,
    )
    client.authenticate(password="hunter2")
@@ -255,7 +249,7 @@ Using a Non-Standard Port
 
 .. code-block:: python
 
-   from s7 import Client
+   from snap7 import Client
 
    client = Client()
    client.connect("192.168.1.10", 0, 1, tcp_port=1102)

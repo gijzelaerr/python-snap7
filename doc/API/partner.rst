@@ -3,11 +3,12 @@ Partner
 
 The ``Partner`` class implements S7 peer-to-peer communication for
 bidirectional data exchange using BSend/BRecv. Both partners have equal
-rights and can send data asynchronously.
+rights and can send data asynchronously. Partner is part of the legacy
+``snap7`` package.
 
 .. code:: python
 
-   from s7 import Partner
+   from snap7 import Partner
 
    partner = Partner(active=True)
    partner.port = 102
@@ -18,15 +19,6 @@ rights and can send data asynchronously.
    partner.stop()
 
 ----
-
-s7.Partner
-----------
-
-.. automodule:: s7.partner
-   :members:
-
-snap7.Partner (legacy)
-----------------------
 
 .. automodule:: snap7.partner
    :members:

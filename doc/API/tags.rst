@@ -9,7 +9,8 @@ bulk from CSV, JSON, or TIA Portal XML exports.
 
 .. code-block:: python
 
-   from s7 import Client, Tag, load_tia_xml
+   from snap7 import Client
+   from snap7.tags import Tag, load_tia_xml
 
    client = Client()
    client.connect("192.168.1.10", 0, 1)
@@ -104,14 +105,15 @@ relocates variables between downloads, so addresses like ``DB1.DBX0.0``
 are unreliable.
 
 For optimized blocks, use :meth:`~snap7.tags.Tag.from_access_string`
-with LIDs discovered via :meth:`~s7.client.Client.browse`:
+with LIDs discovered via :meth:`~s7commplus.client.S7CommPlusClient.browse`:
 
 .. code-block:: python
 
-   from s7 import Client, Tag
+   from s7commplus import Client
+   from snap7.tags import Tag
 
    client = Client()
-   client.connect("192.168.1.10", 0, 1)
+   client.connect("192.168.1.10")
 
    # Create a symbolic tag (LIDs come from browse)
    tag = Tag.from_access_string(
