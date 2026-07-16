@@ -337,11 +337,23 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            # Step 7: Post-auth legitimation for V1-initial PLCs with SessionKey
+            # Step 7: Post-SessionKey activation sequence (V1-initial PLCs)
+            #
+            # TIA Portal sends GET_VARIABLE (0x04F2) + a finalize read
+            # (GET_VAR_SUBSTREAMED InObj=50, addr 7920) immediately after
+            # SetupSession, BEFORE any legitimation. Data reads work after
+            # this point without password auth. Legitimation (writing to
+            # addr 1846) is optional and only needed for elevated access.
+            #
+            # Sending legitimation BEFORE this activation sequence causes
+            # the PLC to return V254 SYSTEM_EVENT error 0xE9 and RST the
+            # connection on subsequent requests (see GH-710).
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
-                self._post_auth_legitimation(password=self._connect_password)
+                self._session_activate()
+                if self._connect_password:
+                    self._post_auth_legitimation(password=self._connect_password)
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -1365,16 +1377,61 @@ class S7CommPlusConnection:
                 return True
         return False
 
+    def _session_activate(self) -> None:
+        """Activate the session after SessionKey handshake.
+
+        TIA Portal sends two requests immediately after SetupSession
+        before any data operations or legitimation:
+
+        1. GET_VARIABLE (0x04F2) reading attribute 323 from the session
+        2. GET_VAR_SUBSTREAMED reading from InObjectId=50, address 7920
+
+        Without this sequence, the PLC rejects subsequent requests.
+        Data reads work after this point without password authentication.
+
+        Reference: TIA Portal V19 pcap (GH-710 xBiggs capture).
+        """
+        oq = encode_object_qualifier()
+
+        # Step 1: SET_VARIABLE (0x04F2) — write attribute 323 on session
+        sv_payload = struct.pack(">I", self._session_id)
+        sv_payload += encode_uint32_vlq(1)  # item count
+        sv_payload += encode_uint32_vlq(323)  # attribute ID
+        sv_payload += bytes([0x00, DataType.USINT])
+        sv_payload += encode_uint32_vlq(5)  # param value
+        sv_payload += oq
+        sv_payload += struct.pack(">I", 0)
+
+        logger.debug("Session activation: SET_VARIABLE attribute 323")
+        self.send_request(FunctionCode.SET_VARIABLE, sv_payload)
+
+        # Step 2: GET_VAR_SUBSTREAMED — read from InObjectId=50, address 7920
+        gvs = struct.pack(">I", 50)  # InObjectId
+        gvs += bytes([0x20, 0x04])
+        gvs += encode_uint32_vlq(1)  # field count
+        gvs += encode_uint32_vlq(7920)  # address
+        gvs += oq + bytes([0x00])
+        gvs += encode_uint32_vlq(1)
+        gvs += encode_uint32_vlq(1)
+        gvs += struct.pack(">I", 0)
+
+        logger.debug("Session activation: GET_VAR_SUBSTREAMED InObj=50 addr=7920")
+        self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, gvs)
+
+        logger.info("Session activation completed")
+
     def _post_auth_legitimation(self, password: str = "") -> None:
         """Perform the post-SessionKey legitimation handshake.
 
         V1-initial PLCs require this exchange after the SessionKey blob
-        is accepted before they'll allow data operations.
+        is accepted before they'll allow elevated access (e.g. writes).
 
-        Matches the HarpoS7 PoC flow:
+        Matches TIA Portal's legitimation sequence (observed after
+        initial data reads succeed):
         1. GET_VAR_SUBSTREAMED: read 20-byte challenge from address 303
         2. Solve the challenge cryptographically
         3. SET_VAR_SUBSTREAMED: write solved 248-byte blob to address 1846
+        4. GET_VAR_SUBSTREAMED: read finalization from InObj=50 addr 7920
         """
         oq = encode_object_qualifier()
 
