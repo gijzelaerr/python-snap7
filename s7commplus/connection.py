@@ -38,9 +38,13 @@ Version-specific authentication after step 6::
 Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 """
 
+import hashlib
+import hmac
 import logging
+import os
 import ssl
 import struct
+import tempfile
 from typing import Optional, Type
 from types import TracebackType
 
@@ -90,6 +94,37 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
         except (ssl.SSLError, ValueError):
             continue
     logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+
+
+# OMS legitimation derives its session key from the TLS exporter secret
+# (RFC 5705). The label/length are fixed by the S7CommPlus protocol.
+_OMS_EXPORTER_LABEL = b"EXPERIMENTAL_OMS"
+_OMS_EXPORTER_LENGTH = 32
+
+
+def _hkdf_expand_label(secret: bytes, label: bytes, context: bytes, length: int, hashmod) -> bytes:
+    """TLS 1.3 HKDF-Expand-Label (RFC 8446 §7.1)."""
+    full_label = b"tls13 " + label
+    hkdf_label = length.to_bytes(2, "big") + bytes([len(full_label)]) + full_label + bytes([len(context)]) + context
+    out, block, counter = b"", b"", 1
+    while len(out) < length:
+        block = hmac.new(secret, block + hkdf_label + bytes([counter]), hashmod).digest()
+        out += block
+        counter += 1
+    return out[:length]
+
+
+def _tls13_exporter(exporter_master_secret: bytes, label: bytes, length: int, hashmod) -> bytes:
+    """RFC 8446 §7.5 TLS-Exporter with an empty context.
+
+    Computed from the exporter_master_secret because CPython's ssl module
+    does not expose ``export_keying_material``; we capture the secret via the
+    TLS key log instead. Equivalent to ``SSL.export_keying_material`` for a
+    TLS 1.3 session with no context.
+    """
+    empty_hash = hashmod(b"").digest()
+    derived = _hkdf_expand_label(exporter_master_secret, label, empty_hash, hashmod().digest_size, hashmod)
+    return _hkdf_expand_label(derived, b"exporter", empty_hash, length, hashmod)
 
 
 class S7CommPlusConnection:
@@ -1055,6 +1090,15 @@ class S7CommPlusConnection:
             ca_path=tls_ca,
         )
 
+        # CPython's ssl cannot export RFC 5705 keying material, which OMS
+        # legitimation needs. Capture the TLS 1.3 exporter_master_secret via
+        # the key log (written during the handshake) and derive it ourselves
+        # in _derive_oms_secret. The key log is a private 0600 temp file,
+        # removed immediately after the handshake.
+        keylog_fd, keylog_path = tempfile.mkstemp(prefix="s7-tls-keylog-")
+        os.close(keylog_fd)
+        ctx.keylog_filename = keylog_path
+
         # BIO-based TLS: encrypt/decrypt bytes without touching the
         # TCP socket, so TPKT/COTP framing stays unencrypted.
         self._incoming_bio = ssl.MemoryBIO()
@@ -1066,20 +1110,57 @@ class S7CommPlusConnection:
             server_hostname=self.host if ctx.check_hostname else None,
         )
 
-        # TLS handshake — records tunnel through COTP frames
-        self._do_tls_handshake()
-
-        self._tls_active = True
-
-        # Extract OMS exporter secret for legitimation key derivation
         try:
-            self._oms_secret = self._ssl_object.export_keying_material("EXPERIMENTAL_OMS", 32, None)
-            logger.debug("OMS exporter secret extracted from TLS session")
-        except (AttributeError, ssl.SSLError) as e:
-            logger.warning(f"Could not extract OMS exporter secret: {e}")
-            self._oms_secret = None
+            # TLS handshake — records tunnel through COTP frames
+            self._do_tls_handshake()
+            self._tls_active = True
+
+            # Derive OMS exporter secret for legitimation key derivation
+            self._oms_secret = self._derive_oms_secret(keylog_path)
+            if self._oms_secret is not None:
+                logger.debug("OMS exporter secret derived (%d bytes)", len(self._oms_secret))
+        finally:
+            try:
+                os.unlink(keylog_path)
+            except OSError:
+                pass
 
         logger.info("TLS activated (tunneled inside COTP frames)")
+
+    def _derive_oms_secret(self, keylog_path: str) -> Optional[bytes]:
+        """Derive the OMS exporter secret (RFC 5705) for legitimation.
+
+        CPython's ssl module has no ``export_keying_material``, so we read the
+        TLS 1.3 ``exporter_master_secret`` from the session key log and run the
+        RFC 8446 exporter derivation ourselves (stdlib hmac/hashlib only).
+        Returns None (legitimation unavailable, anonymous reads still work) if
+        the session isn't TLS 1.3 or the secret can't be recovered.
+        """
+        cipher = self._ssl_object.cipher() if self._ssl_object else None
+        if not cipher or cipher[1] != "TLSv1.3":
+            logger.warning(
+                "OMS exporter derivation needs TLS 1.3 (session is %s)",
+                cipher[1] if cipher else "unknown",
+            )
+            return None
+        hashmod = hashlib.sha384 if cipher[0].endswith("SHA384") else hashlib.sha256
+
+        exporter_master_secret = None
+        try:
+            with open(keylog_path, "r") as fh:
+                for line in fh:
+                    parts = line.split()
+                    if len(parts) == 3 and parts[0] == "EXPORTER_SECRET":
+                        exporter_master_secret = bytes.fromhex(parts[2])
+        except OSError as e:
+            logger.warning("Could not read TLS key log: %s", e)
+            return None
+
+        if exporter_master_secret is None:
+            logger.warning("EXPORTER_SECRET not found in TLS key log")
+            return None
+
+        return _tls13_exporter(exporter_master_secret, _OMS_EXPORTER_LABEL, _OMS_EXPORTER_LENGTH, hashmod)
 
     def _do_tls_handshake(self) -> None:
         """Perform TLS handshake, tunneling records through COTP."""
