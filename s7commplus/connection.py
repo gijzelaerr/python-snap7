@@ -45,7 +45,7 @@ import os
 import ssl
 import struct
 import tempfile
-from typing import Optional, Type
+from typing import Any, Optional, Type
 from types import TracebackType
 
 from snap7.connection import ISOTCPConnection
@@ -97,7 +97,7 @@ _OMS_EXPORTER_LABEL = b"EXPERIMENTAL_OMS"
 _OMS_EXPORTER_LENGTH = 32
 
 
-def _hkdf_expand_label(secret: bytes, label: bytes, context: bytes, length: int, hashmod) -> bytes:
+def _hkdf_expand_label(secret: bytes, label: bytes, context: bytes, length: int, hashmod: Any) -> bytes:
     """TLS 1.3 HKDF-Expand-Label (RFC 8446 §7.1)."""
     full_label = b"tls13 " + label
     hkdf_label = length.to_bytes(2, "big") + bytes([len(full_label)]) + full_label + bytes([len(context)]) + context
@@ -109,7 +109,7 @@ def _hkdf_expand_label(secret: bytes, label: bytes, context: bytes, length: int,
     return out[:length]
 
 
-def _tls13_exporter(exporter_master_secret: bytes, label: bytes, length: int, hashmod) -> bytes:
+def _tls13_exporter(exporter_master_secret: bytes, label: bytes, length: int, hashmod: Any) -> bytes:
     """RFC 8446 §7.5 TLS-Exporter with an empty context.
 
     Computed from the exporter_master_secret because CPython's ssl module
@@ -676,7 +676,7 @@ class S7CommPlusConnection:
 
         # After SessionKey auth, all data ops use V3 framing with HMAC
         if self._session_key is not None:
-            frame_version = ProtocolVersion.V3
+            frame_version: int = ProtocolVersion.V3
         else:
             frame_version = self._protocol_version
 
@@ -1223,55 +1223,7 @@ class S7CommPlusConnection:
                 offset += 2
                 offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
             return offset
-            elem_size = _pvalue_element_size(datatype)
-            if elem_size > 0:
-                offset += count * elem_size
-            else:
-                # Variable-length: skip each VLQ element
-                for _ in range(count):
-                    if offset >= len(data):
-                        break
-                    _, consumed = decode_uint32_vlq(data, offset)
-                    offset += consumed
-            return offset
-
-        if datatype == DataType.NULL:
-            return offset
-        elif datatype in (DataType.BOOL, DataType.USINT, DataType.BYTE, DataType.SINT):
-            return offset + 1
-        elif datatype in (DataType.UINT, DataType.WORD, DataType.INT):
-            return offset + 2
-        elif datatype in (DataType.UDINT, DataType.DWORD, DataType.AID, DataType.DINT):
-            _, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed
-        elif datatype in (DataType.ULINT, DataType.LWORD, DataType.LINT):
-            _, consumed = decode_uint64_vlq(data, offset)
-            return offset + consumed
-        elif datatype == DataType.REAL:
-            return offset + 4
-        elif datatype == DataType.LREAL:
-            return offset + 8
-        elif datatype == DataType.TIMESTAMP:
-            return offset + 8
-        elif datatype == DataType.TIMESPAN:
-            _, consumed = decode_uint64_vlq(data, offset)  # int64 VLQ
-            return offset + consumed
-        elif datatype == DataType.RID:
-            return offset + 4
-        elif datatype in (DataType.BLOB, DataType.WSTRING):
-            length, consumed = decode_uint32_vlq(data, offset)
-            return offset + consumed + length
-        elif datatype == DataType.STRUCT:
-            count, consumed = decode_uint32_vlq(data, offset)
-            offset += consumed
-            for _ in range(count):
-                if offset + 2 > len(data):
-                    break
-                sub_flags = data[offset]
-                sub_type = data[offset + 1]
-                offset += 2
-                offset = self._skip_typed_value(data, offset, sub_type, sub_flags)
-            return offset
+        return offset
 
     def _try_session_key_auth(self) -> Optional[tuple[bytes, bytes]]:
         """Attempt to generate the SecurityKey authentication blob.
@@ -1343,7 +1295,7 @@ class S7CommPlusConnection:
         payload = bytearray()
         payload += struct.pack(">I", self._session_id)  # InObjectId
 
-        if include_security_key:
+        if include_security_key and auth_result is not None:
             blob, session_key = auth_result
             payload += encode_uint32_vlq(2)  # ItemCount
             payload += encode_uint32_vlq(2)  # AddressCount
@@ -1441,7 +1393,7 @@ class S7CommPlusConnection:
         # Extract the 20-byte challenge from the response.
         # Response format: VLQ return code + BLOB data. The challenge
         # is the first 20 bytes after the return code and BLOB header.
-        legit_challenge = self._session_challenge
+        legit_challenge: bytes = self._session_challenge or b""
         if len(challenge_resp) >= 22:
             offset = 0
             retval, c = decode_uint32_vlq(challenge_resp, offset)
@@ -1450,14 +1402,25 @@ class S7CommPlusConnection:
                 legit_challenge = bytes(challenge_resp[offset : offset + 20])
                 logger.info(f"Legitimation challenge: {legit_challenge.hex()}")
 
+        if not legit_challenge:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Post-auth legitimation failed: no challenge available")
+
         # Step 2: Solve the challenge
         from .session_auth.legitimate import solve_legitimate_challenge_real_plc
+
+        session_key = self._session_key
+        if session_key is None:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Post-auth legitimation failed: no session key")
 
         legit_blob = solve_legitimate_challenge_real_plc(
             legit_challenge,
             self._session_auth_public_key,
             self._session_auth_family,
-            self._session_key,
+            session_key,
             password,
         )
         logger.info(f"Legitimation blob generated ({len(legit_blob)} bytes)")

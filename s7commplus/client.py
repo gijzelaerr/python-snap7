@@ -133,6 +133,7 @@ class S7CommPlusClient:
         return results[0]
 
     def _db_read_substreamed(self, db_number: int, start: int, size: int) -> bytes:
+        assert self._connection is not None
         access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
         payload = _build_substreamed_read_payload(
             self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, size]
@@ -160,6 +161,7 @@ class S7CommPlusClient:
         _parse_write_response(response)
 
     def _db_write_substreamed(self, db_number: int, start: int, data: bytes) -> None:
+        assert self._connection is not None
         access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
         payload = _build_substreamed_write_payload(
             self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, len(data)], data
@@ -517,6 +519,8 @@ class S7CommPlusClient:
 
     def _explore_type_info_container(self) -> list["typeinfo.PObject"]:
         """EXPLORE the OMS type-info container and return its per-type objects."""
+        if self._connection is None:
+            raise RuntimeError("Not connected")
         payload = _build_explore_request(Ids.OBJECT_OMS_TYPE_INFO_CONTAINER, [])
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return typeinfo.extract_type_info_objects(response)
