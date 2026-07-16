@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import struct
 
-from . import monolith9, monolith10
-from .data import SHARED_DATA
+from ._generated import monolith9, monolith10
+from ._generated.data import SHARED_DATA
 
 SOURCE_SIZE = 0x3C
 DESTINATION_SIZE = 0x30

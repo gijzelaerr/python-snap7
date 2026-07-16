@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import struct
 
-from . import monolith9
-from .data import TRANSFORM1_DATA
+from ._generated import monolith9
+from ._generated.data import TRANSFORM1_DATA
 
 SOURCE_SIZE = 0x18
 DESTINATION_SIZE = 0x3C

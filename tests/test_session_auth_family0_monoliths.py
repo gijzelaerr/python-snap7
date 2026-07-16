@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from s7commplus.session_auth.family0 import (
+from s7commplus.session_auth.family0._generated import (
     monolith1,
     monolith2,
     monolith3,

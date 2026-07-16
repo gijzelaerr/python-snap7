@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import struct
 
-from .data import FP_DATA1, FP_DATA2
-from .data._constants import (
+from ._generated.data import FP_DATA1, FP_DATA2
+from ._generated.data._constants import (
     FP_BIG_CONTEXT_INIT_INTS,
     FP_MUTATIONS,
     FP_XOR_MAGIC_INTS,

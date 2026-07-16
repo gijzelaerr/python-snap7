@@ -12,9 +12,9 @@ from __future__ import annotations
 import os
 import struct
 
-from . import monolith1, monolith2, monolith8, monolith11
+from ._generated import monolith1, monolith2, monolith8, monolith11
 from . import transform7, transform13
-from .data import TRANSFORM7_DATA
+from ._generated.data import TRANSFORM7_DATA
 from .pre_seed_transform import DESTINATION_SIZE as TRANSFORM1_SIZE
 
 DESTINATION_SIZE = 0x3C

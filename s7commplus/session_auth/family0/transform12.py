@@ -18,7 +18,7 @@ from __future__ import annotations
 import struct
 
 from . import big_int_transforms as _bigint
-from .data import TRANSFORM12_BIG_INT_DATA, TRANSFORM12_METADATA
+from ._generated.data import TRANSFORM12_BIG_INT_DATA, TRANSFORM12_METADATA
 
 CONTEXT_SIZE = 4 * 894  # 3576 bytes
 

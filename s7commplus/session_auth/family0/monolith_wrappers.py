@@ -10,7 +10,7 @@ Ported from ``HarpoS7.Family0.Monoliths.Monolith{3..7}.WithCopy``.
 
 from __future__ import annotations
 
-from . import monolith3, monolith4, monolith5, monolith6, monolith7
+from ._generated import monolith3, monolith4, monolith5, monolith6, monolith7
 
 
 def monolith3_with_copy(dst1: bytearray, dst2: bytearray, src1: bytes, src2: bytes, src3: bytes) -> None:

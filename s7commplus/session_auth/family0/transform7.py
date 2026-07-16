@@ -13,8 +13,8 @@ import struct
 
 from . import big_int_operations, transform12
 from .big_int_transforms import big_int_addition
-from .data import TRANSFORM7_DATA
-from .data._constants import TRANSFORM7_COUNTS_INTS, TRANSFORM7_INDEXES_INTS
+from ._generated.data import TRANSFORM7_DATA
+from ._generated.data._constants import TRANSFORM7_COUNTS_INTS, TRANSFORM7_INDEXES_INTS
 from .monolith_wrappers import (
     monolith3_with_copy,
     monolith4_with_copy,
