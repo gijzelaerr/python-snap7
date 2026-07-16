@@ -20,7 +20,7 @@ For JSON output (ELK, Datadog, Loki):
 
 .. code-block:: python
 
-   from snap7.log import JSONFormatter
+   from s7.log import JSONFormatter
 
    handler = logging.StreamHandler()
    handler.setFormatter(JSONFormatter())

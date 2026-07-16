@@ -1,47 +1,49 @@
-"""Unified S7 communication library.
+"""Alias for the ``snap7`` package.
 
-Provides protocol-agnostic access to Siemens S7 PLCs with automatic
-protocol discovery (S7CommPlus vs legacy S7).
+``s7`` re-exports everything from ``snap7`` so that either name works::
 
-Usage::
+    from s7 import Client          # same as: from snap7 import Client
+    from s7.type import Area       # same as: from snap7.type import Area
 
-    from s7 import Client
-
-    client = Client()
-    client.connect("192.168.1.10", 0, 1)
-    data = client.db_read(1, 0, 4)
+This alias exists as a transitional step toward retiring the ``snap7``
+name. For S7CommPlus (S7-1200/1500), use ``s7commplus`` instead.
 """
 
-from .client import Client
-from .async_client import AsyncClient
-from .server import Server
-from .partner import Partner, PartnerStatus
-from ._protocol import Protocol
+import importlib
+import sys
 
-from snap7.type import Area, Block, WordLen, SrvEvent, SrvArea
-from snap7.util.db import Row, DB
-from snap7.tags import NodeS7Tag, PLC4XTag, Tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
+import snap7 as snap7  # noqa: F401
 
-__all__ = [
-    "Client",
-    "AsyncClient",
-    "Server",
-    "Partner",
-    "PartnerStatus",
-    "Protocol",
-    "Area",
-    "Block",
-    "WordLen",
-    "SrvEvent",
-    "SrvArea",
-    "Row",
-    "DB",
-    "Tag",
-    "PLC4XTag",
-    "NodeS7Tag",
-    "parse_tag",
-    "load_csv",
-    "load_json",
-    "load_tia_xml",
-    "from_browse",
+from snap7 import *  # noqa: F403
+from snap7 import __all__ as __all__, __version__ as __version__
+
+_SUBMODULES = [
+    "async_client",
+    "cli",
+    "client",
+    "connection",
+    "datatypes",
+    "demo",
+    "discovery",
+    "error",
+    "log",
+    "logo",
+    "optimizer",
+    "partner",
+    "s7protocol",
+    "server",
+    "tags",
+    "type",
+    "util",
 ]
+
+for _name in _SUBMODULES:
+    _fqn = f"s7.{_name}"
+    if _fqn not in sys.modules:
+        try:
+            _mod = importlib.import_module(f"snap7.{_name}")
+            sys.modules[_fqn] = _mod
+        except ImportError:
+            pass
+
+del _name, _fqn, _mod, _SUBMODULES

@@ -344,7 +344,7 @@ Inputs (I / E)
 
 .. code-block:: python
 
-   from s7 import Area
+   from s7.type import Area
 
    # Read 2 input bytes starting at IB0
    data = client.read_area(Area.PE, 0, 0, 2)
@@ -354,7 +354,7 @@ Outputs (Q / A)
 
 .. code-block:: python
 
-   from s7 import Area
+   from s7.type import Area
 
    # Read 2 output bytes starting at QB0
    data = client.read_area(Area.PA, 0, 0, 2)
@@ -367,7 +367,7 @@ Timers (T)
 
 .. code-block:: python
 
-   from s7 import Area
+   from s7.type import Area
 
    # Read timer T0 (1 timer = 2 bytes)
    data = client.read_area(Area.TM, 0, 0, 1)
@@ -377,7 +377,7 @@ Counters (C)
 
 .. code-block:: python
 
-   from s7 import Area
+   from s7.type import Area
 
    # Read counter C0 (1 counter = 2 bytes)
    data = client.read_area(Area.CT, 0, 0, 1)
@@ -396,7 +396,8 @@ Reading Analog Inputs
 .. code-block:: python
 
    from s7 import util
-   from s7 import Client, Area
+   from s7 import Client
+   from s7.type import Area
 
    client = Client()
    client.connect("192.168.1.10", 0, 1)
@@ -423,7 +424,7 @@ Writing Analog Outputs
 .. code-block:: python
 
    from s7 import util
-   from s7 import Area
+   from s7.type import Area
 
    # Write to AQW0 (analog output word at address 0)
    data = bytearray(2)

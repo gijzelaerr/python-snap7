@@ -11,9 +11,9 @@ Connection Issues
 Automatic Reconnection
 ----------------------
 
-The :class:`~snap7.client.Client` (used internally by ``s7.Client``) has
-built-in auto-reconnect with exponential backoff and optional heartbeat
-monitoring. This is the recommended approach for long-running applications:
+The :class:`~snap7.client.Client` has built-in auto-reconnect with exponential
+backoff and optional heartbeat monitoring. This is the recommended approach for
+long-running applications:
 
 .. code-block:: python
 
@@ -28,14 +28,14 @@ monitoring. This is the recommended approach for long-running applications:
    client = Client()
    client.connect("192.168.1.10", 0, 1)
 
-For finer control over reconnection parameters, use the legacy ``snap7.Client``
+For finer control over reconnection parameters, use the legacy ``s7.Client``
 directly:
 
 .. code-block:: python
 
-   import snap7
+   import s7
 
-   client = snap7.Client(
+   client = s7.Client(
        auto_reconnect=True,        # Enable automatic reconnection
        max_retries=5,              # Retry up to 5 times (default: 3)
        retry_delay=1.0,            # Initial delay between retries in seconds

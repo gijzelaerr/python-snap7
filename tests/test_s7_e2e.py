@@ -47,14 +47,14 @@ import unittest
 
 import pytest
 
-from s7._s7commplus_client import S7CommPlusClient
+from s7commplus.client import S7CommPlusClient
 
 # Enable DEBUG logging for all s7 modules so we get full hex dumps
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
-for _mod in ["s7._s7commplus_client", "s7.connection", "snap7.connection"]:
+for _mod in ["s7commplus.client", "s7commplus.connection", "snap7.connection"]:
     logging.getLogger(_mod).setLevel(logging.DEBUG)
 
 # =============================================================================
@@ -496,8 +496,8 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
         This tries several payload encodings to see which ones the PLC accepts.
         """
-        from s7.protocol import FunctionCode
-        from s7.vlq import encode_uint32_vlq
+        from s7commplus.protocol import FunctionCode
+        from s7commplus.vlq import encode_uint32_vlq
 
         print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Raw GetMultiVariables payload experiments")
@@ -523,7 +523,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
                 # Try to parse return code
                 if len(response) > 0:
-                    from s7.vlq import decode_uint32_vlq
+                    from s7commplus.vlq import decode_uint32_vlq
 
                     rc, consumed = decode_uint32_vlq(response, 0)
                     print(f"  Return code (VLQ): {rc} (0x{rc:X})")
@@ -537,7 +537,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
     def test_diag_raw_set_variable(self) -> None:
         """Try SetVariable (0x04F2) instead of SetMultiVariables to see if PLC responds differently."""
-        from s7.protocol import FunctionCode
+        from s7commplus.protocol import FunctionCode
 
         print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Raw SetVariable / GetVariable experiments")
@@ -563,8 +563,8 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
     def test_diag_explore_then_read(self) -> None:
         """Explore first to discover object IDs, then try reading using those IDs."""
-        from s7.protocol import FunctionCode, ElementID
-        from s7.vlq import encode_uint32_vlq, decode_uint32_vlq
+        from s7commplus.protocol import FunctionCode, ElementID
+        from s7commplus.vlq import encode_uint32_vlq, decode_uint32_vlq
 
         print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Explore -> extract object IDs -> try reading")

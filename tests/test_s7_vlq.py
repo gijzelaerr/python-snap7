@@ -2,7 +2,7 @@
 
 import pytest
 
-from s7.vlq import (
+from s7commplus.vlq import (
     encode_uint32_vlq,
     decode_uint32_vlq,
     encode_int32_vlq,

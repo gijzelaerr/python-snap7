@@ -38,18 +38,23 @@ Install using pip::
 
 Connect to any S7 PLC::
 
-   import snap7
+   from s7 import Client
 
-   client = snap7.Client()
+   client = Client()
    client.connect("192.168.1.10", 0, 1)
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
 No native libraries or platform-specific dependencies are required.
 
+.. note::
 
-Version 4.0 -- S7CommPlus & the ``s7`` Package (unreleased)
-============================================================
+   The ``s7`` package is the recommended import for the legacy S7 protocol.
+   The ``snap7`` package name continues to work for backwards compatibility.
+
+
+Version 4.0 -- S7CommPlus & the ``s7commplus`` Package (unreleased)
+====================================================================
 
 .. note::
 
@@ -63,16 +68,17 @@ Version 4.0 -- S7CommPlus & the ``s7`` Package (unreleased)
 required for communicating with S7-1200 and S7-1500 PLCs that have PUT/GET
 disabled. python-snap7 now supports S7CommPlus V1, V2 (with TLS), and V3::
 
-   from s7 import Client
+   from s7commplus import Client
 
    client = Client()
-   client.connect("192.168.1.10", 0, 1)  # auto-detects S7CommPlus vs legacy S7
+   client.connect("192.168.1.10", 0, 1)
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
-The new ``s7`` package is the recommended entry point for all new projects. It
-automatically tries S7CommPlus first (for S7-1200/1500) and falls back to legacy
-S7 when needed. The existing ``snap7`` package continues to work unchanged.
+The new ``s7commplus`` package provides S7CommPlus protocol support for
+S7-1200/1500 PLCs. The ``s7`` package (recommended) and its ``snap7`` alias
+continue to work unchanged for legacy S7-300/400 PLCs and S7-1200/1500 with
+PUT/GET enabled.
 
 **Other new features in 4.0:**
 

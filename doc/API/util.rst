@@ -2,7 +2,7 @@ Util
 ====
 
 Data type conversion helpers for reading and writing S7 data types (BOOL, INT,
-REAL, STRING, etc.). Available as ``s7.util`` or ``snap7.util``:
+REAL, STRING, etc.):
 
 .. code-block:: python
 

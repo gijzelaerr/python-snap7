@@ -1,35 +1,34 @@
 Client
 ======
 
-The ``s7`` package is the recommended entry point for communicating with any
-supported Siemens S7 PLC. It provides a unified client that works with all
-PLC models -- S7-300, S7-400, S7-1200 and S7-1500 -- and automatically
-selects the best protocol (S7CommPlus or legacy S7).
+python-snap7 provides two client packages:
 
-Synchronous client
-------------------
+- ``s7commplus``: S7CommPlus protocol for S7-1200/1500 PLCs
+- ``s7``: Classic S7 protocol for S7-300/400 and PUT/GET access on S7-1200/1500
+
+s7commplus.Client
+-----------------
 
 .. code-block:: python
 
-   from s7 import Client
+   from s7commplus import Client
 
    client = Client()
-   client.connect("192.168.1.10", 0, 1)
+   client.connect("192.168.1.10")
    data = client.db_read(1, 0, 4)
-   print(client.protocol)   # Protocol.S7COMMPLUS or Protocol.LEGACY
    client.disconnect()
 
-Asynchronous client
--------------------
+s7commplus.AsyncClient
+----------------------
 
 .. code-block:: python
 
    import asyncio
-   from s7 import AsyncClient
+   from s7commplus import AsyncClient
 
    async def main():
        client = AsyncClient()
-       await client.connect("192.168.1.10", 0, 1)
+       await client.connect("192.168.1.10")
        data = await client.db_read(1, 0, 4)
        await client.disconnect()
 
@@ -43,10 +42,10 @@ S7-1500 PLCs with firmware 2.x use S7CommPlus V2, which requires TLS. Pass
 
 .. code-block:: python
 
-   from s7 import Client
+   from s7commplus import Client
 
    client = Client()
-   client.connect("192.168.1.10", 0, 1, use_tls=True)
+   client.connect("192.168.1.10", use_tls=True)
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
@@ -55,7 +54,7 @@ For PLCs with custom certificates, provide the certificate paths:
 .. code-block:: python
 
    client.connect(
-       "192.168.1.10", 0, 1,
+       "192.168.1.10",
        use_tls=True,
        tls_cert="/path/to/client.pem",
        tls_key="/path/to/client.key",
@@ -69,29 +68,12 @@ Password-protected PLCs require the ``password`` keyword argument:
 
 .. code-block:: python
 
-   from s7 import Client
+   from s7commplus import Client
 
    client = Client()
-   client.connect("192.168.1.10", 0, 1, use_tls=True, password="my_plc_password")
+   client.connect("192.168.1.10", use_tls=True, password="my_plc_password")
    data = client.db_read(1, 0, 4)
    client.disconnect()
-
-Protocol selection
-------------------
-
-By default the client uses ``Protocol.AUTO`` which tries S7CommPlus first.
-You can force a specific protocol:
-
-.. code-block:: python
-
-   from s7 import Client, Protocol
-
-   # Force legacy S7 only
-   client = Client()
-   client.connect("192.168.1.10", 0, 1, protocol=Protocol.LEGACY)
-
-   # Force S7CommPlus (raises on failure)
-   client.connect("192.168.1.10", 0, 1, protocol=Protocol.S7COMMPLUS)
 
 Concurrent async reads
 ----------------------
@@ -108,28 +90,22 @@ multiple coroutines can safely share a single connection:
 
 ----
 
-s7.Client
----------
-
-.. automodule:: s7.client
+.. automodule:: s7commplus.client
    :members:
 
-s7.AsyncClient
---------------
-
-.. automodule:: s7.async_client
+.. automodule:: s7commplus.async_client
    :members:
 
-snap7.Client (legacy)
+s7.Client (legacy)
 ---------------------
 
-The ``snap7.Client`` is the legacy S7 protocol client. For new projects, use
-``s7.Client`` above instead.
+The ``s7.Client`` implements the classic S7 protocol for S7-300/400 PLCs
+and PUT/GET access on S7-1200/1500.
 
 .. automodule:: snap7.client
    :members:
 
-snap7.AsyncClient (legacy)
+s7.AsyncClient (legacy)
 --------------------------
 
 .. automodule:: snap7.async_client

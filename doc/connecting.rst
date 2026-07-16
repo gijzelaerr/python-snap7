@@ -2,8 +2,7 @@ Connecting to PLCs
 ==================
 
 This page shows how to connect to different Siemens PLC models using
-python-snap7. All examples use the recommended ``s7`` package, which works
-with every supported PLC model.
+python-snap7.
 
 .. contents:: On this page
    :local:
@@ -40,14 +39,14 @@ Rack/Slot Reference
    * - S7-200 / Logo
      - --
      - --
-     - Use ``set_connection_params`` with TSAP addressing (legacy ``snap7`` package)
+     - Use ``set_connection_params`` with TSAP addressing (``s7`` package)
 
 .. warning::
 
    S7-1200 and S7-1500 PLCs ship with PUT/GET communication disabled by
-   default. When using ``s7.Client``, the library automatically tries the
-   S7CommPlus protocol first, which does not require PUT/GET to be enabled.
-   If you need to use the legacy protocol, enable PUT/GET in TIA Portal
+   default. Use ``s7commplus.Client`` to communicate via S7CommPlus, which
+   does not require PUT/GET to be enabled. If you need to use
+   ``s7.Client`` (legacy protocol), enable PUT/GET in TIA Portal
    under the CPU properties. See :doc:`tia-portal-config` for step-by-step
    instructions.
 
@@ -72,8 +71,21 @@ S7-400
    client = Client()
    client.connect("192.168.1.10", 0, 3)
 
-S7-1200 / S7-1500
-------------------
+S7-1200 / S7-1500 (S7CommPlus)
+-------------------------------
+
+.. code-block:: python
+
+   from s7commplus import Client
+
+   client = Client()
+   client.connect("192.168.1.10")
+
+S7-1200 / S7-1500 (Legacy PUT/GET)
+------------------------------------
+
+If PUT/GET access is enabled in TIA Portal, you can also use the legacy
+protocol:
 
 .. code-block:: python
 
@@ -81,21 +93,6 @@ S7-1200 / S7-1500
 
    client = Client()
    client.connect("192.168.1.10", 0, 1)
-   print(client.protocol)  # Protocol.S7COMMPLUS or Protocol.LEGACY
-
-The client automatically tries S7CommPlus first and falls back to legacy S7
-when needed. You can also force a specific protocol:
-
-.. code-block:: python
-
-   from s7 import Client, Protocol
-
-   client = Client()
-   # Force legacy S7 only (requires PUT/GET enabled)
-   client.connect("192.168.1.10", 0, 1, protocol=Protocol.LEGACY)
-
-   # Force S7CommPlus (raises on failure)
-   client.connect("192.168.1.10", 0, 1, protocol=Protocol.S7COMMPLUS)
 
 See :doc:`API/client` for details on TLS and password authentication.
 
@@ -108,12 +105,11 @@ session. Pass ``use_tls=True`` to ``connect`` to activate it:
 
 .. code-block:: python
 
-   from s7 import Client, Protocol
+   from s7commplus import Client
 
    client = Client()
    client.connect(
-       "192.168.1.10", rack=0, slot=1,
-       protocol=Protocol.S7COMMPLUS,
+       "192.168.1.10",
        use_tls=True,
    )
    data = client.db_read(1, 0, 4)
@@ -127,8 +123,7 @@ production. To verify the PLC against a CA bundle, pass ``tls_ca``:
 .. code-block:: python
 
    client.connect(
-       "192.168.1.10", rack=0, slot=1,
-       protocol=Protocol.S7COMMPLUS,
+       "192.168.1.10",
        use_tls=True,
        tls_ca="/path/to/plc-ca.pem",
    )
@@ -216,12 +211,11 @@ disabled in TIA Portal), call ``authenticate`` after ``connect``:
 
 .. code-block:: python
 
-   from s7 import Client, Protocol
+   from s7commplus import Client
 
    client = Client()
    client.connect(
-       "192.168.1.10", rack=0, slot=1,
-       protocol=Protocol.S7COMMPLUS,
+       "192.168.1.10",
        use_tls=True,
    )
    client.authenticate(password="hunter2")
@@ -240,13 +234,13 @@ explicitly:
 S7-200 / Logo (TSAP Connection)
 --------------------------------
 
-S7-200 and Logo PLCs require TSAP addressing via the legacy ``snap7`` package:
+S7-200 and Logo PLCs require TSAP addressing via TSAP addressing:
 
 .. code-block:: python
 
-   import snap7
+   from s7 import Client
 
-   client = snap7.Client()
+   client = Client()
    client.set_connection_params("192.168.1.10", 0x1000, 0x2000)
    client.connect("192.168.1.10", 0, 0)
 
@@ -272,9 +266,9 @@ When the target PLC sits on a different subnet behind a gateway PLC, use
 
 .. code-block:: python
 
-   import snap7
+   from s7 import Client
 
-   client = snap7.Client()
+   client = Client()
    client.connect_routed(
        host="192.168.1.1",       # gateway PLC address
        router_rack=0,            # gateway rack
@@ -290,7 +284,7 @@ Legacy ``snap7`` Package
 -------------------------
 
 If you have existing code using ``snap7.Client``, it continues to work
-unchanged:
+unchanged — ``snap7`` is an alias for ``s7``:
 
 .. code-block:: python
 

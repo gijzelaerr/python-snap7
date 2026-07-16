@@ -14,14 +14,26 @@ backwards compatibility.
 python-snap7 requires Python 3.10+ and runs on Windows, macOS and Linux
 without any native dependencies.
 
-The ``s7`` package
-------------------
+The ``s7commplus`` package
+--------------------------
 
-The recommended way to use this library is through the ``s7`` package. It
-provides a unified client that works with **all supported PLC models** --
-S7-300, S7-400, S7-1200 and S7-1500. For newer PLCs (S7-1200/1500) it
-automatically tries the S7CommPlus protocol and falls back to legacy S7 when
-needed:
+For S7-1200 and S7-1500 PLCs, the ``s7commplus`` package provides a native
+S7CommPlus protocol client. It supports V1, V2 (TLS), and V3 connections:
+
+.. code-block:: python
+
+   from s7commplus import Client
+
+   client = Client()
+   client.connect("192.168.1.10")
+   data = client.db_read(1, 0, 4)
+   client.disconnect()
+
+The ``s7`` package (legacy S7)
+------------------------------
+
+The ``s7`` package implements the classic S7 protocol. It supports
+S7-300, S7-400, S7-1200 and S7-1500 PLCs via the PUT/GET interface:
 
 .. code-block:: python
 
@@ -32,15 +44,15 @@ needed:
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
-The ``snap7`` package (legacy)
-------------------------------
+Use ``s7.Client`` for S7-300/400 PLCs or when PUT/GET access is enabled
+on S7-1200/1500. Use ``s7commplus.Client`` for native S7CommPlus communication
+with S7-1200/1500 PLCs.
 
-The ``snap7`` package is the original S7 protocol implementation. It remains
-fully functional and is kept for backwards compatibility. It supports
-S7-300, S7-400, S7-1200 and S7-1500 PLCs via the classic PUT/GET interface.
+.. note::
 
-If you have existing code that uses ``snap7.Client``, it will continue to work
-unchanged. For new projects, we recommend using ``s7.Client`` instead.
+   The ``snap7`` package name continues to work as an alias for ``s7``
+   and is not deprecated. Existing code using ``from snap7 import Client``
+   does not need to change.
 
 .. note::
 

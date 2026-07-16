@@ -6,9 +6,9 @@ reconstruct the per-tag symbol tree from a PLC's EXPLORE type-info response.
 
 import struct
 
-from s7 import typeinfo as ti
-from s7.protocol import DataType
-from s7.vlq import encode_uint32_vlq
+from s7commplus import typeinfo as ti
+from s7commplus.protocol import DataType
+from s7commplus.vlq import encode_uint32_vlq
 
 
 def _vartype_list_bytes(*elements: bytes) -> bytes:
