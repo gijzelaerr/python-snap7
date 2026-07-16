@@ -25,4 +25,4 @@ for _f in sorted(_DIR.glob("*.xml")):
     _adler = int(_adler_hex, 16)
     _name = _rest.replace("_", " ")
     ZLIB_DICT_NAMES[_adler] = _name
-    ZLIB_DICTIONARIES[_adler] = _f.read_bytes()
+    ZLIB_DICTIONARIES[_adler] = _f.read_bytes().rstrip(b"\n")
