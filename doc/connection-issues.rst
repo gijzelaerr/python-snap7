@@ -17,7 +17,7 @@ long-running applications:
 
 .. code-block:: python
 
-   from snap7 import Client
+   from s7 import Client
 
    def on_disconnect():
        print("Connection lost!")
@@ -28,14 +28,14 @@ long-running applications:
    client = Client()
    client.connect("192.168.1.10", 0, 1)
 
-For finer control over reconnection parameters, use the legacy ``snap7.Client``
+For finer control over reconnection parameters, use the legacy ``s7.Client``
 directly:
 
 .. code-block:: python
 
-   import snap7
+   import s7
 
-   client = snap7.Client(
+   client = s7.Client(
        auto_reconnect=True,        # Enable automatic reconnection
        max_retries=5,              # Retry up to 5 times (default: 3)
        retry_delay=1.0,            # Initial delay between retries in seconds
@@ -72,7 +72,7 @@ manually:
 
 .. code-block:: python
 
-   from snap7 import Client
+   from s7 import Client
    import time
    import logging
 
@@ -119,7 +119,7 @@ the underlying connection object:
 
 .. code-block:: python
 
-   from snap7 import Client
+   from s7 import Client
 
    client = Client()
 

@@ -6,7 +6,7 @@ REAL, STRING, etc.):
 
 .. code-block:: python
 
-   from snap7 import util
+   from s7 import util
 
    data = client.db_read(1, 0, 4)
    value = util.get_real(data, 0)

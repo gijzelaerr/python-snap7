@@ -11,7 +11,7 @@ rack, and slot into every log message:
    import logging
    logging.basicConfig(level=logging.DEBUG)
 
-   from snap7 import Client
+   from s7 import Client
    client = Client()
    client.connect("192.168.1.10", 0, 1)
    # Logs: [192.168.1.10 R0/S1] Connected to 192.168.1.10:102 ...
@@ -20,7 +20,7 @@ For JSON output (ELK, Datadog, Loki):
 
 .. code-block:: python
 
-   from snap7.log import JSONFormatter
+   from s7.log import JSONFormatter
 
    handler = logging.StreamHandler()
    handler.setFormatter(JSONFormatter())

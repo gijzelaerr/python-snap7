@@ -13,8 +13,8 @@ Basic Server Example
 
 .. code-block:: python
 
-   from snap7.server import Server
-   from snap7.type import SrvArea
+   from s7.server import Server
+   from s7.type import SrvArea
    from ctypes import c_char
 
    # Create and configure the server
@@ -35,9 +35,9 @@ Client-Server Round Trip
 
 .. code-block:: python
 
-   from snap7 import Client
-   from snap7.server import Server
-   from snap7.type import SrvArea
+   from s7 import Client
+   from s7.server import Server
+   from s7.type import SrvArea
    from ctypes import c_char
 
    # --- Server setup ---
@@ -69,8 +69,8 @@ Registering Multiple Areas
 
 .. code-block:: python
 
-   from snap7.server import Server
-   from snap7.type import SrvArea
+   from s7.server import Server
+   from s7.type import SrvArea
    from ctypes import c_char
 
    server = Server()
@@ -102,12 +102,12 @@ Registering Multiple Areas
 Using the Mainloop Helper
 --------------------------
 
-For quick testing, the ``mainloop`` function from the legacy ``snap7`` package
+For quick testing, the ``mainloop`` function from the ``s7`` package
 starts a server with common data blocks pre-registered:
 
 .. code-block:: python
 
-   from snap7.server import mainloop
+   from s7.server import mainloop
 
    # Blocks the current thread
    mainloop(tcp_port=1102)

@@ -29,24 +29,30 @@ S7CommPlus protocol client. It supports V1, V2 (TLS), and V3 connections:
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
-The ``snap7`` package (legacy S7)
-----------------------------------
+The ``s7`` package (legacy S7)
+------------------------------
 
-The ``snap7`` package implements the classic S7 protocol. It supports
+The ``s7`` package implements the classic S7 protocol. It supports
 S7-300, S7-400, S7-1200 and S7-1500 PLCs via the PUT/GET interface:
 
 .. code-block:: python
 
-   from snap7 import Client
+   from s7 import Client
 
    client = Client()
    client.connect("192.168.1.10", 0, 1)
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
-Use ``snap7.Client`` for S7-300/400 PLCs or when PUT/GET access is enabled
+Use ``s7.Client`` for S7-300/400 PLCs or when PUT/GET access is enabled
 on S7-1200/1500. Use ``s7commplus.Client`` for native S7CommPlus communication
 with S7-1200/1500 PLCs.
+
+.. note::
+
+   The ``snap7`` package name continues to work as an alias for ``s7``
+   and is not deprecated. Existing code using ``from snap7 import Client``
+   does not need to change.
 
 .. note::
 

@@ -4,7 +4,7 @@ Client
 python-snap7 provides two client packages:
 
 - ``s7commplus``: S7CommPlus protocol for S7-1200/1500 PLCs
-- ``snap7``: Classic S7 protocol for S7-300/400 and PUT/GET access on S7-1200/1500
+- ``s7``: Classic S7 protocol for S7-300/400 and PUT/GET access on S7-1200/1500
 
 s7commplus.Client
 -----------------
@@ -96,16 +96,16 @@ multiple coroutines can safely share a single connection:
 .. automodule:: s7commplus.async_client
    :members:
 
-snap7.Client (legacy)
+s7.Client (legacy)
 ---------------------
 
-The ``snap7.Client`` implements the classic S7 protocol for S7-300/400 PLCs
+The ``s7.Client`` implements the classic S7 protocol for S7-300/400 PLCs
 and PUT/GET access on S7-1200/1500.
 
 .. automodule:: snap7.client
    :members:
 
-snap7.AsyncClient (legacy)
+s7.AsyncClient (legacy)
 --------------------------
 
 .. automodule:: snap7.async_client

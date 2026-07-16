@@ -4,7 +4,7 @@ Server
 python-snap7 provides two server implementations:
 
 - ``s7commplus.Server``: S7CommPlus server emulator
-- ``snap7.server.Server``: Legacy S7 server for testing
+- ``s7.server.Server``: Legacy S7 server for testing
 
 .. code:: python
 
@@ -18,7 +18,7 @@ helper:
 
 .. code:: python
 
-   from snap7.server import mainloop
+   from s7.server import mainloop
 
    mainloop(tcp_port=1102)
 

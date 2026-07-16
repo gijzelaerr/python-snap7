@@ -64,12 +64,12 @@ data = client.db_read(1, 0, 4)
 client.disconnect()
 ```
 
-### Usage (legacy snap7 package — S7-300/400)
+### Usage (s7 package — S7-300/400)
 
 ```python
-import snap7
+from s7 import Client
 
-client = snap7.Client()
+client = Client()
 client.connect("192.168.1.10", 0, 1)
 
 data = client.db_read(1, 0, 4)
@@ -84,8 +84,8 @@ client.disconnect()
 ### Server Usage
 
 ```python
-from snap7.server import Server, mainloop
-from snap7.type import SrvArea
+from s7.server import Server, mainloop
+from s7.type import SrvArea
 from ctypes import c_char
 
 # Start a simple server
