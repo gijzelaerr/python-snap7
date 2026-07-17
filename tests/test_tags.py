@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from snap7.tags import Tag, from_browse, load_csv, load_json, load_tia_xml
+from snap7.tags import NodeS7Tag, PLC4XTag, Tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
 from snap7.type import Area
 
 
@@ -302,3 +302,253 @@ class TestLoadTiaXml:
         f.write_text(self.XML)
         tags = load_tia_xml(f)
         assert len(tags) == 3
+
+
+class TestNodeS7Parse:
+    """Parse nodeS7 / pyS7 style tag addresses."""
+
+    def test_db_bit(self) -> None:
+        t = NodeS7Tag.parse("DB1,X0.0")
+        assert isinstance(t, NodeS7Tag)
+        assert t.area == Area.DB
+        assert t.db_number == 1
+        assert t.byte_offset == 0
+        assert t.bit == 0
+        assert t.datatype == "BOOL"
+
+    def test_db_bit_nonzero(self) -> None:
+        t = NodeS7Tag.parse("DB2,X10.5")
+        assert t.db_number == 2
+        assert t.byte_offset == 10
+        assert t.bit == 5
+
+    def test_db_byte(self) -> None:
+        t = NodeS7Tag.parse("DB1,B10")
+        assert t.datatype == "BYTE"
+        assert t.byte_offset == 10
+
+    def test_db_word(self) -> None:
+        t = NodeS7Tag.parse("DB1,W10")
+        assert t.datatype == "WORD"
+
+    def test_db_int(self) -> None:
+        t = NodeS7Tag.parse("DB1,I10")
+        assert t.datatype == "INT"
+
+    def test_db_dint(self) -> None:
+        t = NodeS7Tag.parse("DB1,DI10")
+        assert t.datatype == "DINT"
+
+    def test_db_dword(self) -> None:
+        t = NodeS7Tag.parse("DB1,DW10")
+        assert t.datatype == "DWORD"
+
+    def test_db_real(self) -> None:
+        t = NodeS7Tag.parse("DB1,R4")
+        assert t.datatype == "REAL"
+        assert t.byte_offset == 4
+
+    def test_db_lreal(self) -> None:
+        t = NodeS7Tag.parse("DB1,LR8")
+        assert t.datatype == "LREAL"
+
+    def test_db_string(self) -> None:
+        t = NodeS7Tag.parse("DB1,S10.20")
+        assert t.datatype == "STRING[20]"
+        assert t.byte_offset == 10
+        assert t.size == 22
+
+    def test_db_wstring(self) -> None:
+        t = NodeS7Tag.parse("DB1,WS10.10")
+        assert t.datatype == "WSTRING[10]"
+        assert t.size == 24
+
+    def test_marker_bit(self) -> None:
+        t = NodeS7Tag.parse("M10.5")
+        assert t.area == Area.MK
+        assert t.byte_offset == 10
+        assert t.bit == 5
+        assert t.datatype == "BOOL"
+
+    def test_marker_byte(self) -> None:
+        t = NodeS7Tag.parse("MB10")
+        assert t.area == Area.MK
+        assert t.datatype == "BYTE"
+        assert t.byte_offset == 10
+
+    def test_marker_word(self) -> None:
+        t = NodeS7Tag.parse("MW20")
+        assert t.datatype == "WORD"
+        assert t.byte_offset == 20
+
+    def test_marker_real(self) -> None:
+        t = NodeS7Tag.parse("MR4")
+        assert t.datatype == "REAL"
+
+    def test_input_bit(self) -> None:
+        t = NodeS7Tag.parse("I0.0")
+        assert t.area == Area.PE
+        assert t.datatype == "BOOL"
+
+    def test_input_word(self) -> None:
+        t = NodeS7Tag.parse("IW22")
+        assert t.area == Area.PE
+        assert t.datatype == "WORD"
+
+    def test_output_real(self) -> None:
+        t = NodeS7Tag.parse("QR24")
+        assert t.area == Area.PA
+        assert t.datatype == "REAL"
+
+    def test_german_input(self) -> None:
+        t = NodeS7Tag.parse("E0.0")
+        assert t.area == Area.PE
+
+    def test_german_output(self) -> None:
+        t = NodeS7Tag.parse("A0.0")
+        assert t.area == Area.PA
+
+    def test_case_insensitive(self) -> None:
+        t = NodeS7Tag.parse("db1,r4")
+        assert t.db_number == 1
+        assert t.datatype == "REAL"
+
+    def test_bit_without_suffix_raises(self) -> None:
+        with pytest.raises(ValueError, match="bit suffix"):
+            NodeS7Tag.parse("DB1,X0")
+
+    def test_string_without_length_raises(self) -> None:
+        with pytest.raises(ValueError, match="length suffix"):
+            NodeS7Tag.parse("DB1,S0")
+
+    def test_byte_with_suffix_raises(self) -> None:
+        with pytest.raises(ValueError, match="does not take"):
+            NodeS7Tag.parse("DB1,B0.5")
+
+    def test_bare_area_without_suffix_raises(self) -> None:
+        with pytest.raises(ValueError, match="Ambiguous"):
+            NodeS7Tag.parse("M10")
+
+    def test_unknown_typecode_raises(self) -> None:
+        with pytest.raises(ValueError, match="Unknown nodeS7 typecode"):
+            NodeS7Tag.parse("DB1,ZZZ0")
+
+
+class TestParseTagDispatcher:
+    """parse_tag autodetects dialect from syntax markers."""
+
+    def test_colon_selects_plc4x(self) -> None:
+        t = parse_tag("DB1.DBD0:REAL")
+        assert isinstance(t, PLC4XTag)
+        assert t.datatype == "REAL"
+
+    def test_comma_selects_nodes7(self) -> None:
+        t = parse_tag("DB1,R0")
+        assert isinstance(t, NodeS7Tag)
+        assert t.datatype == "REAL"
+
+    def test_both_dialects_same_address(self) -> None:
+        """PLC4X and nodeS7 renderings of the same address match on canonical fields."""
+        p = parse_tag("DB1.DBD4:REAL")
+        n = parse_tag("DB1,R4")
+        assert p.area == n.area
+        assert p.db_number == n.db_number
+        assert p.byte_offset == n.byte_offset
+        assert p.datatype == n.datatype
+
+    def test_strict_rejects_bare_short_form(self) -> None:
+        with pytest.raises(ValueError, match="Ambiguous"):
+            parse_tag("M7.1")
+
+    def test_permissive_accepts_bare_short_form(self) -> None:
+        t = parse_tag("M7.1", strict=False)
+        assert isinstance(t, NodeS7Tag)
+        assert t.area == Area.MK
+        assert t.datatype == "BOOL"
+
+    def test_permissive_accepts_iw(self) -> None:
+        t = parse_tag("IW22", strict=False)
+        assert t.area == Area.PE
+        assert t.datatype == "WORD"
+
+    def test_strict_is_default(self) -> None:
+        with pytest.raises(ValueError):
+            parse_tag("IW22")
+
+    def test_name_passed_through(self) -> None:
+        t = parse_tag("DB1,R0", name="Motor.Speed")
+        assert t.name == "Motor.Speed"
+
+
+class TestTagStringRendering:
+    """__str__ round-trips to each dialect's syntax."""
+
+    def test_plc4x_db_bit(self) -> None:
+        t = PLC4XTag.parse("DB1.DBX0.0:BOOL")
+        assert str(t) == "DB1.DBX0.0:BOOL"
+
+    def test_plc4x_db_word(self) -> None:
+        t = PLC4XTag.parse("DB1.DBW10:INT")
+        assert str(t) == "DB1:10:INT"  # canonical short form
+
+    def test_plc4x_merker_bit(self) -> None:
+        t = PLC4XTag.parse("M10.5:BOOL")
+        assert str(t) == "M10.5:BOOL"
+
+    def test_plc4x_merker_word(self) -> None:
+        t = PLC4XTag.parse("MW20:WORD")
+        assert str(t) == "M20:WORD"
+
+    def test_plc4x_string(self) -> None:
+        t = PLC4XTag.parse("DB1:10:STRING[20]")
+        assert str(t) == "DB1:10:STRING[20]"
+
+    def test_plc4x_array(self) -> None:
+        t = PLC4XTag.parse("DB1:0:REAL[5]")
+        assert str(t) == "DB1:0:REAL[5]"
+
+    def test_nodes7_db_bit(self) -> None:
+        t = NodeS7Tag.parse("DB1,X0.0")
+        assert str(t) == "DB1,X0.0"
+
+    def test_nodes7_db_real(self) -> None:
+        t = NodeS7Tag.parse("DB1,R4")
+        assert str(t) == "DB1,R4"
+
+    def test_nodes7_db_string(self) -> None:
+        t = NodeS7Tag.parse("DB1,S10.20")
+        assert str(t) == "DB1,S10.20"
+
+    def test_nodes7_marker_bit(self) -> None:
+        t = NodeS7Tag.parse("M10.5")
+        assert str(t) == "M10.5"
+
+    def test_nodes7_marker_word(self) -> None:
+        t = NodeS7Tag.parse("MW20")
+        assert str(t) == "MW20"
+
+    def test_nodes7_input_word(self) -> None:
+        t = NodeS7Tag.parse("IW22")
+        assert str(t) == "IW22"
+
+    def test_bare_tag_defaults_to_plc4x(self) -> None:
+        t = Tag(area=Area.DB, db_number=1, byte_offset=4, datatype="REAL")
+        assert str(t) == "DB1:4:REAL"
+
+    def test_plc4x_tag_isinstance_of_tag(self) -> None:
+        t = PLC4XTag.parse("DB1,DBX0.0:BOOL") if False else PLC4XTag.parse("DB1.DBX0.0:BOOL")
+        assert isinstance(t, Tag)
+
+    def test_nodes7_tag_isinstance_of_tag(self) -> None:
+        t = NodeS7Tag.parse("M10.5")
+        assert isinstance(t, Tag)
+
+
+class TestFromStringBackwardsCompat:
+    """Tag.from_string still works and returns PLC4XTag."""
+
+    def test_returns_plc4x_tag(self) -> None:
+        t = Tag.from_string("DB1.DBD0:REAL")
+        assert isinstance(t, PLC4XTag)
+        assert isinstance(t, Tag)
+        assert t.datatype == "REAL"

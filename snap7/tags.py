@@ -3,25 +3,36 @@
 A :class:`Tag` represents a typed value at a specific S7 address.  Tags can
 be created from:
 
-- A PLC4X-style address string: ``Tag.from_string("DB1.DBX0.0:BOOL")``
+- A PLC4X-style address string: ``PLC4XTag.parse("DB1.DBX0.0:BOOL")``
+- A nodeS7-style address string: ``NodeS7Tag.parse("DB1,X0.0")``
+- A dialect-agnostic dispatcher: ``parse_tag("DB1,R4")``
 - A CSV file: :func:`load_csv`
 - A JSON file: :func:`load_json`
 - A TIA Portal XML export: :func:`load_tia_xml`
 - A live PLC browse: ``{t.name: t for t in client.browse()}``
 
-Reading and writing tags is done via :meth:`~snap7.client.Client.read_tag`
-and :meth:`~snap7.client.Client.write_tag`.
+Two dialects are supported:
+
+- **PLC4X / Siemens STEP7** — ``DB1.DBX0.0:BOOL``, ``DB1:10:REAL``,
+  ``M10.5:BOOL``, ``MW20:WORD``. The colon-type suffix is required.
+- **nodeS7 / pyS7** — ``DB1,X0.0``, ``DB1,R4``, ``M10.5``, ``IW22``.
+  The comma separates DB from typecode; area shortcuts imply the type.
+
+:func:`parse_tag` autodetects dialect from syntax markers (``,`` → nodeS7,
+``:TYPE`` → PLC4X). Pass ``strict=False`` to allow bare short forms like
+``M7.1`` or ``IW22`` (dispatched to the nodeS7 parser).
 
 Example::
 
     from s7 import Client
-    from s7.tags import load_tia_xml
+    from s7.tags import parse_tag, load_tia_xml
 
     client = Client()
     client.connect("192.168.1.10", 0, 1)
 
-    # Ad-hoc tag access
-    speed = client.read_tag("DB1.DBD0:REAL")
+    # Ad-hoc tag access (either dialect)
+    speed = client.read_tag(parse_tag("DB1.DBD0:REAL"))
+    speed = client.read_tag(parse_tag("DB1,R0"))
 
     # Named tags from a file
     tags = load_tia_xml("db1.xml")
@@ -71,9 +82,24 @@ _TYPE_SIZE: dict[str, int] = {
 _STRING_RE = re.compile(r"^(STRING|WSTRING|FSTRING)\[(\d+)]$", re.IGNORECASE)
 
 
+# Area → PLC4X short prefix (used for __str__ output)
+_AREA_PREFIX: dict[Area, str] = {
+    Area.DB: "DB",
+    Area.MK: "M",
+    Area.PE: "I",
+    Area.PA: "Q",
+}
+
+
 @dataclass
 class Tag:
     """A typed reference to a value in a PLC data area.
+
+    This is the canonical, dialect-agnostic representation used by the
+    protocol layer. For parsing strings, prefer :class:`PLC4XTag`,
+    :class:`NodeS7Tag`, or the :func:`parse_tag` dispatcher — each of
+    those returns a subtype whose ``__str__`` round-trips to its source
+    dialect.
 
     A Tag can address the PLC in two ways:
 
@@ -134,90 +160,19 @@ class Tag:
             raise ValueError(f"Unknown S7 type: {self.datatype}")
         return elem * self.count
 
+    def __str__(self) -> str:
+        """Render as PLC4X syntax (default dialect for bare Tags)."""
+        return _render_plc4x(self)
+
     @classmethod
-    def from_string(cls, address: str, name: str = "") -> "Tag":
+    def from_string(cls, address: str, name: str = "") -> "PLC4XTag":
         """Parse a PLC4X-style tag address string.
 
-        Supported formats::
-
-            DB1.DBX0.0:BOOL          # bit in data block
-            DB1.DBB10:BYTE           # byte
-            DB1.DBW10:INT            # word
-            DB1.DBD10:REAL           # double word as real
-            DB1:10:INT               # short form (DB 1, offset 10, INT)
-            DB1:10:STRING[20]        # variable-length string
-            DB1:10:REAL[5]           # array of 5 REALs
-            M10.5:BOOL               # Merker bit
-            MW20:WORD                # Merker word
-            I0.0:BOOL                # input bit
-            Q0.0:BOOL                # output bit
-
-        Args:
-            address: Tag address string.
-            name: Optional name to store on the Tag.
-
-        Returns:
-            A parsed :class:`Tag`.
-
-        Raises:
-            ValueError: If the address format is not recognised.
+        Kept for backwards compatibility; equivalent to
+        ``PLC4XTag.parse(address, name)``. For new code, prefer the
+        explicit dialect parsers or :func:`parse_tag`.
         """
-        raw = address.strip()
-        s = raw.upper()
-
-        # Extract type (optional array)
-        if ":" not in s:
-            raise ValueError(f"Tag address must include type (e.g. 'DB1.DBX0.0:BOOL'): {address}")
-
-        # Split carefully — short form `DB1:10:INT` has two colons
-        parts = s.split(":")
-
-        count = 1
-        if len(parts) == 3 and parts[0].startswith("DB"):
-            # Short form: DB<n>:<offset>:<type>
-            db_part, offset_part, type_part = parts
-            db_number = int(db_part[2:])
-            byte_offset, bit = _parse_offset(offset_part)
-            datatype, count = _parse_type(type_part)
-            return cls(
-                area=Area.DB, db_number=db_number, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name
-            )
-
-        if len(parts) != 2:
-            raise ValueError(f"Invalid tag address: {address}")
-
-        addr_str, type_part = parts
-        datatype, count = _parse_type(type_part)
-
-        # Handle leading % (optional)
-        if addr_str.startswith("%"):
-            addr_str = addr_str[1:]
-
-        # Data block: DB<n>.DBX/DBB/DBW/DBD<offset>[.<bit>]
-        if addr_str.startswith("DB") and "." in addr_str:
-            db_part, addr_part = addr_str.split(".", 1)
-            db_number = int(db_part[2:])
-            byte_offset, bit = _parse_db_address(addr_part)
-            return cls(
-                area=Area.DB, db_number=db_number, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name
-            )
-
-        # Merker (flag): M<offset>[.<bit>] or MB/MW/MD<offset>
-        if addr_str.startswith("M"):
-            byte_offset, bit = _parse_simple_address(addr_str[1:])
-            return cls(area=Area.MK, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
-
-        # Input: I<offset>[.<bit>] or IB/IW/ID<offset>
-        if addr_str.startswith("I"):
-            byte_offset, bit = _parse_simple_address(addr_str[1:])
-            return cls(area=Area.PE, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
-
-        # Output: Q<offset>[.<bit>] or QB/QW/QD<offset>
-        if addr_str.startswith("Q"):
-            byte_offset, bit = _parse_simple_address(addr_str[1:])
-            return cls(area=Area.PA, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
-
-        raise ValueError(f"Unsupported tag address: {address}")
+        return PLC4XTag.parse(address, name)
 
     @classmethod
     def from_access_string(
@@ -260,7 +215,6 @@ class Tag:
         access_area = ids[0]
         lids = ids[1:]
 
-        # Derive the Area enum from the access area ID
         if access_area >= 0x8A0E0000:
             area = Area.DB
             db_number = access_area - 0x8A0E0000
@@ -292,11 +246,367 @@ class Tag:
         )
 
 
+@dataclass
+class PLC4XTag(Tag):
+    """A Tag parsed from PLC4X / Siemens STEP7 syntax.
+
+    Example inputs accepted by :meth:`parse`:
+
+    - ``DB1.DBX0.0:BOOL`` — DB bit
+    - ``DB1.DBB10:BYTE`` — DB byte
+    - ``DB1.DBW10:INT`` — DB word (signed)
+    - ``DB1.DBD10:REAL`` — DB double word
+    - ``DB1:10:INT`` — short form
+    - ``DB1:10:STRING[20]`` — variable-length string
+    - ``DB1:0:REAL[5]`` — array of 5 REALs
+    - ``M10.5:BOOL``, ``MW20:WORD`` — marker bit / marker word
+    - ``I0.0:BOOL``, ``Q0.0:BOOL`` — input / output bit
+    - A leading ``%`` is accepted and ignored.
+
+    The type suffix (``:TYPE``) is required. Use :class:`NodeS7Tag` for
+    the shorter nodeS7 / pyS7 convention.
+    """
+
+    @classmethod
+    def parse(cls, address: str, name: str = "") -> "PLC4XTag":
+        """Parse a PLC4X-style tag address string.
+
+        Raises:
+            ValueError: If the address is malformed or lacks a type suffix.
+        """
+        raw = address.strip()
+        s = raw.upper()
+
+        if ":" not in s:
+            raise ValueError(f"PLC4X tag address must include type (e.g. 'DB1.DBX0.0:BOOL'): {address}")
+
+        parts = s.split(":")
+
+        count = 1
+        if len(parts) == 3 and parts[0].startswith("DB"):
+            db_part, offset_part, type_part = parts
+            db_number = int(db_part[2:])
+            byte_offset, bit = _parse_offset(offset_part)
+            datatype, count = _parse_type(type_part)
+            return cls(
+                area=Area.DB,
+                db_number=db_number,
+                byte_offset=byte_offset,
+                bit=bit,
+                datatype=datatype,
+                count=count,
+                name=name,
+            )
+
+        if len(parts) != 2:
+            raise ValueError(f"Invalid PLC4X tag address: {address}")
+
+        addr_str, type_part = parts
+        datatype, count = _parse_type(type_part)
+
+        if addr_str.startswith("%"):
+            addr_str = addr_str[1:]
+
+        if addr_str.startswith("DB") and "." in addr_str:
+            db_part, addr_part = addr_str.split(".", 1)
+            db_number = int(db_part[2:])
+            byte_offset, bit = _parse_db_address(addr_part)
+            return cls(
+                area=Area.DB,
+                db_number=db_number,
+                byte_offset=byte_offset,
+                bit=bit,
+                datatype=datatype,
+                count=count,
+                name=name,
+            )
+
+        if addr_str.startswith("M"):
+            byte_offset, bit = _parse_simple_address(addr_str[1:])
+            return cls(area=Area.MK, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
+
+        if addr_str.startswith("I"):
+            byte_offset, bit = _parse_simple_address(addr_str[1:])
+            return cls(area=Area.PE, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
+
+        if addr_str.startswith("Q"):
+            byte_offset, bit = _parse_simple_address(addr_str[1:])
+            return cls(area=Area.PA, db_number=0, byte_offset=byte_offset, bit=bit, datatype=datatype, count=count, name=name)
+
+        raise ValueError(f"Unsupported PLC4X tag address: {address}")
+
+    def __str__(self) -> str:
+        """Round-trip to PLC4X syntax."""
+        return _render_plc4x(self)
+
+
+@dataclass
+class NodeS7Tag(Tag):
+    """A Tag parsed from nodeS7 / pyS7 syntax.
+
+    Example inputs accepted by :meth:`parse`:
+
+    - ``DB1,X0.0`` — DB bit (BOOL)
+    - ``DB1,B10`` — DB byte
+    - ``DB1,W10`` — DB word (unsigned 16-bit)
+    - ``DB1,I10`` — DB int (signed 16-bit)
+    - ``DB1,DW10`` / ``DB1,DI10`` — DB dword / dint
+    - ``DB1,R10`` — DB real
+    - ``DB1,LR10`` — DB lreal
+    - ``DB1,S10.20`` — DB string (offset 10, 20 chars)
+    - ``DB1,WS10.10`` — DB wstring
+    - ``M10.5`` — marker bit (bit form, type is BOOL)
+    - ``MB10``, ``MW10``, ``MD10``, ``MR10`` — marker byte/word/dword/real
+    - ``IW22``, ``QR24`` — input word, output real
+    """
+
+    @classmethod
+    def parse(cls, address: str, name: str = "") -> "NodeS7Tag":
+        """Parse a nodeS7 / pyS7 style tag address string.
+
+        Raises:
+            ValueError: If the address is malformed.
+        """
+        raw = address.strip()
+        s = raw.upper()
+
+        if s.startswith("%"):
+            s = s[1:]
+
+        # DB form: DB<n>,<typecode><offset>[.<bit-or-length>]
+        if s.startswith("DB") and "," in s:
+            match = _NODES7_DB_RE.match(s)
+            if not match:
+                raise ValueError(f"Invalid nodeS7 DB address: {address}")
+            db_number = int(match.group(1))
+            typecode = match.group(2)
+            offset = int(match.group(3))
+            trailing = match.group(4)
+            datatype, bit, count = _nodes7_typecode_to_type(typecode, trailing)
+            return cls(
+                area=Area.DB,
+                db_number=db_number,
+                byte_offset=offset,
+                bit=bit,
+                datatype=datatype,
+                count=count,
+                name=name,
+            )
+
+        # Area-shortcut form: <M|I|Q|E|A>[typecode]<offset>[.<bit-or-length>]
+        match = _NODES7_AREA_RE.match(s)
+        if match:
+            area_char = match.group(1)
+            typecode = match.group(2) or ""
+            offset = int(match.group(3))
+            trailing = match.group(4)
+            area = _NODES7_AREA_MAP[area_char]
+
+            if not typecode:
+                # Bare form: must be a bit access, e.g. M7.1
+                if trailing is None:
+                    raise ValueError(
+                        f"Ambiguous nodeS7 address {address!r}: bare area+offset needs a bit suffix (M7.1) or typecode (MW7)."
+                    )
+                return cls(area=area, db_number=0, byte_offset=offset, bit=int(trailing), datatype="BOOL", count=1, name=name)
+
+            datatype, bit, count = _nodes7_typecode_to_type(typecode, trailing)
+            return cls(
+                area=area,
+                db_number=0,
+                byte_offset=offset,
+                bit=bit,
+                datatype=datatype,
+                count=count,
+                name=name,
+            )
+
+        raise ValueError(f"Invalid nodeS7 tag address: {address}")
+
+    def __str__(self) -> str:
+        """Round-trip to nodeS7 syntax."""
+        return _render_nodes7(self)
+
+
+def parse_tag(address: str, *, strict: bool = True, name: str = "") -> Tag:
+    """Autodetect dialect and parse a tag address string.
+
+    Dialect is detected from syntax markers:
+
+    - A comma (``,``) selects :class:`NodeS7Tag`.
+    - A colon followed by a type (``:TYPE``) selects :class:`PLC4XTag`.
+
+    Args:
+        address: Tag address string.
+        strict: When ``True`` (default), require one of the dialect markers
+            above. Bare short forms like ``M7.1`` or ``IW22`` raise
+            :class:`ValueError`. When ``False``, bare forms are dispatched
+            to the nodeS7 parser (which accepts them).
+        name: Optional tag name to store on the resulting Tag.
+
+    Returns:
+        A :class:`PLC4XTag` or :class:`NodeS7Tag` depending on the dialect
+        detected.
+
+    Raises:
+        ValueError: If the input is ambiguous under strict mode, or if
+            the selected parser fails to parse.
+    """
+    s = address.strip()
+    if "," in s:
+        return NodeS7Tag.parse(s, name)
+    if ":" in s:
+        return PLC4XTag.parse(s, name)
+    if strict:
+        raise ValueError(
+            f"Ambiguous tag syntax {address!r}: must contain ',' (nodeS7) "
+            f"or ':TYPE' (PLC4X). Pass strict=False to accept bare short forms."
+        )
+    return NodeS7Tag.parse(s, name)
+
+
+# ---------------------------------------------------------------------------
+# nodeS7 syntax tables and helpers
+# ---------------------------------------------------------------------------
+
+# DB form: DB<n>,<TYPECODE><OFFSET>[.<BIT or LENGTH>]
+_NODES7_DB_RE = re.compile(r"^DB(\d+),([A-Z]+)(\d+)(?:\.(\d+))?$")
+
+# Area-shortcut form: <AREA>[TYPECODE]<OFFSET>[.<BIT or LENGTH>]
+_NODES7_AREA_RE = re.compile(r"^([MIQEA])([A-Z]*)(\d+)(?:\.(\d+))?$")
+
+# Ordered longest-first so multi-char codes match before single-char
+_NODES7_TYPECODES: list[tuple[str, str]] = [
+    ("USINT", "USINT"),
+    ("SINT", "SINT"),
+    ("ULI", "ULINT"),
+    ("LI", "LINT"),
+    ("LW", "LWORD"),
+    ("LR", "LREAL"),
+    ("WS", "WSTRING"),
+    ("DI", "DINT"),
+    ("DW", "DWORD"),
+    ("X", "BOOL"),
+    ("B", "BYTE"),
+    ("C", "CHAR"),
+    ("I", "INT"),
+    ("W", "WORD"),
+    ("D", "DWORD"),
+    ("R", "REAL"),
+    ("S", "STRING"),
+]
+
+_NODES7_AREA_MAP: dict[str, Area] = {
+    "M": Area.MK,
+    "I": Area.PE,
+    "Q": Area.PA,
+    "E": Area.PE,  # German: Eingang
+    "A": Area.PA,  # German: Ausgang
+}
+
+
+def _nodes7_typecode_to_type(typecode: str, trailing: str | None) -> tuple[str, int, int]:
+    """Map a nodeS7 typecode to (datatype, bit, count).
+
+    ``trailing`` is the optional ``.N`` suffix: it's a bit index for BOOL
+    and a character length for STRING/WSTRING; otherwise rejected.
+    """
+    for prefix, dtype in _NODES7_TYPECODES:
+        if typecode == prefix:
+            if dtype == "BOOL":
+                if trailing is None:
+                    raise ValueError("nodeS7 BOOL address needs a bit suffix (X0.0)")
+                return "BOOL", int(trailing), 1
+            if dtype in ("STRING", "WSTRING"):
+                if trailing is None:
+                    raise ValueError(f"nodeS7 {dtype} address needs a length suffix (S0.20)")
+                return f"{dtype}[{int(trailing)}]", 0, 1
+            if trailing is not None:
+                raise ValueError(f"nodeS7 {dtype} address does not take a trailing .N suffix")
+            return dtype, 0, 1
+    raise ValueError(f"Unknown nodeS7 typecode: {typecode!r}")
+
+
+# Reverse map for __str__ rendering
+_TYPE_TO_NODES7_CODE: dict[str, str] = {
+    "BOOL": "X",
+    "BYTE": "B",
+    "CHAR": "C",
+    "SINT": "SINT",
+    "USINT": "USINT",
+    "INT": "I",
+    "WORD": "W",
+    "DINT": "DI",
+    "DWORD": "DW",
+    "REAL": "R",
+    "LREAL": "LR",
+    "LINT": "LI",
+    "ULINT": "ULI",
+    "LWORD": "LW",
+}
+
+
+def _render_plc4x(tag: Tag) -> str:
+    """Render a Tag in PLC4X syntax."""
+    dt_upper = tag.datatype.upper()
+    if _STRING_RE.match(dt_upper):
+        dt_part = tag.datatype  # STRING[20] round-trips as-is
+    elif tag.count > 1:
+        dt_part = f"{tag.datatype}[{tag.count}]"
+    else:
+        dt_part = tag.datatype
+
+    if tag.area == Area.DB:
+        if dt_upper == "BOOL":
+            return f"DB{tag.db_number}.DBX{tag.byte_offset}.{tag.bit}:BOOL"
+        return f"DB{tag.db_number}:{tag.byte_offset}:{dt_part}"
+
+    prefix = _AREA_PREFIX.get(tag.area, "?")
+    if dt_upper == "BOOL":
+        return f"{prefix}{tag.byte_offset}.{tag.bit}:BOOL"
+    return f"{prefix}{tag.byte_offset}:{dt_part}"
+
+
+def _render_nodes7(tag: Tag) -> str:
+    """Render a Tag in nodeS7 syntax.
+
+    Arrays (count > 1, non-string) are not expressible in nodeS7; they
+    round-trip by emitting the base typecode without the count.
+    """
+    dt_upper = tag.datatype.upper()
+    string_match = _STRING_RE.match(dt_upper)
+
+    prefix = _AREA_PREFIX.get(tag.area, "?")
+
+    if tag.area == Area.DB:
+        if dt_upper == "BOOL":
+            return f"DB{tag.db_number},X{tag.byte_offset}.{tag.bit}"
+        if string_match:
+            code = "S" if string_match.group(1) == "STRING" else "WS"
+            length = string_match.group(2)
+            return f"DB{tag.db_number},{code}{tag.byte_offset}.{length}"
+        code = _TYPE_TO_NODES7_CODE.get(dt_upper, dt_upper)
+        return f"DB{tag.db_number},{code}{tag.byte_offset}"
+
+    if dt_upper == "BOOL":
+        return f"{prefix}{tag.byte_offset}.{tag.bit}"
+    if string_match:
+        code = "S" if string_match.group(1) == "STRING" else "WS"
+        length = string_match.group(2)
+        return f"{prefix}{code}{tag.byte_offset}.{length}"
+    code = _TYPE_TO_NODES7_CODE.get(dt_upper, dt_upper)
+    return f"{prefix}{code}{tag.byte_offset}"
+
+
+# ---------------------------------------------------------------------------
+# Shared low-level helpers
+# ---------------------------------------------------------------------------
+
+
 def _parse_type(type_part: str) -> tuple[str, int]:
     """Parse ``INT`` or ``INT[5]`` into (datatype, count)."""
     type_part = type_part.strip()
     if "[" in type_part and type_part.endswith("]"):
-        # Could be STRING[20] (length) or INT[5] (array) — distinguish by type
         base = type_part[: type_part.index("[")]
         if base.upper() in ("STRING", "WSTRING", "FSTRING"):
             return type_part, 1  # STRING[20] is a scalar with size hint
@@ -456,7 +766,6 @@ def load_tia_xml(source: Union[str, Path]) -> dict[str, Tag]:
     text = _read_source(source)
     root = ET.fromstring(text)
 
-    # Extract DB number from attribute list
     db_number = 0
     for elem in root.iter():
         if elem.tag.endswith("AttributeList"):
@@ -468,7 +777,6 @@ def load_tia_xml(source: Union[str, Path]) -> dict[str, Tag]:
                         pass
                     break
 
-    # TIA type names → canonical S7 type names
     dt_map = {
         "Bool": "BOOL",
         "Byte": "BYTE",

@@ -13,7 +13,7 @@ from .server import Server
 from .partner import Partner
 from .logo import Logo
 from .util.db import Row, DB
-from .tags import Tag, load_csv, load_json, load_tia_xml, from_browse
+from .tags import NodeS7Tag, PLC4XTag, Tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
 from .type import Area, Block, WordLen, SrvEvent, SrvArea
 
 __all__ = [
@@ -25,6 +25,9 @@ __all__ = [
     "Row",
     "DB",
     "Tag",
+    "PLC4XTag",
+    "NodeS7Tag",
+    "parse_tag",
     "load_csv",
     "load_json",
     "load_tia_xml",

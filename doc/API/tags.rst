@@ -29,7 +29,11 @@ bulk from CSV, JSON, or TIA Portal XML exports.
 Address syntax
 --------------
 
-Tag addresses follow the PLC4X / Siemens STEP7 convention::
+Two dialects are supported. Each has its own parser class that returns a
+subtype of :class:`~snap7.tags.Tag`; a ``__str__`` on each subtype
+round-trips to its source dialect.
+
+**PLC4X / Siemens STEP7** — :class:`~snap7.tags.PLC4XTag`::
 
    DB1.DBX0.0:BOOL          # bit in data block
    DB1.DBB10:BYTE           # byte
@@ -43,7 +47,36 @@ Tag addresses follow the PLC4X / Siemens STEP7 convention::
    I0.0:BOOL                # input bit
    Q0.0:BOOL                # output bit
 
-The leading ``%`` is optional (``%DB1.DBX0.0:BOOL`` also works).
+The leading ``%`` is optional (``%DB1.DBX0.0:BOOL`` also works). The type
+suffix (``:TYPE``) is required.
+
+**nodeS7 / pyS7** — :class:`~snap7.tags.NodeS7Tag`::
+
+   DB1,X0.0                 # bit in data block
+   DB1,B10                  # byte
+   DB1,W10                  # word (unsigned 16-bit)
+   DB1,I10                  # int (signed 16-bit)
+   DB1,DW10                 # dword / DB1,DI10 for dint
+   DB1,R4                   # real
+   DB1,LR8                  # lreal
+   DB1,S10.20               # string at offset 10, 20 chars
+   M10.5                    # marker bit
+   MB10, MW10, MD10, MR10   # marker typed
+   IW22, QR24               # input word, output real
+
+Area shortcuts (``M``, ``I``, ``Q``, plus German ``E``, ``A``) imply the
+type via the trailing typecode; no ``:TYPE`` suffix is needed.
+
+**Autodetect** — :func:`~snap7.tags.parse_tag` picks the right parser
+based on syntax markers. Pass ``strict=False`` to accept bare short
+forms like ``M7.1`` or ``IW22`` (dispatched to the nodeS7 parser)::
+
+   from snap7.tags import parse_tag
+
+   parse_tag("DB1.DBD0:REAL")       # → PLC4XTag
+   parse_tag("DB1,R0")              # → NodeS7Tag
+   parse_tag("M7.1")                # raises: ambiguous under strict=True
+   parse_tag("M7.1", strict=False)  # → NodeS7Tag (BOOL)
 
 Supported types
 ---------------
