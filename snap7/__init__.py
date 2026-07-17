@@ -13,6 +13,7 @@ from .server import Server
 from .partner import Partner
 from .logo import Logo
 from .util.db import Row, DB
+from .util.symbols import SymbolTable
 from .type import Area, Block, WordLen, SrvEvent, SrvArea
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "Logo",
     "Row",
     "DB",
+    "SymbolTable",
     "Area",
     "Block",
     "WordLen",
