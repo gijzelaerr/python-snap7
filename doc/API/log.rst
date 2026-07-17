@@ -11,7 +11,7 @@ rack, and slot into every log message:
    import logging
    logging.basicConfig(level=logging.DEBUG)
 
-   from s7 import Client
+   from snap7 import Client
    client = Client()
    client.connect("192.168.1.10", 0, 1)
    # Logs: [192.168.1.10 R0/S1] Connected to 192.168.1.10:102 ...

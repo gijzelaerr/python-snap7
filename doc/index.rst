@@ -8,14 +8,18 @@ Contents:
 
    introduction
    installation
+   connecting
+   cli
    development
 
    API/client
    API/async_client
-   API/s7commplus
    API/server
    API/partner
    API/logo
+   API/tags
+   API/optimizer
+   API/log
    API/type
    API/util
    API/connection
