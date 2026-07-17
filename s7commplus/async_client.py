@@ -511,7 +511,7 @@ class S7CommPlusAsyncClient:
         .. warning:: This method is **experimental** and may change.
 
         Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
-        (the dot-separated hex LID path usable with :meth:`read_tag`), ``data_type``,
+        (the dot-separated hex LID path usable with ``read_tag()``), ``data_type``,
         and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
         each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
         then recombine into the symbol tree.

@@ -48,6 +48,7 @@ Welcome to python-snap7's documentation!
    API/optimizer
    API/log
    API/type
+   API/error
 
 .. toctree::
    :maxdepth: 2

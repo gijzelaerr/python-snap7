@@ -394,7 +394,7 @@ class S7CommPlusClient:
         .. warning:: This method is **experimental** and may change.
 
         Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
-        (the dot-separated hex LID path usable with :meth:`read_tag`), ``data_type``,
+        (the dot-separated hex LID path usable with ``read_tag()``), ``data_type``,
         and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
         each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
         then recombine into the symbol tree.
@@ -477,7 +477,7 @@ class S7CommPlusClient:
         .. warning:: This method is **experimental** and may change.
 
         The PLC will push data updates for the specified variables. Use
-        :meth:`receive_notification` to receive the pushed data.
+        ``receive_notification()`` to receive the pushed data.
 
         Args:
             items: List of (db_number, start_offset, size) tuples to monitor.

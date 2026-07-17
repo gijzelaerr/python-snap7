@@ -714,7 +714,7 @@ def load_json(source: Union[str, Path]) -> dict[str, Tag]:
 
 
 def from_browse(variables: list[dict[str, Any]]) -> dict[str, Tag]:
-    """Build a dict of Tags from :meth:`s7.Client.browse` results.
+    """Build a dict of Tags from ``Client.browse()`` results.
 
     .. warning:: This function is **experimental** and may change.
 
