@@ -21,6 +21,7 @@ Contents:
    API/connection
    API/s7protocol
    API/datatypes
+   API/discovery
 
 
 
