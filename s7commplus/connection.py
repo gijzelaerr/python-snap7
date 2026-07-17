@@ -339,21 +339,18 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            # Step 7: Post-SessionKey activation sequence (V1-initial PLCs)
+            # Step 7: Post-SessionKey data operations (V1-initial PLCs)
             #
-            # TIA Portal sends GET_VARIABLE (0x04F2) + a finalize read
-            # (GET_VAR_SUBSTREAMED InObj=50, addr 7920) immediately after
-            # SetupSession, BEFORE any legitimation. Data reads work after
-            # this point without password auth. Legitimation (writing to
-            # addr 1846) is optional and only needed for elevated access.
+            # After SetupSession with the SecurityKey blob, the PLC accepts
+            # V3+HMAC framed requests immediately — no activation sequence
+            # needed. Password legitimation is optional and only required
+            # for write access or elevated operations.
             #
-            # Sending legitimation BEFORE this activation sequence causes
-            # the PLC to return V254 SYSTEM_EVENT error 0xE9 and RST the
-            # connection on subsequent requests (see GH-710).
+            # Reference: HarpoS7 PoC goes straight from SetupSession to
+            # data reads (GetVarSubStreamed) without any intermediate steps.
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
-                self._session_activate()
                 if self._connect_password:
                     self._post_auth_legitimation(password=self._connect_password)
             logger.info(
@@ -1192,57 +1189,11 @@ class S7CommPlusConnection:
         payload += struct.pack(">I", 0)
         return payload
 
-    def _session_activate(self) -> None:
-        """Activate the session after SessionKey handshake.
-
-        TIA Portal sends four requests immediately after SetupSession,
-        identical across every captured session (GH-710, GH-728):
-
-        1. SET_VARIABLE (0x04F2) attr 323 = USINT(5) on session
-        2. GET_VAR_SUBSTREAMED InObj=50, addr 7920 (first activation read)
-        3. GET_VAR_SUBSTREAMED InObj=session, addr 1842 (session state)
-        4. GET_VAR_SUBSTREAMED InObj=50, addr 7920 (second activation read)
-
-        After this sequence, EXPLORE and data reads work without password.
-
-        Reference: TIA Portal V19 pcaps from GH-710 (xBiggs) and GH-728.
-        """
-        oq = encode_object_qualifier()
-
-        # Step 1: SET_VARIABLE (0x04F2) — write attribute 323 on session
-        sv_payload = struct.pack(">I", self._session_id)
-        sv_payload += encode_uint32_vlq(1)
-        sv_payload += encode_uint32_vlq(323)
-        sv_payload += bytes([0x00, DataType.USINT])
-        sv_payload += encode_uint32_vlq(5)
-        sv_payload += oq
-        sv_payload += struct.pack(">I", 0)
-
-        logger.debug("Session activation step 1: SET_VARIABLE attr 323")
-        self.send_request(FunctionCode.SET_VARIABLE, sv_payload)
-
-        # Step 2: GET_VAR_SUBSTREAMED InObj=50, addr 7920
-        logger.debug("Session activation step 2: GET_VAR_SUBSTREAMED InObj=50 addr=7920")
-        self.send_request(
-            FunctionCode.GET_VAR_SUBSTREAMED,
-            self._build_get_var_substreamed(50, 7920, seq_field=1),
-        )
-
-        # Step 3: GET_VAR_SUBSTREAMED InObj=session, addr 1842
-        logger.debug("Session activation step 3: GET_VAR_SUBSTREAMED InObj=%d addr=1842", self._session_id)
-        self.send_request(
-            FunctionCode.GET_VAR_SUBSTREAMED,
-            self._build_get_var_substreamed(self._session_id, 1842, seq_field=2),
-        )
-
-        # Step 4: GET_VAR_SUBSTREAMED InObj=50, addr 7920 (again)
-        logger.debug("Session activation step 4: GET_VAR_SUBSTREAMED InObj=50 addr=7920")
-        self.send_request(
-            FunctionCode.GET_VAR_SUBSTREAMED,
-            self._build_get_var_substreamed(50, 7920, seq_field=3),
-        )
-
-        logger.info("Session activation completed")
+    # TODO: _session_activate() removed — TIA Portal sends SET_VARIABLE
+    # attr 323 + finalize reads after SetupSession, but HarpoS7 (the
+    # reference SessionKey implementation) skips this entirely and V1-initial
+    # PLCs RST the connection when they receive it (GH-710). May be needed
+    # for specific firmware bands or write-without-password access later.
 
     def _post_auth_legitimation(self, password: str = "") -> None:
         """Perform the post-SessionKey legitimation handshake.
@@ -1250,12 +1201,10 @@ class S7CommPlusConnection:
         V1-initial PLCs require this exchange after the SessionKey blob
         is accepted before they'll allow elevated access (e.g. writes).
 
-        Matches TIA Portal's legitimation sequence (observed after
-        initial data reads succeed):
+        Matches HarpoS7 PoC legitimation sequence:
         1. GET_VAR_SUBSTREAMED: read 20-byte challenge from address 303
         2. Solve the challenge cryptographically
         3. SET_VAR_SUBSTREAMED: write solved 248-byte blob to address 1846
-        4. GET_VAR_SUBSTREAMED: read finalization from InObj=50 addr 7920
         """
         oq = encode_object_qualifier()
 
@@ -1317,13 +1266,6 @@ class S7CommPlusConnection:
 
         logger.debug("Post-auth legitimation: writing solved blob to address 1846")
         self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
-
-        # Step 4: Read from object 50, address 7920 to finalize legitimation.
-        logger.debug("Post-auth legitimation: finalizing (GET_VAR_SUB object 50, addr 7920)")
-        self.send_request(
-            FunctionCode.GET_VAR_SUBSTREAMED,
-            self._build_get_var_substreamed(50, 7920),
-        )
 
         logger.info("Post-auth legitimation completed")
 

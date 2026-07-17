@@ -41,10 +41,7 @@ PLC                                          Client
  │                                              │
  │──── response: success ──────────────────────►│
  │                                              │
- │◄──── SET_VARIABLE attr 323 ──────────────────│  V3+HMAC framing
- │◄──── GET_VAR_SUB InObj=50 addr=7920 ─────────│  (session activation)
- │                                              │
- │  ══ data operations now work ══              │
+ │  ══ data operations now work (V3+HMAC) ══    │
  │                                              │
  │◄──── GET_VAR_SUB addr 303 (challenge) ───────│  (optional, only if
  │◄──── SET_VAR_SUB addr 1846 (solved blob) ────│   password provided)
@@ -52,7 +49,13 @@ PLC                                          Client
 ```
 
 After SetupSession, all data frames use **V3 framing** with HMAC-SHA256
-(keyed by the first 24 bytes of the session key).
+(keyed by the first 24 bytes of the session key). No intermediate
+activation sequence is needed — data reads work immediately.
+
+Note: TIA Portal sends SET_VARIABLE attr 323 + finalize reads before
+data operations, but this is TIA-specific behavior. The HarpoS7
+reference implementation skips it, and V1-initial PLCs reject the
+SET_VARIABLE with a connection reset (GH-710).
 
 ## Module map
 
