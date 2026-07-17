@@ -24,8 +24,8 @@ Two dialects are supported:
 
 Example::
 
-    from s7 import Client
-    from s7.tags import parse_tag, load_tia_xml
+    from snap7 import Client
+    from snap7.tags import parse_tag, load_tia_xml
 
     client = Client()
     client.connect("192.168.1.10", 0, 1)
