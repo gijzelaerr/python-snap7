@@ -6,6 +6,7 @@ CHANGES
 
 Bug fix release for the pure Python S7 communication library.
 
+<<<<<<< HEAD
 * Fix `AttributeError` from `__del__` during interpreter shutdown (#707)
 * Fix server SZL 0x001C response to match real PLC format (#694)
 * Fix `connection_type` in TSAP composition during connect (#766)
@@ -21,6 +22,58 @@ Bug fix release for the pure Python S7 communication library.
 * Fix `set_date` to use unsigned short for day count (dates after ~2079)
 * Fix `set_tod` float precision loss with integer arithmetic
 * Validate BMP range in `set_wstring` to prevent silent data corruption
+||||||| parent of 8a0ff08 (4.0 polish: docs, examples, property tests, stress tests, optimizer fix (#696))
+* New `s7` package as recommended entry point with protocol auto-detection
+* S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
+* S7CommPlus area read/write (M, I, Q, counters, timers)
+* S7CommPlus PLC start/stop via INVOKE
+* S7CommPlus object browsing via EXPLORE
+* S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
+* Partner BSend/BRecv with correct PBC format, async receive, PDU reference echo
+* TCP_NODELAY and SO_KEEPALIVE on all sockets for lower latency
+* Structured logging with PLC connection context (`snap7.log`)
+* Command-line interface (`snap7-cli` / `s7`)
+* Multi-variable read optimizer with parallel dispatch (experimental)
+* S7 routing for multi-subnet PLC access (experimental)
+* Symbolic addressing via SymbolTable (experimental)
+* Dependabot auto-merge for dependency updates
+* Documentation restructured: API Reference + Internals sections
+
+### Thanks
+
+* [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
+* [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
+=======
+* New `s7` package as recommended entry point with protocol auto-detection
+* S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
+* S7CommPlus area read/write (M, I, Q, counters, timers)
+* S7CommPlus PLC start/stop via INVOKE
+* S7CommPlus object browsing via EXPLORE
+* S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
+* Partner BSend/BRecv with correct PBC format, async receive, PDU reference echo
+* TCP_NODELAY and SO_KEEPALIVE on all sockets for lower latency
+* Structured logging with PLC connection context (`snap7.log`)
+* Command-line interface (`snap7-cli` / `s7`)
+* Multi-variable read optimizer with parallel dispatch (experimental)
+* S7 routing for multi-subnet PLC access (experimental)
+* Symbolic addressing via SymbolTable (experimental)
+* S7CommPlus CPU state reading and block transfer (upload/download)
+* Array read/write helpers (`db_read_array`, `db_write_array`)
+* Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt`
+* Optimized `SymbolTable.read_many()` with multi-variable batching
+* Optimizer excludes counter/timer areas from byte-range merging
+* Fixed `get_cpu_info` field offsets for real S7-300/1500 (thanks @qzertywsx)
+* Fixed `S7SZL.__str__` attribute name typo (thanks @qzertywsx)
+* Dependabot auto-merge for dependency updates
+* Documentation restructured: API Reference + Internals sections
+
+### Thanks
+
+* [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
+* [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
+>>>>>>> 8a0ff08 (4.0 polish: docs, examples, property tests, stress tests, optimizer fix (#696))
 
 3.0.0
 -----

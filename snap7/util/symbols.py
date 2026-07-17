@@ -23,7 +23,6 @@ from logging import getLogger
 from pathlib import Path
 from typing import Any, Dict, Union
 
-from snap7.client import Client
 from snap7.type import ValueType
 from snap7.util import (
     get_bool,
@@ -378,7 +377,7 @@ class SymbolTable:
     # Read / write
     # ------------------------------------------------------------------
 
-    def read(self, client: Client, tag: str) -> ValueType:
+    def read(self, client: Any, tag: str) -> ValueType:
         """Read a single tag value from the PLC.
 
         Args:
@@ -393,7 +392,7 @@ class SymbolTable:
         data = client.db_read(addr.db, addr.byte_offset, size)
         return self._get_value(data, 0, addr)
 
-    def write(self, client: Client, tag: str, value: Any) -> None:
+    def write(self, client: Any, tag: str, value: Any) -> None:
         """Write a single tag value to the PLC.
 
         Args:
@@ -417,7 +416,7 @@ class SymbolTable:
         self._set_value(data, 0, addr, value)
         client.db_write(addr.db, addr.byte_offset, data)
 
-    def read_many(self, client: Client, tags: list[str]) -> Dict[str, ValueType]:
+    def read_many(self, client: Any, tags: list[str]) -> Dict[str, ValueType]:
         """Read multiple tags in batched requests.
 
         Groups tags by DB number and uses :meth:`~snap7.client.Client.read_multi_vars`
