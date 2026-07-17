@@ -248,7 +248,7 @@ def test_wstring_rejects_supplementary_characters(value: str) -> None:
     """Characters outside BMP should be rejected, matching PLC behavior."""
     assume(any(ord(c) > 0xFFFF for c in value))
     data = bytearray(100)
-    with pytest.raises(ValueError, match="Basic Multilingual Plane"):
+    with pytest.raises(ValueError, match="BMP"):
         set_wstring(data, 0, value, 50)
 
 
