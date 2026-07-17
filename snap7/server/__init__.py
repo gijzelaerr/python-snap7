@@ -1626,10 +1626,10 @@ class Server:
         elif szl_id == 0x0000:
             # Return list of available SZL IDs
             available_ids = [0x0000, 0x0011, 0x001C, 0x0131, 0x0232]
-            data = b""
+            result = b""
             for id_val in available_ids:
-                data += struct.pack(">H", id_val)
-            return data
+                result += struct.pack(">H", id_val)
+            return result
 
         return None
 

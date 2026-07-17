@@ -1,6 +1,19 @@
 CHANGES
 =======
 
+3.1.0
+-----
+
+Bug fix release for the pure Python S7 communication library.
+
+* Fix `AttributeError` from `__del__` during interpreter shutdown (#707)
+* Fix server SZL 0x001C response to match real PLC format (#694)
+* Fix `connection_type` in TSAP composition during connect (#766)
+* Accept `memoryview` in setter and getter type annotations (#647)
+* Zero-pad milliseconds in `get_time` so 3 ms reads as ".003" (#716)
+* Fix PI service PDU format for PLC control commands (#743)
+* Fix `get_cpu_info` and `S7SZL.__str__` (#692)
+
 3.0.0
 -----
 
