@@ -57,6 +57,7 @@ markers =[
     "logo",
     "mainloop",
     "partner",
+    "routing",
     "server",
     "util"
     ]
