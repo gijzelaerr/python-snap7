@@ -46,4 +46,5 @@ API reference
 
 .. automodule:: snap7.async_client
    :members:
+   :no-index:
    :exclude-members: AsyncISOTCPConnection

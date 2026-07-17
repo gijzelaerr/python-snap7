@@ -25,7 +25,7 @@ setup: .venv/installed
 
 .PHONY: doc
 doc: .venv/bin/sphinx-build
-	uv run sphinx-build -N -bhtml doc/ doc/_build
+	uv run sphinx-build -W -N -bhtml doc/ doc/_build
 
 .PHONY: check
 check: .venv/bin/pytest
