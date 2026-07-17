@@ -781,13 +781,13 @@ class Client(ClientMixin):
         return self.db_write(db_number, start, data)
 
     def read_tag(self, tag: "Union[Tag, str]") -> Any:
-        """Read a typed value by :class:`Tag` or address string.
+        """Read a typed value by :class:`~snap7.tags.Tag` or address string.
 
         Accepts a :class:`~snap7.tags.Tag` or a PLC4X-style address string
         (e.g. ``"DB1.DBX0.0:BOOL"``, ``"DB1:10:INT"``, ``"M10.5:BOOL"``).
 
         Args:
-            tag: A :class:`Tag` instance or a parseable address string.
+            tag: A :class:`~snap7.tags.Tag` instance or a parseable address string.
 
         Returns:
             The typed value (bool/int/float/datetime/str depending on type).
@@ -808,10 +808,10 @@ class Client(ClientMixin):
         return _decode_tag(resolved, bytearray(data))
 
     def write_tag(self, tag: "Union[Tag, str]", value: Any) -> int:
-        """Write a typed value by :class:`Tag` or address string.
+        """Write a typed value by :class:`~snap7.tags.Tag` or address string.
 
         Args:
-            tag: A :class:`Tag` instance or a parseable address string.
+            tag: A :class:`~snap7.tags.Tag` instance or a parseable address string.
             value: The value to write (type must match the tag's datatype).
 
         Returns:
@@ -838,7 +838,7 @@ class Client(ClientMixin):
         reads into minimal PDU exchanges.
 
         Args:
-            tags: List of :class:`Tag` instances or address strings.
+            tags: List of :class:`~snap7.tags.Tag` instances or address strings.
 
         Returns:
             List of decoded values in the same order as input.
@@ -1351,8 +1351,7 @@ class Client(ClientMixin):
             return 0
 
         # Handle dict list
-        dict_items = cast(List[dict[str, Any]], items)
-        for dict_item in dict_items:
+        for dict_item in items:
             area = dict_item["area"]
             db_number = dict_item.get("db_number", 0)
             start = dict_item["start"]
