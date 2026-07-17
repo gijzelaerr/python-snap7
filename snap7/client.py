@@ -1351,7 +1351,8 @@ class Client(ClientMixin):
             return 0
 
         # Handle dict list
-        for dict_item in items:
+        dict_items = cast(List[dict[str, Any]], items)
+        for dict_item in dict_items:
             area = dict_item["area"]
             db_number = dict_item.get("db_number", 0)
             start = dict_item["start"]
