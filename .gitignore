@@ -63,3 +63,4 @@ snap7.dll
 
 .claude/
 .hypothesis/
+*.pyc

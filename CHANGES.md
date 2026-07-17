@@ -4,88 +4,58 @@ CHANGES
 3.1.0
 -----
 
-Bug fix release for the pure Python S7 communication library.
+Feature and bug fix release for the pure Python S7 communication library.
 
-<<<<<<< HEAD
+### New features
+
+* **AsyncClient** for `asyncio` support (#593)
+* **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
+  Siemens STEP7 syntax (#697)
+* **Dual-dialect tag parsing**: PLC4X and nodeS7 tag formats with
+  auto-detection (#701)
+* **Multi-variable read optimizer** with parallel dispatch (experimental, #641)
+* **S7 routing** for multi-subnet PLC access (experimental, #639)
+* **Heartbeat monitoring** and auto-reconnect with exponential backoff (#635)
+* **Structured logging** with PLC connection context (`snap7.log`, #688)
+* **PROFINET DCP** network discovery (#634)
+* **CLI tools** for PLC interaction (`pip install "python-snap7[cli]"`, #631)
+* **Demo server** exposing real host metrics (#704)
+* Typed DB access methods (`db_read_bool`, `db_read_int`, etc., #632)
+* Symbolic addressing — read/write by tag name (experimental, #638)
+* Diagnostic buffer reading (#690)
+* Array read/write helpers (`db_read_array`, `db_write_array`, #693)
+* Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt` (#693)
+* Property-based testing with Hypothesis (#636)
+
+### Bug fixes
+
 * Fix `AttributeError` from `__del__` during interpreter shutdown (#707)
 * Fix server SZL 0x001C response to match real PLC format (#694)
 * Fix `connection_type` in TSAP composition during connect (#766)
 * Accept `memoryview` in setter and getter type annotations (#647)
-* Zero-pad milliseconds in `get_time` so 3 ms reads as ".003" (#716)
+* Zero-pad milliseconds in `get_time` (#716)
 * Fix PI service PDU format for PLC control commands (#743)
 * Fix `get_cpu_info` and `S7SZL.__str__` (#692)
-* Set `TCP_NODELAY` and `SO_KEEPALIVE` on all S7 sockets for better performance (#677)
+* Fix partner S7 Communication Setup and bsend/brecv PDU format (#669)
+* Fix `get_dtl` microsecond parsing (4-byte nanosecond field)
+* Fix `set_date` unsigned short for day count
+* Fix `set_tod` float precision loss
+* Validate BMP range in `set_wstring`
+* Fix async `get_cpu_info` SZL offsets (#702)
+* Fix demo primary-IP guess with VPN/tunnel interfaces (#708)
+* Fix mypy errors in server SZL list (#695)
+* Robustness: 210+ S7 error codes, auto PDU splitting, stale packet retry (#580)
+
+### Improvements
+
+* Set `TCP_NODELAY` and `SO_KEEPALIVE` on all sockets (#677)
 * Export `get_ulint`, `get_lint`, `get_date_time_object` from `snap7.util` (#652)
-* Fix partner S7 Communication Setup and bsend/brecv PDU format for real PLCs (#669)
-* Robustness backport: 210+ S7 error codes, auto PDU splitting for large reads/writes, stale packet retry (#580)
-* Fix `get_dtl` microsecond parsing (read 4-byte nanosecond field instead of single byte)
-* Fix `set_date` to use unsigned short for day count (dates after ~2079)
-* Fix `set_tod` float precision loss with integer arithmetic
-* Validate BMP range in `set_wstring` to prevent silent data corruption
-||||||| parent of 8a0ff08 (4.0 polish: docs, examples, property tests, stress tests, optimizer fix (#696))
-* New `s7` package as recommended entry point with protocol auto-detection
-* S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
-* S7CommPlus area read/write (M, I, Q, counters, timers)
-* S7CommPlus PLC start/stop via INVOKE
-* S7CommPlus object browsing via EXPLORE
-* S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
-* TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
-* Partner BSend/BRecv with correct PBC format, async receive, PDU reference echo
-* TCP_NODELAY and SO_KEEPALIVE on all sockets for lower latency
-* Structured logging with PLC connection context (`snap7.log`)
-* Command-line interface (`snap7-cli` / `s7`)
-* Multi-variable read optimizer with parallel dispatch (experimental)
-* S7 routing for multi-subnet PLC access (experimental)
-* Symbolic addressing via SymbolTable (experimental)
-* Dependabot auto-merge for dependency updates
 * Documentation restructured: API Reference + Internals sections
 
 ### Thanks
 
 * [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
 * [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
-=======
-* New `s7` package as recommended entry point with protocol auto-detection
-* S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
-* S7CommPlus area read/write (M, I, Q, counters, timers)
-* S7CommPlus PLC start/stop via INVOKE
-* S7CommPlus object browsing via EXPLORE
-* S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
-* TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
-* Partner BSend/BRecv with correct PBC format, async receive, PDU reference echo
-* TCP_NODELAY and SO_KEEPALIVE on all sockets for lower latency
-* Structured logging with PLC connection context (`snap7.log`)
-* Command-line interface (`snap7-cli` / `s7`)
-* Multi-variable read optimizer with parallel dispatch (experimental)
-* S7 routing for multi-subnet PLC access (experimental)
-* Symbolic addressing via SymbolTable (experimental)
-* S7CommPlus CPU state reading and block transfer (upload/download)
-* Array read/write helpers (`db_read_array`, `db_write_array`)
-* Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt`
-* **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
-  Siemens STEP7 syntax, replacing the homegrown SymbolTable class.
-  Loaders: `load_csv`, `load_json`, `load_tia_xml` return `dict[str, Tag]`
-* **Dual-dialect tag parsing**: `PLC4XTag` and `NodeS7Tag` subtypes of
-  `Tag` with dialect-specific `parse()` and `__str__` (round-trip).
-  `parse_tag(s, *, strict=True)` autodetects dialect from syntax markers
-  (`,` → nodeS7, `:TYPE` → PLC4X); `strict=False` accepts bare short
-  forms like `M7.1` or `IW22`. Enables pyS7 / Node-RED tag migration.
-* **Symbolic (LID-based) access for optimized DBs** (experimental):
-  `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
-  `client.read_tag(tag)` routes to S7CommPlus LID-based access via the
-  PLC's symbol tree. Required for S7-1200/1500 DBs with
-  "Optimized block access" enabled (the TIA Portal V13+ default).
-* Optimizer excludes counter/timer areas from byte-range merging
-* Fixed `get_cpu_info` field offsets for real S7-300/1500 (thanks @qzertywsx)
-* Fixed `S7SZL.__str__` attribute name typo (thanks @qzertywsx)
-* Dependabot auto-merge for dependency updates
-* Documentation restructured: API Reference + Internals sections
-
-### Thanks
-
-* [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
-* [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
->>>>>>> 8a0ff08 (4.0 polish: docs, examples, property tests, stress tests, optimizer fix (#696))
 
 3.0.0
 -----
