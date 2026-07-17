@@ -339,20 +339,16 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            # Step 7: Post-SessionKey data operations (V1-initial PLCs)
+            # Step 7: Post-SessionKey legitimation (V1-initial PLCs)
             #
-            # After SetupSession with the SecurityKey blob, the PLC accepts
-            # V3+HMAC framed requests immediately — no activation sequence
-            # needed. Password legitimation is optional and only required
-            # for write access or elevated operations.
-            #
-            # Reference: HarpoS7 PoC goes straight from SetupSession to
-            # data reads (GetVarSubStreamed) without any intermediate steps.
+            # After SetupSession with the SecurityKey blob, the PLC requires
+            # a legitimation handshake before it will allow data operations.
+            # This applies even when no password is configured on the PLC —
+            # an empty-password legitimation is still required.
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
-                if self._connect_password:
-                    self._post_auth_legitimation(password=self._connect_password)
+                self._post_auth_legitimation(password=self._connect_password)
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
