@@ -4,7 +4,7 @@ import zlib
 
 import pytest
 
-from s7commplus.blob_decompressor import decompress_blob, find_and_decompress
+from s7commplus import decompress_blob, find_and_decompress
 from s7commplus.zlib_dicts import ZLIB_DICTIONARIES, ZLIB_DICT_NAMES
 
 

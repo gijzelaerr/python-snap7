@@ -8,6 +8,7 @@ import struct
 from typing import Any, Optional
 
 from . import typeinfo
+from .blob_decompressor import find_and_decompress
 from .connection import S7CommPlusConnection
 from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
@@ -283,6 +284,26 @@ class S7CommPlusClient:
         payload = _build_explore_payload(explore_id)
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return response
+
+    def explore_xml(self, explore_id: int = 0) -> str | None:
+        """EXPLORE a PLC object and decompress the XML metadata from the response.
+
+        S7-1200/1500 PLCs (FW V4.5+) compress XML metadata — tag definitions,
+        interface descriptions, line comments, etc. — using zlib with Siemens
+        preset dictionaries. This method sends an EXPLORE request and
+        decompresses the first zlib stream found in the response.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            explore_id: Object to explore (0 = root).
+
+        Returns:
+            Decompressed XML as a UTF-8 string, or ``None`` if the response
+            contains no recognisable zlib stream.
+        """
+        raw = self.explore(explore_id)
+        return find_and_decompress(raw)
 
     def set_plc_operating_state(self, state: int) -> None:
         """Set the PLC operating state (start/stop).
