@@ -1,10 +1,16 @@
 import logging
+import socket
+import struct
+import threading
+import time
 
 import pytest
 import unittest as unittest
-from snap7.error import error_text
+from snap7.connection import ISOTCPConnection
+from snap7.error import S7Error, S7ConnectionError, error_text
 
 import snap7.partner
+from snap7.partner import Partner, PartnerStatus
 from snap7.type import Parameter
 
 logging.basicConfig(level=logging.WARNING)
@@ -139,27 +145,37 @@ class TestPartnerPDU:
         pdu = p._build_partner_data_pdu(data)
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
-        assert struct.unpack(">H", pdu[2:4])[0] == len(data)
-        assert pdu[6:] == data
+        payload, r_id, pdu_ref = p._parse_partner_data_pdu(pdu)
+        assert payload == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
         pdu = p._build_partner_data_pdu(b"")
         assert pdu[0:1] == b"\x32"
-        assert struct.unpack(">H", pdu[2:4])[0] == 0
+        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        assert payload == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
         pdu = p._build_partner_data_pdu(data)
-        assert struct.unpack(">H", pdu[2:4])[0] == 1024
-        assert pdu[6:] == data
+        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        assert payload == data
+
+    def test_build_partner_data_pdu_r_id(self) -> None:
+        """R-ID is embedded in the data section and extracted by parser."""
+        p = Partner()
+        p.r_id = 0xDEADBEEF
+        pdu = p._build_partner_data_pdu(b"\x01")
+        payload, r_id, _pdu_ref = p._parse_partner_data_pdu(pdu)
+        assert payload == b"\x01"
+        assert r_id == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:
         p = Partner()
         original = b"Hello, Partner!"
         pdu = p._build_partner_data_pdu(original)
-        parsed = p._parse_partner_data_pdu(pdu)
+        parsed, _, _ = p._parse_partner_data_pdu(pdu)
         assert parsed == original
 
     def test_parse_partner_data_pdu_roundtrip_various_sizes(self) -> None:
@@ -167,7 +183,8 @@ class TestPartnerPDU:
         for size in [0, 1, 10, 100, 500, 1024]:
             data = (bytes(range(256)) * (size // 256 + 1))[:size]
             pdu = p._build_partner_data_pdu(data)
-            assert p._parse_partner_data_pdu(pdu) == data
+            payload, _, _ = p._parse_partner_data_pdu(pdu)
+            assert payload == data
 
     def test_parse_partner_data_pdu_too_short(self) -> None:
         p = Partner()
@@ -177,9 +194,15 @@ class TestPartnerPDU:
     def test_build_partner_ack(self) -> None:
         p = Partner()
         ack = p._build_partner_ack()
-        assert len(ack) == 6
         assert ack[0:1] == b"\x32"
-        assert ack[1:2] == b"\x08"
+        assert ack[1:2] == b"\x07"
+
+    def test_build_partner_ack_pdu_ref(self) -> None:
+        """ACK echoes the PDU reference from the data PDU."""
+        p = Partner()
+        ack = p._build_partner_ack(pdu_ref=0x1234)
+        _, _, _, pdu_ref, _, _ = struct.unpack(">BBHHHH", ack[:10])
+        assert pdu_ref == 0x1234
 
     def test_parse_partner_ack_valid(self) -> None:
         p = Partner()
@@ -193,7 +216,7 @@ class TestPartnerPDU:
 
     def test_parse_partner_ack_wrong_type(self) -> None:
         p = Partner()
-        bad_ack = struct.pack(">BBHH", 0x32, 0x07, 0x0000, 0x0000)
+        bad_ack = struct.pack(">BBHHHH", 0x32, 0x01, 0x0000, 0x0000, 0x0000, 0x0000)
         with pytest.raises(S7Error, match="Expected partner ACK"):
             p._parse_partner_ack(bad_ack)
 

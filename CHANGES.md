@@ -14,6 +14,8 @@ Bug fix release for the pure Python S7 communication library.
 * Fix PI service PDU format for PLC control commands (#743)
 * Fix `get_cpu_info` and `S7SZL.__str__` (#692)
 * Set `TCP_NODELAY` and `SO_KEEPALIVE` on all S7 sockets for better performance (#677)
+* Export `get_ulint`, `get_lint`, `get_date_time_object` from `snap7.util` (#652)
+* Fix partner S7 Communication Setup and bsend/brecv PDU format for real PLCs (#669)
 
 3.0.0
 -----
