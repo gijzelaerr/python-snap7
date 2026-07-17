@@ -13,6 +13,7 @@ Bug fix release for the pure Python S7 communication library.
 * Zero-pad milliseconds in `get_time` so 3 ms reads as ".003" (#716)
 * Fix PI service PDU format for PLC control commands (#743)
 * Fix `get_cpu_info` and `S7SZL.__str__` (#692)
+* Set `TCP_NODELAY` and `SO_KEEPALIVE` on all S7 sockets for better performance (#677)
 
 3.0.0
 -----
