@@ -203,7 +203,7 @@ class TestJSONConstruction:
 
 def _make_client() -> MagicMock:
     """Create a MagicMock that behaves enough like snap7.Client."""
-    return MagicMock(spec=["db_read", "db_write"])
+    return MagicMock(spec=["db_read", "db_write", "read_multi_vars"])
 
 
 class TestRead:
@@ -383,7 +383,8 @@ class TestReadMany:
         int_data = bytearray(2)
         struct.pack_into(">h", int_data, 0, 100)
 
-        client.db_read.side_effect = [real_data, int_data]
+        # read_many uses read_multi_vars for batching
+        client.read_multi_vars.return_value = (0, [real_data, int_data])
 
         table = SymbolTable(
             {
@@ -396,6 +397,22 @@ class TestReadMany:
         assert isinstance(speed, float)
         assert abs(speed - 50.0) < 0.01
         assert values["Level"] == 100
+
+    def test_read_many_single_tag(self) -> None:
+        """Single tag falls back to read() instead of read_multi_vars."""
+        client = _make_client()
+        real_data = bytearray(4)
+        struct.pack_into(">f", real_data, 0, 42.0)
+        client.db_read.return_value = real_data
+
+        table = SymbolTable({"Temp": {"db": 1, "offset": 0, "type": "REAL"}})
+        values = table.read_many(client, ["Temp"])
+        assert abs(values["Temp"] - 42.0) < 0.01
+
+    def test_read_many_empty(self) -> None:
+        client = _make_client()
+        table = SymbolTable({"X": {"db": 1, "offset": 0, "type": "INT"}})
+        assert table.read_many(client, []) == {}
 
 
 # ---------------------------------------------------------------------------

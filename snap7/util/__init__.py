@@ -22,6 +22,11 @@ from .setters import (
     set_tod,
     set_dtl,
     set_dt,
+    set_lint,
+    set_ulint,
+    set_ltime,
+    set_ltod,
+    set_ldt,
 )
 
 from .getters import (
@@ -111,4 +116,9 @@ __all__ = [
     "set_tod",
     "set_dtl",
     "set_dt",
+    "set_lint",
+    "set_ulint",
+    "set_ltime",
+    "set_ltod",
+    "set_ldt",
 ]
