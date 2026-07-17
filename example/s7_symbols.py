@@ -1,36 +1,37 @@
-"""Symbolic addressing example — read/write by tag name.
+"""Tag-based symbolic addressing example.
 
 Usage:
     python example/s7_symbols.py 192.168.1.10
 """
 
 import sys
-from s7 import Client, SymbolTable
+
+from s7 import Client, Tag
 
 address = sys.argv[1] if len(sys.argv) > 1 else "192.168.1.10"
-
-# Define symbols (or use SymbolTable.from_csv("tags.csv"))
-symbols = SymbolTable(
-    {
-        "Motor1.Speed": {"db": 1, "offset": 0, "type": "REAL"},
-        "Motor1.Running": {"db": 1, "offset": 4, "bit": 0, "type": "BOOL"},
-        "SetPoint": {"db": 1, "offset": 6, "type": "INT"},
-    }
-)
 
 client = Client()
 client.connect(address, 0, 1)
 
-# Read by name
-speed = symbols.read(client, "Motor1.Speed")
-running = symbols.read(client, "Motor1.Running")
+# Ad-hoc tag read using PLC4X-style syntax
+speed = client.read_tag("DB1.DBD0:REAL")
+running = client.read_tag("DB1.DBX4.0:BOOL")
 print(f"Speed: {speed!r}, Running: {running!r}")
 
-# Write by name
-symbols.write(client, "SetPoint", 1500)
+# Write a value
+client.write_tag("DB1.DBW6:INT", 1500)
 
-# Batch read (uses optimizer when available)
-values = symbols.read_many(client, ["Motor1.Speed", "SetPoint"])
-print(f"Batch: {values}")
+# Read multiple tags in one optimized request
+values = client.read_tags(["DB1.DBD0:REAL", "DB1.DBW6:INT"])
+print(f"Batch: {values!r}")
+
+# Or build tags programmatically / load from file
+# tags = load_csv("tags.csv")  # returns dict[str, Tag]
+# value = client.read_tag(tags["Motor.Speed"])
+
+# Tag instances are also accepted directly
+temperature_tag = Tag.from_string("DB1.DBD0:REAL", name="Temperature")
+temp = client.read_tag(temperature_tag)
+print(f"Temperature: {temp!r}")
 
 client.disconnect()
