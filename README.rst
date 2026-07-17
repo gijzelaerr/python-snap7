@@ -12,19 +12,12 @@ Python-snap7 is tested with Python 3.10+, on Windows, Linux and OS X.
 The full documentation is available on `Read The Docs <https://python-snap7.readthedocs.io/en/latest/>`_.
 
 
-Version 3.0 - Pure Python Rewrite
-==================================
+Version 3.0 -- Pure Python Rewrite
+====================================
 
-Version 3.0 is a ground-up rewrite of python-snap7. The library no longer wraps the
-C snap7 shared library — instead, the entire S7 protocol stack (TPKT, COTP, and S7)
-is now implemented in pure Python. This is a **breaking change** from all previous
-versions.
-
-**Why this matters:**
-
-* **Portability**: No more platform-specific shared libraries (``.dll``, ``.so``, ``.dylib``).
-  python-snap7 now works on any platform that runs Python — including ARM, Alpine Linux,
-  and other environments where the C library was difficult or impossible to install.
+Version 3.0 was a ground-up rewrite of python-snap7. The library no longer wraps
+the C snap7 shared library -- instead, the entire S7 protocol stack (TPKT, COTP,
+and S7) is implemented in pure Python.
 
 Connect to any S7 PLC::
 
@@ -36,14 +29,6 @@ Connect to any S7 PLC::
    client.disconnect()
 
 No native libraries or platform-specific dependencies are required.
-
-
-Version 3.0 -- Pure Python Rewrite
-====================================
-
-Version 3.0 was a ground-up rewrite of python-snap7. The library no longer wraps
-the C snap7 shared library -- instead, the entire S7 protocol stack (TPKT, COTP,
-and S7) is implemented in pure Python.
 
 * **Portability**: No more platform-specific shared libraries (``.dll``, ``.so``, ``.dylib``).
   Works on any platform that runs Python -- including ARM, Alpine Linux, and other

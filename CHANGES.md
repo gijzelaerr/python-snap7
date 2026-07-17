@@ -16,6 +16,11 @@ Bug fix release for the pure Python S7 communication library.
 * Set `TCP_NODELAY` and `SO_KEEPALIVE` on all S7 sockets for better performance (#677)
 * Export `get_ulint`, `get_lint`, `get_date_time_object` from `snap7.util` (#652)
 * Fix partner S7 Communication Setup and bsend/brecv PDU format for real PLCs (#669)
+* Robustness backport: 210+ S7 error codes, auto PDU splitting for large reads/writes, stale packet retry (#580)
+* Fix `get_dtl` microsecond parsing (read 4-byte nanosecond field instead of single byte)
+* Fix `set_date` to use unsigned short for day count (dates after ~2079)
+* Fix `set_tod` float precision loss with integer arithmetic
+* Validate BMP range in `set_wstring` to prevent silent data corruption
 
 3.0.0
 -----

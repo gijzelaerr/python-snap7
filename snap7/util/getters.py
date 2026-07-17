@@ -660,6 +660,12 @@ def get_ldt(bytearray_: Buffer, byte_index: int) -> datetime:
 
 
 def get_dtl(bytearray_: Buffer, byte_index: int) -> datetime:
+    """Get DTL (Date and Time Long) value from bytearray.
+
+    The DTL data type is 12 bytes: 2-byte year, month, day, weekday,
+    hour, minute, second, and a 4-byte nanosecond field at bytes 8-11.
+    """
+    nanoseconds = struct.unpack_from(">I", bytearray_, byte_index + 8)[0]
     time_to_datetime = datetime(
         year=int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big"),
         month=int(bytearray_[byte_index + 2]),
@@ -667,8 +673,8 @@ def get_dtl(bytearray_: Buffer, byte_index: int) -> datetime:
         hour=int(bytearray_[byte_index + 5]),
         minute=int(bytearray_[byte_index + 6]),
         second=int(bytearray_[byte_index + 7]),
-        microsecond=int(bytearray_[byte_index + 8]),
-    )  # --- ? noch nicht genau genug
+        microsecond=nanoseconds // 1000,
+    )
     if time_to_datetime > datetime(2554, 12, 31, 23, 59, 59):
         raise ValueError("date_val is higher than specification allows.")
     return time_to_datetime
