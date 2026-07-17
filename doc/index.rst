@@ -12,6 +12,7 @@ Contents:
 
    API/client
    API/async_client
+   API/s7commplus
    API/server
    API/partner
    API/logo
