@@ -112,6 +112,37 @@ def test_parse_block_interface_types():
     ]
 
 
+def test_parse_block_interface_fb_sections():
+    # FB/OB interfaces are organized in sections; the section-header <Member>s
+    # (Input/Static, no RID) must be skipped, real members tagged with their
+    # section. Complex members carry a ready-made ``Type`` attribute (arrays),
+    # scalar ones resolve from the RID.
+    xml = (
+        "<BlockInterface><Payload><Root>"
+        '<Member ID="2" Name="Input" SubPartIndex="0" StdO="0" />'
+        '<Member ID="5" Name="Static" SubPartIndex="3" StdO="0" />'
+        "</Root></Payload>"
+        "<SubParts>"
+        '<Part Kind="InputSection"><Payload><Member>'
+        '<Member ID="51" Name="puls_start_stop" RID="0x02000001" StdO="0" LID="9" />'
+        "</Member></Payload></Part>"
+        '<Part Kind="StaticSection"><Payload><Member>'
+        '<Member ID="61" Name="num_step" RID="0x02000005" StdO="0" LID="19" />'
+        '<Member ID="62" Name="timers" RID="0x0201001F"'
+        ' Type="Array[0..5] of IEC_TIMER" StdO="16" LID="20" />'
+        '<Member ID="63" Name="echo" RID="0x02010001"'
+        ' Type="Array[0..2] of Bool" StdO="784" LID="21" />'
+        "</Member></Payload></Part>"
+        "</SubParts></BlockInterface>"
+    )
+    assert parse_block_interface(xml) == [
+        Member("puls_start_stop", "Bool", 9, 0, 0x02000001, "Input"),
+        Member("num_step", "Int", 19, 0, 0x02000005, "Static"),
+        Member("timers", "Array[0..5] of IEC_TIMER", 20, 16, 0x0201001F, "Static"),
+        Member("echo", "Array[0..2] of Bool", 21, 784, 0x02010001, "Static"),
+    ]
+
+
 def test_block_interface_from_live_g2_db():
     members = block_interface_from_explore(_DB_INTERFACE_BLOB)
     got = [(m.name, m.data_type) for m in members]

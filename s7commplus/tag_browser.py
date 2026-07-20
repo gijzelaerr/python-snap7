@@ -162,40 +162,69 @@ class Member:
     """A single variable inside a data block or FB/OB interface."""
 
     name: str
-    data_type: str  # resolved SoftDataType name, or raw RID hex if complex
+    data_type: str  # readable type: SoftDataType name or the inline complex type
     lid: int
     offset: int  # StdO: standard (non-optimized) byte offset
     rid: int  # raw type RID
+    section: str = ""  # Input/Output/InOut/Static/Temp/Constant (FB/OB); "" for a DB
 
 
-def _member_type(rid_attr: str) -> str:
-    """Resolve a ``<Member RID=...>`` attribute to a data-type name."""
+def _member_type(member: ET.Element) -> str:
+    """Resolve a ``<Member>``'s data type to a readable name.
+
+    Complex members (arrays, UDTs, strings, structs) already carry a ready-made
+    ``Type`` attribute (e.g. ``Array[0..5] of IEC_TIMER``). Scalar elementary
+    members carry only a RID of the form ``0x0200_00XX`` whose low byte is a
+    Siemens SoftDataType id. (Arrays use ``0x0201_00XX``, hence the explicit
+    ``Type``; the raw RID stays available on :attr:`Member.rid`.)
+    """
+    explicit = member.get("Type")
+    if explicit:
+        return explicit
     try:
-        rid = int(rid_attr, 16)
-    except (TypeError, ValueError):
+        rid = int(member.get("RID", "0") or "0", 16)
+    except ValueError:
         return ""
-    # Elementary types live in the 0x0200_00XX namespace; anything else is a
-    # reference to a complex type (UDT/system struct) we don't inline-resolve.
     if (rid & 0xFFFF0000) == 0x02000000:
         return SOFTDATATYPE.get(rid & 0xFFFF, f"SoftType#{rid & 0xFFFF}")
     return f"0x{rid:08X}"
 
 
+def _enclosing_section(member: ET.Element, parent: dict) -> str:
+    """Walk up to the enclosing ``<Part Kind="XxxSection">`` and return ``Xxx``."""
+    node = parent.get(member)
+    while node is not None:
+        kind = node.get("Kind", "") if node.tag == "Part" else ""
+        if kind.endswith("Section"):
+            return kind[: -len("Section")]
+        node = parent.get(node)
+    return ""
+
+
 def parse_block_interface(xml_text: str) -> list[Member]:
     """Parse a decompressed ``<BlockInterface>`` document into :class:`Member`s.
 
-    Works for DB, FB and OB interfaces. Members are returned in declaration
-    order across all sections (Input/Output/InOut/Static/...).
+    Works for DB, FB and OB interfaces. Only ``<Member>`` elements that carry a
+    ``RID`` are real variables; the section-header and list-wrapper ``<Member>``
+    elements (which have no ``RID``) are skipped. Members are returned in
+    declaration order, each tagged with its section (Input/Output/... for FB/OB;
+    empty for a DB).
     """
+    root = ET.fromstring(xml_text)
+    parent = {child: p for p in root.iter() for child in p}
     members: list[Member] = []
-    for m in ET.fromstring(xml_text).iter("Member"):
+    for m in root.iter("Member"):
+        rid_attr = m.get("RID")
+        if rid_attr is None:
+            continue  # section header or list wrapper, not a variable
         members.append(
             Member(
                 name=m.get("Name", ""),
-                data_type=_member_type(m.get("RID", "")),
+                data_type=_member_type(m),
                 lid=int(m.get("LID", "0")),
                 offset=int(m.get("StdO", "0")),
-                rid=int(m.get("RID", "0") or "0", 16),
+                rid=int(rid_attr or "0", 16),
+                section=_enclosing_section(m, parent),
             )
         )
     return members
