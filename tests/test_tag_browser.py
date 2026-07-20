@@ -143,6 +143,28 @@ def test_parse_block_interface_fb_sections():
     ]
 
 
+def test_parse_block_interface_udt_member_and_embedded_type():
+    # A member of a UDT type carries a readable ``Type`` ("MyUdt", TIA quotes)
+    # and a RID in the UDT object namespace (0x91......). The interface also
+    # embeds the UDT's own definition under a nested <Part Kind="DataTypeSource">;
+    # those members describe the type, not the block, and must be skipped.
+    xml = (
+        '<BlockInterface><Part Kind="DBSource"><Payload><Root>'
+        '<Member ID="51" Name="flag" RID="0x02000001" StdO="0" LID="9" />'
+        '<Member ID="52" Name="valve" RID="0x91000001"'
+        ' Type="&quot;MyUdt&quot;" StdO="16" LID="10" />'
+        "</Root></Payload>"
+        '<SubParts><Part Kind="DataTypeSource"><Payload><Root>'
+        '<Member ID="60" Name="inner_field" RID="0x02000005" StdO="0" LID="1" />'
+        "</Root></Payload></Part></SubParts>"
+        "</Part></BlockInterface>"
+    )
+    assert parse_block_interface(xml) == [
+        Member("flag", "Bool", 9, 0, 0x02000001, ""),
+        Member("valve", '"MyUdt"', 10, 16, 0x91000001, ""),
+    ]
+
+
 def test_block_interface_from_live_g2_db():
     members = block_interface_from_explore(_DB_INTERFACE_BLOB)
     got = [(m.name, m.data_type) for m in members]

@@ -190,33 +190,44 @@ def _member_type(member: ET.Element) -> str:
     return f"0x{rid:08X}"
 
 
-def _enclosing_section(member: ET.Element, parent: dict) -> str:
-    """Walk up to the enclosing ``<Part Kind="XxxSection">`` and return ``Xxx``."""
+def _enclosing_part(member: ET.Element, parent: dict) -> ET.Element | None:
+    """Return the nearest enclosing ``<Part>`` element, or ``None``."""
     node = parent.get(member)
     while node is not None:
-        kind = node.get("Kind", "") if node.tag == "Part" else ""
-        if kind.endswith("Section"):
-            return kind[: -len("Section")]
+        if node.tag == "Part":
+            return node
         node = parent.get(node)
-    return ""
+    return None
 
 
 def parse_block_interface(xml_text: str) -> list[Member]:
     """Parse a decompressed ``<BlockInterface>`` document into :class:`Member`s.
 
-    Works for DB, FB and OB interfaces. Only ``<Member>`` elements that carry a
-    ``RID`` are real variables; the section-header and list-wrapper ``<Member>``
-    elements (which have no ``RID``) are skipped. Members are returned in
-    declaration order, each tagged with its section (Input/Output/... for FB/OB;
-    empty for a DB).
+    Works for DB, FB, OB and UDT interfaces. A member is a real variable only if
+    it carries a ``RID``; the section-header and list-wrapper ``<Member>``
+    elements (no ``RID``) are skipped. When a block uses a UDT, the interface
+    also embeds that UDT's own definition under a nested ``<Part
+    Kind="DataTypeSource">`` — those members describe the *type*, not the block,
+    so they are skipped: a member is kept only when its nearest enclosing
+    ``<Part>`` is the block's primary part (flat DB/UDT) or a ``*Section`` part
+    (FB/OB). Members are returned in declaration order, each tagged with its
+    section (Input/Output/... for FB/OB; empty for DB/UDT).
     """
     root = ET.fromstring(xml_text)
     parent = {child: p for p in root.iter() for child in p}
+    primary = root.find("Part")  # first top-level Part = the block's own source
     members: list[Member] = []
     for m in root.iter("Member"):
         rid_attr = m.get("RID")
         if rid_attr is None:
             continue  # section header or list wrapper, not a variable
+        part = _enclosing_part(m, parent)
+        if part is primary:
+            section = ""
+        elif part is not None and part.get("Kind", "").endswith("Section"):
+            section = part.get("Kind")[: -len("Section")]
+        else:
+            continue  # member of an embedded type definition (nested *Source part)
         members.append(
             Member(
                 name=m.get("Name", ""),
@@ -224,7 +235,7 @@ def parse_block_interface(xml_text: str) -> list[Member]:
                 lid=int(m.get("LID", "0")),
                 offset=int(m.get("StdO", "0")),
                 rid=int(rid_attr or "0", 16),
-                section=_enclosing_section(m, parent),
+                section=section,
             )
         )
     return members
