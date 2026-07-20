@@ -210,11 +210,16 @@ def parse_block_interface(xml_text: str) -> list[Member]:
     primary = root.find("Part")  # first top-level Part = the block's own source
     if primary is None:
         return []
-    return _parse_source_part(primary)
+    return _parse_source_part(primary, set())
 
 
-def _parse_source_part(part: ET.Element) -> list[Member]:
-    """Parse one source ``<Part>`` (DBSource/BlockSource/DataTypeSource)."""
+def _parse_source_part(part: ET.Element, seen: set[int]) -> list[Member]:
+    """Parse one source ``<Part>`` (DBSource/BlockSource/DataTypeSource).
+
+    ``seen`` carries the identities of the ``<Part>`` elements already being
+    expanded on the current path, so a malformed ``SubPartIndex`` cycle stops
+    instead of recursing forever.
+    """
     sub_el = part.find("SubParts")
     subparts = list(sub_el) if sub_el is not None else []  # index-addressable
 
@@ -224,7 +229,7 @@ def _parse_source_part(part: ET.Element) -> list[Member]:
     if root_el is not None:
         for m in root_el.findall("Member"):
             if m.get("RID") is not None:
-                members.append(_build_member(m, "", subparts))
+                members.append(_build_member(m, "", subparts, seen))
     # FB/OB: variables live in the <Part Kind="*Section"> entries of <SubParts>.
     for sp in subparts:
         kind = sp.get("Kind", "")
@@ -233,11 +238,11 @@ def _parse_source_part(part: ET.Element) -> list[Member]:
         section = kind[: -len("Section")]
         for m in sp.findall("./Payload/Member/Member"):
             if m.get("RID") is not None:
-                members.append(_build_member(m, section, subparts))
+                members.append(_build_member(m, section, subparts, seen))
     return members
 
 
-def _build_member(m: ET.Element, section: str, subparts: list) -> Member:
+def _build_member(m: ET.Element, section: str, subparts: list, seen: set[int]) -> Member:
     """Build a :class:`Member`, expanding a structured type via ``SubPartIndex``."""
     member = Member(
         name=m.get("Name", ""),
@@ -253,7 +258,9 @@ def _build_member(m: ET.Element, section: str, subparts: list) -> Member:
         # Only an inlined type definition (a *Source part) carries sub-members;
         # a *Section index or a library reference expands to nothing.
         if 0 <= idx < len(subparts) and subparts[idx].get("Kind", "").endswith("Source"):
-            member.fields = _parse_source_part(subparts[idx])
+            target = subparts[idx]
+            if id(target) not in seen:
+                member.fields = _parse_source_part(target, seen | {id(target)})
     return member
 
 
@@ -284,11 +291,28 @@ def _find_preset_stream(data: bytes, adler: int) -> int | None:
     need the one for a specific dictionary, not merely the first.
     """
     i = 0
-    end = len(data) - 6
+    # A header needs 6 bytes (CMF + FLG + 4-byte DICTID), so the last valid
+    # start position is len(data) - 6 inclusive.
+    end = len(data) - 5
     while i < end:
         if data[i] == 0x78 and (data[i + 1] & 0x20) and int.from_bytes(data[i + 2 : i + 6], "big") == adler:
             return i
         i += 1
+    return None
+
+
+def _find_zlib_stream(data: bytes) -> int | None:
+    """Return the offset of the first standard (non-preset) zlib stream.
+
+    Standard-compression ``PlcContentInfo`` uses CMF ``0x78`` but its FLG byte
+    varies with the compression level (``78 01`` / ``78 5e`` / ``78 9c`` /
+    ``78 da``). Match any ``0x78`` whose 2-byte header checksums correctly
+    (``CMF*256 + FLG`` divisible by 31) and has no preset-dict flag set, rather
+    than hardcoding a single FLG value.
+    """
+    for i in range(len(data) - 1):
+        if data[i] == 0x78 and not (data[i + 1] & 0x20) and ((data[i] << 8) | data[i + 1]) % 31 == 0:
+            return i
     return None
 
 
@@ -304,12 +328,13 @@ class DataBlock:
 def datablocks_from_explore(wildcard_payload: bytes) -> list[DataBlock]:
     """Parse the DB list from a ``0x8A11FFFF`` wildcard EXPLORE response.
 
-    PlcContentInfo is a *standard* zlib stream (``78 da``) embedded in a larger
-    BLOB, so it is raw-inflated (the Adler-32 trailer would fail on the trailing
-    bytes). Returns only ``Type="DB"`` blocks.
+    PlcContentInfo is a *standard* zlib stream embedded in a larger BLOB, so it
+    is raw-inflated (the Adler-32 trailer would fail on the trailing bytes). The
+    stream header is located tolerantly (any compression level), not assumed to
+    be ``78 da``. Returns only ``Type="DB"`` blocks.
     """
-    pos = wildcard_payload.find(b"\x78\xda")
-    if pos < 0:
+    pos = _find_zlib_stream(wildcard_payload)
+    if pos is None:
         return []
     try:
         xml_bytes = zlib.decompressobj(wbits=-15).decompress(wildcard_payload[pos + 2 :])
