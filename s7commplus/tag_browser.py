@@ -1,32 +1,34 @@
-"""Parse symbolic I/Q/M tags from decompressed S7CommPlus EXPLORE responses.
+"""Parse symbolic tags and block interfaces from S7CommPlus EXPLORE responses.
 
-S7-1200/1500 PLCs answer an EXPLORE request for the I/Q/M areas with a
-zlib blob compressed against the ``IntfDescTag`` preset dictionary
-(Adler-32 ``0xce9b821b``). Once decompressed with
-:func:`s7commplus.blob_decompressor.find_and_decompress`, the payload is a
-clean ``<IdentContainer>`` XML document::
+S7-1200/1500 PLCs answer an EXPLORE request with a zlib blob compressed
+against a Siemens preset dictionary. Once decompressed with
+:func:`s7commplus.blob_decompressor.decompress_blob`, the payload is clean
+XML. Two shapes are handled here:
 
-    <IdentContainer>
-      <Ident Name="mtag_word" Scope="Global" LID="13">
-        <SimpleType>Word</SimpleType>
-        <Access SubClass="SimpleAccess">
-          <SimpleAccess ByteNumber="102" Width="Word" Range="Memory" />
-        </Access>
-      </Ident>
-    </IdentContainer>
+* **I/Q/M areas** -> ``<IdentContainer>`` with ``<Ident>`` entries that carry
+  a direct ``<SimpleType>`` and ``<SimpleAccess>`` address (dict
+  ``IntfDescTag`` / Adler-32 ``0xce9b821b``). Parsed into :class:`Tag`.
 
-This module turns that XML into :class:`Tag` records with TIA-style
-addresses (``%I0.0``, ``%Q0.1``, ``%MB100``, ``%MW102``, ``%MD104``).
+* **Data blocks / FBs** -> ``<BlockInterface>`` with ``<Member>`` entries whose
+  data type is a *reference* (``RID="0x0200_00XX"``) into the Siemens
+  SoftDataType table, not an inline string (dict ``DebugInfo_IntfDesc`` /
+  Adler-32 ``0x66052b13``). Parsed into :class:`Member`.
 
-Validated end-to-end against a live S7-1200 G2 (FW V4.1).
+Validated end-to-end against a live S7-1200 G2 (FW V4.1): I/Q/M tags and an
+optimized DB (``Data_block_1``, 11 members, names + Bool/Int/Real types).
 """
 
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+import zlib
 from dataclasses import dataclass
 
-from .blob_decompressor import find_and_decompress
+from .blob_decompressor import decompress_blob
+
+# ---------------------------------------------------------------------------
+# I/Q/M symbolic tags (<IdentContainer>)
+# ---------------------------------------------------------------------------
 
 # EXPLORE relation IDs per area (S7-1200 V3 / FW V4.x).
 AREA_RID = {"I": 80, "Q": 81, "M": 82}
@@ -39,11 +41,11 @@ _WIDTH_SUFFIX = {"Byte": "B", "Word": "W", "DWord": "D", "LWord": "L"}
 
 @dataclass
 class Tag:
-    """A symbolic PLC tag resolved from an EXPLORE response."""
+    """A symbolic I/Q/M tag resolved from an EXPLORE response."""
 
     name: str
-    data_type: str          # <SimpleType>, e.g. Bool / Byte / Word / DWord
-    address: str            # TIA syntax, e.g. %I0.0 / %MB100 / %MW102
+    data_type: str  # <SimpleType>, e.g. Bool / Byte / Word / DWord
+    address: str  # TIA syntax, e.g. %I0.0 / %MB100 / %MW102
     lid: int
     byte_offset: int
     bit_offset: int | None
@@ -80,13 +82,196 @@ def parse_ident_container(xml_text: str) -> list[Tag]:
 
 
 def tags_from_explore(explore_payload: bytes) -> list[Tag]:
-    """Decompress a raw EXPLORE payload and parse its symbolic tags.
+    """Decompress a raw I/Q/M EXPLORE payload and parse its symbolic tags.
 
-    ``explore_payload`` is the (possibly multi-fragment) EXPLORE response for
-    one area. Returns an empty list if the payload contains no preset-dict
-    zlib stream.
+    Returns an empty list if the payload contains no preset-dict zlib stream.
     """
-    xml_text = find_and_decompress(explore_payload)
-    if not xml_text:
+    pos = _find_preset_stream(explore_payload, _IDENT_ADLER)
+    if pos is None:
         return []
-    return parse_ident_container(xml_text)
+    return parse_ident_container(decompress_blob(explore_payload, offset=pos))
+
+
+# ---------------------------------------------------------------------------
+# Data-block / FB interfaces (<BlockInterface>)
+# ---------------------------------------------------------------------------
+
+# Adler-32 of the ``IntfDescTag`` preset dict (I/Q/M symbols).
+_IDENT_ADLER = 0xCE9B821B
+# Adler-32 of interface-description preset dicts. ``DebugInfo_IntfDesc`` carries
+# the optimized (symbolic-access) block interface; ``IntfDesc`` the standard one.
+_INTFDESC_ADLERS = (0x66052B13, 0x4B8416F0)
+
+# Siemens SoftDataType ids, from thomas-v2/S7CommPlusDriver Core/Softdatatype.cs
+# (LGPL-3.0). A <Member> type is a RID of the form 0x0200_00XX where XX is the
+# SoftDataType id below.
+SOFTDATATYPE = {
+    0: "Void",
+    1: "Bool",
+    2: "Byte",
+    3: "Char",
+    4: "Word",
+    5: "Int",
+    6: "DWord",
+    7: "DInt",
+    8: "Real",
+    9: "Date",
+    10: "TimeOfDay",
+    11: "Time",
+    12: "S5Time",
+    13: "S5Count",
+    14: "DateAndTime",
+    15: "InternetTime",
+    16: "Array",
+    17: "Struct",
+    18: "EndStruct",
+    19: "String",
+    20: "Pointer",
+    21: "MultiFB",
+    22: "Any",
+    23: "BlockFB",
+    24: "BlockFC",
+    25: "BlockDB",
+    26: "BlockSDB",
+    28: "Counter",
+    29: "Timer",
+    30: "IEC_Counter",
+    31: "IEC_Timer",
+    37: "BlockUDT",
+    40: "BBool",
+    48: "LReal",
+    49: "ULInt",
+    50: "LInt",
+    51: "LWord",
+    52: "USInt",
+    53: "UInt",
+    54: "UDInt",
+    55: "SInt",
+    61: "WChar",
+    62: "WString",
+    63: "Variant",
+    64: "LTime",
+    65: "LTimeOfDay",
+    66: "LDT",
+    67: "DTL",
+}
+
+
+@dataclass
+class Member:
+    """A single variable inside a data block or FB/OB interface."""
+
+    name: str
+    data_type: str  # resolved SoftDataType name, or raw RID hex if complex
+    lid: int
+    offset: int  # StdO: standard (non-optimized) byte offset
+    rid: int  # raw type RID
+
+
+def _member_type(rid_attr: str) -> str:
+    """Resolve a ``<Member RID=...>`` attribute to a data-type name."""
+    try:
+        rid = int(rid_attr, 16)
+    except (TypeError, ValueError):
+        return ""
+    # Elementary types live in the 0x0200_00XX namespace; anything else is a
+    # reference to a complex type (UDT/system struct) we don't inline-resolve.
+    if (rid & 0xFFFF0000) == 0x02000000:
+        return SOFTDATATYPE.get(rid & 0xFFFF, f"SoftType#{rid & 0xFFFF}")
+    return f"0x{rid:08X}"
+
+
+def parse_block_interface(xml_text: str) -> list[Member]:
+    """Parse a decompressed ``<BlockInterface>`` document into :class:`Member`s.
+
+    Works for DB, FB and OB interfaces. Members are returned in declaration
+    order across all sections (Input/Output/InOut/Static/...).
+    """
+    members: list[Member] = []
+    for m in ET.fromstring(xml_text).iter("Member"):
+        members.append(
+            Member(
+                name=m.get("Name", ""),
+                data_type=_member_type(m.get("RID", "")),
+                lid=int(m.get("LID", "0")),
+                offset=int(m.get("StdO", "0")),
+                rid=int(m.get("RID", "0") or "0", 16),
+            )
+        )
+    return members
+
+
+def block_interface_from_explore(explore_payload: bytes) -> list[Member]:
+    """Decompress a block EXPLORE payload and parse its interface members.
+
+    The EXPLORE response for a block RID bundles several preset-dict streams
+    (IdentES, interface, comments, ...). This targets the interface dictionary
+    specifically rather than taking the first stream. Returns an empty list if
+    no interface stream is present.
+    """
+    for adler in _INTFDESC_ADLERS:
+        pos = _find_preset_stream(explore_payload, adler)
+        if pos is not None:
+            return parse_block_interface(decompress_blob(explore_payload, offset=pos))
+    return []
+
+
+# ---------------------------------------------------------------------------
+# shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _find_preset_stream(data: bytes, adler: int) -> int | None:
+    """Return the offset of the first preset-dict zlib stream matching ``adler``.
+
+    A block EXPLORE response contains multiple ``78 xx`` FDICT streams; callers
+    need the one for a specific dictionary, not merely the first.
+    """
+    i = 0
+    end = len(data) - 6
+    while i < end:
+        if data[i] == 0x78 and (data[i + 1] & 0x20) and int.from_bytes(data[i + 2 : i + 6], "big") == adler:
+            return i
+        i += 1
+    return None
+
+
+@dataclass
+class DataBlock:
+    """A data block advertised in the PlcContentInfo listing."""
+
+    name: str
+    number: int
+    rid: int
+
+
+def datablocks_from_explore(wildcard_payload: bytes) -> list[DataBlock]:
+    """Parse the DB list from a ``0x8A11FFFF`` wildcard EXPLORE response.
+
+    PlcContentInfo is a *standard* zlib stream (``78 da``) embedded in a larger
+    BLOB, so it is raw-inflated (the Adler-32 trailer would fail on the trailing
+    bytes). Returns only ``Type="DB"`` blocks.
+    """
+    pos = wildcard_payload.find(b"\x78\xda")
+    if pos < 0:
+        return []
+    try:
+        xml_bytes = zlib.decompressobj(wbits=-15).decompress(wildcard_payload[pos + 2 :])
+    except zlib.error:
+        return []
+    dbs: list[DataBlock] = []
+    for entity in ET.fromstring(xml_bytes.decode("utf-8")).findall('.//Entity[@Id="Block"]'):
+        header = entity.find("Header")
+        if header is None or header.get("Type") != "DB":
+            continue
+        try:
+            dbs.append(
+                DataBlock(
+                    name=header.get("Name", ""),
+                    number=int(header.get("Number", "0")),
+                    rid=int(entity.get("Rid", "0")),
+                )
+            )
+        except ValueError:
+            continue
+    return dbs
