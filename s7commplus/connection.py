@@ -1212,15 +1212,23 @@ class S7CommPlusConnection:
         )
 
         # Extract the 20-byte challenge from the response.
-        # Response format: VLQ return code + BLOB data. The challenge
-        # is the first 20 bytes after the return code and BLOB header.
+        # Response format (per thomas-v2 GetVarSubstreamedResponse):
+        #   UInt64Vlq ReturnValue | byte unknown | PValue(datatype + count_vlq + length_vlq + data) | UInt32Vlq IntegrityId
         legit_challenge: bytes = self._session_challenge or b""
-        if len(challenge_resp) >= 22:
+        if len(challenge_resp) >= 26:
             offset = 0
-            retval, c = decode_uint32_vlq(challenge_resp, offset)
+            retval, c = decode_uint64_vlq(challenge_resp, offset)
             offset += c
-            if offset + 20 <= len(challenge_resp):
-                legit_challenge = bytes(challenge_resp[offset : offset + 20])
+            if retval != 0:
+                logger.warning(f"Legitimation challenge read returned error: 0x{retval:X}")
+            offset += 1  # unknown byte
+            offset += 1  # datatype tag (0x10 = BLOB/USIntArray)
+            _count, c = decode_uint32_vlq(challenge_resp, offset)
+            offset += c
+            length, c = decode_uint32_vlq(challenge_resp, offset)
+            offset += c
+            if offset + length <= len(challenge_resp) and length == 20:
+                legit_challenge = bytes(challenge_resp[offset : offset + length])
                 logger.info(f"Legitimation challenge: {legit_challenge.hex()}")
 
         if not legit_challenge:
@@ -1261,7 +1269,16 @@ class S7CommPlusConnection:
         svs += struct.pack(">I", 0)
 
         logger.debug("Post-auth legitimation: writing solved blob to address 1846")
-        self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
+        legit_resp = self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
+
+        if len(legit_resp) >= 1:
+            legit_retval, _ = decode_uint64_vlq(legit_resp, 0)
+            signed_retval = legit_retval if legit_retval < (1 << 63) else legit_retval - (1 << 64)
+            if signed_retval < 0:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(f"Post-auth legitimation rejected by PLC: return_value=0x{legit_retval:X}")
+            logger.debug(f"Legitimation write return_value=0x{legit_retval:X}")
 
         logger.info("Post-auth legitimation completed")
 
