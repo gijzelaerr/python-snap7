@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .blob_decompressor import decompress_blob
 
@@ -167,6 +167,7 @@ class Member:
     offset: int  # StdO: standard (non-optimized) byte offset
     rid: int  # raw type RID
     section: str = ""  # Input/Output/InOut/Static/Temp/Constant (FB/OB); "" for a DB
+    fields: list[Member] = field(default_factory=list)  # sub-members for a UDT/Struct type
 
 
 def _member_type(member: ET.Element) -> str:
@@ -190,55 +191,70 @@ def _member_type(member: ET.Element) -> str:
     return f"0x{rid:08X}"
 
 
-def _enclosing_part(member: ET.Element, parent: dict) -> ET.Element | None:
-    """Return the nearest enclosing ``<Part>`` element, or ``None``."""
-    node = parent.get(member)
-    while node is not None:
-        if node.tag == "Part":
-            return node
-        node = parent.get(node)
-    return None
-
-
 def parse_block_interface(xml_text: str) -> list[Member]:
     """Parse a decompressed ``<BlockInterface>`` document into :class:`Member`s.
 
-    Works for DB, FB, OB and UDT interfaces. A member is a real variable only if
-    it carries a ``RID``; the section-header and list-wrapper ``<Member>``
-    elements (no ``RID``) are skipped. When a block uses a UDT, the interface
-    also embeds that UDT's own definition under a nested ``<Part
-    Kind="DataTypeSource">`` — those members describe the *type*, not the block,
-    so they are skipped: a member is kept only when its nearest enclosing
-    ``<Part>`` is the block's primary part (flat DB/UDT) or a ``*Section`` part
-    (FB/OB). Members are returned in declaration order, each tagged with its
-    section (Input/Output/... for FB/OB; empty for DB/UDT).
+    Works for DB, FB, OB and UDT interfaces. The block's own variables come from
+    its primary ``<Part>`` — directly under ``<Payload><Root>`` for a flat
+    DB/UDT, or from the ``<Part Kind="*Section">`` entries for an FB/OB. Members
+    are returned in declaration order, each tagged with its section
+    (Input/Output/... for FB/OB; empty for DB/UDT).
+
+    When a member is of a UDT (or other structured type), the interface embeds
+    that type's definition under the primary part's ``<SubParts>``; the member's
+    ``SubPartIndex`` selects it. Such members are expanded recursively into
+    :attr:`Member.fields`. Library types (e.g. ``IEC_TIMER``) are referenced but
+    not inlined, so they expand to no fields.
     """
     root = ET.fromstring(xml_text)
-    parent = {child: p for p in root.iter() for child in p}
     primary = root.find("Part")  # first top-level Part = the block's own source
+    if primary is None:
+        return []
+    return _parse_source_part(primary)
+
+
+def _parse_source_part(part: ET.Element) -> list[Member]:
+    """Parse one source ``<Part>`` (DBSource/BlockSource/DataTypeSource)."""
+    sub_el = part.find("SubParts")
+    subparts = list(sub_el) if sub_el is not None else []  # index-addressable
+
     members: list[Member] = []
-    for m in root.iter("Member"):
-        rid_attr = m.get("RID")
-        if rid_attr is None:
-            continue  # section header or list wrapper, not a variable
-        part = _enclosing_part(m, parent)
-        if part is primary:
-            section = ""
-        elif part is not None and part.get("Kind", "").endswith("Section"):
-            section = part.get("Kind")[: -len("Section")]
-        else:
-            continue  # member of an embedded type definition (nested *Source part)
-        members.append(
-            Member(
-                name=m.get("Name", ""),
-                data_type=_member_type(m),
-                lid=int(m.get("LID", "0")),
-                offset=int(m.get("StdO", "0")),
-                rid=int(rid_attr or "0", 16),
-                section=section,
-            )
-        )
+    # Flat DB/UDT: variables are direct <Member> children of <Payload><Root>.
+    root_el = part.find("./Payload/Root")
+    if root_el is not None:
+        for m in root_el.findall("Member"):
+            if m.get("RID") is not None:
+                members.append(_build_member(m, "", subparts))
+    # FB/OB: variables live in the <Part Kind="*Section"> entries of <SubParts>.
+    for sp in subparts:
+        kind = sp.get("Kind", "")
+        if not kind.endswith("Section"):
+            continue
+        section = kind[: -len("Section")]
+        for m in sp.findall("./Payload/Member/Member"):
+            if m.get("RID") is not None:
+                members.append(_build_member(m, section, subparts))
     return members
+
+
+def _build_member(m: ET.Element, section: str, subparts: list) -> Member:
+    """Build a :class:`Member`, expanding a structured type via ``SubPartIndex``."""
+    member = Member(
+        name=m.get("Name", ""),
+        data_type=_member_type(m),
+        lid=int(m.get("LID", "0")),
+        offset=int(m.get("StdO", "0")),
+        rid=int(m.get("RID", "0") or "0", 16),
+        section=section,
+    )
+    spi = m.get("SubPartIndex")
+    if spi is not None:
+        idx = int(spi)
+        # Only an inlined type definition (a *Source part) carries sub-members;
+        # a *Section index or a library reference expands to nothing.
+        if 0 <= idx < len(subparts) and subparts[idx].get("Kind", "").endswith("Source"):
+            member.fields = _parse_source_part(subparts[idx])
+    return member
 
 
 def block_interface_from_explore(explore_payload: bytes) -> list[Member]:

@@ -58,6 +58,41 @@ _DB_INTERFACE_BLOB = base64.b64decode(
     "o7sMQBQAo70tQBQAo70lQBQAo5NaAAEAo5NlQBQAoqKiAAAAAA=="
 )
 
+# Live S7-1200 G2 EXPLORE response for DB "Data_block_1" after adding a member of
+# a user UDT ("elettrovalvola"), from the interface stream onward. The blob
+# bundles the DB interface and the UDT's own definition; the UDT member is
+# expanded into Member.fields.
+_DB_UDT_INTERFACE_BLOB = base64.b64decode(
+    "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"
+    "AKOTZUAUAKKiogAAAAA="
+)
+
 
 def test_parse_ident_container_addresses():
     xml = (
@@ -118,7 +153,7 @@ def test_parse_block_interface_fb_sections():
     # section. Complex members carry a ready-made ``Type`` attribute (arrays),
     # scalar ones resolve from the RID.
     xml = (
-        "<BlockInterface><Payload><Root>"
+        '<BlockInterface><Part Kind="BlockSource"><Payload><Root>'
         '<Member ID="2" Name="Input" SubPartIndex="0" StdO="0" />'
         '<Member ID="5" Name="Static" SubPartIndex="3" StdO="0" />'
         "</Root></Payload>"
@@ -133,7 +168,7 @@ def test_parse_block_interface_fb_sections():
         '<Member ID="63" Name="echo" RID="0x02010001"'
         ' Type="Array[0..2] of Bool" StdO="784" LID="21" />'
         "</Member></Payload></Part>"
-        "</SubParts></BlockInterface>"
+        "</SubParts></Part></BlockInterface>"
     )
     assert parse_block_interface(xml) == [
         Member("puls_start_stop", "Bool", 9, 0, 0x02000001, "Input"),
@@ -143,25 +178,57 @@ def test_parse_block_interface_fb_sections():
     ]
 
 
-def test_parse_block_interface_udt_member_and_embedded_type():
-    # A member of a UDT type carries a readable ``Type`` ("MyUdt", TIA quotes)
-    # and a RID in the UDT object namespace (0x91......). The interface also
-    # embeds the UDT's own definition under a nested <Part Kind="DataTypeSource">;
-    # those members describe the type, not the block, and must be skipped.
+def test_parse_block_interface_udt_member_expands_fields():
+    # A UDT member carries a readable ``Type`` ("MyUdt", TIA quotes), a RID in
+    # the UDT object namespace (0x91......) and a ``SubPartIndex`` pointing at the
+    # UDT's definition embedded under <SubParts>. That definition is expanded
+    # into Member.fields, not surfaced as top-level members.
     xml = (
         '<BlockInterface><Part Kind="DBSource"><Payload><Root>'
         '<Member ID="51" Name="flag" RID="0x02000001" StdO="0" LID="9" />'
-        '<Member ID="52" Name="valve" RID="0x91000001"'
-        ' Type="&quot;MyUdt&quot;" StdO="16" LID="10" />'
+        '<Member ID="52" Name="valve" RID="0x91000001" Type="&quot;MyUdt&quot;"'
+        ' SubPartIndex="0" StdO="16" LID="10" />'
         "</Root></Payload>"
         '<SubParts><Part Kind="DataTypeSource"><Payload><Root>'
-        '<Member ID="60" Name="inner_field" RID="0x02000005" StdO="0" LID="1" />'
+        '<Member ID="60" Name="open_cmd" RID="0x02000001" StdO="0" LID="1" />'
+        '<Member ID="61" Name="level" RID="0x02000005" StdO="16" LID="2" />'
         "</Root></Payload></Part></SubParts>"
         "</Part></BlockInterface>"
     )
     assert parse_block_interface(xml) == [
         Member("flag", "Bool", 9, 0, 0x02000001, ""),
-        Member("valve", '"MyUdt"', 10, 16, 0x91000001, ""),
+        Member(
+            "valve",
+            '"MyUdt"',
+            10,
+            16,
+            0x91000001,
+            "",
+            fields=[
+                Member("open_cmd", "Bool", 1, 0, 0x02000001, ""),
+                Member("level", "Int", 2, 16, 0x02000005, ""),
+            ],
+        ),
+    ]
+
+
+def test_block_interface_from_live_g2_db_with_udt():
+    members = block_interface_from_explore(_DB_UDT_INTERFACE_BLOB)
+    # 12 top-level members; the embedded UDT definition is not surfaced flat.
+    assert len(members) == 12
+    valve = members[-1]
+    assert (valve.name, valve.data_type, valve.rid) == (
+        "elettrovalvola_1",
+        '"elettrovalvola"',
+        0x91000001,
+    )
+    assert [(f.name, f.data_type) for f in valve.fields] == [
+        ("fc_apertura", "Bool"),
+        ("fc_chiusura", "Bool"),
+        ("stato_ev", "Int"),
+        ("allarme_ev", "Int"),
+        ("cons_ev", "Bool"),
+        ("perc_apertura", "Real"),
     ]
 
 
