@@ -251,16 +251,11 @@ class S7CommPlusConnection:
     def requires_substreamed(self) -> bool:
         """Whether data operations must use substreamed function codes.
 
-        V1-initial PLCs accept GET_VAR_SUBSTREAMED for session-level
-        operations (legitimation), but reject it for DB data reads with
-        V254 SystemEvent error 0xE9. Data reads use GetMultiVariables
-        (0x054C) with V3+HMAC framing — same function code as TLS/V2
-        connections (thomas-v2 S7CommPlusDriver).
-
-        Substreamed is only needed when there is no session at all
-        (pre-auth reads), which is not currently supported.
+        V1-initial PLCs with SessionKey auth reject GET_MULTI_VARIABLES
+        (0x054C) and require GET_VAR_SUBSTREAMED (0x0586) /
+        SET_VAR_SUBSTREAMED (0x057C) for all data operations.
         """
-        return False
+        return self._session_key is not None
 
     @property
     def oms_secret(self) -> Optional[bytes]:
