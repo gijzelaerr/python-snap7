@@ -339,15 +339,17 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            # Step 7: Post-SessionKey legitimation (V1-initial PLCs)
+            # Step 7: Session activation + legitimation (V1-initial PLCs)
             #
-            # After SetupSession with the SecurityKey blob, the PLC requires
-            # a legitimation handshake before it will allow data operations.
-            # This applies even when no password is configured on the PLC —
-            # an empty-password legitimation is still required.
+            # After the V2 key exchange, the PLC requires:
+            # a) SET_VARIABLE addr 323 = USINT(5) to activate the V3 session
+            # b) Legitimation handshake (even without a password)
+            # Without (a), data reads fail with 0xE9.
+            # Ref: TIA Portal pcap frame 17 (TIAPortalWatchDB7.pcapng, GH-710)
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
+                self._session_activate()
                 self._post_auth_legitimation(password=self._connect_password)
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
@@ -1185,11 +1187,33 @@ class S7CommPlusConnection:
         payload += struct.pack(">I", 0)
         return payload
 
-    # TODO: _session_activate() removed — TIA Portal sends SET_VARIABLE
-    # attr 323 + finalize reads after SetupSession, but HarpoS7 (the
-    # reference SessionKey implementation) skips this entirely and V1-initial
-    # PLCs RST the connection when they receive it (GH-710). May be needed
-    # for specific firmware bands or write-without-password access later.
+    def _session_activate(self) -> None:
+        """Activate the V3 session after the SecurityKey handshake.
+
+        TIA Portal sends SET_VARIABLE writing USINT(5) to address 323 on the
+        session object immediately after the V2 SetMultiVariables key exchange
+        succeeds, BEFORE any data reads or legitimation.
+
+        Without this step, the PLC rejects data operations with 0xE9.
+
+        Previous attempt (432d9c6 → e73f915) bundled this with 3 extra
+        GET_VAR_SUBSTREAMED reads that are NOT in TIA's flow and caused RST.
+        This version sends only the SET_VARIABLE, matching the pcap exactly
+        (frame 17 of TIAPortalWatchDB7.pcapng from GH-710).
+        """
+        oq = encode_object_qualifier()
+
+        payload = struct.pack(">I", self._session_id)
+        payload += encode_uint32_vlq(1)  # AddressCount
+        payload += encode_uint32_vlq(323)  # address
+        payload += bytes([0x00, DataType.USINT])
+        payload += encode_uint32_vlq(5)
+        payload += oq
+        payload += struct.pack(">I", 0)
+
+        logger.debug("Session activation: SET_VARIABLE addr 323 = USINT(5)")
+        self.send_request(FunctionCode.SET_VARIABLE, payload)
+        logger.info("Session activation completed")
 
     def _post_auth_legitimation(self, password: str = "") -> None:
         """Perform the post-SessionKey legitimation handshake.
