@@ -647,8 +647,11 @@ class S7CommPlusConnection:
             0x0000,  # Reserved
             seq_num,
             self._session_id,
-            # Transport flags: 0x34 for GetMultiVariables and Explore, 0x36 otherwise.
-            0x34 if function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE) else 0x36,
+            # Transport flags: 0x34 after SessionKey auth (matches TIA Portal),
+            # also for GetMultiVariables and Explore; 0x36 for other V1/TLS requests.
+            0x34
+            if self._session_key is not None or function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE)
+            else 0x36,
         )
 
         # For V2+ with IntegrityId enabled, insert IntegrityId after header
@@ -1137,7 +1140,10 @@ class S7CommPlusConnection:
 
         if include_security_key:
             self._session_key = session_key
-            logger.info("SecurityKey blob included in session setup")
+            self._with_integrity_id = True
+            self._integrity_id_read = 0
+            self._integrity_id_write = 0
+            logger.info("SecurityKey blob included in session setup, IntegrityId tracking enabled")
 
         # Outer S7+ frame is always V2 for the setup write, even if the PLC
         # negotiated V1 on the initial CreateObject.
