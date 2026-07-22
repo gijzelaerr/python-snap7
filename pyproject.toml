@@ -41,7 +41,7 @@ discovery = ["pnio-dcp"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed"]
-s7commplus = ["py.typed"]
+s7commplus = ["py.typed", "session_auth/**/*.bin"]
 
 [tool.setuptools.packages.find]
 include = ["snap7*", "s7*", "s7commplus*"]
