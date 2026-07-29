@@ -1658,14 +1658,13 @@ class Server:
             return bytes(data)
 
         # SZL 0x0011: Module identification (S7OrderCode)
+        # Record layout: Index(2) + MLFB(20) + Reserved(1) + V1(1) + V2(1) + V3(1) = 26 bytes
         elif szl_id == 0x0011:
-            order_code = b"6ES7 315-2EH14-0AB0\x00"
-            version = b"V3.3\x00"
-
-            order_code = order_code.ljust(20, b"\x00")[:20]
-            version = version.ljust(4, b"\x00")[:4]
-
-            return order_code + version
+            mlfb = b"6ES7 315-2EH14-0AB0\x00".ljust(20, b"\x00")[:20]
+            record_len = 26
+            record = struct.pack(">H", 0x0001) + mlfb + struct.pack("BBBB", 0x00, 3, 3, 0)
+            header = struct.pack(">HH", record_len, 1)
+            return header + record
 
         # SZL 0x0131: Communication parameters (S7CpInfo)
         elif szl_id == 0x0131:
