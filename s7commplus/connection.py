@@ -654,9 +654,8 @@ class S7CommPlusConnection:
             else 0x36,
         )
 
-        # For V2+ with IntegrityId enabled, insert IntegrityId after header
         integrity_id_bytes = b""
-        if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
+        if self._with_integrity_id:
             is_read = function_code in READ_FUNCTION_CODES
             if is_read:
                 integrity_id = self._integrity_id_read
@@ -700,8 +699,7 @@ class S7CommPlusConnection:
         logger.debug(f"  Full frame ({len(frame)} bytes): {frame.hex(' ')}")
         self._send_s7_data(frame)
 
-        # Increment the appropriate IntegrityId counter after sending
-        if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
+        if self._with_integrity_id:
             if function_code in READ_FUNCTION_CODES:
                 self._integrity_id_read = (self._integrity_id_read + 1) & 0xFFFFFFFF
             else:
