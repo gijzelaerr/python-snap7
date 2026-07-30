@@ -83,12 +83,13 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     by variable-length indexed records.  S7-300 uses 26-byte records while
     S7-1200/1500 uses 28-byte records with multiple record IDs:
 
-    - 0x0001: main catalog code (MLFB) — version bytes are padding on S7-1500
-    - 0x0002: legacy firmware block (fallback)
-    - 0x0007 / 0x0081: active firmware on modern S7-1200/1500 (takes priority)
+    - 0x0001: main catalog code (MLFB) — version at fixed offsets 22/23/24
+    - 0x0002: legacy firmware block (fallback, same fixed offsets)
+    - 0x0007: factory firmware on S7-1200/1500 (version at rec[-3:])
+    - 0x0081: active firmware / boot loader on S7-1200/1500 (highest priority)
 
-    Version bytes are always the last 3 bytes of the record payload, which
-    works for both 26-byte and 28-byte layouts.
+    Record transmission order is not guaranteed by Siemens, so 0x0081 is
+    tracked explicitly and never overwritten by lower-priority records.
     """
     order_code = S7OrderCode()
     data = _szl_data(szl)
@@ -102,6 +103,7 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     if record_len < 22 or ndr < 1 or 4 + record_len * ndr > len(data):
         return order_code
 
+    has_0x0081 = False
     offset = 4
     for _ in range(ndr):
         rec = data[offset : offset + record_len]
@@ -112,13 +114,17 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
 
         if record_id == 0x0001 and record_len >= 22:
             order_code.OrderCode = rec[2:22].rstrip(b"\x00")
-            if record_len >= 25 and (rec[-3] != 0 or rec[-2] != 0):
-                order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+            if record_len >= 26 and (rec[23] != 0 or rec[24] != 0):
+                order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
 
-        elif record_id == 0x0002 and record_len >= 25 and order_code.V1 == 0:
+        elif record_id == 0x0002 and record_len >= 26 and order_code.V1 == 0:
+            order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
+
+        elif record_id == 0x0081 and record_len >= 28:
             order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+            has_0x0081 = True
 
-        elif record_id in (0x0081, 0x0007) and record_len >= 25:
+        elif record_id == 0x0007 and record_len >= 28 and not has_0x0081:
             order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
 
         offset += record_len

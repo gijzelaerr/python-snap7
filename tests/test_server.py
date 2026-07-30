@@ -394,32 +394,55 @@ class TestServerUserdataOperations(unittest.TestCase):
         szl = self.client.read_szl(0x0011, 0)
         self.assertGreater(szl.Header.LengthDR, 0)
 
-    def test_parse_order_code_s71500_multi_record(self) -> None:
-        """parse_order_code_szl handles S7-1500 28-byte multi-record layout."""
-        import struct
-
+    def test_parse_order_code_s71516f(self) -> None:
+        """parse_order_code_szl with real S7-1516F hex dump (FW V3.3.0)."""
         from snap7.szl import parse_order_code_szl
         from snap7.type import S7SZL
 
-        record_len = 28
-        mlfb = b"6ES7 516-3FN02-0AB0\x00".ljust(20, b"\x00")
-
-        rec_0001 = struct.pack(">H", 0x0001) + mlfb + b"\x00" * (record_len - 22)
-        rec_0081 = struct.pack(">H", 0x0081) + b"\x00" * (record_len - 5) + bytes([3, 3, 0])
-
-        header = struct.pack(">HH", record_len, 2)
-        payload = header + rec_0001 + rec_0081
-
+        # Real trimmed hex dump from CPU 1516F-3 PN/DP, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x05"
+            b"\x00\x01\x36\x45\x53\x37\x20\x35\x31\x36\x2d\x33\x46\x4e\x30\x32\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x02\x00\x00"
+            b"\x00\x06\x36\x45\x53\x37\x20\x35\x31\x36\x2d\x33\x46\x4e\x30\x32\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x02\x00\x00"
+            b"\x00\x07\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x02\x09\x02"
+            b"\x00\x80\x36\x45\x53\x37\x39\x35\x34\x2d\x38\x4c\x45\x30\x33\x2d\x30\x41\x41\x30\x20\x20\x00\x00\x01\x00\x00\x00"
+            b"\x00\x81\x42\x6f\x6f\x74\x20\x4c\x6f\x61\x64\x65\x72\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x03\x03\x00"
+        )
         szl = S7SZL()
         szl.Header.LengthDR = len(payload)
         for i, b in enumerate(payload):
             szl.Data[i] = b
 
         result = parse_order_code_szl(szl)
-        self.assertEqual(result.OrderCode, b"6ES7 516-3FN02-0AB0")
+        self.assertIn(b"6ES7 516-3FN02-0AB0", result.OrderCode)
         self.assertEqual(result.V1, 3)
         self.assertEqual(result.V2, 3)
         self.assertEqual(result.V3, 0)
+
+    def test_parse_order_code_s71510sp(self) -> None:
+        """parse_order_code_szl with real S7-1510SP hex dump (FW V4.2.3)."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real trimmed hex dump from CPU 1510SP F-1 PN, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x05"
+            b"\x00\x01\x36\x45\x53\x37\x20\x35\x31\x30\x2d\x31\x53\x4b\x30\x33\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x03\x00\x00"
+            b"\x00\x06\x36\x45\x53\x37\x20\x35\x31\x30\x2d\x31\x53\x4b\x30\x33\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x03\x00\x00"
+            b"\x00\x07\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x03\x00\x03"
+            b"\x00\x80\x36\x45\x53\x37\x39\x35\x34\x2d\x38\x4c\x45\x30\x33\x2d\x30\x41\x41\x30\x20\x20\x00\x00\x01\x00\x00\x00"
+            b"\x00\x81\x42\x6f\x6f\x74\x20\x4c\x6f\x61\x64\x65\x72\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x04\x02\x03"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 510-1SK03-0AB0", result.OrderCode)
+        self.assertEqual(result.V1, 4)
+        self.assertEqual(result.V2, 2)
+        self.assertEqual(result.V3, 3)
 
     def test_read_szl_0x0131(self) -> None:
         """read_szl(0x0131) should return communication parameters."""
