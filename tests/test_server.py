@@ -394,6 +394,33 @@ class TestServerUserdataOperations(unittest.TestCase):
         szl = self.client.read_szl(0x0011, 0)
         self.assertGreater(szl.Header.LengthDR, 0)
 
+    def test_parse_order_code_s71500_multi_record(self) -> None:
+        """parse_order_code_szl handles S7-1500 28-byte multi-record layout."""
+        import struct
+
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        record_len = 28
+        mlfb = b"6ES7 516-3FN02-0AB0\x00".ljust(20, b"\x00")
+
+        rec_0001 = struct.pack(">H", 0x0001) + mlfb + b"\x00" * (record_len - 22)
+        rec_0081 = struct.pack(">H", 0x0081) + b"\x00" * (record_len - 5) + bytes([3, 3, 0])
+
+        header = struct.pack(">HH", record_len, 2)
+        payload = header + rec_0001 + rec_0081
+
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertEqual(result.OrderCode, b"6ES7 516-3FN02-0AB0")
+        self.assertEqual(result.V1, 3)
+        self.assertEqual(result.V2, 3)
+        self.assertEqual(result.V3, 0)
+
     def test_read_szl_0x0131(self) -> None:
         """read_szl(0x0131) should return communication parameters."""
         szl = self.client.read_szl(0x0131, 0)

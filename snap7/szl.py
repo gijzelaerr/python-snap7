@@ -80,8 +80,15 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     """Decode SZL 0x0011 (module order code + firmware version) into :class:`S7OrderCode`.
 
     Real PLCs prepend a 4-byte partial-list header (LengthDR + NDR) followed
-    by 26-byte records: Index(2) + MLFB(20) + Reserved(1) + V1 + V2 + V3.
-    We locate the first record that contains a non-empty order code.
+    by variable-length indexed records.  S7-300 uses 26-byte records while
+    S7-1200/1500 uses 28-byte records with multiple record IDs:
+
+    - 0x0001: main catalog code (MLFB) — version bytes are padding on S7-1500
+    - 0x0002: legacy firmware block (fallback)
+    - 0x0007 / 0x0081: active firmware on modern S7-1200/1500 (takes priority)
+
+    Version bytes are always the last 3 bytes of the record payload, which
+    works for both 26-byte and 28-byte layouts.
     """
     order_code = S7OrderCode()
     data = _szl_data(szl)
@@ -92,19 +99,28 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     record_len = struct.unpack(">H", data[0:2])[0]
     ndr = struct.unpack(">H", data[2:4])[0]
 
-    if record_len < 24 or ndr < 1 or 4 + record_len * ndr > len(data):
+    if record_len < 22 or ndr < 1 or 4 + record_len * ndr > len(data):
         return order_code
 
     offset = 4
     for _ in range(ndr):
         rec = data[offset : offset + record_len]
-        mlfb = rec[2:22].rstrip(b"\x00")
-        if mlfb:
-            order_code.OrderCode = mlfb
-            order_code.V1 = rec[23]
-            order_code.V2 = rec[24]
-            order_code.V3 = rec[25]
+        if len(rec) < 2:
             break
+
+        record_id = struct.unpack(">H", rec[0:2])[0]
+
+        if record_id == 0x0001 and record_len >= 22:
+            order_code.OrderCode = rec[2:22].rstrip(b"\x00")
+            if record_len >= 25 and (rec[-3] != 0 or rec[-2] != 0):
+                order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+
+        elif record_id == 0x0002 and record_len >= 25 and order_code.V1 == 0:
+            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+
+        elif record_id in (0x0081, 0x0007) and record_len >= 25:
+            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+
         offset += record_len
 
     return order_code
