@@ -76,17 +76,84 @@ def parse_cp_info_szl(szl: S7SZL) -> S7CpInfo:
     return info
 
 
+def _parse_order_code_structured(data: bytes, record_len: int, ndr: int, order_code: S7OrderCode) -> bool:
+    """Try parsing SZL 0x0011 as structured indexed records (S7-1200/1500).
+
+    Returns True if at least one known record ID was found.
+    """
+    found_structured = False
+    has_0x0081 = False
+    offset = 4
+    for _ in range(ndr):
+        rec = data[offset : offset + record_len]
+        if len(rec) < 2:
+            break
+
+        record_id = struct.unpack(">H", rec[0:2])[0]
+
+        if record_id == 0x0001 and record_len >= 22:
+            found_structured = True
+            order_code.OrderCode = rec[2:22].rstrip(b"\x00")
+            if record_len >= 26 and (rec[23] != 0 or rec[24] != 0):
+                order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
+
+        elif record_id == 0x0002 and record_len >= 26 and order_code.V1 == 0:
+            found_structured = True
+            order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
+
+        elif record_id == 0x0081 and record_len >= 28:
+            found_structured = True
+            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+            has_0x0081 = True
+
+        elif record_id == 0x0007 and record_len >= 28 and not has_0x0081:
+            found_structured = True
+            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+
+        offset += record_len
+
+    return found_structured
+
+
+def _parse_order_code_flat(data: bytes, order_code: S7OrderCode) -> None:
+    """Fall back to flat-text parsing for S7-300 style payloads.
+
+    S7-300 CPUs return SZL 0x0011 as a continuous ASCII text stream without
+    structured record IDs.  The MLFB is found by searching for "6ES7" and
+    the version is extracted from the 3 bytes following the 20-byte MLFB
+    and a 1-byte separator (matching the S7OrderCode struct layout).
+    """
+    payload = data[4:]
+    mlfb_start = payload.find(b"6ES7")
+    if mlfb_start < 0:
+        return
+
+    if len(payload) >= mlfb_start + 20:
+        order_code.OrderCode = payload[mlfb_start : mlfb_start + 20].rstrip(b"\x00 ")
+
+    ver_offset = mlfb_start + 21
+    if len(payload) >= ver_offset + 3:
+        order_code.V1, order_code.V2, order_code.V3 = payload[ver_offset], payload[ver_offset + 1], payload[ver_offset + 2]
+
+
 def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     """Decode SZL 0x0011 (module order code + firmware version) into :class:`S7OrderCode`.
 
     Real PLCs prepend a 4-byte partial-list header (LengthDR + NDR) followed
-    by variable-length indexed records.  S7-300 uses 26-byte records while
-    S7-1200/1500 uses 28-byte records with multiple record IDs:
+    by variable-length records whose layout differs by PLC generation:
 
-    - 0x0001: main catalog code (MLFB) — version at fixed offsets 22/23/24
+    **S7-1200/1500** (structured records with 2-byte index prefix):
+
+    - 0x0001: main catalog code (MLFB) — version at fixed offsets 23/24/25
     - 0x0002: legacy firmware block (fallback, same fixed offsets)
-    - 0x0007: factory firmware on S7-1200/1500 (version at rec[-3:])
-    - 0x0081: active firmware / boot loader on S7-1200/1500 (highest priority)
+    - 0x0007: factory firmware (version at rec[-3:])
+    - 0x0081: active firmware / boot loader (highest priority, rec[-3:])
+
+    **S7-300** (flat ASCII text stream, no record IDs):
+
+    Records contain continuous text (e.g. "CPU 315-2 PN/DP...6ES7...").
+    The MLFB is located by searching for "6ES7" and the version follows
+    at a fixed offset from the MLFB start.
 
     Record transmission order is not guaranteed by Siemens, so 0x0081 is
     tracked explicitly and never overwritten by lower-priority records.
@@ -103,31 +170,8 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     if record_len < 22 or ndr < 1 or 4 + record_len * ndr > len(data):
         return order_code
 
-    has_0x0081 = False
-    offset = 4
-    for _ in range(ndr):
-        rec = data[offset : offset + record_len]
-        if len(rec) < 2:
-            break
-
-        record_id = struct.unpack(">H", rec[0:2])[0]
-
-        if record_id == 0x0001 and record_len >= 22:
-            order_code.OrderCode = rec[2:22].rstrip(b"\x00")
-            if record_len >= 26 and (rec[23] != 0 or rec[24] != 0):
-                order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
-
-        elif record_id == 0x0002 and record_len >= 26 and order_code.V1 == 0:
-            order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
-
-        elif record_id == 0x0081 and record_len >= 28:
-            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
-            has_0x0081 = True
-
-        elif record_id == 0x0007 and record_len >= 28 and not has_0x0081:
-            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
-
-        offset += record_len
+    if not _parse_order_code_structured(data, record_len, ndr, order_code):
+        _parse_order_code_flat(data, order_code)
 
     return order_code
 

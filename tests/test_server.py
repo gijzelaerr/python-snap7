@@ -444,6 +444,28 @@ class TestServerUserdataOperations(unittest.TestCase):
         self.assertEqual(result.V2, 2)
         self.assertEqual(result.V3, 3)
 
+    def test_parse_order_code_s7300_flat_text(self) -> None:
+        """parse_order_code_szl handles S7-300 flat ASCII text layout."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real hex dump from CPU 315-2 PN/DP, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x03"
+            b"\x43\x50\x55\x20\x33\x31\x35\x2d\x32\x20\x50\x4e\x2f\x44\x50\x20\x20\x20\x20\x20"
+            b"\x36\x45\x53\x37\x20\x33\x31\x35\x2d\x32\x4e\x44\x30\x37\x2d\x30\x41\x42\x30\x20"
+            b"\x00\x01\x00\x04\x00\x04"
+            b"\x4d\x50\x49\x2f\x44\x50\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20"
+            b"\x20\x20\x20\x20\x20\x20\x00\x02\x00\x00\x00\x04\x50\x4e\x2d\x4a\x4f\x20"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 315-2ND07-0AB0", result.OrderCode)
+
     def test_read_szl_0x0131(self) -> None:
         """read_szl(0x0131) should return communication parameters."""
         szl = self.client.read_szl(0x0131, 0)
