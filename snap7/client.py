@@ -54,7 +54,7 @@ _VALID_AREA_VALUES: frozenset[int] = frozenset(a.value for a in Area)
 logger = logging.getLogger(__name__)
 
 
-def _decode_tag(tag: Tag, data: bytearray) -> Any:
+def _decode_tag(tag: Tag, data: bytearray, encoding: str = "latin-1") -> Any:
     """Decode a Tag's raw bytes into a typed Python value."""
     upper = tag.datatype.upper()
     # Variable-length string types
@@ -62,9 +62,9 @@ def _decode_tag(tag: Tag, data: bytearray) -> Any:
     if match:
         kind, length = match.group(1), int(match.group(2))
         if kind == "FSTRING":
-            return util.get_fstring(data, 0, length)
+            return util.get_fstring(data, 0, length, encoding=encoding)
         if kind == "STRING":
-            return util.get_string(data, 0)
+            return util.get_string(data, 0, encoding=encoding)
         if kind == "WSTRING":
             return util.get_wstring(data, 0)
 
@@ -131,17 +131,17 @@ def _decode_scalar(datatype: str, data: bytearray, bit: int) -> Any:
     raise ValueError(f"Unsupported tag datatype: {datatype}")
 
 
-def _encode_tag(tag: Tag, buf: bytearray, value: Any) -> None:
+def _encode_tag(tag: Tag, buf: bytearray, value: Any, encoding: str = "latin-1") -> None:
     """Encode a typed Python value into a Tag's byte buffer."""
     upper = tag.datatype.upper()
     match = _STRING_RE.match(upper)
     if match:
         kind, length = match.group(1), int(match.group(2))
         if kind == "FSTRING":
-            util.set_fstring(buf, 0, value, length)
+            util.set_fstring(buf, 0, value, length, encoding=encoding)
             return
         if kind == "STRING":
-            util.set_string(buf, 0, value, length)
+            util.set_string(buf, 0, value, length, encoding=encoding)
             return
         if kind == "WSTRING":
             util.set_wstring(buf, 0, value, length)
@@ -783,7 +783,7 @@ class Client(ClientMixin):
             struct.pack_into(fmt, data, i * item_size, v)
         return self.db_write(db_number, start, data)
 
-    def read_tag(self, tag: "Union[Tag, str]") -> Any:
+    def read_tag(self, tag: "Union[Tag, str]", encoding: str = "latin-1") -> Any:
         """Read a typed value by :class:`~snap7.tags.Tag` or address string.
 
         Accepts a :class:`~snap7.tags.Tag` or a PLC4X-style address string
@@ -791,6 +791,8 @@ class Client(ClientMixin):
 
         Args:
             tag: A :class:`~snap7.tags.Tag` instance or a parseable address string.
+            encoding: Character encoding for STRING/FSTRING values (default ``"latin-1"``).
+                Use ``"gbk"`` for Chinese PLCs or ``"utf-8"`` for UTF-8 encoded strings.
 
         Returns:
             The typed value (bool/int/float/datetime/str depending on type).
@@ -801,6 +803,7 @@ class Client(ClientMixin):
             client.read_tag("DB1.DBD4:REAL")              # float
             client.read_tag("DB1:20:STRING[30]")          # variable-length string
             client.read_tag(Tag(Area.DB, 1, 0, "REAL"))   # from Tag instance
+            client.read_tag("DB1:34:STRING[10]", encoding="gbk")  # Chinese string
         """
         resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
         if resolved.is_symbolic:
@@ -808,14 +811,15 @@ class Client(ClientMixin):
                 "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
             )
         data = self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, resolved.size)
-        return _decode_tag(resolved, bytearray(data))
+        return _decode_tag(resolved, bytearray(data), encoding=encoding)
 
-    def write_tag(self, tag: "Union[Tag, str]", value: Any) -> int:
+    def write_tag(self, tag: "Union[Tag, str]", value: Any, encoding: str = "latin-1") -> int:
         """Write a typed value by :class:`~snap7.tags.Tag` or address string.
 
         Args:
             tag: A :class:`~snap7.tags.Tag` instance or a parseable address string.
             value: The value to write (type must match the tag's datatype).
+            encoding: Character encoding for STRING/FSTRING values (default ``"latin-1"``).
 
         Returns:
             0 on success.
@@ -831,10 +835,10 @@ class Client(ClientMixin):
         if resolved.datatype.upper() == "BOOL":
             current = self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, 1)
             buf[0] = current[0]
-        _encode_tag(resolved, buf, value)
+        _encode_tag(resolved, buf, value, encoding=encoding)
         return self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
 
-    def read_tags(self, tags: "list[Union[Tag, str]]") -> list[Any]:
+    def read_tags(self, tags: "list[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
         """Read multiple tags in a single optimized request.
 
         Uses the multi-variable read optimizer when available to batch
@@ -842,6 +846,7 @@ class Client(ClientMixin):
 
         Args:
             tags: List of :class:`~snap7.tags.Tag` instances or address strings.
+            encoding: Character encoding for STRING/FSTRING values (default ``"latin-1"``).
 
         Returns:
             List of decoded values in the same order as input.
@@ -849,7 +854,7 @@ class Client(ClientMixin):
         resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
         items = [{"area": Area(t.area), "db_number": t.db_number, "start": t.byte_offset, "size": t.size} for t in resolved]
         _code, data_list = self.read_multi_vars(items)
-        return [_decode_tag(t, bytearray(d)) for t, d in zip(resolved, data_list)]
+        return [_decode_tag(t, bytearray(d), encoding=encoding) for t, d in zip(resolved, data_list)]
 
     def db_read(self, db_number: int, start: int, size: int) -> bytearray:
         """
