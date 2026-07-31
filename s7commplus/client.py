@@ -789,7 +789,11 @@ def _parse_substreamed_read_response(response: bytes) -> bytes:
     return_value, consumed = decode_uint64_vlq(response, offset)
     offset += consumed
     if return_value != 0:
-        raise RuntimeError(f"Substreamed read failed with return value 0x{return_value:X}")
+        raise RuntimeError(
+            f"Substreamed read failed: PLC returned error 0x{return_value:X}. "
+            f"This may indicate the addressed object does not exist or the PLC "
+            f"does not support GET_VAR_SUBSTREAMED for data reads."
+        )
     if offset >= len(response):
         raise RuntimeError("Substreamed read response empty")
     raw_bytes, consumed = decode_pvalue_to_bytes(response, offset)

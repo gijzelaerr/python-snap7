@@ -251,11 +251,12 @@ class S7CommPlusConnection:
     def requires_substreamed(self) -> bool:
         """Whether data operations must use substreamed function codes.
 
-        V1-initial PLCs with SessionKey auth reject GET_MULTI_VARIABLES
-        (0x054C) and require GET_VAR_SUBSTREAMED (0x0586) /
-        SET_VAR_SUBSTREAMED (0x057C) for all data operations.
+        V1+SessionKey PLCs use GET_VAR_SUBSTREAMED for session-level ops
+        (legitimation challenge/response) but accept GET_MULTI_VARIABLES
+        for DB data reads — same as the thomas-v2 S7CommPlusDriver.
+        V3+HMAC framing is controlled separately by session_key presence.
         """
-        return self._session_key is not None
+        return False
 
     @property
     def oms_secret(self) -> Optional[bytes]:
