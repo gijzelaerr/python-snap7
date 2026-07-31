@@ -749,10 +749,19 @@ class S7CommPlusConnection:
         )
 
         # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses have
-        # NO SessionId field (requests do, making their header 14 bytes). Integrity is at the END.
+        # NO SessionId field (requests do, making their header 14 bytes).
         resp_offset = 10
 
         resp_payload = response[resp_offset:]
+
+        # Real PLCs prepend an IntegrityId VLQ to the response payload when
+        # integrity tracking is active.  Strip it so callers see only the
+        # application-level data (ReturnValue + items + errors).
+        if self._with_integrity_id and len(resp_payload) > 1:
+            resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
+            logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
+            resp_payload = resp_payload[iid_consumed:]
+
         logger.debug(f"  Response payload ({len(resp_payload)} bytes): {resp_payload.hex(' ')}")
 
         # Check for trailer bytes after data_length

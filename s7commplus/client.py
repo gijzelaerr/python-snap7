@@ -635,7 +635,7 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
     offset += consumed
 
     if return_value != 0:
-        logger.error(f"_parse_read_response: PLC returned error: {return_value}")
+        logger.error(f"_parse_read_response: PLC returned error 0x{return_value:X}")
         return []
 
     values: dict[int, bytes] = {}
