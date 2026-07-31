@@ -339,18 +339,11 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            # Step 7: Session activation + legitimation (V1-initial PLCs)
-            #
-            # After the V2 key exchange, the PLC requires:
-            # a) SET_VARIABLE addr 323 = USINT(5) to activate the V3 session
-            # b) Legitimation handshake (even without a password)
-            # Without (a), data reads fail with 0xE9.
-            # Ref: TIA Portal pcap frame 17 (TIAPortalWatchDB7.pcapng, GH-710)
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
-                self._session_activate()
-                self._post_auth_legitimation(password=self._connect_password)
+                if self._connect_password:
+                    self._post_auth_legitimation(password=self._connect_password)
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
