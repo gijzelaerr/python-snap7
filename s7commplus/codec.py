@@ -301,11 +301,16 @@ def encode_typed_value(datatype: int, value: Any) -> bytes:
 # -- S7CommPlus request/response payload helpers --
 
 
-def encode_object_qualifier() -> bytes:
+def encode_object_qualifier(key_qualifier: int = 0) -> bytes:
     """Encode the S7CommPlus ObjectQualifier structure.
 
     This fixed structure is appended to GetMultiVariables and
     SetMultiVariables requests.
+
+    Args:
+        key_qualifier: Sequence number for KEY_QUALIFIER field. TIA Portal
+            sets this to the current S7CommPlus sequence number. Encoded as
+            a 4-byte big-endian uint32.
 
     Reference: thomas-v2/S7CommPlusDriver/Core/S7p.cs EncodeObjectQualifier
     """
@@ -317,11 +322,9 @@ def encode_object_qualifier() -> bytes:
     # CompositionAID = AID(0)
     result += encode_uint32_vlq(Ids.COMPOSITION_AID)
     result += bytes([0x00, DataType.AID]) + encode_uint32_vlq(0)
-    # KeyQualifier = UDInt(0)
+    # KeyQualifier = UDInt(key_qualifier)
     result += encode_uint32_vlq(Ids.KEY_QUALIFIER)
-    result += bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(0)
-    # Terminator
-    result += bytes([0x00])
+    result += bytes([0x00, DataType.UDINT]) + struct.pack(">I", key_qualifier)
     return bytes(result)
 
 

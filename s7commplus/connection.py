@@ -343,8 +343,8 @@ class S7CommPlusConnection:
             self._connected = True
 
             if self._session_key is not None and self._session_setup_ok:
-                if self._connect_password:
-                    self._post_auth_legitimation(password=self._connect_password)
+                self._session_activate()
+                self._post_auth_legitimation(password=self._connect_password)
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -1182,33 +1182,36 @@ class S7CommPlusConnection:
         return False
 
     def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
-        """Build a GET_VAR_SUBSTREAMED payload (reused by activation and legitimation)."""
-        oq = encode_object_qualifier()
+        """Build a GET_VAR_SUBSTREAMED payload (reused by legitimation).
+
+        The ObjectQualifier KEY_QUALIFIER carries the next sequence number,
+        and the trailing section is 3 zero bytes (IntegrityId spliced before
+        them by ``send_request`` with ``integrity_tail=3``).
+        """
+        oq = encode_object_qualifier(key_qualifier=self._sequence_number)
         payload = struct.pack(">I", in_object_id)
         payload += bytes([0x20, 0x04])
         payload += encode_uint32_vlq(1)  # field count
         payload += encode_uint32_vlq(address)
-        payload += oq + bytes([0x00])
-        payload += encode_uint32_vlq(1)
+        payload += oq
         payload += encode_uint32_vlq(seq_field)
-        payload += struct.pack(">I", 0)
+        payload += bytes(3)  # trailing zeros
         return payload
 
     def _session_activate(self) -> None:
         """Activate the V3 session after the SecurityKey handshake.
 
         TIA Portal sends SET_VARIABLE writing USINT(5) to address 323 on the
-        session object immediately after the V2 SetMultiVariables key exchange
+        session object immediately after the SetupSession key exchange
         succeeds, BEFORE any data reads or legitimation.
 
-        Without this step, the PLC rejects data operations with 0xE9.
-
-        Previous attempt (432d9c6 → e73f915) bundled this with 3 extra
-        GET_VAR_SUBSTREAMED reads that are NOT in TIA's flow and caused RST.
-        This version sends only the SET_VARIABLE, matching the pcap exactly
-        (frame 17 of TIAPortalWatchDB7.pcapng from GH-710).
+        The payload must match TIA Portal exactly (frame 17 of
+        TIAPortalWatchDB7.pcapng from GH-710): the ObjectQualifier's
+        KEY_QUALIFIER field carries the frame sequence number as a 4-byte
+        uint32, and the trailing section is 3 zero bytes (the IntegrityId
+        is spliced before them by ``send_request``).
         """
-        oq = encode_object_qualifier()
+        oq = encode_object_qualifier(key_qualifier=self._sequence_number)
 
         payload = struct.pack(">I", self._session_id)
         payload += encode_uint32_vlq(1)  # AddressCount
@@ -1216,10 +1219,10 @@ class S7CommPlusConnection:
         payload += bytes([0x00, DataType.USINT])
         payload += encode_uint32_vlq(5)
         payload += oq
-        payload += struct.pack(">I", 0)
+        payload += bytes(3)  # trailing zeros (IntegrityId spliced before these)
 
         logger.debug("Session activation: SET_VARIABLE addr 323 = USINT(5)")
-        self.send_request(FunctionCode.SET_VARIABLE, payload)
+        self.send_request(FunctionCode.SET_VARIABLE, payload, integrity_tail=3)
         logger.info("Session activation completed")
 
     def _post_auth_legitimation(self, password: str = "") -> None:
@@ -1233,13 +1236,12 @@ class S7CommPlusConnection:
         2. Solve the challenge cryptographically
         3. SET_VAR_SUBSTREAMED: write solved 248-byte blob to address 1846
         """
-        oq = encode_object_qualifier()
-
         # Step 1: Read legitimation challenge from session, address 303
         logger.debug("Post-auth legitimation: reading challenge from address 303")
         challenge_resp = self.send_request(
             FunctionCode.GET_VAR_SUBSTREAMED,
             self._build_get_var_substreamed(self._session_id, LegitimationId.SERVER_SESSION_REQUEST),
+            integrity_tail=3,
         )
 
         # Extract the 20-byte challenge from the response.
@@ -1286,21 +1288,21 @@ class S7CommPlusConnection:
         logger.info(f"Legitimation blob generated ({len(legit_blob)} bytes)")
 
         # Step 3: Write solved blob via SET_VAR_SUBSTREAMED to address 1846
-        # Format matches HarpoS7 PoC SetVarSubStreamedRequest template
+        oq = encode_object_qualifier(key_qualifier=self._sequence_number)
         svs = struct.pack(">I", self._session_id)
         svs += bytes([0x20, 0x04])
         svs += encode_uint32_vlq(1)
         svs += encode_uint32_vlq(LegitimationId.LEGITIMATE)  # 1846
-        svs += oq + bytes([0x00])
+        svs += oq
         svs += encode_uint32_vlq(1)
-        svs += bytes([0x00, DataType.BLOB, 0x00])  # extra 0x00 before VLQ length
+        svs += bytes([0x00, DataType.BLOB, 0x00])
         svs += encode_uint32_vlq(len(legit_blob))
         svs += legit_blob
         svs += encode_uint32_vlq(self._sequence_number)
-        svs += struct.pack(">I", 0)
+        svs += bytes(3)  # trailing zeros
 
         logger.debug("Post-auth legitimation: writing solved blob to address 1846")
-        legit_resp = self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs)
+        legit_resp = self.send_request(FunctionCode.SET_VAR_SUBSTREAMED, svs, integrity_tail=3)
 
         if len(legit_resp) >= 1:
             legit_retval, _ = decode_uint64_vlq(legit_resp, 0)
