@@ -103,8 +103,15 @@ def _parse_order_code_structured(data: bytes, record_len: int, ndr: int, order_c
 
         elif record_id == 0x0081 and record_len >= 28:
             found_structured = True
-            order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
-            has_0x0081 = True
+            v1, v2, v3 = rec[-3], rec[-2], rec[-1]
+            # On S7-1500 the Boot Loader record holds the active firmware
+            # (e.g. V3.3.0). On S7-300 it holds the boot loader's own
+            # version which uses a different encoding (e.g. V34.9.9).
+            # Siemens firmware major versions are single-digit, so reject
+            # implausible values to avoid overwriting a good 0x0007 result.
+            if v1 <= 9:
+                order_code.V1, order_code.V2, order_code.V3 = v1, v2, v3
+                has_0x0081 = True
 
         elif record_id == 0x0007 and record_len >= 28 and not has_0x0081:
             found_structured = True

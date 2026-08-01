@@ -466,6 +466,31 @@ class TestServerUserdataOperations(unittest.TestCase):
         result = parse_order_code_szl(szl)
         self.assertIn(b"6ES7 315-2ND07-0AB0", result.OrderCode)
 
+    def test_parse_order_code_s7300_structured(self) -> None:
+        """parse_order_code_szl with real S7-300 CPU 318-3 structured records."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real hex dump from CPU 318-3EL01-0AB0, courtesy of @b1163646804
+        payload = (
+            b"\x00\x1c\x00\x04"
+            b"\x00\x016ES7 318-3EL01-0AB0 \x00\xc0\x00\x03\x00\x01"
+            b"\x00\x066ES7 318-3EL01-0AB0 \x00\xc0\x00\x03\x00\x01"
+            b"\x00\x07                    \x00\xc0V\x03\x02\x04"
+            b'\x00\x81Boot Loader         \x00\x00A"\x09\x09'
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 318-3EL01-0AB0", result.OrderCode)
+        # Should use 0x0007 firmware (V3.2.4), NOT 0x0081 boot loader (V34.9.9)
+        self.assertEqual(result.V1, 3)
+        self.assertEqual(result.V2, 2)
+        self.assertEqual(result.V3, 4)
+
     def test_read_szl_0x0131(self) -> None:
         """read_szl(0x0131) should return communication parameters."""
         szl = self.client.read_szl(0x0131, 0)
