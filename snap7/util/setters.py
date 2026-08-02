@@ -170,8 +170,8 @@ def set_fstring(bytearray_: Buffer, byte_index: int, value: str, max_length: int
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
-        :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
-        or 'value' contains non-ascii characters.
+        :obj:`ValueError`: if the length of the `value` is larger than the
+            ``max_size`` or ``value`` contains non-ASCII characters.
 
     Examples:
         >>> data = bytearray(20)
@@ -208,8 +208,9 @@ def set_string(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
-        :obj:`ValueError`: if the length of the `value` is larger than the `max_size`
-        or 'max_size' is greater than 254 or 'value' contains ascii characters > 255.
+        :obj:`ValueError`: if the length of the `value` is larger than the
+            ``max_size``, or ``max_size`` is greater than 254, or ``value``
+            contains characters with ordinal > 255.
 
     Examples:
         >>> from snap7.util import set_string

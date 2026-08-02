@@ -217,6 +217,17 @@ class TestClientServerIntegration:
         finally:
             client.disconnect()
 
+    def test_explore_xml(self, server: S7CommPlusServer) -> None:
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=TEST_PORT)
+        try:
+            result = client.explore_xml()
+            # Emulated server doesn't send zlib preset-dict blobs,
+            # so explore_xml returns None (no decompressible stream).
+            assert result is None
+        finally:
+            client.disconnect()
+
     def test_server_data_persists_across_clients(self, server: S7CommPlusServer) -> None:
         # Client 1 writes
         c1 = S7CommPlusClient()

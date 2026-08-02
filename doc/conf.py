@@ -7,7 +7,19 @@ import snap7  # noqa: E402
 
 # -- General configuration -----------------------------------------------------
 
-extensions = ["sphinx.ext.autodoc", "sphinx.ext.coverage", "sphinx.ext.viewcode", "sphinx.ext.napoleon"]
+extensions = ["sphinx.ext.autodoc", "sphinx.ext.coverage", "sphinx.ext.viewcode", "sphinx.ext.napoleon", "sphinx.ext.intersphinx"]
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}
+
+nitpick_ignore = [
+    ("py:class", "ctypes.Array"),
+    ("py:class", "ctypes.c_int"),
+    ("py:class", "ctypes.c_uint"),
+    ("py:class", "snap7.type.S7DataItem"),
+    ("py:class", "snap7.type.c_ubyte_Array_65536"),
+]
 
 templates_path = ["_templates"]
 
