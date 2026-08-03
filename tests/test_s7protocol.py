@@ -578,3 +578,39 @@ class TestPlcControlParams:
         proto = S7Protocol()
         with pytest.raises(ValueError, match="Unknown PLC control operation"):
             proto.build_plc_control_request("invalid")
+
+
+class TestParseForceTable:
+    """Unit tests for _parse_force_szl (SZL 0x0025 parser)."""
+
+    def test_empty_data(self) -> None:
+        from snap7.client import _parse_force_szl
+
+        assert _parse_force_szl(b"") == []
+
+    def test_single_entry(self) -> None:
+        from snap7.client import _parse_force_szl
+        from snap7.type import ForceEntry
+
+        # PE byte 10, bit 3, value True
+        raw = struct.pack(">HHBBxx", 0x0081, 10, 3, 0x01)
+        result = _parse_force_szl(raw)
+        assert len(result) == 1
+        assert result[0] == ForceEntry(area=0x0081, byte_offset=10, bit=3, value=True)
+
+    def test_multiple_entries(self) -> None:
+        from snap7.client import _parse_force_szl
+        from snap7.type import ForceEntry
+
+        raw = struct.pack(">HHBBxx", 0x0081, 0, 0, 0x01)  # PE byte 0 bit 0 = True
+        raw += struct.pack(">HHBBxx", 0x0082, 5, 7, 0x00)  # PA byte 5 bit 7 = False
+        result = _parse_force_szl(raw)
+        assert len(result) == 2
+        assert result[0] == ForceEntry(area=0x0081, byte_offset=0, bit=0, value=True)
+        assert result[1] == ForceEntry(area=0x0082, byte_offset=5, bit=7, value=False)
+
+    def test_truncated_data(self) -> None:
+        from snap7.client import _parse_force_szl
+
+        # 5 bytes is less than one 8-byte entry
+        assert _parse_force_szl(b"\x00\x81\x00\x02\x03") == []

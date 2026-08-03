@@ -382,3 +382,43 @@ async def test_get_block_info(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_pdu_length_after_connect(client: AsyncClient) -> None:
     assert client.get_pdu_length() > 0
+
+
+# -------------------------------------------------------------------
+# Force I/O
+# -------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_force_bit(client: AsyncClient) -> None:
+    """Force a single input bit and verify it reads back correctly."""
+    await client.write_area(Area.PE, 0, 0, bytearray([0x00]))
+    await client.force_bit(Area.PE, 0, 3, True)
+    data = await client.read_area(Area.PE, 0, 0, 1)
+    assert data[0] & (1 << 3)
+
+
+@pytest.mark.asyncio
+async def test_cancel_force(client: AsyncClient) -> None:
+    """Cancel force clears the bit in the process image."""
+    await client.write_area(Area.PA, 0, 0, bytearray([0x00]))
+    await client.force_bit(Area.PA, 0, 2, True)
+    data = await client.read_area(Area.PA, 0, 0, 1)
+    assert data[0] & (1 << 2)
+    await client.cancel_force(Area.PA, 0, 2)
+    data = await client.read_area(Area.PA, 0, 0, 1)
+    assert not (data[0] & (1 << 2))
+
+
+@pytest.mark.asyncio
+async def test_force_bit_invalid_area(client: AsyncClient) -> None:
+    """Force should reject non-I/O areas."""
+    with pytest.raises(ValueError):
+        await client.force_bit(Area.MK, 0, 0, True)
+
+
+@pytest.mark.asyncio
+async def test_read_force_table(client: AsyncClient) -> None:
+    """read_force_table should return a list (possibly empty)."""
+    result = await client.read_force_table()
+    assert isinstance(result, list)

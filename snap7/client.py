@@ -36,6 +36,7 @@ from .type import (
     Area,
     Block,
     BlocksList,
+    ForceEntry,
     S7CpuInfo,
     TS7BlockInfo,
     S7DataItem,
@@ -231,6 +232,31 @@ def _encode_scalar(datatype: str, buf: bytearray, offset: int, value: Any, bit: 
         util.set_dtl(buf, offset, value)
         return
     raise ValueError(f"Unsupported tag datatype: {datatype}")
+
+
+def _parse_force_szl(raw: bytes) -> list[ForceEntry]:
+    """Parse SZL 0x0025 (force table) data into :class:`ForceEntry` items.
+
+    Each SZL 0x0025 entry is 8 bytes:
+      - bytes 0-1: area code (big-endian, 0x0081=PE, 0x0082=PA)
+      - bytes 2-3: byte offset (big-endian)
+      - byte 4:    bit number (0-7)
+      - byte 5:    force value (0x00=False, 0x01=True)
+      - bytes 6-7: reserved
+
+    Returns an empty list if *raw* is too short or contains no entries.
+    """
+    entry_size = 8
+    entries: list[ForceEntry] = []
+    offset = 0
+    while offset + entry_size <= len(raw):
+        area_code = struct.unpack(">H", raw[offset : offset + 2])[0]
+        byte_off = struct.unpack(">H", raw[offset + 2 : offset + 4])[0]
+        bit_num = raw[offset + 4]
+        val = raw[offset + 5] != 0
+        entries.append(ForceEntry(area=area_code, byte_offset=byte_off, bit=bit_num, value=val))
+        offset += entry_size
+    return entries
 
 
 class _OptimizationPlan:
@@ -1930,6 +1956,98 @@ class Client(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
         return parse_protection_szl(self.read_szl(0x0232, 0))
+
+    # ---------------------------------------------------------------
+    # Force I/O
+    # ---------------------------------------------------------------
+
+    _FORCE_AREAS: frozenset[int] = frozenset({Area.PE, Area.PA})
+
+    def force_bit(self, area: Area, byte_offset: int, bit: int, value: bool) -> None:
+        """Force a single I/O bit in the process image.
+
+        Performs a read-modify-write on the specified byte to set or clear
+        the target bit without affecting neighbouring bits. This writes
+        directly to the process image, so the value may be overwritten by
+        the PLC's scan cycle. It is equivalent to the approach used by
+        rs-snap7.
+
+        Only the I/O areas (PE = inputs, PA = outputs) are supported.
+
+        Args:
+            area: Memory area (:attr:`~snap7.type.Area.PE` or
+                :attr:`~snap7.type.Area.PA`).
+            byte_offset: Byte offset within the area.
+            bit: Bit number (0-7) within the byte.
+            value: Desired bit value.
+
+        Raises:
+            ValueError: If *area* is not PE or PA, or *bit* is out of range.
+        """
+        if area not in self._FORCE_AREAS:
+            raise ValueError(f"Force is only supported for PE (inputs) and PA (outputs), got {area!r}")
+        if not 0 <= bit <= 7:
+            raise ValueError(f"Bit must be 0-7, got {bit}")
+
+        current = self.read_area(area, 0, byte_offset, 1)
+        if value:
+            current[0] |= 1 << bit
+        else:
+            current[0] &= ~(1 << bit)
+        self.write_area(area, 0, byte_offset, current)
+        logger.info(f"Forced {area.name} byte {byte_offset} bit {bit} = {value}")
+
+    def cancel_force(self, area: Area, byte_offset: int, bit: int) -> None:
+        """Cancel a forced I/O bit by clearing it in the process image.
+
+        Clears the specified bit. On a real PLC the scan cycle will
+        restore the natural I/O state once the force is released; on the
+        emulated server the bit stays at 0 until explicitly written.
+
+        Args:
+            area: Memory area (:attr:`~snap7.type.Area.PE` or
+                :attr:`~snap7.type.Area.PA`).
+            byte_offset: Byte offset within the area.
+            bit: Bit number (0-7) within the byte.
+
+        Raises:
+            ValueError: If *area* is not PE or PA, or *bit* is out of range.
+        """
+        if area not in self._FORCE_AREAS:
+            raise ValueError(f"Cancel force is only supported for PE (inputs) and PA (outputs), got {area!r}")
+        if not 0 <= bit <= 7:
+            raise ValueError(f"Bit must be 0-7, got {bit}")
+
+        current = self.read_area(area, 0, byte_offset, 1)
+        current[0] &= ~(1 << bit)
+        self.write_area(area, 0, byte_offset, current)
+        logger.info(f"Cancelled force on {area.name} byte {byte_offset} bit {bit}")
+
+    def read_force_table(self) -> list[ForceEntry]:
+        """Read the PLC force table via SZL 0x0025.
+
+        On a real PLC this returns bits that have been forced through the
+        CPU's built-in force mechanism (e.g. via TIA Portal). Bits set
+        through :meth:`force_bit` (process-image writes) do **not** appear
+        here because they bypass the CPU force table.
+
+        Returns:
+            List of :class:`~snap7.type.ForceEntry` instances describing
+            each forced bit.  Returns an empty list when no bits are
+            currently forced or when the PLC does not support SZL 0x0025.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        try:
+            szl = self.read_szl(0x0025, 0x0000)
+        except (S7ProtocolError, RuntimeError):
+            # PLC does not support force table SZL or returned an error
+            logger.debug("SZL 0x0025 not available; returning empty force table")
+            return []
+
+        raw = bytes(szl.Data[: szl.Header.LengthDR])
+        return _parse_force_szl(raw)
 
     def read_szl(self, ssl_id: int, index: int = 0) -> S7SZL:
         """
