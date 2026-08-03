@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 
 from snap7.async_client import AsyncClient
+from snap7.error import S7ConnectionError
 from snap7.server import Server
 from snap7.type import SrvArea, Area, Parameter
 
@@ -265,13 +266,20 @@ def test_error_text() -> None:
     assert "Not connected" in c.error_text(0x0003)
 
 
-def test_set_clear_session_password() -> None:
+@pytest.mark.asyncio
+async def test_set_session_password_requires_connection() -> None:
+    """set_session_password sends a USERDATA PDU and requires a connection."""
     c = AsyncClient()
-    assert c.session_password is None
-    c.set_session_password("secret")
-    assert c.session_password == "secret"
-    c.clear_session_password()
-    assert c.session_password is None
+    with pytest.raises(S7ConnectionError, match="Not connected"):
+        await c.set_session_password("secret")
+
+
+@pytest.mark.asyncio
+async def test_clear_session_password_requires_connection() -> None:
+    """clear_session_password sends a USERDATA PDU and requires a connection."""
+    c = AsyncClient()
+    with pytest.raises(S7ConnectionError, match="Not connected"):
+        await c.clear_session_password()
 
 
 def test_set_connection_params() -> None:

@@ -147,29 +147,6 @@ class ClientMixin:
         self.connection_type = connection_type
         logger.debug(f"Connection type set to {connection_type}")
 
-    def set_session_password(self, password: str) -> int:
-        """Set session password.
-
-        Args:
-            password: Session password
-
-        Returns:
-            0 on success
-        """
-        self.session_password = password
-        logger.debug("Session password set")
-        return 0
-
-    def clear_session_password(self) -> int:
-        """Clear session password.
-
-        Returns:
-            0 on success
-        """
-        self.session_password = None
-        logger.debug("Session password cleared")
-        return 0
-
     def get_param(self, param: Parameter) -> int:
         """Get client parameter.
 

@@ -1070,6 +1070,53 @@ class AsyncClient(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
         return parse_protection_szl(await self.read_szl(0x0232, 0))
 
+    async def set_session_password(self, password: str) -> int:
+        """Set the session password to unlock a password-protected PLC.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 1)
+        with the encoded password.
+
+        Args:
+            password: Plaintext password (max 8 ASCII characters).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the password.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        encoded = self.protocol.encode_password(password)
+        request = self.protocol.build_set_session_password_request(encoded)
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password set successfully")
+        return 0
+
+    async def clear_session_password(self) -> int:
+        """Clear the session password, returning to the default protection level.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 2).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the request.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        request = self.protocol.build_clear_session_password_request()
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password cleared successfully")
+        return 0
+
     async def compress(self, timeout: int) -> int:
         """Compress PLC memory."""
         if not self.get_connected():
