@@ -149,17 +149,22 @@ def get_real(bytearray_: Buffer, byte_index: int) -> float:
     return real
 
 
-def get_fstring(bytearray_: Buffer, byte_index: int, max_length: int, remove_padding: bool = True) -> str:
+def get_fstring(
+    bytearray_: Buffer, byte_index: int, max_length: int, remove_padding: bool = True, encoding: str = "latin-1"
+) -> str:
     """Parse space-padded fixed-length string from bytearray
 
     Notes:
-        This function supports fixed-length ASCII strings, right-padded with spaces.
+        This function supports fixed-length strings, right-padded with spaces.
+        Use the ``encoding`` parameter to decode multi-byte strings (e.g. ``"gbk"``
+        for Chinese PLCs or ``"utf-8"``).
 
     Args:
         bytearray_: buffer from where to get the string.
         byte_index: byte index from where to start reading.
-        max_length: the maximum length of the string.
+        max_length: the maximum length of the string in bytes.
         remove_padding: whether to remove the right-padding.
+        encoding: character encoding used to decode the raw bytes (default ``"latin-1"``).
 
     Returns:
         String value.
@@ -171,8 +176,8 @@ def get_fstring(bytearray_: Buffer, byte_index: int, max_length: int, remove_pad
         >>> get_fstring(data, 0, 15, remove_padding=False)
         'hello world    '
     """
-    data = map(chr, bytearray_[byte_index : byte_index + max_length])
-    string = "".join(data)
+    raw = bytes(bytearray_[byte_index : byte_index + max_length])
+    string = raw.decode(encoding)
 
     if remove_padding:
         return string.rstrip(" ")
@@ -180,16 +185,19 @@ def get_fstring(bytearray_: Buffer, byte_index: int, max_length: int, remove_pad
         return string
 
 
-def get_string(bytearray_: Buffer, byte_index: int) -> str:
+def get_string(bytearray_: Buffer, byte_index: int, encoding: str = "latin-1") -> str:
     """Parse string from bytearray
 
     Notes:
         The first byte of the buffer will contain the max size posible for a string.
         The second byte contains the length of the string that contains.
+        Use the ``encoding`` parameter to decode multi-byte strings (e.g. ``"gbk"``
+        for Chinese PLCs or ``"utf-8"``).
 
     Args:
         bytearray_: buffer from where to get the string.
         byte_index: byte index from where to start reading.
+        encoding: character encoding used to decode the raw bytes (default ``"latin-1"``).
 
     Returns:
         String value.
@@ -210,8 +218,8 @@ def get_string(bytearray_: Buffer, byte_index: int) -> str:
             "String contains {str_length} chars, but max. {max_string_size} chars are expected or is "
             "larger than 254. Bytearray doesn't seem to be a valid string."
         )
-    data = map(chr, bytearray_[byte_index + 2 : byte_index + 2 + str_length])
-    return "".join(data)
+    raw = bytes(bytearray_[byte_index + 2 : byte_index + 2 + str_length])
+    return raw.decode(encoding)
 
 
 def get_dword(bytearray_: Buffer, byte_index: int) -> int:

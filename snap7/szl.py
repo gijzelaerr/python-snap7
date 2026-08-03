@@ -77,18 +77,35 @@ def parse_cp_info_szl(szl: S7SZL) -> S7CpInfo:
 
 
 def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
-    """Decode SZL 0x0011 (module order code + firmware version) into :class:`S7OrderCode`."""
+    """Decode SZL 0x0011 (module order code + firmware version) into :class:`S7OrderCode`.
+
+    Real PLCs prepend a 4-byte partial-list header (LengthDR + NDR) followed
+    by 26-byte records: Index(2) + MLFB(20) + Reserved(1) + V1 + V2 + V3.
+    We locate the first record that contains a non-empty order code.
+    """
     order_code = S7OrderCode()
     data = _szl_data(szl)
 
-    if len(data) >= 20:
-        order_code.OrderCode = data[0:20].rstrip(b"\x00")
-    if len(data) >= 21:
-        order_code.V1 = data[20]
-    if len(data) >= 22:
-        order_code.V2 = data[21]
-    if len(data) >= 23:
-        order_code.V3 = data[22]
+    if len(data) < 4:
+        return order_code
+
+    record_len = struct.unpack(">H", data[0:2])[0]
+    ndr = struct.unpack(">H", data[2:4])[0]
+
+    if record_len < 24 or ndr < 1 or 4 + record_len * ndr > len(data):
+        return order_code
+
+    offset = 4
+    for _ in range(ndr):
+        rec = data[offset : offset + record_len]
+        mlfb = rec[2:22].rstrip(b"\x00")
+        if mlfb:
+            order_code.OrderCode = mlfb
+            order_code.V1 = rec[23]
+            order_code.V2 = rec[24]
+            order_code.V3 = rec[25]
+            break
+        offset += record_len
 
     return order_code
 
