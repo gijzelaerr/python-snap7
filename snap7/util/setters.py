@@ -159,19 +159,20 @@ def set_real(bytearray_: Buffer, byte_index: int, real: Union[bool, str, float, 
     return bytearray_
 
 
-def set_fstring(bytearray_: Buffer, byte_index: int, value: str, max_length: int) -> Buffer:
+def set_fstring(bytearray_: Buffer, byte_index: int, value: str, max_length: int, encoding: str = "latin-1") -> Buffer:
     """Set space-padded fixed-length string value
 
     Args:
         bytearray_: buffer to write to.
         byte_index: byte index to start writing from.
         value: string to write.
-        max_length: maximum string length, i.e. the fixed size of the string.
+        max_length: maximum string length in bytes, i.e. the fixed size of the string.
+        encoding: character encoding used to encode the string (default ``"latin-1"``).
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
-        :obj:`ValueError`: if the length of the `value` is larger than the
-            ``max_size`` or ``value`` contains non-ASCII characters.
+        :obj:`ValueError`: if the encoded byte length of the `value` is larger than
+            ``max_length``.
 
     Examples:
         >>> data = bytearray(20)
@@ -179,38 +180,34 @@ def set_fstring(bytearray_: Buffer, byte_index: int, value: str, max_length: int
         >>> data
             bytearray(b'hello world    \x00\x00\x00\x00\x00')
     """
-    if not value.isascii():
-        raise ValueError("Value contains non-ascii values.")
-    # FAIL HARD WHEN trying to write too much data into PLC
-    size = len(value)
+    encoded = value.encode(encoding)
+    size = len(encoded)
     if size > max_length:
-        raise ValueError(f"size {size} > max_length {max_length} {value}")
+        raise ValueError(f"encoded byte size {size} > max_length {max_length} {value}")
 
-    # fill array with chr integers
-    for i, c in enumerate(value):
-        bytearray_[byte_index + i] = ord(c)
+    bytearray_[byte_index : byte_index + size] = encoded
 
-    # fill the rest with empty space
-    for r in range(len(value), max_length):
+    # fill the rest with spaces
+    for r in range(size, max_length):
         bytearray_[byte_index + r] = ord(" ")
 
     return bytearray_
 
 
-def set_string(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 254) -> Buffer:
+def set_string(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 254, encoding: str = "latin-1") -> Buffer:
     """Set string value
 
     Args:
         bytearray_: buffer to write to.
         byte_index: byte index to start writing from.
         value: string to write.
-        max_size: maximum possible string size, max. 254 as default.
+        max_size: maximum possible string size in bytes, max. 254 as default.
+        encoding: character encoding used to encode the string (default ``"latin-1"``).
 
     Raises:
         :obj:`TypeError`: if the `value` is not a :obj:`str`.
-        :obj:`ValueError`: if the length of the `value` is larger than the
-            ``max_size``, or ``max_size`` is greater than 254, or ``value``
-            contains characters with ordinal > 255.
+        :obj:`ValueError`: if the encoded byte length of the `value` is larger than the
+            ``max_size``, or ``max_size`` is greater than 254.
 
     Examples:
         >>> from snap7.util import set_string
@@ -225,29 +222,21 @@ def set_string(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 
     if max_size > 254:
         raise ValueError(f"max_size: {max_size} > max. allowed 254 chars")
 
-    if any(ord(char) < 0 or ord(char) > 255 for char in value):
-        raise ValueError(
-            "Value contains ascii values > 255, which is not compatible with PLC Type STRING. "
-            "Check encoding of value or try set_wstring()."
-        )
-
-    size = len(value)
-    # FAIL HARD WHEN trying to write too much data into PLC
+    encoded = value.encode(encoding)
+    size = len(encoded)
     if size > max_size:
-        raise ValueError(f"size {size} > max_size {max_size} {value}")
+        raise ValueError(f"encoded byte size {size} > max_size {max_size} {value}")
 
     # set max string size
     bytearray_[byte_index] = max_size
 
-    # set len count on first position
-    bytearray_[byte_index + 1] = len(value)
+    # set actual byte length
+    bytearray_[byte_index + 1] = size
 
-    # fill array with chr integers
-    for i, c in enumerate(value):
-        bytearray_[byte_index + 2 + i] = ord(c)
+    bytearray_[byte_index + 2 : byte_index + 2 + size] = encoded
 
-    # fill the rest with empty space
-    for r in range(len(value), bytearray_[byte_index]):
+    # fill the rest with spaces
+    for r in range(size, bytearray_[byte_index]):
         bytearray_[byte_index + 2 + r] = ord(" ")
 
     return bytearray_
