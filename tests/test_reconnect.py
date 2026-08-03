@@ -10,7 +10,8 @@ import pytest
 from snap7.client import Client
 from snap7.error import S7ConnectionError
 from snap7.server import Server
-from snap7.type import SrvArea
+from snap7.tags import Tag
+from snap7.type import Area, SrvArea
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -149,6 +150,26 @@ class TestAutoReconnect(unittest.TestCase):
             # Verify the data was written after reconnection
             data = client.db_read(db_number, 0, 4)
             assert data == bytearray([5, 6, 7, 8])
+        finally:
+            client.disconnect()
+
+    def test_reconnect_on_multi_block_read(self) -> None:
+        """Client reconnects when connection drops during multi-block sequential read."""
+        client = Client(auto_reconnect=True, max_retries=3, retry_delay=0.1)
+        client.connect(ip, rack, slot, tcpport)
+
+        try:
+            tags = [Tag(Area.DB, db_number, i * 2, "INT") for i in range(20)]
+            data = client.read_tags(tags)
+            assert len(data) == 20
+
+            if client.connection and client.connection.socket:
+                client.connection.socket.close()
+            client.connected = False
+
+            data = client.read_tags(tags)
+            assert len(data) == 20
+            assert client.connected is True
         finally:
             client.disconnect()
 

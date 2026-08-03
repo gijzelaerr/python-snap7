@@ -1289,8 +1289,13 @@ class Client(ClientMixin):
 
     def _execute_packets_sequential(self, packet_requests: list[Tuple[int, bytes, ReadPacket]]) -> None:
         """Execute multi-block packets one at a time."""
-        for _, request, packet in packet_requests:
-            response = self._send_receive(request)
+        for _, _request, packet in packet_requests:
+            block_specs = [(blk.area, blk.db_number, blk.start_offset, blk.byte_length) for blk in packet.blocks]
+
+            def build_request(specs: list[tuple[int, int, int, int]] = block_specs) -> bytes:
+                return self.protocol.build_multi_read_request(specs)
+
+            response = self._send_receive_with_reconnect(build_request)
             block_data_list = self.protocol.extract_multi_read_data(response, len(packet.blocks))
             for blk, buf in zip(packet.blocks, block_data_list):
                 blk.buffer = buf
@@ -1299,9 +1304,20 @@ class Client(ClientMixin):
         """Execute multi-block packets using parallel dispatch.
 
         Sends up to *max_parallel* PDUs back-to-back before reading
-        responses, reducing round-trip overhead.
+        responses, reducing round-trip overhead.  Falls back to
+        sequential reconnect-aware execution on connection loss.
         """
-        # Process in chunks of max_parallel
+        try:
+            self._execute_packets_parallel_inner(packet_requests)
+        except (S7ConnectionError, OSError) as e:
+            if not self._auto_reconnect:
+                raise
+            logger.warning(f"Connection lost during parallel read: {e}")
+            self._do_reconnect()
+            self._execute_packets_sequential(packet_requests)
+
+    def _execute_packets_parallel_inner(self, packet_requests: list[Tuple[int, bytes, ReadPacket]]) -> None:
+        """Inner parallel dispatch without reconnect handling."""
         for chunk_start in range(0, len(packet_requests), self.max_parallel):
             chunk = packet_requests[chunk_start : chunk_start + self.max_parallel]
             requests = [(pkt_idx, pdu) for pkt_idx, pdu, _ in chunk]
