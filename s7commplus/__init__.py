@@ -13,10 +13,19 @@ Usage::
     data = client.db_read(1, 0, 4)
 """
 
+from .blob_decompressor import decompress_blob, find_and_decompress
 from .client import S7CommPlusClient as Client
 from .async_client import S7CommPlusAsyncClient as AsyncClient
 from .server import S7CommPlusServer as Server, DataBlock, CPUState
 from .connection import S7CommPlusConnection
+from .tag_browser import (
+    Tag,
+    Member,
+    DataBlock as ExploreDataBlock,
+    tags_from_explore,
+    block_interface_from_explore,
+    datablocks_from_explore,
+)
 
 __all__ = [
     "Client",
@@ -25,4 +34,12 @@ __all__ = [
     "DataBlock",
     "CPUState",
     "S7CommPlusConnection",
+    "decompress_blob",
+    "find_and_decompress",
+    "Tag",
+    "Member",
+    "ExploreDataBlock",
+    "tags_from_explore",
+    "block_interface_from_explore",
+    "datablocks_from_explore",
 ]

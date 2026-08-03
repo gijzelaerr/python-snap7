@@ -136,8 +136,8 @@ class S7Protocol:
             response_sequence: Sequence number from the response PDU.
 
         Raises:
-            S7StalePacketError: If response is older than expected (stale).
-            S7PacketLostError: If response is ahead of expected (packet loss).
+            ~snap7.error.S7StalePacketError: If response is older than expected (stale).
+            ~snap7.error.S7PacketLostError: If response is ahead of expected (packet loss).
         """
         if response_sequence < self.sequence:
             raise S7StalePacketError(f"Stale packet: expected sequence {self.sequence}, got {response_sequence}")
@@ -239,7 +239,7 @@ class S7Protocol:
             List of bytearrays, one per block.
 
         Raises:
-            S7ProtocolError: If any item has a non-success return code.
+            ~snap7.error.S7ProtocolError: If any item has a non-success return code.
         """
         raw = response.get("raw_data", b"")
         if not raw:
@@ -429,7 +429,7 @@ class S7Protocol:
             response: Parsed S7 response
 
         Raises:
-            S7ProtocolError: If control operation failed
+            ~snap7.error.S7ProtocolError: If control operation failed
         """
         # For now, just check that we got a response
         # In a full implementation, we would check specific error codes
@@ -1048,7 +1048,7 @@ class S7Protocol:
         return result
 
     def parse_list_blocks(self, response: Dict[str, Any]) -> BlocksList:
-        """Parse list blocks response directly into a :class:`BlocksList`.
+        """Parse list blocks response directly into a :class:`~snap7.type.BlocksList`.
 
         Consolidates the dict→struct conversion that used to live in both
         the sync and async clients so the field mapping is declared once.
@@ -1056,7 +1056,7 @@ class S7Protocol:
         return build_blocks_list_from_dict(self.parse_list_blocks_response(response))
 
     def parse_get_block_info(self, response: Dict[str, Any]) -> TS7BlockInfo:
-        """Parse block info response directly into a :class:`TS7BlockInfo`.
+        """Parse block info response directly into a :class:`~snap7.type.TS7BlockInfo`.
 
         Consolidates the dict→struct conversion that used to live in both
         the sync and async clients.
@@ -1602,7 +1602,7 @@ class S7Protocol:
             response: Parsed S7 response
 
         Raises:
-            S7ProtocolError: If write operation failed
+            ~snap7.error.S7ProtocolError: If write operation failed
         """
         # First check for errors in the response header
         # S7-1200/1500 returns error codes in the header for write failures
@@ -1631,7 +1631,7 @@ class S7Protocol:
 
 
 def build_blocks_list_from_dict(counts: Dict[str, int]) -> BlocksList:
-    """Populate a :class:`BlocksList` from the dict returned by ``parse_list_blocks_response``."""
+    """Populate a :class:`~snap7.type.BlocksList` from the dict returned by ``parse_list_blocks_response``."""
     block_list = BlocksList()
     block_list.OBCount = counts.get("OBCount", 0)
     block_list.FBCount = counts.get("FBCount", 0)
@@ -1644,7 +1644,7 @@ def build_blocks_list_from_dict(counts: Dict[str, int]) -> BlocksList:
 
 
 def build_block_info_from_dict(info: Dict[str, Any]) -> TS7BlockInfo:
-    """Populate a :class:`TS7BlockInfo` from the dict returned by ``parse_get_block_info_response``."""
+    """Populate a :class:`~snap7.type.TS7BlockInfo` from the dict returned by ``parse_get_block_info_response``."""
     block_info = TS7BlockInfo()
     block_info.BlkType = info["block_type"]
     block_info.BlkNumber = info["block_number"]

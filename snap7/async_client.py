@@ -4,7 +4,7 @@ Legacy async S7 client implementation.
 Uses asyncio streams for non-blocking I/O with an asyncio.Lock() to serialize
 send/receive cycles, ensuring safe concurrent use via asyncio.gather().
 
-For new projects, use :class:`s7.AsyncClient` instead, which supports all PLC
+For new projects, use ``s7.AsyncClient`` instead, which supports all PLC
 models and automatically selects the best protocol.
 """
 
@@ -287,7 +287,7 @@ class AsyncClient(ClientMixin):
     serializes each send+receive cycle so that concurrent coroutines
     (e.g. via asyncio.gather) never interleave on the same TCP socket.
 
-    For new projects, use :class:`s7.AsyncClient` instead.
+    For new projects, use ``s7.AsyncClient`` instead.
 
     Examples:
         >>> from s7 import AsyncClient
