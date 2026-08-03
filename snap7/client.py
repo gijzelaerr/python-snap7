@@ -656,7 +656,7 @@ class Client(ClientMixin):
         self._params[Parameter.RemotePort] = port
 
         # Remote TSAP targets the gateway rack/slot
-        self.remote_tsap = 0x0100 | (router_rack << 5) | router_slot
+        self.remote_tsap = (self.connection_type << 8) | (router_rack << 5) | router_slot
 
         try:
             start_time = time.time()
