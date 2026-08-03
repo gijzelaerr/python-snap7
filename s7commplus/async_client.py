@@ -30,6 +30,7 @@ from .codec import (
     parse_server_session_version,
 )
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
+from .blob_decompressor import find_and_decompress
 from .client import (
     _build_read_payload,
     _parse_read_response,
@@ -477,6 +478,26 @@ class S7CommPlusAsyncClient:
         """Browse the PLC object tree."""
         payload = _build_explore_payload(explore_id)
         return await self._send_request(FunctionCode.EXPLORE, payload)
+
+    async def explore_xml(self, explore_id: int = 0) -> str | None:
+        """EXPLORE a PLC object and decompress the XML metadata from the response.
+
+        S7-1200/1500 PLCs (FW V4.5+) compress XML metadata — tag definitions,
+        interface descriptions, line comments, etc. — using zlib with Siemens
+        preset dictionaries. This method sends an EXPLORE request and
+        decompresses the first zlib stream found in the response.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            explore_id: Object to explore (0 = root).
+
+        Returns:
+            Decompressed XML as a UTF-8 string, or ``None`` if the response
+            contains no recognisable zlib stream.
+        """
+        raw = await self.explore(explore_id)
+        return find_and_decompress(raw)
 
     async def set_plc_operating_state(self, state: int) -> None:
         """Set the PLC operating state (start/stop)."""

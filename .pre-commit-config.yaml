@@ -10,6 +10,7 @@ repos:
       - id: check-symlinks
       - id: check-toml
       - id: check-xml
+        exclude: ^s7commplus/zlib_dicts/
       - id: check-yaml
       - id: check-illegal-windows-names
       - id: check-merge-conflict

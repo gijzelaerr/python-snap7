@@ -506,6 +506,11 @@ class TestClientErrorPaths:
         with pytest.raises(RuntimeError, match="Not connected"):
             client.explore()
 
+    def test_explore_xml_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.explore_xml()
+
     def test_context_manager_not_connected(self) -> None:
         """Test that context manager works without connection (disconnect is a no-op)."""
         with S7CommPlusClient() as client:
