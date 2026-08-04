@@ -26,6 +26,7 @@ from .codec import (
     decode_header,
     encode_typed_value,
     encode_object_qualifier,
+    encode_pvalue_blob,
     parse_create_object_session_id,
     parse_server_session_version,
 )
@@ -39,10 +40,12 @@ from .client import (
     _build_area_read_payload,
     _build_area_write_payload,
     _build_symbolic_read_payload,
+    _build_symbolic_write_payload,
     _build_explore_payload,
     _build_invoke_payload,
     _build_explore_request,
     _parse_explore_datablocks,
+    _build_subscription_request,
 )
 from . import typeinfo
 from .protocol import Ids
@@ -504,6 +507,96 @@ class S7CommPlusAsyncClient:
         payload = _build_invoke_payload(state)
         await self._send_request(FunctionCode.INVOKE, payload)
 
+    async def get_cpu_state(self) -> str:
+        """Get PLC CPU operating state via S7CommPlus.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns:
+            One of ``"RUN"``, ``"STOP"``, or ``"UNKNOWN"``.
+        """
+        payload = _build_explore_request(Ids.NATIVE_THE_CPU_EXEC_UNIT_RID, [])
+        response = await self._send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
+        return "RUN" if response else "UNKNOWN"
+
+    async def upload_block(self, block_type: int, block_number: int) -> bytes:
+        """Upload (read) a program block from the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            block_type: Block type (e.g. 0x08 for DB, 0x0C for FC).
+            block_number: Block number.
+
+        Returns:
+            Raw block data.
+        """
+        payload = bytearray()
+        payload += struct.pack(">I", self._session_id)
+        payload += encode_uint32_vlq(1)  # item count
+        payload += encode_uint32_vlq(1)  # field count
+        payload += encode_uint32_vlq(block_type)
+        payload += encode_uint32_vlq(block_number)
+        payload += struct.pack(">I", 0)
+
+        response = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, bytes(payload))
+        # Skip return code VLQ
+        offset = 0
+        _, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+        return response[offset:]
+
+    async def download_block(self, block_type: int, block_number: int, data: bytes) -> None:
+        """Download (write) a program block to the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            block_type: Block type.
+            block_number: Block number.
+            data: Raw block data to write.
+        """
+        payload = bytearray()
+        payload += struct.pack(">I", self._session_id)
+        payload += encode_uint32_vlq(1)
+        payload += encode_uint32_vlq(block_type)
+        payload += encode_uint32_vlq(block_number)
+        payload += encode_pvalue_blob(data)
+        payload += struct.pack(">I", 0)
+
+        await self._send_request(FunctionCode.SET_VAR_SUBSTREAMED, bytes(payload))
+
+    async def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+        """Create a data change subscription.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            items: List of (db_number, start_offset, size) tuples to monitor.
+            cycle_ms: Cycle time in milliseconds (0 = on change).
+
+        Returns:
+            Subscription object ID assigned by the PLC.
+        """
+        payload = _build_subscription_request(items, cycle_ms, self._session_id)
+        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload)
+
+        sub_id, consumed = decode_uint32_vlq(response, 0)
+        logger.info(f"Subscription created, id={sub_id:#x}")
+        return sub_id
+
+    async def delete_subscription(self, subscription_id: int) -> None:
+        """Delete a data change subscription.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            subscription_id: ID returned by :meth:`create_subscription`.
+        """
+        payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
+        await self._send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Subscription {subscription_id:#x} deleted")
+
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.
 
@@ -516,6 +609,15 @@ class S7CommPlusAsyncClient:
         if not results or results[0] is None:
             raise RuntimeError("Symbolic read failed")
         return results[0]
+
+    async def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+        """Write a variable using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+        """
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
 
     async def list_datablocks(self) -> list[dict[str, Any]]:
         """List all datablocks on the PLC via EXPLORE.
