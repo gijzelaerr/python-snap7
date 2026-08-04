@@ -392,16 +392,13 @@ class S7Protection(Structure):
 
 
 class ForceEntry(NamedTuple):
-    """A single entry in the I/O force table.
+    """A single entry in the I/O force table."""
 
-    Attributes:
-        area: Memory area (:attr:`Area.PE` for inputs, :attr:`Area.PA` for outputs).
-        byte_offset: Byte offset of the forced bit.
-        bit: Bit number (0-7) within the byte.
-        value: Forced value (True/False).
-    """
-
-    area: int  # Area enum value (PE=0x81, PA=0x82)
+    area: int
+    """Memory area (:attr:`Area.PE` for inputs, :attr:`Area.PA` for outputs)."""
     byte_offset: int
+    """Byte offset of the forced bit."""
     bit: int
+    """Bit number (0-7) within the byte."""
     value: bool
+    """Forced value (True/False)."""
