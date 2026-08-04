@@ -1021,7 +1021,12 @@ class S7CommPlusConnection:
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
         if return_value != 0:
-            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+            if self._tls_active:
+                # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero CreateObject
+                # value on a perfectly usable TLS session, so this is informational only.
+                logger.debug(f"CreateObject returned non-zero 0x{return_value:X} on an active TLS session (session still usable)")
+            else:
+                logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
 
         # Parse remaining payload (the ResponseObject tree) for session attributes
         attrs = parse_create_object_attributes(response[offset:])

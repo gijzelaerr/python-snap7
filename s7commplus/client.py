@@ -5,11 +5,12 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import struct
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar
 
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
 from .connection import S7CommPlusConnection
+from snap7.error import S7ConnectionError
 from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
 from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
@@ -21,6 +22,8 @@ from .codec import (
 
 logger = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 
 class S7CommPlusClient:
     """S7CommPlus client for S7-1200/1500 PLCs.
@@ -30,6 +33,9 @@ class S7CommPlusClient:
 
     def __init__(self) -> None:
         self._connection: Optional[S7CommPlusConnection] = None
+        # Last-used connect() arguments, kept so operations can transparently
+        # reconnect on firmware that RSTs the session after a symbolic read.
+        self._connect_params: Optional[dict[str, Any]] = None
 
     @property
     def connected(self) -> bool:
@@ -88,24 +94,67 @@ class S7CommPlusClient:
             tls_ca: Path to CA certificate for PLC verification (PEM)
             password: PLC password for legitimation (V2+ with TLS)
         """
-        self._connection = S7CommPlusConnection(host=host, port=port)
-        self._connection.connect(
-            use_tls=use_tls,
-            tls_cert=tls_cert,
-            tls_key=tls_key,
-            tls_ca=tls_ca,
-            password=password or "",
-        )
+        self._connect_params = {
+            "host": host,
+            "port": port,
+            "use_tls": use_tls,
+            "tls_cert": tls_cert,
+            "tls_key": tls_key,
+            "tls_ca": tls_ca,
+            "password": password,
+        }
+        self._open_connection()
 
-        if password is not None and self._connection.tls_active and not self._connection.requires_substreamed:
+    def _open_connection(self) -> None:
+        """(Re)open the connection using the stored ``connect()`` arguments."""
+        if self._connect_params is None:
+            raise RuntimeError("Not connected")
+        p = self._connect_params
+        self._connection = S7CommPlusConnection(host=p["host"], port=p["port"])
+        self._connection.connect(
+            use_tls=p["use_tls"],
+            tls_cert=p["tls_cert"],
+            tls_key=p["tls_key"],
+            tls_ca=p["tls_ca"],
+            password=p["password"] or "",
+        )
+        if p["password"] is not None and self._connection.tls_active and not self._connection.requires_substreamed:
             logger.info("Performing PLC legitimation (password authentication)")
-            self._connection.authenticate(password)
+            self._connection.authenticate(p["password"])
+
+    def _reconnect(self) -> None:
+        """Tear down and re-establish the connection with the same parameters.
+
+        Some firmware (e.g. S7-1200 FW V4.1) sends a TCP RST after the first
+        symbolic ``GetMultiVariables`` read per connection, so multi-step flows
+        such as :meth:`browse` need a fresh session to continue.
+        """
+        if self._connection is not None:
+            try:
+                self._connection.disconnect()
+            except Exception:
+                pass
+        self._open_connection()
+
+    def _with_reconnect(self, op: Callable[[], "_T"]) -> "_T":
+        """Run ``op``; if the socket was RST by the PLC, reconnect once and retry.
+
+        Well-behaved firmware never triggers the retry (the first call succeeds);
+        RST-happy firmware reconnects only when a send actually fails.
+        """
+        try:
+            return op()
+        except S7ConnectionError as exc:
+            logger.info("Connection dropped by PLC (%s); reconnecting and retrying", exc)
+            self._reconnect()
+            return op()
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
         if self._connection:
             self._connection.disconnect()
             self._connection = None
+        self._connect_params = None
 
     def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block.
@@ -485,7 +534,9 @@ class S7CommPlusClient:
         for db_info in self.list_datablocks():
             if db_info.get("number", 0) <= 0 or db_info.get("rid", 0) == 0:
                 continue
-            ti_rid = self._read_typeinfo_rid(db_info["rid"])
+            # A symbolic read may prompt a TCP RST on RST-happy firmware; retry once
+            # on a fresh session so the read still resolves.
+            ti_rid = self._with_reconnect(lambda: self._read_typeinfo_rid(db_info["rid"]))
             if ti_rid == 0:
                 continue  # load-memory-only DB, skip
             root_nodes.append(
@@ -507,7 +558,9 @@ class S7CommPlusClient:
             )
 
         # Phase D: explore the OMS type-info container (a large, multi-fragment PDU).
-        type_objects = self._explore_type_info_container()
+        # The symbolic reads above may have left the socket RST on some firmware;
+        # reconnect and retry if so.
+        type_objects = self._with_reconnect(self._explore_type_info_container)
 
         # Phase E: recombine type-info with the DB/area nodes and flatten.
         typeinfo.build_tree(root_nodes, type_objects)
@@ -534,6 +587,9 @@ class S7CommPlusClient:
         """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
         try:
             raw = self.read_symbolic(db_rid, [1], 0)
+        except S7ConnectionError:
+            # Socket was RST by the PLC — let the caller reconnect and retry.
+            raise
         except Exception:
             return 0
         return struct.unpack(">I", raw[:4])[0] if len(raw) >= 4 else 0
