@@ -325,6 +325,59 @@ class TestAsyncClientServerIntegration:
                 assert isinstance(r, float)
 
 
+RST_PORT = 11122
+
+
+class TestRstAfterSymbolicRead:
+    """Test RST-after-symbolic-read emulation and client reconnect."""
+
+    @pytest.fixture()
+    def rst_server(self) -> Generator[S7CommPlusServer, None, None]:
+        srv = S7CommPlusServer(rst_after_symbolic_read=True)
+        srv.register_db(
+            1,
+            {
+                "temperature": ("Real", 0),
+                "pressure": ("Real", 4),
+            },
+        )
+        db1 = srv.get_db(1)
+        assert db1 is not None
+        struct.pack_into(">f", db1.data, 0, 23.5)
+        srv.start(port=RST_PORT)
+        time.sleep(0.1)
+        yield srv
+        srv.stop()
+
+    def test_db_read_survives_rst(self, rst_server: S7CommPlusServer) -> None:
+        """A plain db_read triggers GetMultiVariables which RSTs the socket.
+
+        The first db_read succeeds (the response is sent before the RST),
+        but a second call on the same client hits a dead socket.
+        """
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=RST_PORT)
+        try:
+            data = client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 23.5) < 0.001
+        finally:
+            client.disconnect()
+
+    def test_browse_reconnects_on_rst(self, rst_server: S7CommPlusServer) -> None:
+        """browse() should complete despite the server RST-ing after each
+        GetMultiVariables — the _with_reconnect wrapper retries on a fresh
+        session.
+        """
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=RST_PORT)
+        try:
+            variables = client.browse()
+            assert isinstance(variables, list)
+        finally:
+            client.disconnect()
+
+
 class TestSessionKeyServer:
     """Test the server's SessionKey handshake emulation."""
 

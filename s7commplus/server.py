@@ -201,6 +201,7 @@ class S7CommPlusServer:
         protocol_version: int = ProtocolVersion.V1,
         public_key_fingerprint: Optional[str] = None,
         session_challenge: Optional[bytes] = None,
+        rst_after_symbolic_read: bool = False,
     ) -> None:
         self._data_blocks: dict[int, DataBlock] = {}
         self._cpu_state = CPUState.RUN
@@ -224,6 +225,11 @@ class S7CommPlusServer:
         # the post-auth legitimation flow (GetVarSubStreamed 303 / SetVarSubStreamed 1846).
         self._public_key_fingerprint = public_key_fingerprint
         self._session_challenge = session_challenge
+
+        # When True, the server closes the TCP connection after responding
+        # to a GetMultiVariables request (emulating firmware like S7-1200
+        # FW V4.1 that RSTs the session after a symbolic read).
+        self._rst_after_symbolic_read = rst_after_symbolic_read
 
     @property
     def cpu_state(self) -> CPUState:
@@ -430,11 +436,15 @@ class S7CommPlusServer:
                     except (ValueError, struct.error):
                         pass
 
-                    response = self._process_request(data, session_id, integrity_id_read, integrity_id_write)
+                    response, rst = self._process_request(data, session_id, integrity_id_read, integrity_id_write)
                     if response is not None:
                         if session_id == 0 and len(response) >= 14:
                             session_id = struct.unpack_from(">I", response, 9)[0]
                         send_app_frame(response)
+
+                    if rst:
+                        logger.debug(f"RST emulation: closing connection to {address}")
+                        break
 
                     # Activate TLS right after the InitSSL response, tunneled inside COTP.
                     if (
@@ -572,26 +582,31 @@ class S7CommPlusServer:
         session_id: int,
         integrity_id_read: int = 0,
         integrity_id_write: int = 0,
-    ) -> Optional[bytes]:
-        """Process an S7CommPlus request and return a response."""
+    ) -> tuple[Optional[bytes], bool]:
+        """Process an S7CommPlus request and return (response, rst_after_send).
+
+        When *rst_after_send* is ``True`` the caller must close the TCP
+        socket immediately after transmitting the response — this emulates
+        firmware that sends a TCP RST after certain operations.
+        """
         if len(data) < 4:
-            return None
+            return None, False
 
         # Parse S7CommPlus frame header
         try:
             version, data_length, consumed = decode_header(data)
         except ValueError:
-            return None
+            return None, False
 
         # Use data_length to exclude any trailer
         payload = data[consumed : consumed + data_length]
         if len(payload) < 14:
-            return None
+            return None, False
 
         # Parse request header
         opcode = payload[0]
         if opcode != Opcode.REQUEST:
-            return None
+            return None, False
 
         function_code = struct.unpack_from(">H", payload, 3)[0]
         seq_num = struct.unpack_from(">H", payload, 7)[0]
@@ -604,23 +619,25 @@ class S7CommPlusServer:
         request_data = payload[14:]
 
         if function_code == FunctionCode.INIT_SSL:
-            return self._handle_init_ssl(seq_num)
+            return self._handle_init_ssl(seq_num), False
         elif function_code == FunctionCode.CREATE_OBJECT:
-            return self._handle_create_object(seq_num, request_data)
+            return self._handle_create_object(seq_num, request_data), False
         elif function_code == FunctionCode.DELETE_OBJECT:
-            return self._handle_delete_object(seq_num, req_session_id)
+            return self._handle_delete_object(seq_num, req_session_id), False
         elif function_code == FunctionCode.EXPLORE:
-            return self._handle_explore(seq_num, req_session_id, request_data)
+            return self._handle_explore(seq_num, req_session_id, request_data), False
         elif function_code == FunctionCode.GET_MULTI_VARIABLES:
-            return self._handle_get_multi_variables(seq_num, req_session_id, request_data)
+            resp = self._handle_get_multi_variables(seq_num, req_session_id, request_data)
+            rst = self._rst_after_symbolic_read and session_id != 0
+            return resp, rst
         elif function_code == FunctionCode.SET_MULTI_VARIABLES:
-            return self._handle_set_multi_variables(seq_num, req_session_id, request_data)
+            return self._handle_set_multi_variables(seq_num, req_session_id, request_data), False
         elif function_code == FunctionCode.GET_VAR_SUBSTREAMED:
-            return self._handle_get_var_substreamed(seq_num, req_session_id, request_data)
+            return self._handle_get_var_substreamed(seq_num, req_session_id, request_data), False
         elif function_code == FunctionCode.SET_VAR_SUBSTREAMED:
-            return self._handle_set_var_substreamed(seq_num, req_session_id, request_data)
+            return self._handle_set_var_substreamed(seq_num, req_session_id, request_data), False
         else:
-            return self._build_error_response(seq_num, req_session_id, function_code)
+            return self._build_error_response(seq_num, req_session_id, function_code), False
 
     def _build_response_header(self, function_code: int, seq_num: int) -> bytes:
         """Build a 10-byte S7CommPlus data-response header.
