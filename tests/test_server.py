@@ -395,7 +395,7 @@ class TestServerUserdataOperations(unittest.TestCase):
         self.assertGreater(szl.Header.LengthDR, 0)
 
     def test_parse_order_code_s71516f(self) -> None:
-        """parse_order_code_szl with real S7-1516F hex dump (FW V3.3.0)."""
+        """Parse a real S7-1516F dump using the native-compatible 0x0081 version."""
         from snap7.szl import parse_order_code_szl
         from snap7.type import S7SZL
 
@@ -420,7 +420,7 @@ class TestServerUserdataOperations(unittest.TestCase):
         self.assertEqual(result.V3, 0)
 
     def test_parse_order_code_s71510sp(self) -> None:
-        """parse_order_code_szl with real S7-1510SP hex dump (FW V4.2.3)."""
+        """Parse a real S7-1510SP dump using the native-compatible 0x0081 version."""
         from snap7.szl import parse_order_code_szl
         from snap7.type import S7SZL
 
@@ -443,6 +443,29 @@ class TestServerUserdataOperations(unittest.TestCase):
         self.assertEqual(result.V1, 4)
         self.assertEqual(result.V2, 2)
         self.assertEqual(result.V3, 3)
+
+    def test_parse_order_code_s71214c(self) -> None:
+        """Parse a real S7-1214C dump whose installed firmware is in 0x0007."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real trimmed hex dump from CPU 1214C, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x03"
+            b"\x00\x01\x36\x45\x53\x37\x20\x32\x31\x34\x2d\x31\x41\x47\x34\x30\x2d\x30\x58\x42\x30\x20\x00\x00\x00\x10\x20\x20"
+            b"\x00\x06\x36\x45\x53\x37\x20\x32\x31\x34\x2d\x31\x41\x47\x34\x30\x2d\x30\x58\x42\x30\x20\x00\x00\x00\x10\x20\x20"
+            b"\x00\x07\x36\x45\x53\x37\x20\x32\x31\x34\x2d\x31\x41\x47\x34\x30\x2d\x30\x58\x42\x30\x20\x00\x00\x56\x04\x06\x00"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 214-1AG40-0XB0", result.OrderCode)
+        self.assertEqual(result.V1, 4)
+        self.assertEqual(result.V2, 6)
+        self.assertEqual(result.V3, 0)
 
     def test_parse_order_code_s7300_flat_text(self) -> None:
         """parse_order_code_szl handles S7-300 flat ASCII text layout."""

@@ -104,11 +104,12 @@ def _parse_order_code_structured(data: bytes, record_len: int, ndr: int, order_c
         elif record_id == 0x0081 and record_len >= 28:
             found_structured = True
             v1, v2, v3 = rec[-3], rec[-2], rec[-1]
-            # On S7-1500 the Boot Loader record holds the active firmware
-            # (e.g. V3.3.0). On S7-300 it holds the boot loader's own
-            # version which uses a different encoding (e.g. V34.9.9).
-            # Siemens firmware major versions are single-digit, so reject
-            # implausible values to avoid overwriting a good 0x0007 result.
+            # Preserve the version selected by the native Snap7 implementation:
+            # on tested S7-1500 CPUs get_order_code() returns this Boot Loader
+            # version (e.g. V3.3.0), while TIA Portal identifies the installed
+            # firmware from record 0x0007 (e.g. V2.9.2). On S7-300 the Boot
+            # Loader version can use a different encoding (e.g. V34.9.9), so
+            # reject implausible major versions and retain the 0x0007 fallback.
             if v1 <= 9:
                 order_code.V1, order_code.V2, order_code.V3 = v1, v2, v3
                 has_0x0081 = True
@@ -153,8 +154,9 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
 
     - 0x0001: main catalog code (MLFB) — version at fixed offsets 23/24/25
     - 0x0002: legacy firmware block (fallback, same fixed offsets)
-    - 0x0007: factory firmware (version at rec[-3:])
-    - 0x0081: active firmware / boot loader (highest priority, rec[-3:])
+    - 0x0007: installed firmware (version at rec[-3:])
+    - 0x0081: boot loader version returned by native Snap7 (compatibility
+      priority when the major version is plausible, rec[-3:])
 
     **S7-300** (flat ASCII text stream, no record IDs):
 
@@ -162,8 +164,11 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     The MLFB is located by searching for "6ES7" and the version follows
     at a fixed offset from the MLFB start.
 
-    Record transmission order is not guaranteed by Siemens, so 0x0081 is
-    tracked explicitly and never overwritten by lower-priority records.
+    Record transmission order is not guaranteed by Siemens, so a plausible
+    0x0081 version is tracked explicitly and never overwritten by record
+    0x0007. This preserves python-snap7 2.x behavior for get_order_code();
+    record 0x0007 remains the fallback and is the only firmware record on
+    some CPUs such as the S7-1214C.
     """
     order_code = S7OrderCode()
     data = _szl_data(szl)
