@@ -224,16 +224,22 @@ class ClientMixin:
 
         Calculated as PDU length minus overhead:
         12 bytes S7 header + 2 bytes param + 4 bytes data header = 18 bytes.
+
+        Returns at least 1 to prevent infinite loops in chunked reads
+        when the server negotiates an implausibly small PDU.
         """
-        return self.pdu_length - 18
+        return max(1, self.pdu_length - 18)
 
     def _max_write_size(self) -> int:
         """Maximum payload bytes for a single write request.
 
         Calculated as PDU length minus overhead:
         12 bytes S7 header + 14 bytes param + 4 bytes data header + 5 bytes padding = 35 bytes.
+
+        Returns at least 1 to prevent infinite loops in chunked writes
+        when the server negotiates an implausibly small PDU.
         """
-        return self.pdu_length - 35
+        return max(1, self.pdu_length - 35)
 
     def _map_area(self, area: Area) -> S7Area:
         """Map library area enum to native S7 area."""
