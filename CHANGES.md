@@ -20,21 +20,45 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
   PLC's symbol tree. Required for S7-1200/1500 DBs with
   "Optimized block access" enabled (the TIA Portal V13+ default).
 
-3.1.1
+3.1.2
 -----
 
-Bug fix and security release.
+Corrective bug fix and robustness release replacing the yanked 3.1.1 release.
 
-### Security
+### Corrections
 
-* Validate COTP PDU size exponent to ISO 8073 range 7–13; reject
-  out-of-range values that could produce unbounded integers (CWE-190)
-* Prevent client infinite loop when server negotiates PDU length 0;
-  `_max_read_size()` / `_max_write_size()` now return at least 1 and
-  PDU lengths below 64 are rejected at negotiation time (CWE-754)
-* Server block download now rejects writes to unregistered memory areas,
-  preventing unbounded allocation from attacker-controlled block numbers
-  (CWE-862)
+* Withdraw the vulnerability and CWE characterizations published with 3.1.1.
+  Independent review found that those descriptions overstated or incorrectly
+  described the affected code paths.
+
+### Robustness fixes
+
+* Bound the server to 64 simultaneous clients by default, enforce the existing
+  `MaxClients` parameter, and allow `max_clients` configuration.
+* Validate block-download targets and declared sizes before allocating transfer
+  state, cap accumulated data at the declared size and registered area's
+  capacity, and clean up abandoned upload/download state on disconnect.
+* Correct block-download address parsing so the requested DB number is used
+  instead of silently falling back to DB1.
+* Bound COTP request reassembly to 1 MiB and apply one absolute deadline across
+  all fragments of a request.
+* Apply COTP TPDU-size validation consistently to sync and async clients.
+* Add regression tests for invalid PDU negotiation, TPDU-size validation,
+  connection limits, request reassembly, and block-download limits.
+
+3.1.1 (yanked)
+----------------
+
+This release was yanked because its security descriptions were inaccurate and
+some of its input-hardening changes were incomplete. Use 3.1.2 instead.
+
+### Robustness changes
+
+* Validate COTP TPDU-size encodings in the synchronous client.
+* Normalize implausibly small negotiated PDU lengths and ensure read/write
+  chunk sizes remain positive.
+* Stop finalizing downloads into unregistered server memory areas. This did not
+  bound the download accumulator and was completed in 3.1.2.
 
 ### Bug fixes
 
@@ -53,8 +77,6 @@ Bug fix and security release.
 
 ### Thanks
 
-* [S9S Security Electronic Service](https://s9s.de) — coordinated
-  security disclosure of input validation vulnerabilities
 * [@b1163646804](https://github.com/b1163646804) — multi-byte encoding
   support and testing (#788)
 * [@domelg](https://github.com/domelg) — server COTP fragmentation and
