@@ -42,6 +42,17 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * Dependabot auto-merge for dependency updates
 * Documentation restructured: API Reference + Internals sections
 
+### Security and robustness
+
+* Bound the legacy server to 64 simultaneous clients by default, enforce the
+  existing `MaxClients` parameter, and allow `max_clients` configuration.
+* Validate block-download targets and declared sizes before allocating transfer
+  state, cap accumulated data at the registered area's capacity, and clean up
+  abandoned upload/download state when a client disconnects.
+* Bound COTP request reassembly to 1 MiB and apply one absolute deadline across
+  all fragments of a request.
+* Apply COTP TPDU-size validation consistently to sync and async clients.
+
 ### Thanks
 
 * [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)

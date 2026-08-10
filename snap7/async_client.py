@@ -242,9 +242,17 @@ class AsyncISOTCPConnection:
             param_data = data[offset + 2 : offset + 2 + param_len]
             if param_code == self.COTP_PARAM_PDU_SIZE:
                 if param_len == 1:
-                    self.pdu_size = 1 << param_data[0]
+                    exponent = param_data[0]
+                    if 7 <= exponent <= 13:
+                        self.pdu_size = 1 << exponent
+                    else:
+                        logger.warning(f"Invalid COTP PDU size exponent {exponent}, using default")
                 elif param_len == 2:
-                    self.pdu_size = struct.unpack(">H", param_data)[0]
+                    raw = struct.unpack(">H", param_data)[0]
+                    if 128 <= raw <= 8192:
+                        self.pdu_size = raw
+                    else:
+                        logger.warning(f"Invalid COTP PDU size {raw}, using default")
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
             offset += 2 + param_len
 
