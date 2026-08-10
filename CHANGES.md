@@ -26,6 +26,11 @@ Bug fix and security release.
   `set_string`, `get_fstring`, `set_fstring` (#788)
 * Thread encoding parameter through `read_tag` / `write_tag` /
   `read_tags` (#786)
+* Server: reassemble COTP-fragmented requests; include TPDU size
+  parameter in Connection Confirm so clients don't fall back to the
+  128-byte ISO 8073 default (#804)
+* Server: fix `INT` and `DINT` word lengths returning wrong byte count
+  in read requests (#804)
 
 ### Thanks
 
@@ -33,6 +38,8 @@ Bug fix and security release.
   security disclosure of input validation vulnerabilities
 * [@b1163646804](https://github.com/b1163646804) — multi-byte encoding
   support and testing (#788)
+* [@domelg](https://github.com/domelg) — server COTP fragmentation and
+  INT/DINT byte count bug reports (#804)
 
 3.1.0
 -----

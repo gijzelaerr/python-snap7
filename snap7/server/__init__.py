@@ -816,9 +816,9 @@ class Server:
             word_len = addr.get("word_len", S7WordLen.BYTE)
 
             # Convert count to bytes
-            if word_len in (S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD):
+            if word_len in (S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD, S7WordLen.INT):
                 byte_count = count * 2
-            elif word_len in (S7WordLen.DWORD, S7WordLen.REAL):
+            elif word_len in (S7WordLen.DWORD, S7WordLen.REAL, S7WordLen.DINT):
                 byte_count = count * 4
             elif word_len == S7WordLen.BIT:
                 byte_count = 1
@@ -876,9 +876,9 @@ class Server:
                 word_len = addr_spec.get("word_len", S7WordLen.BYTE)
 
                 # Convert count to bytes based on word length
-                if word_len in [S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD]:
+                if word_len in [S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD, S7WordLen.INT]:
                     byte_count = count * 2  # 16-bit items
-                elif word_len in [S7WordLen.DWORD, S7WordLen.REAL]:
+                elif word_len in [S7WordLen.DWORD, S7WordLen.REAL, S7WordLen.DINT]:
                     byte_count = count * 4  # 32-bit items
                 elif word_len == S7WordLen.BIT:
                     byte_count = 1  # Single bit needs at least 1 byte
@@ -2495,6 +2495,9 @@ class ServerISOConnection:
     COTP_DC = 0xC0  # Disconnect Confirm
     COTP_DT = 0xF0  # Data Transfer
 
+    # COTP parameter code for TPDU size (ISO 8073)
+    COTP_PARAM_PDU_SIZE = 0xC0
+
     def __init__(self, client_socket: socket.socket):
         """Initialize server ISO connection."""
         self.socket = client_socket
@@ -2502,6 +2505,7 @@ class ServerISOConnection:
         self.connected = False
         self.src_ref = 0x0001  # Server reference
         self.dst_ref = 0x0000  # Client reference (assigned during handshake)
+        self.tpdu_size = 0x0A  # Default: 1024 bytes (2^10)
 
     def accept_connection(self) -> bool:
         """Accept ISO connection from client."""
@@ -2534,25 +2538,40 @@ class ServerISOConnection:
             return False
 
     def receive_data(self) -> bytes:
-        """Receive data from client."""
-        # Receive TPKT header (4 bytes)
-        tpkt_header = self._recv_exact(4)
+        """Receive data from client.
 
-        # Parse TPKT header
-        version, reserved, length = struct.unpack(">BBH", tpkt_header)
+        Reassembles COTP DT fragments by reading frames until the EOT
+        bit (bit 7 of the third COTP header byte) is set, then returns
+        the concatenated payload.
+        """
+        fragments: list[bytes] = []
+        while True:
+            tpkt_header = self._recv_exact(4)
+            version, reserved, length = struct.unpack(">BBH", tpkt_header)
 
-        if version != 3:
-            raise S7ConnectionError(f"Invalid TPKT version: {version}")
+            if version != 3:
+                raise S7ConnectionError(f"Invalid TPKT version: {version}")
 
-        # Receive remaining data
-        remaining = length - 4
-        if remaining <= 0:
-            raise S7ConnectionError("Invalid TPKT length")
+            remaining = length - 4
+            if remaining <= 0:
+                raise S7ConnectionError("Invalid TPKT length")
 
-        payload = self._recv_exact(remaining)
+            payload = self._recv_exact(remaining)
 
-        # Parse COTP header and extract data
-        return self._parse_cotp_data(payload)
+            if len(payload) < 3:
+                raise S7ConnectionError("Invalid COTP DT: too short")
+
+            pdu_len, pdu_type, eot_num = struct.unpack(">BBB", payload[:3])
+
+            if pdu_type != self.COTP_DT:
+                raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
+
+            fragments.append(payload[3:])
+
+            if eot_num & 0x80:
+                break
+
+        return b"".join(fragments)
 
     def send_data(self, data: bytes) -> None:
         """Send data to client."""
@@ -2580,22 +2599,43 @@ class ServerISOConnection:
         # Store client reference
         self.dst_ref = src_ref
 
+        # Parse variable parameters for TPDU size
+        offset = 7
+        while offset + 2 <= len(data):
+            param_code = data[offset]
+            param_len = data[offset + 1]
+            if offset + 2 + param_len > len(data):
+                break
+            if param_code == self.COTP_PARAM_PDU_SIZE and param_len == 1:
+                exponent = data[offset + 2]
+                if 7 <= exponent <= 13:
+                    self.tpdu_size = exponent
+                    logger.debug(f"Client requested TPDU size 2^{exponent} = {1 << exponent}")
+            offset += 2 + param_len
+
         logger.debug(f"Received COTP CR from client ref {src_ref}")
         return True
 
     def _build_cotp_cc(self) -> bytes:
-        """Build COTP Connection Confirm."""
-        # Basic COTP CC
+        """Build COTP Connection Confirm.
+
+        Includes the TPDU size parameter (0xC0) so clients know the
+        negotiated maximum segment size and don't fall back to the
+        ISO 8073 class-0 default of 128 bytes.
+        """
+        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
+        pdu_length = 6 + len(pdu_size_param)
         base_pdu = struct.pack(
-            ">BBHHB",
-            6,  # PDU length
+            ">BBBHHB",
+            pdu_length,  # PDU length
             self.COTP_CC,  # PDU type
+            0x00,  # Reserved / CDT
             self.dst_ref,  # Destination reference (client's source ref)
             self.src_ref,  # Source reference (our ref)
             0x00,  # Class/option
         )
 
-        return struct.pack(">B", 6) + base_pdu[1:]
+        return base_pdu + pdu_size_param
 
     def _recv_exact(self, size: int) -> bytes:
         """Receive exactly the specified number of bytes."""
@@ -2618,18 +2658,6 @@ class ServerISOConnection:
         """Build COTP Data Transfer PDU."""
         header = struct.pack(">BBB", 2, self.COTP_DT, 0x80)
         return header + data
-
-    def _parse_cotp_data(self, cotp_pdu: bytes) -> bytes:
-        """Parse COTP Data Transfer PDU and extract S7 data."""
-        if len(cotp_pdu) < 3:
-            raise S7ConnectionError("Invalid COTP DT: too short")
-
-        pdu_len, pdu_type, eot_num = struct.unpack(">BBB", cotp_pdu[:3])
-
-        if pdu_type != self.COTP_DT:
-            raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
-
-        return cotp_pdu[3:]  # Return data portion
 
 
 def mainloop(tcp_port: int = 1102, init_standard_values: bool = False) -> None:
