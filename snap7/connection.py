@@ -375,11 +375,19 @@ class ISOTCPConnection:
             if param_code == self.COTP_PARAM_PDU_SIZE:
                 # PDU Size parameter
                 if param_len == 1:
-                    # ISO 8073 code: size = 2^code
-                    self.pdu_size = 1 << param_data[0]
+                    # ISO 8073 code: size = 2^code, valid range 7-13
+                    exponent = param_data[0]
+                    if 7 <= exponent <= 13:
+                        self.pdu_size = 1 << exponent
+                    else:
+                        logger.warning(f"Invalid COTP PDU size exponent {exponent}, using default")
                 elif param_len == 2:
                     # Raw 2-byte value
-                    self.pdu_size = struct.unpack(">H", param_data)[0]
+                    raw = struct.unpack(">H", param_data)[0]
+                    if 128 <= raw <= 8192:
+                        self.pdu_size = raw
+                    else:
+                        logger.warning(f"Invalid COTP PDU size {raw}, using default")
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
             else:
                 logger.debug(f"Unsupported COTP parameter: code={param_code:#04x}, length={param_len}")

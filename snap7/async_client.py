@@ -1164,7 +1164,11 @@ class AsyncClient(ClientMixin):
         if response.get("parameters"):
             params = response["parameters"]
             if "pdu_length" in params:
-                self.pdu_length = params["pdu_length"]
+                negotiated = params["pdu_length"]
+                if negotiated < 64:
+                    logger.warning(f"Server negotiated implausible PDU length {negotiated}, using minimum 240")
+                    negotiated = 240
+                self.pdu_length = negotiated
                 self._params[Parameter.PDURequest] = self.pdu_length
                 logger.info(f"Negotiated PDU length: {self.pdu_length}")
 
