@@ -54,7 +54,7 @@ jobs:
     needs: publish
     strategy:
       matrix:
-        os: ["ubuntu-24.04", "macos-14", "windows-2022"]
+        os: ["ubuntu-24.04", "ubuntu-26.04", "macos-14", "macos-15", "windows-2022", "windows-2025"]
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
     permissions:
@@ -67,7 +67,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          enable-cache: true
+          enable-cache: false
       - name: Install and test python-snap7
         run: |
           uv venv
