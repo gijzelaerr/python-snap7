@@ -1,6 +1,39 @@
 CHANGES
 =======
 
+3.1.1
+-----
+
+Bug fix and security release.
+
+### Security
+
+* Validate COTP PDU size exponent to ISO 8073 range 7–13; reject
+  out-of-range values that could produce unbounded integers (CWE-190)
+* Prevent client infinite loop when server negotiates PDU length 0;
+  `_max_read_size()` / `_max_write_size()` now return at least 1 and
+  PDU lengths below 64 are rejected at negotiation time (CWE-754)
+* Server block download now rejects writes to unregistered memory areas,
+  preventing unbounded allocation from attacker-controlled block numbers
+  (CWE-862)
+
+### Bug fixes
+
+* Fix `connection_type` not applied in TSAP composition during
+  `connect()` (#766)
+* Fix auto-reconnect not triggered on multi-block read path (#787)
+* Support multi-byte string encodings (GBK, UTF-8) in `get_string`,
+  `set_string`, `get_fstring`, `set_fstring` (#788)
+* Thread encoding parameter through `read_tag` / `write_tag` /
+  `read_tags` (#786)
+
+### Thanks
+
+* [S9S Security Electronic Service](https://s9s.de) — coordinated
+  security disclosure of input validation vulnerabilities
+* [@b1163646804](https://github.com/b1163646804) — multi-byte encoding
+  support and testing (#788)
+
 3.1.0
 -----
 
