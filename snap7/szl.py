@@ -80,9 +80,20 @@ def _parse_order_code_structured(data: bytes, record_len: int, ndr: int, order_c
     """Try parsing SZL 0x0011 as structured indexed records (S7-1200/1500).
 
     Returns True if at least one known record ID was found.
+
+    Record priority (confirmed by Siemens docs and real-hardware testing):
+
+    - **0x0007** — installed firmware version (matches TIA Portal).
+      Always preferred when present.  Verified on S7-1516F (V2.9.2),
+      S7-1510SP F-1 (V3.0.3), S7-1214C (V4.6.0), S7-318 (V3.2.4).
+    - **0x0081** — boot loader version. Ignored — it does not reflect
+      the installed firmware (e.g. reports V3.3.0 when firmware is
+      V2.9.2, or V34.9.9 on S7-300).
+    - **0x0001 / 0x0002** — catalog entry; used as a last-resort
+      fallback only when 0x0007 is absent.
     """
     found_structured = False
-    has_0x0081 = False
+    has_0x0007 = False
     offset = 4
     for _ in range(ndr):
         rec = data[offset : offset + record_len]
@@ -94,29 +105,21 @@ def _parse_order_code_structured(data: bytes, record_len: int, ndr: int, order_c
         if record_id == 0x0001 and record_len >= 22:
             found_structured = True
             order_code.OrderCode = rec[2:22].rstrip(b"\x00")
-            if record_len >= 26 and (rec[23] != 0 or rec[24] != 0):
+            if record_len >= 26 and not has_0x0007 and (rec[23] != 0 or rec[24] != 0):
                 order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
 
-        elif record_id == 0x0002 and record_len >= 26 and order_code.V1 == 0:
+        elif record_id == 0x0002 and record_len >= 26 and order_code.V1 == 0 and not has_0x0007:
             found_structured = True
             order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
 
-        elif record_id == 0x0081 and record_len >= 28:
-            found_structured = True
-            v1, v2, v3 = rec[-3], rec[-2], rec[-1]
-            # Preserve the version selected by the native Snap7 implementation:
-            # on tested S7-1500 CPUs get_order_code() returns this Boot Loader
-            # version (e.g. V3.3.0), while TIA Portal identifies the installed
-            # firmware from record 0x0007 (e.g. V2.9.2). On S7-300 the Boot
-            # Loader version can use a different encoding (e.g. V34.9.9), so
-            # reject implausible major versions and retain the 0x0007 fallback.
-            if v1 <= 9:
-                order_code.V1, order_code.V2, order_code.V3 = v1, v2, v3
-                has_0x0081 = True
-
-        elif record_id == 0x0007 and record_len >= 28 and not has_0x0081:
+        elif record_id == 0x0007 and record_len >= 28:
             found_structured = True
             order_code.V1, order_code.V2, order_code.V3 = rec[-3], rec[-2], rec[-1]
+            has_0x0007 = True
+
+        elif record_id == 0x0081:
+            # Boot loader — skip. Does not reflect installed firmware.
+            found_structured = True
 
         offset += record_len
 
@@ -154,9 +157,8 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
 
     - 0x0001: main catalog code (MLFB) — version at fixed offsets 23/24/25
     - 0x0002: legacy firmware block (fallback, same fixed offsets)
-    - 0x0007: installed firmware (version at rec[-3:])
-    - 0x0081: boot loader version returned by native Snap7 (compatibility
-      priority when the major version is plausible, rec[-3:])
+    - 0x0007: installed firmware — always preferred (matches TIA Portal)
+    - 0x0081: boot loader version — ignored (does not reflect firmware)
 
     **S7-300** (flat ASCII text stream, no record IDs):
 
@@ -164,11 +166,11 @@ def parse_order_code_szl(szl: S7SZL) -> S7OrderCode:
     The MLFB is located by searching for "6ES7" and the version follows
     at a fixed offset from the MLFB start.
 
-    Record transmission order is not guaranteed by Siemens, so a plausible
-    0x0081 version is tracked explicitly and never overwritten by record
-    0x0007. This preserves python-snap7 2.x behavior for get_order_code();
-    record 0x0007 remains the fallback and is the only firmware record on
-    some CPUs such as the S7-1214C.
+    .. note:: This is a **breaking change** from python-snap7 2.x, which
+       returned the boot loader version (record 0x0081) on S7-1500. That
+       version does not match the installed firmware shown in TIA Portal.
+       Confirmed by Siemens documentation and real-hardware testing on
+       S7-1516F, S7-1510SP, S7-1214C, and S7-318.
     """
     order_code = S7OrderCode()
     data = _szl_data(szl)

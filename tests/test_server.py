@@ -395,7 +395,11 @@ class TestServerUserdataOperations(unittest.TestCase):
         self.assertGreater(szl.Header.LengthDR, 0)
 
     def test_parse_order_code_s71516f(self) -> None:
-        """Parse a real S7-1516F dump using the native-compatible 0x0081 version."""
+        """Parse a real S7-1516F dump — should use 0x0007 firmware, not 0x0081 boot loader.
+
+        Verified by @fls-witturcom: TIA Portal shows V2.9.2 (record 0x0007),
+        not V3.3.0 (record 0x0081 boot loader).
+        """
         from snap7.szl import parse_order_code_szl
         from snap7.type import S7SZL
 
@@ -415,12 +419,17 @@ class TestServerUserdataOperations(unittest.TestCase):
 
         result = parse_order_code_szl(szl)
         self.assertIn(b"6ES7 516-3FN02-0AB0", result.OrderCode)
-        self.assertEqual(result.V1, 3)
-        self.assertEqual(result.V2, 3)
-        self.assertEqual(result.V3, 0)
+        # Firmware V2.9.2 from record 0x0007 (NOT boot loader V3.3.0 from 0x0081)
+        self.assertEqual(result.V1, 2)
+        self.assertEqual(result.V2, 9)
+        self.assertEqual(result.V3, 2)
 
     def test_parse_order_code_s71510sp(self) -> None:
-        """Parse a real S7-1510SP dump using the native-compatible 0x0081 version."""
+        """Parse a real S7-1510SP dump — should use 0x0007 firmware, not 0x0081 boot loader.
+
+        Verified by @fls-witturcom: TIA Portal identifies the firmware from
+        record 0x0007, not the boot loader in 0x0081.
+        """
         from snap7.szl import parse_order_code_szl
         from snap7.type import S7SZL
 
@@ -440,8 +449,9 @@ class TestServerUserdataOperations(unittest.TestCase):
 
         result = parse_order_code_szl(szl)
         self.assertIn(b"6ES7 510-1SK03-0AB0", result.OrderCode)
-        self.assertEqual(result.V1, 4)
-        self.assertEqual(result.V2, 2)
+        # Firmware V3.0.3 from record 0x0007 (NOT boot loader V4.2.3 from 0x0081)
+        self.assertEqual(result.V1, 3)
+        self.assertEqual(result.V2, 0)
         self.assertEqual(result.V3, 3)
 
     def test_parse_order_code_s71214c(self) -> None:
