@@ -66,6 +66,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: false
+          ignore-empty-workdir: true
       - name: Install and test python-snap7
         run: |
           uv venv
