@@ -1,21 +1,34 @@
 CHANGES
 =======
 
-3.1.1
+3.1.2
 -----
 
-Bug fix and security release.
+Corrective bug-fix and robustness release superseding 3.1.1.
 
-### Security
+* Bound the server to 64 simultaneous clients by default and expose a
+  configurable `max_clients` limit.
+* Validate block-download targets and declared sizes, cap accumulated data at
+  the registered area's capacity, and discard abandoned transfer state.
+* Correct block-download parsing so registered DB numbers other than DB1 work.
+* Bound COTP request reassembly to 1 MiB and use one absolute receive deadline
+  across all fragments of a request.
+* Apply COTP TPDU-size validation consistently to sync and async clients.
+* Withdraw the vulnerability and CWE characterizations published with 3.1.1;
+  they were not supported by the affected code paths.
 
-* Validate COTP PDU size exponent to ISO 8073 range 7–13; reject
-  out-of-range values that could produce unbounded integers (CWE-190)
-* Prevent client infinite loop when server negotiates PDU length 0;
-  `_max_read_size()` / `_max_write_size()` now return at least 1 and
-  PDU lengths below 64 are rejected at negotiation time (CWE-754)
-* Server block download now rejects writes to unregistered memory areas,
-  preventing unbounded allocation from attacker-controlled block numbers
-  (CWE-862)
+3.1.1 (yanked)
+--------------
+
+This release was yanked because its security descriptions were inaccurate and
+its input-hardening was incomplete. Use 3.1.2 instead.
+
+### Robustness fixes
+
+* Reject invalid COTP TPDU-size values while retaining the safe default.
+* Reject invalid negotiated S7 PDU lengths instead of using them for chunk-size
+  calculations.
+* Reject block downloads to unregistered server memory areas.
 
 ### Bug fixes
 
@@ -34,8 +47,6 @@ Bug fix and security release.
 
 ### Thanks
 
-* [S9S Security Electronic Service](https://s9s.de) — coordinated
-  security disclosure of input validation vulnerabilities
 * [@b1163646804](https://github.com/b1163646804) — multi-byte encoding
   support and testing (#788)
 * [@domelg](https://github.com/domelg) — server COTP fragmentation and
@@ -91,6 +102,17 @@ Feature and bug fix release for the pure Python S7 communication library.
 * Set `TCP_NODELAY` and `SO_KEEPALIVE` on all sockets (#677)
 * Export `get_ulint`, `get_lint`, `get_date_time_object` from `snap7.util` (#652)
 * Documentation restructured: API Reference + Internals sections
+
+### Security and robustness
+
+* Bound the legacy server to 64 simultaneous clients by default, enforce the
+  existing `MaxClients` parameter, and allow `max_clients` configuration.
+* Validate block-download targets and declared sizes before allocating transfer
+  state, cap accumulated data at the registered area's capacity, and clean up
+  abandoned upload/download state when a client disconnects.
+* Bound COTP request reassembly to 1 MiB and apply one absolute deadline across
+  all fragments of a request.
+* Apply COTP TPDU-size validation consistently to sync and async clients.
 
 ### Thanks
 

@@ -10,9 +10,22 @@ jobs:
   build:
     name: Build distribution 📦
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Verify release metadata
+        id: version
+        shell: bash
+        run: |
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          git fetch origin master
+          git show origin/master:CHANGES.md | grep -Fx "$version"
+          test "$(git rev-list -n 1 "$version")" = "$GITHUB_SHA"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -49,7 +62,7 @@ jobs:
 
   test-published-package:
     name: Test published package
-    needs: publish
+    needs: [build, publish]
     strategy:
       matrix:
         os: ["ubuntu-24.04", "ubuntu-26.04", "macos-14", "macos-15", "windows-2022", "windows-2025"]
@@ -68,5 +81,5 @@ jobs:
       - name: Install and test python-snap7
         run: |
           uv venv
-          uv pip install python-snap7[test]
-          uv run python -c "import snap7; print('snap7 imported successfully')"
+          uv pip install "python-snap7[test]==${{ needs.build.outputs.version }}"
+          uv run python -c "import importlib.metadata; import snap7; assert importlib.metadata.version('python-snap7') == '${{ needs.build.outputs.version }}'"

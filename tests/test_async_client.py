@@ -5,14 +5,16 @@ Uses the same Server fixture as test_client.py for integration tests.
 
 import asyncio
 import logging
+import struct
 from collections.abc import AsyncGenerator, Generator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 
-from snap7.async_client import AsyncClient
+from snap7.async_client import AsyncClient, AsyncISOTCPConnection
 from snap7.server import Server
-from snap7.type import SrvArea, Area, Parameter
+from snap7.type import Area, Parameter, SrvArea
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -299,6 +301,53 @@ def test_get_param_non_client_raises() -> None:
     c = AsyncClient()
     with pytest.raises(RuntimeError):
         c.get_param(Parameter.LocalPort)
+
+
+@pytest.mark.asyncio
+async def test_invalid_negotiated_pdu_length_uses_safe_default() -> None:
+    client = AsyncClient()
+    response = {"parameters": {"pdu_length": 0}}
+
+    with patch.object(client, "_send_receive", new=AsyncMock(return_value=response)):
+        await client._setup_communication()
+
+    assert client.pdu_length == 240
+    assert client._max_read_size() == 222
+    assert client._max_write_size() == 205
+
+
+@pytest.mark.parametrize(
+    ("parameter", "expected"),
+    [
+        (struct.pack(">BBB", 0xC0, 1, 0x0A), 1024),
+        (struct.pack(">BBH", 0xC0, 2, 2048), 2048),
+    ],
+)
+def test_async_cotp_accepts_valid_pdu_sizes(parameter: bytes, expected: int) -> None:
+    connection = AsyncISOTCPConnection("127.0.0.1")
+    base = struct.pack(">BBHHB", 6 + len(parameter), 0xD0, 0x0001, 0x0001, 0x00)
+
+    connection._parse_cotp_cc(base + parameter)
+
+    assert connection.pdu_size == expected
+
+
+@pytest.mark.parametrize(
+    "parameter",
+    [
+        struct.pack(">BBB", 0xC0, 1, 0x00),
+        struct.pack(">BBB", 0xC0, 1, 0xFF),
+        struct.pack(">BBH", 0xC0, 2, 127),
+        struct.pack(">BBH", 0xC0, 2, 8193),
+    ],
+)
+def test_async_cotp_ignores_invalid_pdu_sizes(parameter: bytes) -> None:
+    connection = AsyncISOTCPConnection("127.0.0.1")
+    base = struct.pack(">BBHHB", 6 + len(parameter), 0xD0, 0x0001, 0x0001, 0x00)
+
+    connection._parse_cotp_cc(base + parameter)
+
+    assert connection.pdu_size == 240
 
 
 # -------------------------------------------------------------------

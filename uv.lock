@@ -885,7 +885,7 @@ wheels = [
 
 [[package]]
 name = "python-snap7"
-version = "3.1.1"
+version = "3.1.2"
 source = { editable = "." }
 
 [package.optional-dependencies]
