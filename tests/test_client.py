@@ -2,7 +2,7 @@ import logging
 import struct
 import time
 from typing import Any, Tuple
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import unittest
@@ -1049,6 +1049,17 @@ class TestPDUSplitting:
         client = Client()
         client.pdu_length = 480
         assert client._max_write_size() == 480 - 35
+
+    def test_invalid_negotiated_pdu_length_uses_safe_default(self) -> None:
+        client = Client()
+        response = {"parameters": {"pdu_length": 0}}
+
+        with patch.object(client, "_send_receive", return_value=response):
+            client._setup_communication()
+
+        assert client.pdu_length == 240
+        assert client._max_read_size() == 222
+        assert client._max_write_size() == 205
 
     def test_read_area_splits_large_request(self) -> None:
         """read_area should make multiple requests when size > max_read_size."""
