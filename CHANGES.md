@@ -13,33 +13,102 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus object browsing via EXPLORE
 * S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
-* Partner BSend/BRecv with correct PBC format, async receive, PDU reference echo
-* TCP_NODELAY and SO_KEEPALIVE on all sockets for lower latency
-* Structured logging with PLC connection context (`snap7.log`)
-* Command-line interface (`snap7-cli` / `s7`)
-* Multi-variable read optimizer with parallel dispatch (experimental)
-* S7 routing for multi-subnet PLC access (experimental)
-* Symbolic addressing via SymbolTable (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)
-* Array read/write helpers (`db_read_array`, `db_write_array`)
-* Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt`
-* **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
-  Siemens STEP7 syntax, replacing the homegrown SymbolTable class.
-  Loaders: `load_csv`, `load_json`, `load_tia_xml` return `dict[str, Tag]`
-* **Dual-dialect tag parsing**: `PLC4XTag` and `NodeS7Tag` subtypes of
-  `Tag` with dialect-specific `parse()` and `__str__` (round-trip).
-  `parse_tag(s, *, strict=True)` autodetects dialect from syntax markers
-  (`,` → nodeS7, `:TYPE` → PLC4X); `strict=False` accepts bare short
-  forms like `M7.1` or `IW22`. Enables pyS7 / Node-RED tag migration.
 * **Symbolic (LID-based) access for optimized DBs** (experimental):
   `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
   `client.read_tag(tag)` routes to S7CommPlus LID-based access via the
   PLC's symbol tree. Required for S7-1200/1500 DBs with
   "Optimized block access" enabled (the TIA Portal V13+ default).
-* Optimizer excludes counter/timer areas from byte-range merging
-* Fixed `get_cpu_info` field offsets for real S7-300/1500 (thanks @qzertywsx)
-* Fixed `S7SZL.__str__` attribute name typo (thanks @qzertywsx)
-* Dependabot auto-merge for dependency updates
+
+3.1.1
+-----
+
+Bug fix and security release.
+
+### Security
+
+* Validate COTP PDU size exponent to ISO 8073 range 7–13; reject
+  out-of-range values that could produce unbounded integers (CWE-190)
+* Prevent client infinite loop when server negotiates PDU length 0;
+  `_max_read_size()` / `_max_write_size()` now return at least 1 and
+  PDU lengths below 64 are rejected at negotiation time (CWE-754)
+* Server block download now rejects writes to unregistered memory areas,
+  preventing unbounded allocation from attacker-controlled block numbers
+  (CWE-862)
+
+### Bug fixes
+
+* Fix `connection_type` not applied in TSAP composition during
+  `connect()` (#766)
+* Fix auto-reconnect not triggered on multi-block read path (#787)
+* Support multi-byte string encodings (GBK, UTF-8) in `get_string`,
+  `set_string`, `get_fstring`, `set_fstring` (#788)
+* Thread encoding parameter through `read_tag` / `write_tag` /
+  `read_tags` (#786)
+* Server: reassemble COTP-fragmented requests; include TPDU size
+  parameter in Connection Confirm so clients don't fall back to the
+  128-byte ISO 8073 default (#804)
+* Server: fix `INT` and `DINT` word lengths returning wrong byte count
+  in read requests (#804)
+
+### Thanks
+
+* [S9S Security Electronic Service](https://s9s.de) — coordinated
+  security disclosure of input validation vulnerabilities
+* [@b1163646804](https://github.com/b1163646804) — multi-byte encoding
+  support and testing (#788)
+* [@domelg](https://github.com/domelg) — server COTP fragmentation and
+  INT/DINT byte count bug reports (#804)
+
+3.1.0
+-----
+
+Feature and bug fix release for the pure Python S7 communication library.
+
+### New features
+
+* **AsyncClient** for `asyncio` support (#593)
+* **Unified Tag API**: `client.read_tag("DB1.DBD0:REAL")` with PLC4X /
+  Siemens STEP7 syntax (#697)
+* **Dual-dialect tag parsing**: PLC4X and nodeS7 tag formats with
+  auto-detection (#701)
+* **Multi-variable read optimizer** with parallel dispatch (experimental, #641)
+* **S7 routing** for multi-subnet PLC access (experimental, #639)
+* **Heartbeat monitoring** and auto-reconnect with exponential backoff (#635)
+* **Structured logging** with PLC connection context (`snap7.log`, #688)
+* **PROFINET DCP** network discovery (#634)
+* **CLI tools** for PLC interaction (`pip install "python-snap7[cli]"`, #631)
+* **Demo server** exposing real host metrics (#704)
+* Typed DB access methods (`db_read_bool`, `db_read_int`, etc., #632)
+* Symbolic addressing — read/write by tag name (experimental, #638)
+* Diagnostic buffer reading (#690)
+* Array read/write helpers (`db_read_array`, `db_write_array`, #693)
+* Missing data type setters: `set_lint`, `set_ulint`, `set_ltime`, `set_ltod`, `set_ldt` (#693)
+* Property-based testing with Hypothesis (#636)
+
+### Bug fixes
+
+* Fix `AttributeError` from `__del__` during interpreter shutdown (#707)
+* Fix server SZL 0x001C response to match real PLC format (#694)
+* Fix `connection_type` in TSAP composition during connect (#766)
+* Accept `memoryview` in setter and getter type annotations (#647)
+* Zero-pad milliseconds in `get_time` (#716)
+* Fix PI service PDU format for PLC control commands (#743)
+* Fix `get_cpu_info` and `S7SZL.__str__` (#692)
+* Fix partner S7 Communication Setup and bsend/brecv PDU format (#669)
+* Fix `get_dtl` microsecond parsing (4-byte nanosecond field)
+* Fix `set_date` unsigned short for day count
+* Fix `set_tod` float precision loss
+* Validate BMP range in `set_wstring`
+* Fix async `get_cpu_info` SZL offsets (#702)
+* Fix demo primary-IP guess with VPN/tunnel interfaces (#708)
+* Fix mypy errors in server SZL list (#695)
+* Robustness: 210+ S7 error codes, auto PDU splitting, stale packet retry (#580)
+
+### Improvements
+
+* Set `TCP_NODELAY` and `SO_KEEPALIVE` on all sockets (#677)
+* Export `get_ulint`, `get_lint`, `get_date_time_object` from `snap7.util` (#652)
 * Documentation restructured: API Reference + Internals sections
 
 ### Security and robustness
