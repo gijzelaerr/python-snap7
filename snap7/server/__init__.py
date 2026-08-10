@@ -2418,7 +2418,9 @@ class Server:
             block_num = ctx["block_num"]
             block_data = ctx["data"]
 
-            # Store block data
+            # Store block data — only into pre-registered areas.
+            # Reject downloads to unknown areas to prevent unbounded memory
+            # allocation from attacker-controlled block numbers.
             if block_type == 0x41:  # DB
                 area_key = (S7Area.DB, block_num)
                 if area_key in self.memory_areas:
@@ -2428,9 +2430,9 @@ class Server:
                         copy_len = min(len(block_data), len(existing_area))
                         existing_area[0:copy_len] = block_data[0:copy_len]
                 else:
-                    # Create new area
-                    self.memory_areas[area_key] = bytearray(block_data)
-                    self.area_locks[area_key] = threading.Lock()
+                    logger.warning(f"Download rejected: area DB{block_num} not registered")
+                    del self._download_contexts[client_address]
+                    return self._build_error_response(request, 0x8104)
 
             logger.info(f"Download ended from {client_address}: stored {len(block_data)} bytes to {block_type:#02x}:{block_num}")
 
