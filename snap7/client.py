@@ -1931,6 +1931,59 @@ class Client(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
         return parse_protection_szl(self.read_szl(0x0232, 0))
 
+    def set_session_password(self, password: str) -> int:
+        """Set the session password to unlock a password-protected PLC.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 1)
+        with the encoded password. After a successful call the PLC grants
+        higher-privilege access for the duration of this session.
+
+        Args:
+            password: Plaintext password (max 8 ASCII characters).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the password.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        encoded = self.protocol.encode_password(password)
+
+        def build_request() -> bytes:
+            return self.protocol.build_set_session_password_request(encoded)
+
+        response = self._send_receive_with_reconnect(build_request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password set successfully")
+        return 0
+
+    def clear_session_password(self) -> int:
+        """Clear the session password, returning to the default protection level.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 2).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the request.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        def build_request() -> bytes:
+            return self.protocol.build_clear_session_password_request()
+
+        response = self._send_receive_with_reconnect(build_request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password cleared successfully")
+        return 0
+
     def read_szl(self, ssl_id: int, index: int = 0) -> S7SZL:
         """
         Read SZL (System Status List).
