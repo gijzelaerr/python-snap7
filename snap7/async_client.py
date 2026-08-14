@@ -22,10 +22,12 @@ from .datatypes import S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
+from .client import _parse_force_szl
 from .type import (
     Area,
     Block,
     BlocksList,
+    ForceEntry,
     S7CpuInfo,
     TS7BlockInfo,
     S7CpInfo,
@@ -1077,6 +1079,62 @@ class AsyncClient(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
         return parse_protection_szl(await self.read_szl(0x0232, 0))
+
+    # ---------------------------------------------------------------
+    # Force I/O
+    # ---------------------------------------------------------------
+
+    _FORCE_AREAS: frozenset[int] = frozenset({Area.PE, Area.PA})
+
+    async def force_bit(self, area: Area, byte_offset: int, bit: int, value: bool) -> None:
+        """Force a single I/O bit in the process image.
+
+        Async equivalent of :meth:`snap7.client.Client.force_bit`.
+        """
+        if area not in self._FORCE_AREAS:
+            raise ValueError(f"Force is only supported for PE (inputs) and PA (outputs), got {area!r}")
+        if not 0 <= bit <= 7:
+            raise ValueError(f"Bit must be 0-7, got {bit}")
+
+        current = await self.read_area(area, 0, byte_offset, 1)
+        if value:
+            current[0] |= 1 << bit
+        else:
+            current[0] &= ~(1 << bit)
+        await self.write_area(area, 0, byte_offset, current)
+        logger.info(f"Forced {area.name} byte {byte_offset} bit {bit} = {value}")
+
+    async def cancel_force(self, area: Area, byte_offset: int, bit: int) -> None:
+        """Cancel a forced I/O bit by clearing it in the process image.
+
+        Async equivalent of :meth:`snap7.client.Client.cancel_force`.
+        """
+        if area not in self._FORCE_AREAS:
+            raise ValueError(f"Cancel force is only supported for PE (inputs) and PA (outputs), got {area!r}")
+        if not 0 <= bit <= 7:
+            raise ValueError(f"Bit must be 0-7, got {bit}")
+
+        current = await self.read_area(area, 0, byte_offset, 1)
+        current[0] &= ~(1 << bit)
+        await self.write_area(area, 0, byte_offset, current)
+        logger.info(f"Cancelled force on {area.name} byte {byte_offset} bit {bit}")
+
+    async def read_force_table(self) -> list[ForceEntry]:
+        """Read the PLC force table via SZL 0x0025.
+
+        Async equivalent of :meth:`snap7.client.Client.read_force_table`.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        try:
+            szl = await self.read_szl(0x0025, 0x0000)
+        except (S7ProtocolError, RuntimeError):
+            logger.debug("SZL 0x0025 not available; returning empty force table")
+            return []
+
+        raw = bytes(szl.Data[: szl.Header.LengthDR])
+        return _parse_force_szl(raw)
 
     async def set_session_password(self, password: str) -> int:
         """Set the session password to unlock a password-protected PLC.

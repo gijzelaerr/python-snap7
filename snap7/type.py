@@ -21,7 +21,7 @@ from ctypes import (
 )
 from datetime import datetime, date, timedelta
 from enum import IntEnum
-from typing import Dict, Union, Literal
+from typing import Dict, NamedTuple, Union, Literal
 
 CDataArrayType = Union[
     Array[c_byte], Array[c_int], Array[c_int16], Array[c_int32], Array[c_uint8], Array[c_uint16], Array[c_uint32]
@@ -389,3 +389,16 @@ class S7Protection(Structure):
         ("bart_sch", word),
         ("anl_sch", word),
     ]
+
+
+class ForceEntry(NamedTuple):
+    """A single entry in the I/O force table."""
+
+    area: int
+    """Memory area (:attr:`Area.PE` for inputs, :attr:`Area.PA` for outputs)."""
+    byte_offset: int
+    """Byte offset of the forced bit."""
+    bit: int
+    """Bit number (0-7) within the byte."""
+    value: bool
+    """Forced value (True/False)."""
