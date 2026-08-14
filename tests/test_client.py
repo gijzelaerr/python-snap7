@@ -788,8 +788,10 @@ class TestClient(unittest.TestCase):
     def test_get_order_code(self) -> None:
         # Cli_GetOrderCode - uses real SZL protocol
         result = self.client.get_order_code()
-        # Order code should contain the 6ES7 prefix
         self.assertIn(b"6ES7", result.OrderCode)
+        self.assertEqual(3, result.V1)
+        self.assertEqual(3, result.V2)
+        self.assertEqual(0, result.V3)
 
     def test_get_protection(self) -> None:
         # Cli_GetProtection - now uses real SZL protocol
