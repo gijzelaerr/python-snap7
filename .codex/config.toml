@@ -1,0 +1,17 @@
+[mcp_servers.atlassian-mcp]
+enabled = false
+
+[mcp_servers.bigquery-mcp]
+enabled = false
+
+[mcp_servers.code-search-mcp]
+enabled = false
+
+[mcp_servers.enterprise-context-agent-mcp]
+enabled = false
+
+[mcp_servers.slack]
+enabled = false
+
+[mcp_servers.slack-mcp]
+enabled = false

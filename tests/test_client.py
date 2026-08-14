@@ -2,7 +2,7 @@ import logging
 import struct
 import time
 from typing import Any, Tuple
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import unittest
@@ -788,8 +788,10 @@ class TestClient(unittest.TestCase):
     def test_get_order_code(self) -> None:
         # Cli_GetOrderCode - uses real SZL protocol
         result = self.client.get_order_code()
-        # Order code should contain the 6ES7 prefix
         self.assertIn(b"6ES7", result.OrderCode)
+        self.assertEqual(3, result.V1)
+        self.assertEqual(3, result.V2)
+        self.assertEqual(0, result.V3)
 
     def test_get_protection(self) -> None:
         # Cli_GetProtection - now uses real SZL protocol
@@ -1127,6 +1129,17 @@ class TestPDUSplitting:
         client = Client()
         client.pdu_length = 480
         assert client._max_write_size() == 480 - 35
+
+    def test_invalid_negotiated_pdu_length_uses_safe_default(self) -> None:
+        client = Client()
+        response = {"parameters": {"pdu_length": 0}}
+
+        with patch.object(client, "_send_receive", return_value=response):
+            client._setup_communication()
+
+        assert client.pdu_length == 240
+        assert client._max_read_size() == 222
+        assert client._max_write_size() == 205
 
     def test_read_area_splits_large_request(self) -> None:
         """read_area should make multiple requests when size > max_read_size."""

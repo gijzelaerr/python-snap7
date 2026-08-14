@@ -139,6 +139,22 @@ class TestParseCOTPParameters:
         # Should break early without error
         assert conn.pdu_size == 240
 
+    @pytest.mark.parametrize(
+        "params",
+        [
+            struct.pack(">BBB", 0xC0, 1, 0x00),
+            struct.pack(">BBB", 0xC0, 1, 0xFF),
+            struct.pack(">BBH", 0xC0, 2, 127),
+            struct.pack(">BBH", 0xC0, 2, 8193),
+        ],
+    )
+    def test_invalid_pdu_size_keeps_default(self, params: bytes) -> None:
+        conn = ISOTCPConnection("1.2.3.4")
+
+        conn._parse_cotp_parameters(params)
+
+        assert conn.pdu_size == 240
+
 
 class TestParseCOTPData:
     """Test COTP Data Transfer parsing."""

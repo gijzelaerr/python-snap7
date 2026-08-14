@@ -1,15 +1,17 @@
 from ctypes import c_char
 import logging
+import socket
 import time
 from datetime import datetime
 
 import pytest
 import unittest
 from threading import Thread
+from unittest.mock import MagicMock
 
 from snap7.client import Client
-from snap7.error import server_errors, error_text
-from snap7.server import Server
+from snap7.error import server_errors, error_text, S7ConnectionError
+from snap7.server import Server, ServerISOConnection
 from snap7.type import SrvEvent, mkEvent, mkLog, SrvArea, Parameter, Block
 
 logging.basicConfig(level=logging.WARNING)
@@ -125,7 +127,7 @@ class TestServer(unittest.TestCase):
         # check the defaults
         self.assertEqual(self.server.get_param(Parameter.LocalPort), 12102)
         self.assertEqual(self.server.get_param(Parameter.WorkInterval), 100)
-        self.assertEqual(self.server.get_param(Parameter.MaxClients), 1024)
+        self.assertEqual(self.server.get_param(Parameter.MaxClients), 64)
 
         # invalid param for server
         self.assertRaises(Exception, self.server.get_param, Parameter.RemotePort)
@@ -143,10 +145,79 @@ class TestServerBeforeStart(unittest.TestCase):
     def test_set_param(self) -> None:
         self.server.set_param(Parameter.LocalPort, 1102)
 
+    def test_max_clients_parameter(self) -> None:
+        self.server.set_param(Parameter.MaxClients, 3)
+        self.assertEqual(self.server.get_param(Parameter.MaxClients), 3)
+        self.assertRaises(ValueError, self.server.set_param, Parameter.MaxClients, 0)
+
+    def test_max_clients_constructor_validation(self) -> None:
+        self.assertRaises(ValueError, Server, max_clients=0)
+
 
 @pytest.mark.server
 class TestServerRobustness(unittest.TestCase):
     """Test server robustness and edge cases."""
+
+    def test_max_clients_is_enforced(self) -> None:
+        server = Server(max_clients=1)
+        first = None
+        second = None
+        try:
+            server.start(0)
+            assert server.server_socket is not None
+            port = server.server_socket.getsockname()[1]
+
+            first = socket.create_connection(("127.0.0.1", port), timeout=1)
+            deadline = time.monotonic() + 2
+            while server.client_count != 1 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertEqual(server.client_count, 1)
+
+            second = socket.create_connection(("127.0.0.1", port), timeout=1)
+            second.settimeout(2)
+            try:
+                self.assertEqual(second.recv(1), b"")
+            except ConnectionResetError:
+                pass
+
+            self.assertEqual(server.client_count, 1)
+        finally:
+            if first is not None:
+                first.close()
+            if second is not None:
+                second.close()
+            server.stop()
+
+    def test_download_target_and_size_are_bounded(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(4))
+        address = ("127.0.0.1", 12345)
+
+        start_pdu = server.protocol.build_download_request(0x41, 2, b"1234")
+        start_request = server._parse_request(start_pdu)
+        response = server._handle_request_download(start_request, address)
+
+        self.assertEqual(response[10:12], b"\x00\x00")
+        self.assertEqual(server._download_contexts[address]["block_num"], 2)
+        self.assertEqual(server._download_contexts[address]["max_size"], 4)
+
+        server._handle_download_block({"sequence": 1, "data": {"data": b"123"}}, address)
+        response = server._handle_download_block({"sequence": 2, "data": {"data": b"45"}}, address)
+
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertNotIn(address, server._download_contexts)
+
+    def test_oversized_download_is_rejected_before_context_allocation(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(4))
+        address = ("127.0.0.1", 12345)
+
+        pdu = server.protocol.build_download_request(0x41, 2, b"12345")
+        request = server._parse_request(pdu)
+        response = server._handle_request_download(request, address)
+
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertFalse(hasattr(server, "_download_contexts"))
 
     def test_multiple_server_instances(self) -> None:
         """Test multiple server instances on different ports."""
@@ -241,6 +312,33 @@ class TestServerRobustness(unittest.TestCase):
 
 ip = "127.0.0.1"
 SERVER_PORT = 12200
+
+
+@pytest.mark.server
+class TestServerISOConnectionLimits:
+    def test_partial_frame_timeout_closes_connection(self) -> None:
+        client_socket = MagicMock()
+        client_socket.recv.side_effect = [b"\x03", TimeoutError()]
+        connection = ServerISOConnection(client_socket)
+
+        with pytest.raises(S7ConnectionError, match="partial frame"):
+            connection._recv_exact(4, time.monotonic() + 1)
+
+    def test_reassembled_request_size_is_bounded(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection.MAX_REASSEMBLED_SIZE = 4
+        connection._recv_exact = MagicMock(
+            side_effect=[
+                b"\x03\x00\x00\x0a",
+                b"\x02\xf0\x00abc",
+                b"\x03\x00\x00\x09",
+                b"\x02\xf0\x80de",
+            ]
+        )
+
+        with pytest.raises(S7ConnectionError, match="exceeds 4 bytes"):
+            connection.receive_data()
 
 
 @pytest.mark.server
@@ -354,6 +452,15 @@ class TestServerBlockOperations(unittest.TestCase):
         read_back = self.client.db_read(1, 0, 4)
         self.assertEqual(read_back, download_data)
 
+    def test_download_uses_requested_block_number(self) -> None:
+        """Download data to DB2 rather than silently falling back to DB1."""
+        download_data = bytearray([0x12, 0x34, 0x56, 0x78])
+
+        result = self.client.download(download_data, block_num=2)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(self.client.db_read(2, 0, 4), download_data)
+
 
 @pytest.mark.server
 class TestServerUserdataOperations(unittest.TestCase):
@@ -393,6 +500,136 @@ class TestServerUserdataOperations(unittest.TestCase):
         """read_szl(0x0011) should return module identification data."""
         szl = self.client.read_szl(0x0011, 0)
         self.assertGreater(szl.Header.LengthDR, 0)
+
+    def test_parse_order_code_s71516f(self) -> None:
+        """Parse a real S7-1516F dump — should use 0x0007 firmware, not 0x0081 boot loader.
+
+        Verified by @fls-witturcom: TIA Portal shows V2.9.2 (record 0x0007),
+        not V3.3.0 (record 0x0081 boot loader).
+        """
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real trimmed hex dump from CPU 1516F-3 PN/DP, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x05"
+            b"\x00\x01\x36\x45\x53\x37\x20\x35\x31\x36\x2d\x33\x46\x4e\x30\x32\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x02\x00\x00"
+            b"\x00\x06\x36\x45\x53\x37\x20\x35\x31\x36\x2d\x33\x46\x4e\x30\x32\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x02\x00\x00"
+            b"\x00\x07\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x02\x09\x02"
+            b"\x00\x80\x36\x45\x53\x37\x39\x35\x34\x2d\x38\x4c\x45\x30\x33\x2d\x30\x41\x41\x30\x20\x20\x00\x00\x01\x00\x00\x00"
+            b"\x00\x81\x42\x6f\x6f\x74\x20\x4c\x6f\x61\x64\x65\x72\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x03\x03\x00"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 516-3FN02-0AB0", result.OrderCode)
+        # Firmware V2.9.2 from record 0x0007 (NOT boot loader V3.3.0 from 0x0081)
+        self.assertEqual(result.V1, 2)
+        self.assertEqual(result.V2, 9)
+        self.assertEqual(result.V3, 2)
+
+    def test_parse_order_code_s71510sp(self) -> None:
+        """Parse a real S7-1510SP dump — should use 0x0007 firmware, not 0x0081 boot loader.
+
+        Verified by @fls-witturcom: TIA Portal identifies the firmware from
+        record 0x0007, not the boot loader in 0x0081.
+        """
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real trimmed hex dump from CPU 1510SP F-1 PN, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x05"
+            b"\x00\x01\x36\x45\x53\x37\x20\x35\x31\x30\x2d\x31\x53\x4b\x30\x33\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x03\x00\x00"
+            b"\x00\x06\x36\x45\x53\x37\x20\x35\x31\x30\x2d\x31\x53\x4b\x30\x33\x2d\x30\x41\x42\x30\x20\x00\x00\x00\x03\x00\x00"
+            b"\x00\x07\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x03\x00\x03"
+            b"\x00\x80\x36\x45\x53\x37\x39\x35\x34\x2d\x38\x4c\x45\x30\x33\x2d\x30\x41\x41\x30\x20\x20\x00\x00\x01\x00\x00\x00"
+            b"\x00\x81\x42\x6f\x6f\x74\x20\x4c\x6f\x61\x64\x65\x72\x20\x20\x20\x20\x20\x20\x20\x20\x20\x00\x00\x56\x04\x02\x03"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 510-1SK03-0AB0", result.OrderCode)
+        # Firmware V3.0.3 from record 0x0007 (NOT boot loader V4.2.3 from 0x0081)
+        self.assertEqual(result.V1, 3)
+        self.assertEqual(result.V2, 0)
+        self.assertEqual(result.V3, 3)
+
+    def test_parse_order_code_s71214c(self) -> None:
+        """Parse a real S7-1214C dump whose installed firmware is in 0x0007."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real trimmed hex dump from CPU 1214C, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x03"
+            b"\x00\x01\x36\x45\x53\x37\x20\x32\x31\x34\x2d\x31\x41\x47\x34\x30\x2d\x30\x58\x42\x30\x20\x00\x00\x00\x10\x20\x20"
+            b"\x00\x06\x36\x45\x53\x37\x20\x32\x31\x34\x2d\x31\x41\x47\x34\x30\x2d\x30\x58\x42\x30\x20\x00\x00\x00\x10\x20\x20"
+            b"\x00\x07\x36\x45\x53\x37\x20\x32\x31\x34\x2d\x31\x41\x47\x34\x30\x2d\x30\x58\x42\x30\x20\x00\x00\x56\x04\x06\x00"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 214-1AG40-0XB0", result.OrderCode)
+        self.assertEqual(result.V1, 4)
+        self.assertEqual(result.V2, 6)
+        self.assertEqual(result.V3, 0)
+
+    def test_parse_order_code_s7300_flat_text(self) -> None:
+        """parse_order_code_szl handles S7-300 flat ASCII text layout."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real hex dump from CPU 315-2 PN/DP, courtesy of @fls-witturcom
+        payload = (
+            b"\x00\x1c\x00\x03"
+            b"\x43\x50\x55\x20\x33\x31\x35\x2d\x32\x20\x50\x4e\x2f\x44\x50\x20\x20\x20\x20\x20"
+            b"\x36\x45\x53\x37\x20\x33\x31\x35\x2d\x32\x4e\x44\x30\x37\x2d\x30\x41\x42\x30\x20"
+            b"\x00\x01\x00\x04\x00\x04"
+            b"\x4d\x50\x49\x2f\x44\x50\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20"
+            b"\x20\x20\x20\x20\x20\x20\x00\x02\x00\x00\x00\x04\x50\x4e\x2d\x4a\x4f\x20"
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 315-2ND07-0AB0", result.OrderCode)
+
+    def test_parse_order_code_s7300_structured(self) -> None:
+        """parse_order_code_szl with real S7-300 CPU 318-3 structured records."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        # Real hex dump from CPU 318-3EL01-0AB0, courtesy of @b1163646804
+        payload = (
+            b"\x00\x1c\x00\x04"
+            b"\x00\x016ES7 318-3EL01-0AB0 \x00\xc0\x00\x03\x00\x01"
+            b"\x00\x066ES7 318-3EL01-0AB0 \x00\xc0\x00\x03\x00\x01"
+            b"\x00\x07                    \x00\xc0V\x03\x02\x04"
+            b'\x00\x81Boot Loader         \x00\x00A"\x09\x09'
+        )
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertIn(b"6ES7 318-3EL01-0AB0", result.OrderCode)
+        # Should use 0x0007 firmware (V3.2.4), NOT 0x0081 boot loader (V34.9.9)
+        self.assertEqual(result.V1, 3)
+        self.assertEqual(result.V2, 2)
+        self.assertEqual(result.V3, 4)
 
     def test_read_szl_0x0131(self) -> None:
         """read_szl(0x0131) should return communication parameters."""

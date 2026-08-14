@@ -244,9 +244,17 @@ class AsyncISOTCPConnection:
             param_data = data[offset + 2 : offset + 2 + param_len]
             if param_code == self.COTP_PARAM_PDU_SIZE:
                 if param_len == 1:
-                    self.pdu_size = 1 << param_data[0]
+                    exponent = param_data[0]
+                    if 7 <= exponent <= 13:
+                        self.pdu_size = 1 << exponent
+                    else:
+                        logger.warning(f"Invalid COTP PDU size exponent {exponent}, using default")
                 elif param_len == 2:
-                    self.pdu_size = struct.unpack(">H", param_data)[0]
+                    raw = struct.unpack(">H", param_data)[0]
+                    if 128 <= raw <= 8192:
+                        self.pdu_size = raw
+                    else:
+                        logger.warning(f"Invalid COTP PDU size {raw}, using default")
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
             offset += 2 + param_len
 
@@ -1128,6 +1136,53 @@ class AsyncClient(ClientMixin):
         raw = bytes(szl.Data[: szl.Header.LengthDR])
         return _parse_force_szl(raw)
 
+    async def set_session_password(self, password: str) -> int:
+        """Set the session password to unlock a password-protected PLC.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 1)
+        with the encoded password.
+
+        Args:
+            password: Plaintext password (max 8 ASCII characters).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the password.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        encoded = self.protocol.encode_password(password)
+        request = self.protocol.build_set_session_password_request(encoded)
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password set successfully")
+        return 0
+
+    async def clear_session_password(self) -> int:
+        """Clear the session password, returning to the default protection level.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 2).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the request.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        request = self.protocol.build_clear_session_password_request()
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password cleared successfully")
+        return 0
+
     async def compress(self, timeout: int) -> int:
         """Compress PLC memory."""
         if not self.get_connected():
@@ -1222,7 +1277,11 @@ class AsyncClient(ClientMixin):
         if response.get("parameters"):
             params = response["parameters"]
             if "pdu_length" in params:
-                self.pdu_length = params["pdu_length"]
+                negotiated = params["pdu_length"]
+                if negotiated < 64:
+                    logger.warning(f"Server negotiated implausible PDU length {negotiated}, using minimum 240")
+                    negotiated = 240
+                self.pdu_length = negotiated
                 self._params[Parameter.PDURequest] = self.pdu_length
                 logger.info(f"Negotiated PDU length: {self.pdu_length}")
 
