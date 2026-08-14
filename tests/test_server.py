@@ -316,6 +316,17 @@ SERVER_PORT = 12200
 
 @pytest.mark.server
 class TestServerISOConnectionLimits:
+    def test_connection_confirm_has_valid_length_and_tpdu_size(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection.dst_ref = 0x000F
+        connection.tpdu_size = 0x09
+
+        connection_confirm = connection._build_cotp_cc()
+
+        assert connection_confirm == bytes.fromhex("09d0000f000100c00109")
+        assert connection_confirm[0] == len(connection_confirm) - 1
+
     def test_partial_frame_timeout_closes_connection(self) -> None:
         client_socket = MagicMock()
         client_socket.recv.side_effect = [b"\x03", TimeoutError()]
