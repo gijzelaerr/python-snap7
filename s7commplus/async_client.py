@@ -9,7 +9,7 @@ import ssl
 import struct
 from typing import Any, Optional
 
-from .connection import _S7_CIPHERS
+from .connection import _S7_CIPHERS, _set_s7_groups
 from .protocol import (
     DataType,
     ElementID,
@@ -251,9 +251,9 @@ class S7CommPlusAsyncClient:
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
         ctx.set_ciphers(_S7_CIPHERS)
+        _set_s7_groups(ctx)
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
         ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
