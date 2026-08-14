@@ -1,15 +1,17 @@
 from ctypes import c_char
 import logging
+import socket
 import time
 from datetime import datetime
 
 import pytest
 import unittest
 from threading import Thread
+from unittest.mock import MagicMock
 
 from snap7.client import Client
-from snap7.error import server_errors, error_text
-from snap7.server import Server
+from snap7.error import server_errors, error_text, S7ConnectionError
+from snap7.server import Server, ServerISOConnection
 from snap7.type import SrvEvent, mkEvent, mkLog, SrvArea, Parameter, Block
 
 logging.basicConfig(level=logging.WARNING)
@@ -125,7 +127,7 @@ class TestServer(unittest.TestCase):
         # check the defaults
         self.assertEqual(self.server.get_param(Parameter.LocalPort), 12102)
         self.assertEqual(self.server.get_param(Parameter.WorkInterval), 100)
-        self.assertEqual(self.server.get_param(Parameter.MaxClients), 1024)
+        self.assertEqual(self.server.get_param(Parameter.MaxClients), 64)
 
         # invalid param for server
         self.assertRaises(Exception, self.server.get_param, Parameter.RemotePort)
@@ -143,10 +145,79 @@ class TestServerBeforeStart(unittest.TestCase):
     def test_set_param(self) -> None:
         self.server.set_param(Parameter.LocalPort, 1102)
 
+    def test_max_clients_parameter(self) -> None:
+        self.server.set_param(Parameter.MaxClients, 3)
+        self.assertEqual(self.server.get_param(Parameter.MaxClients), 3)
+        self.assertRaises(ValueError, self.server.set_param, Parameter.MaxClients, 0)
+
+    def test_max_clients_constructor_validation(self) -> None:
+        self.assertRaises(ValueError, Server, max_clients=0)
+
 
 @pytest.mark.server
 class TestServerRobustness(unittest.TestCase):
     """Test server robustness and edge cases."""
+
+    def test_max_clients_is_enforced(self) -> None:
+        server = Server(max_clients=1)
+        first = None
+        second = None
+        try:
+            server.start(0)
+            assert server.server_socket is not None
+            port = server.server_socket.getsockname()[1]
+
+            first = socket.create_connection(("127.0.0.1", port), timeout=1)
+            deadline = time.monotonic() + 2
+            while server.client_count != 1 and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertEqual(server.client_count, 1)
+
+            second = socket.create_connection(("127.0.0.1", port), timeout=1)
+            second.settimeout(2)
+            try:
+                self.assertEqual(second.recv(1), b"")
+            except ConnectionResetError:
+                pass
+
+            self.assertEqual(server.client_count, 1)
+        finally:
+            if first is not None:
+                first.close()
+            if second is not None:
+                second.close()
+            server.stop()
+
+    def test_download_target_and_size_are_bounded(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(4))
+        address = ("127.0.0.1", 12345)
+
+        start_pdu = server.protocol.build_download_request(0x41, 2, b"1234")
+        start_request = server._parse_request(start_pdu)
+        response = server._handle_request_download(start_request, address)
+
+        self.assertEqual(response[10:12], b"\x00\x00")
+        self.assertEqual(server._download_contexts[address]["block_num"], 2)
+        self.assertEqual(server._download_contexts[address]["max_size"], 4)
+
+        server._handle_download_block({"sequence": 1, "data": {"data": b"123"}}, address)
+        response = server._handle_download_block({"sequence": 2, "data": {"data": b"45"}}, address)
+
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertNotIn(address, server._download_contexts)
+
+    def test_oversized_download_is_rejected_before_context_allocation(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(4))
+        address = ("127.0.0.1", 12345)
+
+        pdu = server.protocol.build_download_request(0x41, 2, b"12345")
+        request = server._parse_request(pdu)
+        response = server._handle_request_download(request, address)
+
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertFalse(hasattr(server, "_download_contexts"))
 
     def test_multiple_server_instances(self) -> None:
         """Test multiple server instances on different ports."""
@@ -241,6 +312,33 @@ class TestServerRobustness(unittest.TestCase):
 
 ip = "127.0.0.1"
 SERVER_PORT = 12200
+
+
+@pytest.mark.server
+class TestServerISOConnectionLimits:
+    def test_partial_frame_timeout_closes_connection(self) -> None:
+        client_socket = MagicMock()
+        client_socket.recv.side_effect = [b"\x03", TimeoutError()]
+        connection = ServerISOConnection(client_socket)
+
+        with pytest.raises(S7ConnectionError, match="partial frame"):
+            connection._recv_exact(4, time.monotonic() + 1)
+
+    def test_reassembled_request_size_is_bounded(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection.MAX_REASSEMBLED_SIZE = 4
+        connection._recv_exact = MagicMock(
+            side_effect=[
+                b"\x03\x00\x00\x0a",
+                b"\x02\xf0\x00abc",
+                b"\x03\x00\x00\x09",
+                b"\x02\xf0\x80de",
+            ]
+        )
+
+        with pytest.raises(S7ConnectionError, match="exceeds 4 bytes"):
+            connection.receive_data()
 
 
 @pytest.mark.server
@@ -353,6 +451,15 @@ class TestServerBlockOperations(unittest.TestCase):
         # Verify the data was written by reading it back
         read_back = self.client.db_read(1, 0, 4)
         self.assertEqual(read_back, download_data)
+
+    def test_download_uses_requested_block_number(self) -> None:
+        """Download data to DB2 rather than silently falling back to DB1."""
+        download_data = bytearray([0x12, 0x34, 0x56, 0x78])
+
+        result = self.client.download(download_data, block_num=2)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(self.client.db_read(2, 0, 4), download_data)
 
 
 @pytest.mark.server

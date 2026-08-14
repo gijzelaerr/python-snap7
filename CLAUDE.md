@@ -169,6 +169,14 @@ pip install -e ".[test]"
 pip install -e ".[cli]"
 ```
 
+## Release Branches and Changelog
+
+- `master` contains the complete changelog, including releases made from maintenance branches.
+- Maintain pending maintenance-release notes on the relevant release branch (for example, `v3.1`).
+- After tagging a maintenance release, immediately forward-port its finalized `CHANGES.md` section to `master` in a changelog-only pull request. Do not merge the maintenance branch into `master`.
+- Changes intended for both lines should normally land on `master` first and then be cherry-picked to the maintenance branch.
+- A release is not complete until its finalized changelog section is present on `master`; the production publish workflow enforces this before uploading to PyPI.
+
 ## Test Markers
 
 Tests are organized with pytest markers:

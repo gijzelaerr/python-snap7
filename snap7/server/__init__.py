@@ -56,14 +56,18 @@ class Server:
         >>> server.stop()
     """
 
-    def __init__(self, log: bool = True, **kwargs: object) -> None:
+    def __init__(self, log: bool = True, max_clients: int = 64, **kwargs: object) -> None:
         """
         Initialize S7 server.
 
         Args:
             log: Enable event logging
+            max_clients: Maximum number of simultaneous client connections
             **kwargs: Ignored. Kept for backwards compatibility.
         """
+        if max_clients < 1:
+            raise ValueError("max_clients must be at least 1")
+
         self.server_socket: Optional[socket.socket] = None
         self.server_thread: Optional[threading.Thread] = None
         self.running = False
@@ -89,6 +93,7 @@ class Server:
         # Client connections
         self.clients: List[threading.Thread] = []
         self.client_lock = threading.Lock()
+        self.max_clients = max_clients
 
         # Event queue for pick_event
         self._event_queue: List[SrvEvent] = []
@@ -180,9 +185,13 @@ class Server:
 
         # Close all client connections
         with self.client_lock:
-            for client_thread in self.clients[:]:
-                if client_thread.is_alive():
-                    client_thread.join(timeout=1.0)
+            client_threads = self.clients[:]
+
+        for client_thread in client_threads:
+            if client_thread.is_alive():
+                client_thread.join(timeout=1.0)
+
+        with self.client_lock:
             self.clients.clear()
             self.client_count = 0
 
@@ -451,6 +460,10 @@ class Server:
         """
         if param == Parameter.LocalPort:
             self.port = value
+        elif param == Parameter.MaxClients:
+            if value < 1:
+                raise ValueError("MaxClients must be at least 1")
+            self.max_clients = value
         logger.debug(f"Set parameter {param} = {value}")
         return 0
 
@@ -484,7 +497,7 @@ class Server:
         param_values = {
             Parameter.LocalPort: self.port,
             Parameter.WorkInterval: 100,
-            Parameter.MaxClients: 1024,
+            Parameter.MaxClients: self.max_clients,
         }
         return param_values.get(param, 0)
 
@@ -582,6 +595,10 @@ class Server:
                     client_thread = threading.Thread(target=self._handle_client, args=(client_socket, address), daemon=True)
 
                     with self.client_lock:
+                        if self.client_count >= self.max_clients:
+                            logger.warning(f"Rejecting client {address}: maximum of {self.max_clients} clients reached")
+                            client_socket.close()
+                            continue
                         self.clients.append(client_thread)
                         self.client_count += 1
 
@@ -647,6 +664,11 @@ class Server:
                 if current_thread in self.clients:
                     self.clients.remove(current_thread)
                 self.client_count = max(0, self.client_count - 1)
+
+            if hasattr(self, "_download_contexts"):
+                self._download_contexts.pop(address, None)
+            if hasattr(self, "_upload_contexts"):
+                self._upload_contexts.pop(address, None)
 
             logger.info(f"Client {address} handler finished")
 
@@ -819,9 +841,9 @@ class Server:
             word_len = addr.get("word_len", S7WordLen.BYTE)
 
             # Convert count to bytes
-            if word_len in (S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD):
+            if word_len in (S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD, S7WordLen.INT):
                 byte_count = count * 2
-            elif word_len in (S7WordLen.DWORD, S7WordLen.REAL):
+            elif word_len in (S7WordLen.DWORD, S7WordLen.REAL, S7WordLen.DINT):
                 byte_count = count * 4
             elif word_len == S7WordLen.BIT:
                 byte_count = 1
@@ -879,9 +901,9 @@ class Server:
                 word_len = addr_spec.get("word_len", S7WordLen.BYTE)
 
                 # Convert count to bytes based on word length
-                if word_len in [S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD]:
+                if word_len in [S7WordLen.TIMER, S7WordLen.COUNTER, S7WordLen.WORD, S7WordLen.INT]:
                     byte_count = count * 2  # 16-bit items
-                elif word_len in [S7WordLen.DWORD, S7WordLen.REAL]:
+                elif word_len in [S7WordLen.DWORD, S7WordLen.REAL, S7WordLen.DINT]:
                     byte_count = count * 4  # 32-bit items
                 elif word_len == S7WordLen.BIT:
                     byte_count = 1  # Single bit needs at least 1 byte
@@ -2303,21 +2325,54 @@ class Server:
         try:
             raw_params = request.get("raw_parameters", b"")
 
-            # Parse block address from parameters
-            block_type = 0x41  # Default to DB
-            block_num = 1
+            # Parse and validate the target before allocating transfer state.
+            if len(raw_params) < 6:
+                return self._build_error_response(request, 0x8104)
 
-            if len(raw_params) >= 6:
-                addr_len = raw_params[5]
-                if len(raw_params) >= 6 + addr_len:
-                    block_addr = raw_params[6 : 6 + addr_len]
-                    try:
-                        block_type = int(block_addr[0:2], 16)
-                        block_num = int(block_addr[2:7])
-                    except (ValueError, IndexError):
-                        pass
+            addr_len = raw_params[4]
+            address_end = 5 + addr_len
+            if addr_len < 7 or len(raw_params) < address_end:
+                return self._build_error_response(request, 0x8104)
+
+            block_addr = raw_params[5:address_end]
+            try:
+                block_type = int(block_addr[0:2], 16)
+                block_num = int(block_addr[2:7])
+            except (ValueError, IndexError):
+                return self._build_error_response(request, 0x8104)
 
             logger.info(f"Request download from {client_address}: type={block_type:#02x}, num={block_num}")
+
+            if block_type != 0x41:  # Only DB downloads are implemented.
+                return self._build_error_response(request, 0x8104)
+
+            area_key = (S7Area.DB, block_num)
+            if area_key not in self.memory_areas:
+                logger.warning(f"Download rejected: area DB{block_num} not registered")
+                return self._build_error_response(request, 0x8104)
+
+            area_capacity = len(self.memory_areas[area_key])
+
+            # The request includes an ASCII block length. Reject an oversized
+            # transfer early, while still enforcing the limit on every chunk.
+            if len(raw_params) <= address_end:
+                return self._build_error_response(request, 0x8104)
+
+            length_len = raw_params[address_end]
+            length_start = address_end + 1
+            length_end = length_start + length_len
+            if not length_len or len(raw_params) < length_end:
+                return self._build_error_response(request, 0x8104)
+
+            try:
+                declared_size = int(raw_params[length_start:length_end])
+            except ValueError:
+                return self._build_error_response(request, 0x8104)
+            if declared_size < 0 or declared_size > area_capacity:
+                logger.warning(
+                    f"Download rejected: declared size {declared_size} outside DB{block_num} capacity 0..{area_capacity}"
+                )
+                return self._build_error_response(request, 0x8104)
 
             # Store download context
             if not hasattr(self, "_download_contexts"):
@@ -2326,6 +2381,7 @@ class Server:
                 "block_type": block_type,
                 "block_num": block_num,
                 "data": bytearray(),
+                "max_size": declared_size,
             }
 
             # Build response acknowledging download
@@ -2372,7 +2428,14 @@ class Server:
             data_info = request.get("data", {})
             block_data = data_info.get("data", b"")
 
-            # Append data to context
+            # Bound accumulated data by the pre-registered target area. The
+            # final storage copy is not the only allocation: this bytearray is
+            # grown for every DOWNLOAD_BLOCK request.
+            if len(ctx["data"]) + len(block_data) > ctx["max_size"]:
+                logger.warning(f"Download rejected: data exceeds target capacity {ctx['max_size']}")
+                del self._download_contexts[client_address]
+                return self._build_error_response(request, 0x8104)
+
             ctx["data"].extend(block_data)
 
             logger.info(f"Download block from {client_address}: received {len(block_data)} bytes")
@@ -2420,7 +2483,9 @@ class Server:
             block_num = ctx["block_num"]
             block_data = ctx["data"]
 
-            # Store block data
+            # Store block data — only into pre-registered areas.
+            # Reject downloads to unknown areas to prevent unbounded memory
+            # allocation from attacker-controlled block numbers.
             if block_type == 0x41:  # DB
                 area_key = (S7Area.DB, block_num)
                 if area_key in self.memory_areas:
@@ -2430,9 +2495,9 @@ class Server:
                         copy_len = min(len(block_data), len(existing_area))
                         existing_area[0:copy_len] = block_data[0:copy_len]
                 else:
-                    # Create new area
-                    self.memory_areas[area_key] = bytearray(block_data)
-                    self.area_locks[area_key] = threading.Lock()
+                    logger.warning(f"Download rejected: area DB{block_num} not registered")
+                    del self._download_contexts[client_address]
+                    return self._build_error_response(request, 0x8104)
 
             logger.info(f"Download ended from {client_address}: stored {len(block_data)} bytes to {block_type:#02x}:{block_num}")
 
@@ -2488,12 +2553,18 @@ class Server:
 class ServerISOConnection:
     """ISO connection wrapper for server-side communication."""
 
+    RECEIVE_DEADLINE = 5.0
+    MAX_REASSEMBLED_SIZE = 1024 * 1024
+
     # COTP PDU types
     COTP_CR = 0xE0  # Connection Request
     COTP_CC = 0xD0  # Connection Confirm
     COTP_DR = 0x80  # Disconnect Request
     COTP_DC = 0xC0  # Disconnect Confirm
     COTP_DT = 0xF0  # Data Transfer
+
+    # COTP parameter code for TPDU size (ISO 8073)
+    COTP_PARAM_PDU_SIZE = 0xC0
 
     def __init__(self, client_socket: socket.socket):
         """Initialize server ISO connection."""
@@ -2502,19 +2573,25 @@ class ServerISOConnection:
         self.connected = False
         self.src_ref = 0x0001  # Server reference
         self.dst_ref = 0x0000  # Client reference (assigned during handshake)
+        self.tpdu_size = 0x0A  # Default: 1024 bytes (2^10)
 
     def accept_connection(self) -> bool:
         """Accept ISO connection from client."""
         try:
+            deadline = time.monotonic() + self.RECEIVE_DEADLINE
+
             # Receive COTP Connection Request
-            tpkt_header = self._recv_exact(4)
+            tpkt_header = self._recv_exact(4, deadline)
             version, reserved, length = struct.unpack(">BBH", tpkt_header)
 
             if version != 3:
                 logger.error(f"Invalid TPKT version: {version}")
                 return False
+            if length < 4:
+                logger.error(f"Invalid TPKT length: {length}")
+                return False
 
-            payload = self._recv_exact(length - 4)
+            payload = self._recv_exact(length - 4, deadline)
 
             # Parse COTP Connection Request
             if not self._parse_cotp_cr(payload):
@@ -2534,25 +2611,46 @@ class ServerISOConnection:
             return False
 
     def receive_data(self) -> bytes:
-        """Receive data from client."""
-        # Receive TPKT header (4 bytes)
-        tpkt_header = self._recv_exact(4)
+        """Receive data from client.
 
-        # Parse TPKT header
-        version, reserved, length = struct.unpack(">BBH", tpkt_header)
+        Reassembles COTP DT fragments by reading frames until the EOT
+        bit (bit 7 of the third COTP header byte) is set, then returns
+        the concatenated payload.
+        """
+        fragments: list[bytes] = []
+        total_size = 0
+        deadline = time.monotonic() + self.RECEIVE_DEADLINE
+        while True:
+            tpkt_header = self._recv_exact(4, deadline)
+            version, reserved, length = struct.unpack(">BBH", tpkt_header)
 
-        if version != 3:
-            raise S7ConnectionError(f"Invalid TPKT version: {version}")
+            if version != 3:
+                raise S7ConnectionError(f"Invalid TPKT version: {version}")
 
-        # Receive remaining data
-        remaining = length - 4
-        if remaining <= 0:
-            raise S7ConnectionError("Invalid TPKT length")
+            remaining = length - 4
+            if remaining <= 0:
+                raise S7ConnectionError("Invalid TPKT length")
 
-        payload = self._recv_exact(remaining)
+            payload = self._recv_exact(remaining, deadline)
 
-        # Parse COTP header and extract data
-        return self._parse_cotp_data(payload)
+            if len(payload) < 3:
+                raise S7ConnectionError("Invalid COTP DT: too short")
+
+            pdu_len, pdu_type, eot_num = struct.unpack(">BBB", payload[:3])
+
+            if pdu_type != self.COTP_DT:
+                raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
+
+            fragment = payload[3:]
+            total_size += len(fragment)
+            if total_size > self.MAX_REASSEMBLED_SIZE:
+                raise S7ConnectionError(f"Reassembled COTP request exceeds {self.MAX_REASSEMBLED_SIZE} bytes")
+            fragments.append(fragment)
+
+            if eot_num & 0x80:
+                break
+
+        return b"".join(fragments)
 
     def send_data(self, data: bytes) -> None:
         """Send data to client."""
@@ -2580,29 +2678,68 @@ class ServerISOConnection:
         # Store client reference
         self.dst_ref = src_ref
 
+        # Parse variable parameters for TPDU size
+        offset = 7
+        while offset + 2 <= len(data):
+            param_code = data[offset]
+            param_len = data[offset + 1]
+            if offset + 2 + param_len > len(data):
+                break
+            if param_code == self.COTP_PARAM_PDU_SIZE and param_len == 1:
+                exponent = data[offset + 2]
+                if 7 <= exponent <= 13:
+                    self.tpdu_size = exponent
+                    logger.debug(f"Client requested TPDU size 2^{exponent} = {1 << exponent}")
+            offset += 2 + param_len
+
         logger.debug(f"Received COTP CR from client ref {src_ref}")
         return True
 
     def _build_cotp_cc(self) -> bytes:
-        """Build COTP Connection Confirm."""
-        # Basic COTP CC
+        """Build COTP Connection Confirm.
+
+        Includes the TPDU size parameter (0xC0) so clients know the
+        negotiated maximum segment size and don't fall back to the
+        ISO 8073 class-0 default of 128 bytes.
+        """
+        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
+        pdu_length = 6 + len(pdu_size_param)
         base_pdu = struct.pack(
-            ">BBHHB",
-            6,  # PDU length
+            ">BBBHHB",
+            pdu_length,  # PDU length
             self.COTP_CC,  # PDU type
+            0x00,  # Reserved / CDT
             self.dst_ref,  # Destination reference (client's source ref)
             self.src_ref,  # Source reference (our ref)
             0x00,  # Class/option
         )
 
-        return struct.pack(">B", 6) + base_pdu[1:]
+        return base_pdu + pdu_size_param
 
-    def _recv_exact(self, size: int) -> bytes:
-        """Receive exactly the specified number of bytes."""
+    def _recv_exact(self, size: int, deadline: float | None = None) -> bytes:
+        """Receive exactly the specified bytes within one absolute deadline."""
+        if size < 0:
+            raise S7ConnectionError(f"Invalid receive size: {size}")
+
+        if deadline is None:
+            deadline = time.monotonic() + self.RECEIVE_DEADLINE
+
         data = bytearray()
 
         while len(data) < size:
-            chunk = self.socket.recv(size - len(data))
+            remaining_time = deadline - time.monotonic()
+            if remaining_time <= 0:
+                if data:
+                    raise S7ConnectionError("Receive deadline exceeded after partial frame")
+                raise TimeoutError("Receive deadline exceeded")
+
+            self.socket.settimeout(remaining_time)
+            try:
+                chunk = self.socket.recv(size - len(data))
+            except TimeoutError as e:
+                if data:
+                    raise S7ConnectionError("Receive deadline exceeded after partial frame") from e
+                raise
             if not chunk:
                 raise ConnectionResetError("Connection closed by peer")
             data.extend(chunk)
@@ -2618,18 +2755,6 @@ class ServerISOConnection:
         """Build COTP Data Transfer PDU."""
         header = struct.pack(">BBB", 2, self.COTP_DT, 0x80)
         return header + data
-
-    def _parse_cotp_data(self, cotp_pdu: bytes) -> bytes:
-        """Parse COTP Data Transfer PDU and extract S7 data."""
-        if len(cotp_pdu) < 3:
-            raise S7ConnectionError("Invalid COTP DT: too short")
-
-        pdu_len, pdu_type, eot_num = struct.unpack(">BBB", cotp_pdu[:3])
-
-        if pdu_type != self.COTP_DT:
-            raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
-
-        return cotp_pdu[3:]  # Return data portion
 
 
 def mainloop(tcp_port: int = 1102, init_standard_values: bool = False) -> None:

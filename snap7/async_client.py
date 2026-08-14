@@ -242,9 +242,17 @@ class AsyncISOTCPConnection:
             param_data = data[offset + 2 : offset + 2 + param_len]
             if param_code == self.COTP_PARAM_PDU_SIZE:
                 if param_len == 1:
-                    self.pdu_size = 1 << param_data[0]
+                    exponent = param_data[0]
+                    if 7 <= exponent <= 13:
+                        self.pdu_size = 1 << exponent
+                    else:
+                        logger.warning(f"Invalid COTP PDU size exponent {exponent}, using default")
                 elif param_len == 2:
-                    self.pdu_size = struct.unpack(">H", param_data)[0]
+                    raw = struct.unpack(">H", param_data)[0]
+                    if 128 <= raw <= 8192:
+                        self.pdu_size = raw
+                    else:
+                        logger.warning(f"Invalid COTP PDU size {raw}, using default")
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
             offset += 2 + param_len
 
@@ -1211,7 +1219,11 @@ class AsyncClient(ClientMixin):
         if response.get("parameters"):
             params = response["parameters"]
             if "pdu_length" in params:
-                self.pdu_length = params["pdu_length"]
+                negotiated = params["pdu_length"]
+                if negotiated < 64:
+                    logger.warning(f"Server negotiated implausible PDU length {negotiated}, using minimum 240")
+                    negotiated = 240
+                self.pdu_length = negotiated
                 self._params[Parameter.PDURequest] = self.pdu_length
                 logger.info(f"Negotiated PDU length: {self.pdu_length}")
 
