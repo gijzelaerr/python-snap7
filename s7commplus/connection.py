@@ -762,9 +762,11 @@ class S7CommPlusConnection:
 
         resp_payload = response[resp_offset:]
 
-        # SessionKey/HMAC responses prepend an IntegrityId VLQ. Ordinary
-        # TLS/V2 responses follow the standard layout and append it instead.
-        if self._session_key is not None and len(resp_payload) > 1:
+        # Real PLCs prepend an IntegrityId VLQ whenever response integrity
+        # tracking is active (both TLS/V2 and SessionKey/HMAC sessions). Strip
+        # it so callers receive the application payload beginning with the
+        # ReturnValue.
+        if self._with_integrity_id and len(resp_payload) > 1:
             resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
             logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
             resp_payload = resp_payload[iid_consumed:]
