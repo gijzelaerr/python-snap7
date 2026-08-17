@@ -31,7 +31,16 @@ import threading
 from enum import IntEnum
 from typing import Any, Callable, Optional
 
+from .codec import (
+    decode_header,
+    decode_pvalue_to_bytes,
+    encode_header,
+    encode_pvalue_blob,
+    encode_typed_value,
+)
+from .connection import _S7_CIPHERS, _set_s7_groups
 from .protocol import (
+    READ_FUNCTION_CODES,
     DataType,
     ElementID,
     FunctionCode,
@@ -40,18 +49,9 @@ from .protocol import (
     ObjectId,
     Opcode,
     ProtocolVersion,
-    READ_FUNCTION_CODES,
     SoftDataType,
 )
-from .connection import _S7_CIPHERS, _set_s7_groups
-from .vlq import encode_uint32_vlq, decode_uint32_vlq, encode_uint64_vlq
-from .codec import (
-    encode_header,
-    decode_header,
-    encode_typed_value,
-    encode_pvalue_blob,
-    decode_pvalue_to_bytes,
-)
+from .vlq import decode_uint32_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 logger = logging.getLogger(__name__)
 
@@ -990,17 +990,18 @@ class S7CommPlusServer:
         response = bytearray()
         response += self._build_response_header(FunctionCode.GET_VAR_SUBSTREAMED, seq_num)
         response += encode_uint64_vlq(0)  # ReturnValue: success
+        response += bytes([0x00])  # protocol-defined unknown byte
 
-        # Return the session challenge as a BLOB if we have one
+        # Return the session challenge as a USInt array, matching real PLCs.
         if self._session_challenge is not None:
-            response += bytes([0x00, DataType.BLOB])
+            response += bytes([0x10, DataType.USINT])
             response += encode_uint32_vlq(len(self._session_challenge))
             response += self._session_challenge
         else:
-            response += bytes([0x00, DataType.BLOB])
+            response += bytes([0x10, DataType.USINT])
             response += encode_uint32_vlq(0)
 
-        response += struct.pack(">I", 0)
+        response += encode_uint32_vlq(0)  # IntegrityId
         return bytes(response)
 
     def _handle_set_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:

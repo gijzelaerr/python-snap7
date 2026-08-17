@@ -2,7 +2,7 @@ import logging
 import struct
 import time
 from typing import Any, Tuple
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import unittest
@@ -788,8 +788,10 @@ class TestClient(unittest.TestCase):
     def test_get_order_code(self) -> None:
         # Cli_GetOrderCode - uses real SZL protocol
         result = self.client.get_order_code()
-        # Order code should contain the 6ES7 prefix
         self.assertIn(b"6ES7", result.OrderCode)
+        self.assertEqual(3, result.V1)
+        self.assertEqual(3, result.V2)
+        self.assertEqual(0, result.V3)
 
     def test_get_protection(self) -> None:
         # Cli_GetProtection - now uses real SZL protocol
@@ -800,6 +802,84 @@ class TestClient(unittest.TestCase):
         self.assertEqual(0, result.sch_rel)
         self.assertEqual(0, result.bart_sch)
         self.assertEqual(0, result.anl_sch)
+
+    # ---------------------------------------------------------------
+    # Force I/O
+    # ---------------------------------------------------------------
+
+    def test_force_bit_pe(self) -> None:
+        """Force a single input bit and verify it reads back correctly."""
+        # Clear the byte first
+        self.client.write_area(Area.PE, 0, 0, bytearray([0x00]))
+        # Force bit 3 to True
+        self.client.force_bit(Area.PE, 0, 3, True)
+        data = self.client.read_area(Area.PE, 0, 0, 1)
+        self.assertTrue(data[0] & (1 << 3))
+        # Other bits should still be 0
+        self.assertEqual(data[0] & ~(1 << 3), 0)
+
+    def test_force_bit_pa(self) -> None:
+        """Force a single output bit and verify it reads back correctly."""
+        self.client.write_area(Area.PA, 0, 0, bytearray([0x00]))
+        self.client.force_bit(Area.PA, 0, 5, True)
+        data = self.client.read_area(Area.PA, 0, 0, 1)
+        self.assertTrue(data[0] & (1 << 5))
+
+    def test_force_bit_preserves_other_bits(self) -> None:
+        """Forcing one bit must not disturb other bits in the byte."""
+        self.client.write_area(Area.PE, 0, 0, bytearray([0b10100101]))
+        self.client.force_bit(Area.PE, 0, 1, True)
+        data = self.client.read_area(Area.PE, 0, 0, 1)
+        self.assertEqual(data[0], 0b10100111)
+
+    def test_force_bit_clear(self) -> None:
+        """Force a bit to False (clear it)."""
+        self.client.write_area(Area.PE, 0, 0, bytearray([0xFF]))
+        self.client.force_bit(Area.PE, 0, 4, False)
+        data = self.client.read_area(Area.PE, 0, 0, 1)
+        self.assertEqual(data[0], 0xFF & ~(1 << 4))
+
+    def test_cancel_force(self) -> None:
+        """Cancel force clears the bit in the process image."""
+        self.client.write_area(Area.PA, 0, 0, bytearray([0x00]))
+        self.client.force_bit(Area.PA, 0, 2, True)
+        data = self.client.read_area(Area.PA, 0, 0, 1)
+        self.assertTrue(data[0] & (1 << 2))
+        # Cancel - bit should be cleared
+        self.client.cancel_force(Area.PA, 0, 2)
+        data = self.client.read_area(Area.PA, 0, 0, 1)
+        self.assertFalse(data[0] & (1 << 2))
+
+    def test_cancel_force_preserves_other_bits(self) -> None:
+        """Cancelling a force must not disturb other bits."""
+        self.client.write_area(Area.PE, 0, 0, bytearray([0b11111111]))
+        self.client.cancel_force(Area.PE, 0, 6)
+        data = self.client.read_area(Area.PE, 0, 0, 1)
+        self.assertEqual(data[0], 0xFF & ~(1 << 6))
+
+    def test_force_bit_invalid_area(self) -> None:
+        """Force should reject non-I/O areas."""
+        with self.assertRaises(ValueError):
+            self.client.force_bit(Area.MK, 0, 0, True)
+        with self.assertRaises(ValueError):
+            self.client.force_bit(Area.DB, 0, 0, True)
+
+    def test_cancel_force_invalid_area(self) -> None:
+        """Cancel force should reject non-I/O areas."""
+        with self.assertRaises(ValueError):
+            self.client.cancel_force(Area.MK, 0, 0)
+
+    def test_force_bit_invalid_bit(self) -> None:
+        """Force should reject bit numbers outside 0-7."""
+        with self.assertRaises(ValueError):
+            self.client.force_bit(Area.PE, 0, 8, True)
+        with self.assertRaises(ValueError):
+            self.client.force_bit(Area.PE, 0, -1, True)
+
+    def test_read_force_table(self) -> None:
+        """read_force_table should return a list (possibly empty)."""
+        result = self.client.read_force_table()
+        self.assertIsInstance(result, list)
 
     def test_get_pg_block_info(self) -> None:
         valid_db_block = (
@@ -1049,6 +1129,17 @@ class TestPDUSplitting:
         client = Client()
         client.pdu_length = 480
         assert client._max_write_size() == 480 - 35
+
+    def test_invalid_negotiated_pdu_length_uses_safe_default(self) -> None:
+        client = Client()
+        response = {"parameters": {"pdu_length": 0}}
+
+        with patch.object(client, "_send_receive", return_value=response):
+            client._setup_communication()
+
+        assert client.pdu_length == 240
+        assert client._max_read_size() == 222
+        assert client._max_write_size() == 205
 
     def test_read_area_splits_large_request(self) -> None:
         """read_area should make multiple requests when size > max_read_size."""

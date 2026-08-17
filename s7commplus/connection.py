@@ -45,25 +45,26 @@ import os
 import ssl
 import struct
 import tempfile
-from typing import Any, Optional, Type
 from types import TracebackType
+from typing import Any, Optional, Type
 
 from snap7.connection import ISOTCPConnection
+
+from .codec import decode_header, encode_header, encode_object_qualifier, parse_create_object_attributes
 from .protocol import (
+    READ_FUNCTION_CODES,
+    S7COMMPLUS_LOCAL_TSAP,
+    S7COMMPLUS_REMOTE_TSAP,
     DataType,
+    ElementID,
     FunctionCode,
     Ids,
     LegitimationId,
+    ObjectId,
     Opcode,
     ProtocolVersion,
-    ElementID,
-    ObjectId,
-    S7COMMPLUS_LOCAL_TSAP,
-    S7COMMPLUS_REMOTE_TSAP,
-    READ_FUNCTION_CODES,
 )
-from .codec import encode_header, decode_header, encode_object_qualifier, parse_create_object_attributes
-from .vlq import encode_uint32_vlq, encode_uint64_vlq, decode_uint32_vlq, decode_uint64_vlq
+from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,90 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
         except (ssl.SSLError, ValueError):
             continue
     logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+
+
+def _build_get_var_substreamed_payload(
+    in_object_id: int,
+    address: int,
+    key_qualifier: int = 0,
+    sequence_field: int = 1,
+) -> bytes:
+    """Build the request set used by ``GetVarSubStreamedRequest``.
+
+    The IntegrityId is inserted by :meth:`send_request` immediately before
+    the final four-byte fill field.
+    """
+    payload = struct.pack(">I", in_object_id)
+    payload += bytes([0x20, DataType.UDINT, 0x01])  # one-element address array
+    payload += encode_uint32_vlq(address)
+    payload += encode_object_qualifier(key_qualifier=key_qualifier)
+    payload += struct.pack(">H", sequence_field)
+    payload += struct.pack(">I", 0)  # fill
+    return payload
+
+
+def _parse_get_var_substreamed_response(payload: bytes) -> bytes:
+    """Extract the typed value from a GetVarSubStreamed response payload."""
+    from snap7.error import S7ConnectionError
+
+    try:
+        return_value, consumed = decode_uint64_vlq(payload, 0)
+        if return_value != 0:
+            raise S7ConnectionError(f"GetVarSubStreamed failed: return_value=0x{return_value:X}")
+
+        offset = consumed
+        if offset >= len(payload):
+            raise ValueError("missing response marker")
+        offset += 1  # protocol-defined unknown byte
+
+        if offset + 2 > len(payload):
+            raise ValueError("missing PValue header")
+        flags = payload[offset]
+        datatype = payload[offset + 1]
+        offset += 2
+
+        if datatype == DataType.BLOB:
+            _blob_root_id, consumed = decode_uint32_vlq(payload, offset)
+            offset += consumed
+        elif datatype != DataType.USINT or not (flags & 0x10):
+            raise ValueError(f"unsupported PValue flags=0x{flags:02X} datatype=0x{datatype:02X}")
+
+        length, consumed = decode_uint32_vlq(payload, offset)
+        offset += consumed
+        end = offset + length
+        if end > len(payload):
+            raise ValueError(f"declared value length {length} exceeds response payload")
+        return bytes(payload[offset:end])
+    except S7ConnectionError:
+        raise
+    except (IndexError, ValueError) as exc:
+        raise S7ConnectionError(f"Malformed GetVarSubStreamed response: {exc}") from exc
+
+
+def _build_set_variable_payload(in_object_id: int, address: int, value: bytes) -> bytes:
+    """Build a SetVariable request set around an already encoded PValue."""
+    payload = struct.pack(">I", in_object_id)
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(address)
+    payload += value
+    payload += encode_object_qualifier()
+    payload += bytes([0x00])  # protocol-defined unknown byte
+    payload += struct.pack(">I", 0)  # fill; IntegrityId is inserted before it
+    return payload
+
+
+def _check_set_variable_response(payload: bytes) -> None:
+    """Raise when a SetVariable response reports a non-zero return value."""
+    from snap7.error import S7ConnectionError
+
+    if not payload:
+        raise S7ConnectionError("SetVariable response is empty")
+    try:
+        return_value, _ = decode_uint64_vlq(payload, 0)
+    except ValueError as exc:
+        raise S7ConnectionError(f"Malformed SetVariable response: {exc}") from exc
+    if return_value != 0:
+        raise S7ConnectionError(f"Legitimation rejected by PLC: return_value=0x{return_value:X}")
 
 
 # OMS legitimation derives its session key from the TLS exporter secret
@@ -412,110 +497,33 @@ class S7CommPlusConnection:
         Returns:
             Challenge bytes from PLC (typically 20 bytes)
         """
-        # Build GetVarSubStreamed request
-        payload = bytearray()
-        # InObjectId = session ID
-        payload += struct.pack(">I", self._session_id)
-        # Item count = 1
-        payload += encode_uint32_vlq(1)
-        # Address field count = 1
-        payload += encode_uint32_vlq(1)
-        # Address = ServerSessionRequest (303)
-        payload += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
-        # Trailing padding
-        payload += struct.pack(">I", 0)
-
-        resp_payload = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, bytes(payload))
-
-        # Parse response: return value + value list
-        offset = 0
-        return_value, consumed = decode_uint64_vlq(resp_payload, offset)
-        offset += consumed
-
-        if return_value != 0:
-            from snap7.error import S7ConnectionError
-
-            raise S7ConnectionError(f"GetVarSubStreamed for challenge failed: return_value={return_value}")
-
-        # Value is a USIntArray (BLOB) - read flags + type + length + data
-        if offset + 2 > len(resp_payload):
-            from snap7.error import S7ConnectionError
-
-            raise S7ConnectionError("Challenge response too short")
-
-        _flags = resp_payload[offset]
-        datatype = resp_payload[offset + 1]
-        offset += 2
-
-        if datatype == DataType.BLOB:
-            length, consumed = decode_uint32_vlq(resp_payload, offset)
-            offset += consumed
-            return bytes(resp_payload[offset : offset + length])
-        else:
-            # Try reading as array of USINT
-            count, consumed = decode_uint32_vlq(resp_payload, offset)
-            offset += consumed
-            return bytes(resp_payload[offset : offset + count])
+        payload = _build_get_var_substreamed_payload(self._session_id, LegitimationId.SERVER_SESSION_REQUEST)
+        resp_payload = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+        return _parse_get_var_substreamed_response(resp_payload)
 
     def _send_legitimation_new(self, encrypted_response: bytes) -> None:
         """Send new-style legitimation response (AES-256-CBC encrypted).
 
         Uses SetVariable with address Legitimate (1846).
         """
-        payload = bytearray()
-        # InObjectId = session ID
-        payload += struct.pack(">I", self._session_id)
-        # Address field count = 1
-        payload += encode_uint32_vlq(1)
-        # Address = Legitimate (1846)
-        payload += encode_uint32_vlq(LegitimationId.LEGITIMATE)
-        # Value: BLOB(0, encrypted_response)
-        payload += bytes([0x00, DataType.BLOB])
-        payload += encode_uint32_vlq(len(encrypted_response))
-        payload += encrypted_response
-        # Trailing padding
-        payload += struct.pack(">I", 0)
-
-        resp_payload = self.send_request(FunctionCode.SET_VARIABLE, bytes(payload))
-
-        # Check return value
-        if len(resp_payload) >= 1:
-            return_value, _ = decode_uint64_vlq(resp_payload, 0)
-            if return_value < 0:
-                from snap7.error import S7ConnectionError
-
-                raise S7ConnectionError(f"Legitimation rejected by PLC: return_value={return_value}")
-            logger.debug(f"New legitimation return_value={return_value}")
+        value = bytes([0x00, DataType.BLOB, 0x00])
+        value += encode_uint32_vlq(len(encrypted_response))
+        value += encrypted_response
+        payload = _build_set_variable_payload(self._session_id, LegitimationId.LEGITIMATE, value)
+        resp_payload = self.send_request(FunctionCode.SET_VARIABLE, payload, integrity_tail=4)
+        _check_set_variable_response(resp_payload)
 
     def _send_legitimation_legacy(self, response: bytes) -> None:
         """Send legacy legitimation response (SHA-1 XOR).
 
         Uses SetVariable with address ServerSessionResponse (304).
         """
-        payload = bytearray()
-        # InObjectId = session ID
-        payload += struct.pack(">I", self._session_id)
-        # Address field count = 1
-        payload += encode_uint32_vlq(1)
-        # Address = ServerSessionResponse (304)
-        payload += encode_uint32_vlq(LegitimationId.SERVER_SESSION_RESPONSE)
-        # Value: array of USINT (the XOR'd response bytes)
-        payload += bytes([0x10, DataType.USINT])  # flags=0x10 (array)
-        payload += encode_uint32_vlq(len(response))
-        payload += response
-        # Trailing padding
-        payload += struct.pack(">I", 0)
-
-        resp_payload = self.send_request(FunctionCode.SET_VARIABLE, bytes(payload))
-
-        # Check return value
-        if len(resp_payload) >= 1:
-            return_value, _ = decode_uint64_vlq(resp_payload, 0)
-            if return_value < 0:
-                from snap7.error import S7ConnectionError
-
-                raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
-            logger.debug(f"Legacy legitimation return_value={return_value}")
+        value = bytes([0x10, DataType.USINT])
+        value += encode_uint32_vlq(len(response))
+        value += response
+        payload = _build_set_variable_payload(self._session_id, LegitimationId.SERVER_SESSION_RESPONSE, value)
+        resp_payload = self.send_request(FunctionCode.SET_VARIABLE, payload, integrity_tail=4)
+        _check_set_variable_response(resp_payload)
 
     def collect_explore_frames(self, first_payload: bytes) -> bytes:
         """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
@@ -679,8 +687,8 @@ class S7CommPlusConnection:
 
         if frame_version == ProtocolVersion.V3 and self._session_key is not None:
             # V3: prepend 32-byte HMAC-SHA256 digest over the request
-            import hmac as _hmac
             import hashlib
+            import hmac as _hmac
 
             digest = _hmac.new(self._session_key[:24], request, hashlib.sha256).digest()
             frame_data = bytes([0x20]) + digest + request
@@ -754,10 +762,9 @@ class S7CommPlusConnection:
 
         resp_payload = response[resp_offset:]
 
-        # Real PLCs prepend an IntegrityId VLQ to the response payload when
-        # integrity tracking is active.  Strip it so callers see only the
-        # application-level data (ReturnValue + items + errors).
-        if self._with_integrity_id and len(resp_payload) > 1:
+        # SessionKey/HMAC responses prepend an IntegrityId VLQ. Ordinary
+        # TLS/V2 responses follow the standard layout and append it instead.
+        if self._session_key is not None and len(resp_payload) > 1:
             resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
             logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
             resp_payload = resp_payload[iid_consumed:]
@@ -1049,6 +1056,10 @@ class S7CommPlusConnection:
         Returns (blob, session_key) if we have the challenge and a matching
         public key, or None if any prerequisite is missing.
         """
+        if self._tls_active or self._protocol_version != ProtocolVersion.V1:
+            logger.debug("SessionKey auth: skipped for TLS/non-V1 session")
+            return None
+
         if self._session_challenge is None:
             logger.debug("SessionKey auth: no challenge captured from CreateObject")
             return None
@@ -1189,19 +1200,16 @@ class S7CommPlusConnection:
     def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
         """Build a GET_VAR_SUBSTREAMED payload (reused by legitimation).
 
-        The ObjectQualifier KEY_QUALIFIER carries the next sequence number,
-        and the trailing section is 3 zero bytes (IntegrityId spliced before
-        them by ``send_request`` with ``integrity_tail=3``).
+        The ObjectQualifier KEY_QUALIFIER carries the next sequence number.
+        ``seq_field`` is the two-byte request sequence field; the IntegrityId
+        is spliced before the final four-byte fill by ``send_request``.
         """
-        oq = encode_object_qualifier(key_qualifier=self._sequence_number)
-        payload = struct.pack(">I", in_object_id)
-        payload += bytes([0x20, 0x04])
-        payload += encode_uint32_vlq(1)  # field count
-        payload += encode_uint32_vlq(address)
-        payload += oq
-        payload += encode_uint32_vlq(seq_field)
-        payload += bytes(3)  # trailing zeros
-        return payload
+        return _build_get_var_substreamed_payload(
+            in_object_id,
+            address,
+            key_qualifier=self._sequence_number,
+            sequence_field=seq_field,
+        )
 
     def _session_activate(self) -> None:
         """Activate the V3 session after the SecurityKey handshake.
@@ -1246,7 +1254,7 @@ class S7CommPlusConnection:
         challenge_resp = self.send_request(
             FunctionCode.GET_VAR_SUBSTREAMED,
             self._build_get_var_substreamed(self._session_id, LegitimationId.SERVER_SESSION_REQUEST),
-            integrity_tail=3,
+            integrity_tail=4,
         )
 
         # Extract the 20-byte challenge from the response.
@@ -1334,8 +1342,8 @@ class S7CommPlusConnection:
         symmetric_key_id = derive_key_id(self._session_key or b"\x00" * 24)
 
         # Determine key flags from family
+        from .session_auth.blob_metadata import get_public_key_flags, get_symmetric_key_flags
         from .session_auth.keys import KeyFamily
-        from .session_auth.blob_metadata import get_symmetric_key_flags, get_public_key_flags
 
         family = self._session_auth_family if self._session_auth_family else KeyFamily.S7_1500
         sym_flags = get_symmetric_key_flags(family)

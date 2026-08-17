@@ -22,10 +22,12 @@ from .datatypes import S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
+from .client import _parse_force_szl
 from .type import (
     Area,
     Block,
     BlocksList,
+    ForceEntry,
     S7CpuInfo,
     TS7BlockInfo,
     S7CpInfo,
@@ -242,9 +244,17 @@ class AsyncISOTCPConnection:
             param_data = data[offset + 2 : offset + 2 + param_len]
             if param_code == self.COTP_PARAM_PDU_SIZE:
                 if param_len == 1:
-                    self.pdu_size = 1 << param_data[0]
+                    exponent = param_data[0]
+                    if 7 <= exponent <= 13:
+                        self.pdu_size = 1 << exponent
+                    else:
+                        logger.warning(f"Invalid COTP PDU size exponent {exponent}, using default")
                 elif param_len == 2:
-                    self.pdu_size = struct.unpack(">H", param_data)[0]
+                    raw = struct.unpack(">H", param_data)[0]
+                    if 128 <= raw <= 8192:
+                        self.pdu_size = raw
+                    else:
+                        logger.warning(f"Invalid COTP PDU size {raw}, using default")
                 logger.debug(f"Negotiated PDU size: {self.pdu_size}")
             offset += 2 + param_len
 
@@ -1070,6 +1080,109 @@ class AsyncClient(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
         return parse_protection_szl(await self.read_szl(0x0232, 0))
 
+    # ---------------------------------------------------------------
+    # Force I/O
+    # ---------------------------------------------------------------
+
+    _FORCE_AREAS: frozenset[int] = frozenset({Area.PE, Area.PA})
+
+    async def force_bit(self, area: Area, byte_offset: int, bit: int, value: bool) -> None:
+        """Force a single I/O bit in the process image.
+
+        Async equivalent of :meth:`snap7.client.Client.force_bit`.
+        """
+        if area not in self._FORCE_AREAS:
+            raise ValueError(f"Force is only supported for PE (inputs) and PA (outputs), got {area!r}")
+        if not 0 <= bit <= 7:
+            raise ValueError(f"Bit must be 0-7, got {bit}")
+
+        current = await self.read_area(area, 0, byte_offset, 1)
+        if value:
+            current[0] |= 1 << bit
+        else:
+            current[0] &= ~(1 << bit)
+        await self.write_area(area, 0, byte_offset, current)
+        logger.info(f"Forced {area.name} byte {byte_offset} bit {bit} = {value}")
+
+    async def cancel_force(self, area: Area, byte_offset: int, bit: int) -> None:
+        """Cancel a forced I/O bit by clearing it in the process image.
+
+        Async equivalent of :meth:`snap7.client.Client.cancel_force`.
+        """
+        if area not in self._FORCE_AREAS:
+            raise ValueError(f"Cancel force is only supported for PE (inputs) and PA (outputs), got {area!r}")
+        if not 0 <= bit <= 7:
+            raise ValueError(f"Bit must be 0-7, got {bit}")
+
+        current = await self.read_area(area, 0, byte_offset, 1)
+        current[0] &= ~(1 << bit)
+        await self.write_area(area, 0, byte_offset, current)
+        logger.info(f"Cancelled force on {area.name} byte {byte_offset} bit {bit}")
+
+    async def read_force_table(self) -> list[ForceEntry]:
+        """Read the PLC force table via SZL 0x0025.
+
+        Async equivalent of :meth:`snap7.client.Client.read_force_table`.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        try:
+            szl = await self.read_szl(0x0025, 0x0000)
+        except (S7ProtocolError, RuntimeError):
+            logger.debug("SZL 0x0025 not available; returning empty force table")
+            return []
+
+        raw = bytes(szl.Data[: szl.Header.LengthDR])
+        return _parse_force_szl(raw)
+
+    async def set_session_password(self, password: str) -> int:
+        """Set the session password to unlock a password-protected PLC.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 1)
+        with the encoded password.
+
+        Args:
+            password: Plaintext password (max 8 ASCII characters).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the password.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        encoded = self.protocol.encode_password(password)
+        request = self.protocol.build_set_session_password_request(encoded)
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password set successfully")
+        return 0
+
+    async def clear_session_password(self) -> int:
+        """Clear the session password, returning to the default protection level.
+
+        Sends an S7 USERDATA request (function group 5, subfunction 2).
+
+        Returns:
+            0 on success.
+
+        Raises:
+            ~snap7.error.S7ConnectionError: If not connected.
+            ~snap7.error.S7ProtocolError: If the PLC rejects the request.
+        """
+        if not self.get_connected():
+            raise S7ConnectionError("Not connected to PLC")
+
+        request = self.protocol.build_clear_session_password_request()
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response)
+        logger.info("Session password cleared successfully")
+        return 0
+
     async def compress(self, timeout: int) -> int:
         """Compress PLC memory."""
         if not self.get_connected():
@@ -1164,7 +1277,11 @@ class AsyncClient(ClientMixin):
         if response.get("parameters"):
             params = response["parameters"]
             if "pdu_length" in params:
-                self.pdu_length = params["pdu_length"]
+                negotiated = params["pdu_length"]
+                if negotiated < 64:
+                    logger.warning(f"Server negotiated implausible PDU length {negotiated}, using minimum 240")
+                    negotiated = 240
+                self.pdu_length = negotiated
                 self._params[Parameter.PDURequest] = self.pdu_length
                 logger.info(f"Negotiated PDU length: {self.pdu_length}")
 

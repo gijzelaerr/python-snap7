@@ -1,16 +1,17 @@
 """Integration tests for S7CommPlus server, client, and async client."""
 
+import asyncio
 import struct
 import time
 from collections.abc import Generator
 
 import pytest
-import asyncio
 
-from s7commplus.server import S7CommPlusServer, CPUState, DataBlock
-from s7commplus.client import S7CommPlusClient
 from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.client import S7CommPlusClient
+from s7commplus.connection import _parse_get_var_substreamed_response
 from s7commplus.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
+from s7commplus.server import CPUState, DataBlock, S7CommPlusServer
 from s7commplus.vlq import encode_uint32_vlq
 
 # Use a high port to avoid conflicts
@@ -324,6 +325,39 @@ class TestAsyncClientServerIntegration:
             for r in results:
                 assert isinstance(r, float)
 
+    async def test_write_symbolic(self, server: S7CommPlusServer) -> None:
+        """Test write_symbolic sends a SetMultiVariables request."""
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            # Write 4 bytes to DB1 via symbolic access (access_area for DB1)
+            access_area = 0x8A0E0001
+            await client.write_symbolic(access_area, [1, 4], struct.pack(">f", 55.5))
+            # Read back via db_read to verify
+            data = await client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 55.5) < 0.1
+
+    async def test_get_cpu_state(self, server: S7CommPlusServer) -> None:
+        """Test get_cpu_state returns a valid state string."""
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            state = await client.get_cpu_state()
+            assert state in ("RUN", "STOP", "UNKNOWN")
+
+    async def test_set_plc_operating_state(self, server: S7CommPlusServer) -> None:
+        """Test set_plc_operating_state sends an INVOKE request."""
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            # state 1 = STOP — the emulated server accepts INVOKE requests
+            await client.set_plc_operating_state(1)
+
+    async def test_explore_xml(self, server: S7CommPlusServer) -> None:
+        """Test explore_xml returns None on emulated server (no zlib blobs)."""
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            result = await client.explore_xml()
+            assert result is None
+
 
 RST_PORT = 11122
 
@@ -442,6 +476,7 @@ class TestSessionKeyServer:
         assert len(response) > 0
         # The response should contain the challenge bytes
         assert TEST_CHALLENGE in response
+        assert _parse_get_var_substreamed_response(response[10:]) == TEST_CHALLENGE
 
     def test_set_var_substreamed_accepts_blob(self) -> None:
         """SetVarSubStreamed should accept any blob (legitimation response)."""

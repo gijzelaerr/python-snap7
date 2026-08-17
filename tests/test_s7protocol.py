@@ -578,3 +578,145 @@ class TestPlcControlParams:
         proto = S7Protocol()
         with pytest.raises(ValueError, match="Unknown PLC control operation"):
             proto.build_plc_control_request("invalid")
+
+
+class TestParseForceTable:
+    """Unit tests for _parse_force_szl (SZL 0x0025 parser)."""
+
+    def test_empty_data(self) -> None:
+        from snap7.client import _parse_force_szl
+
+        assert _parse_force_szl(b"") == []
+
+    def test_single_entry(self) -> None:
+        from snap7.client import _parse_force_szl
+        from snap7.type import ForceEntry
+
+        # PE byte 10, bit 3, value True
+        raw = struct.pack(">HHBBxx", 0x0081, 10, 3, 0x01)
+        result = _parse_force_szl(raw)
+        assert len(result) == 1
+        assert result[0] == ForceEntry(area=0x0081, byte_offset=10, bit=3, value=True)
+
+    def test_multiple_entries(self) -> None:
+        from snap7.client import _parse_force_szl
+        from snap7.type import ForceEntry
+
+        raw = struct.pack(">HHBBxx", 0x0081, 0, 0, 0x01)  # PE byte 0 bit 0 = True
+        raw += struct.pack(">HHBBxx", 0x0082, 5, 7, 0x00)  # PA byte 5 bit 7 = False
+        result = _parse_force_szl(raw)
+        assert len(result) == 2
+        assert result[0] == ForceEntry(area=0x0081, byte_offset=0, bit=0, value=True)
+        assert result[1] == ForceEntry(area=0x0082, byte_offset=5, bit=7, value=False)
+
+    def test_truncated_data(self) -> None:
+        from snap7.client import _parse_force_szl
+
+        # 5 bytes is less than one 8-byte entry
+        assert _parse_force_szl(b"\x00\x81\x00\x02\x03") == []
+
+
+class TestSessionPassword:
+    """Tests for session password encoding and PDU building."""
+
+    def setup_method(self) -> None:
+        self.proto = S7Protocol()
+
+    def test_encode_password_known_vector(self) -> None:
+        """Verify encoding against known Sharp7/rs-snap7 test vector.
+
+        'hello' (0x68 0x65 0x6C 0x6C 0x6F) XOR 0x55 each ->
+        (0x3D 0x30 0x39 0x39 0x3A), then rotate left 3 bits each ->
+        (0xE9 0x81 0xC9 0xC9 0xD1).  Remaining bytes are 0x00 XOR 0x55 = 0x55,
+        rotated left 3 = 0xAA.
+        """
+        encoded = S7Protocol.encode_password("hello")
+        assert len(encoded) == 8
+        assert encoded == bytes([0xE9, 0x81, 0xC9, 0xC9, 0xD1, 0xAA, 0xAA, 0xAA])
+
+    def test_encode_password_empty(self) -> None:
+        """Empty password encodes as 8 bytes of 0x00 XOR 0x55 rotated."""
+        encoded = S7Protocol.encode_password("")
+        # 0x00 XOR 0x55 = 0x55; 0x55 rotated left 3 = 0xAA
+        assert encoded == bytes([0xAA] * 8)
+
+    def test_encode_password_max_length(self) -> None:
+        """8-character password uses all 8 bytes."""
+        encoded = S7Protocol.encode_password("ABCDEFGH")
+        assert len(encoded) == 8
+        # Verify first byte: 'A' (0x41) XOR 0x55 = 0x14, rotated left 3 = 0xA0
+        assert encoded[0] == 0xA0
+
+    def test_encode_password_truncates_long(self) -> None:
+        """Passwords longer than 8 characters are truncated."""
+        enc_long = S7Protocol.encode_password("ABCDEFGHIJK")
+        enc_8 = S7Protocol.encode_password("ABCDEFGH")
+        assert enc_long == enc_8
+
+    def test_set_session_password_request_structure(self) -> None:
+        """Verify the set session password PDU structure."""
+        encoded = self.proto.encode_password("test")
+        request = self.proto.build_set_session_password_request(encoded)
+
+        # S7 header
+        assert request[0] == 0x32  # Protocol ID
+        assert request[1] == 0x07  # USERDATA PDU type
+
+        # Parameter section offset = 10 (USERDATA header)
+        # param[4] = 0x11 (method = request)
+        assert request[14] == 0x11
+        # param[5] = 0x45 (type 4 | group 5 = Security)
+        assert request[15] == 0x45
+        # param[6] = 0x01 (subfunction = set password)
+        assert request[16] == 0x01
+
+        # Data section starts after 10 + 8 = 18
+        # data[0] = 0x0A (return value for request)
+        assert request[18] == 0x0A
+        # data[2:4] = length = 8
+        data_len = struct.unpack(">H", request[20:22])[0]
+        assert data_len == 8
+        # data[4:12] = encoded password
+        assert request[22:30] == encoded
+
+    def test_clear_session_password_request_structure(self) -> None:
+        """Verify the clear session password PDU structure."""
+        request = self.proto.build_clear_session_password_request()
+
+        assert request[0] == 0x32  # Protocol ID
+        assert request[1] == 0x07  # USERDATA PDU type
+
+        # param[5] = 0x45 (type 4 | group 5 = Security)
+        assert request[15] == 0x45
+        # param[6] = 0x02 (subfunction = clear password)
+        assert request[16] == 0x02
+
+        # Data section length = 0
+        data_len = struct.unpack(">H", request[20:22])[0]
+        assert data_len == 0
+
+    def test_check_userdata_response_success(self) -> None:
+        """Successful USERDATA response should not raise."""
+        response: dict[str, Any] = {
+            "parameters": {"error_code": 0, "group": 5, "subfunction": 1},
+            "data": {"return_code": 0xFF},
+        }
+        self.proto.check_userdata_response(response)  # should not raise
+
+    def test_check_userdata_response_param_error(self) -> None:
+        """USERDATA response with parameter error should raise."""
+        response: dict[str, Any] = {
+            "parameters": {"error_code": 0xD602},
+            "data": {"return_code": 0xFF},
+        }
+        with pytest.raises(S7ProtocolError, match="USERDATA request failed"):
+            self.proto.check_userdata_response(response)
+
+    def test_check_userdata_response_data_error(self) -> None:
+        """USERDATA response with data-level error should raise."""
+        response: dict[str, Any] = {
+            "parameters": {"error_code": 0},
+            "data": {"return_code": 0x03},  # "Accessing the object not allowed"
+        }
+        with pytest.raises(S7ProtocolError, match="USERDATA request failed"):
+            self.proto.check_userdata_response(response)

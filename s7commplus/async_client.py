@@ -9,43 +9,53 @@ import ssl
 import struct
 from typing import Any, Optional
 
-from .connection import _S7_CIPHERS
-from .protocol import (
-    DataType,
-    ElementID,
-    FunctionCode,
-    ObjectId,
-    Opcode,
-    ProtocolVersion,
-    READ_FUNCTION_CODES,
-    S7COMMPLUS_LOCAL_TSAP,
-    S7COMMPLUS_REMOTE_TSAP,
+from . import typeinfo
+from .blob_decompressor import find_and_decompress
+from .client import (
+    _build_area_read_payload,
+    _build_area_write_payload,
+    _build_explore_payload,
+    _build_explore_request,
+    _build_invoke_payload,
+    _build_read_payload,
+    _build_subscription_request,
+    _build_symbolic_read_payload,
+    _build_symbolic_write_payload,
+    _build_write_payload,
+    _parse_explore_datablocks,
+    _parse_read_response,
+    _parse_write_response,
 )
 from .codec import (
-    encode_header,
     decode_header,
-    encode_typed_value,
+    encode_header,
     encode_object_qualifier,
+    encode_pvalue_blob,
+    encode_typed_value,
     parse_create_object_session_id,
     parse_server_session_version,
 )
-from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
-from .blob_decompressor import find_and_decompress
-from .client import (
-    _build_read_payload,
-    _parse_read_response,
-    _build_write_payload,
-    _parse_write_response,
-    _build_area_read_payload,
-    _build_area_write_payload,
-    _build_symbolic_read_payload,
-    _build_explore_payload,
-    _build_invoke_payload,
-    _build_explore_request,
-    _parse_explore_datablocks,
+from .connection import (
+    _S7_CIPHERS,
+    _build_get_var_substreamed_payload,
+    _build_set_variable_payload,
+    _check_set_variable_response,
+    _parse_get_var_substreamed_response,
+    _set_s7_groups,
 )
-from . import typeinfo
-from .protocol import Ids
+from .protocol import (
+    READ_FUNCTION_CODES,
+    S7COMMPLUS_LOCAL_TSAP,
+    S7COMMPLUS_REMOTE_TSAP,
+    DataType,
+    ElementID,
+    FunctionCode,
+    Ids,
+    ObjectId,
+    Opcode,
+    ProtocolVersion,
+)
+from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
 
@@ -248,9 +258,9 @@ class S7CommPlusAsyncClient:
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
 
         ctx.set_ciphers(_S7_CIPHERS)
+        _set_s7_groups(ctx)
         ctx.options |= ssl.OP_NO_TICKET
         ctx.options |= 0x00080000  # SSL_OP_NO_ENCRYPT_THEN_MAC
         ctx.options |= 0x00000001  # SSL_OP_NO_EXTENDED_MASTER_SECRET (OpenSSL 3.0+)
@@ -318,89 +328,33 @@ class S7CommPlusAsyncClient:
 
     async def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC."""
-        from .protocol import LegitimationId, DataType as DT
+        from .protocol import LegitimationId
 
-        payload = bytearray()
-        payload += struct.pack(">I", self._session_id)
-        payload += encode_uint32_vlq(1)
-        payload += encode_uint32_vlq(1)
-        payload += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
-        payload += struct.pack(">I", 0)
-
-        resp_payload = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, bytes(payload))
-
-        offset = 0
-        return_value, consumed = decode_uint64_vlq(resp_payload, offset)
-        offset += consumed
-
-        if return_value != 0:
-            from snap7.error import S7ConnectionError
-
-            raise S7ConnectionError(f"GetVarSubStreamed for challenge failed: return_value={return_value}")
-
-        if offset + 2 > len(resp_payload):
-            from snap7.error import S7ConnectionError
-
-            raise S7ConnectionError("Challenge response too short")
-
-        _flags = resp_payload[offset]
-        datatype = resp_payload[offset + 1]
-        offset += 2
-
-        if datatype == DT.BLOB:
-            length, consumed = decode_uint32_vlq(resp_payload, offset)
-            offset += consumed
-            return bytes(resp_payload[offset : offset + length])
-        else:
-            count, consumed = decode_uint32_vlq(resp_payload, offset)
-            offset += consumed
-            return bytes(resp_payload[offset : offset + count])
+        payload = _build_get_var_substreamed_payload(self._session_id, LegitimationId.SERVER_SESSION_REQUEST)
+        resp_payload = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+        return _parse_get_var_substreamed_response(resp_payload)
 
     async def _send_legitimation_new(self, encrypted_response: bytes) -> None:
         """Send new-style legitimation response (AES-256-CBC encrypted)."""
-        from .protocol import LegitimationId, DataType as DT
+        from .protocol import LegitimationId
 
-        payload = bytearray()
-        payload += struct.pack(">I", self._session_id)
-        payload += encode_uint32_vlq(1)
-        payload += encode_uint32_vlq(LegitimationId.LEGITIMATE)
-        payload += bytes([0x00, DT.BLOB])
-        payload += encode_uint32_vlq(len(encrypted_response))
-        payload += encrypted_response
-        payload += struct.pack(">I", 0)
-
-        resp_payload = await self._send_request(FunctionCode.SET_VARIABLE, bytes(payload))
-
-        if len(resp_payload) >= 1:
-            return_value, _ = decode_uint64_vlq(resp_payload, 0)
-            if return_value < 0:
-                from snap7.error import S7ConnectionError
-
-                raise S7ConnectionError(f"Legitimation rejected by PLC: return_value={return_value}")
-            logger.debug(f"New legitimation return_value={return_value}")
+        value = bytes([0x00, DataType.BLOB, 0x00])
+        value += encode_uint32_vlq(len(encrypted_response))
+        value += encrypted_response
+        payload = _build_set_variable_payload(self._session_id, LegitimationId.LEGITIMATE, value)
+        resp_payload = await self._send_request(FunctionCode.SET_VARIABLE, payload, integrity_tail=4)
+        _check_set_variable_response(resp_payload)
 
     async def _send_legitimation_legacy(self, response: bytes) -> None:
         """Send legacy legitimation response (SHA-1 XOR)."""
-        from .protocol import LegitimationId, DataType as DT
+        from .protocol import LegitimationId
 
-        payload = bytearray()
-        payload += struct.pack(">I", self._session_id)
-        payload += encode_uint32_vlq(1)
-        payload += encode_uint32_vlq(LegitimationId.SERVER_SESSION_RESPONSE)
-        payload += bytes([0x10, DT.USINT])  # flags=0x10 (array)
-        payload += encode_uint32_vlq(len(response))
-        payload += response
-        payload += struct.pack(">I", 0)
-
-        resp_payload = await self._send_request(FunctionCode.SET_VARIABLE, bytes(payload))
-
-        if len(resp_payload) >= 1:
-            return_value, _ = decode_uint64_vlq(resp_payload, 0)
-            if return_value < 0:
-                from snap7.error import S7ConnectionError
-
-                raise S7ConnectionError(f"Legacy legitimation rejected by PLC: return_value={return_value}")
-            logger.debug(f"Legacy legitimation return_value={return_value}")
+        value = bytes([0x10, DataType.USINT])
+        value += encode_uint32_vlq(len(response))
+        value += response
+        payload = _build_set_variable_payload(self._session_id, LegitimationId.SERVER_SESSION_RESPONSE, value)
+        resp_payload = await self._send_request(FunctionCode.SET_VARIABLE, payload, integrity_tail=4)
+        _check_set_variable_response(resp_payload)
 
     async def disconnect(self) -> None:
         """Disconnect from PLC."""
@@ -504,6 +458,96 @@ class S7CommPlusAsyncClient:
         payload = _build_invoke_payload(state)
         await self._send_request(FunctionCode.INVOKE, payload)
 
+    async def get_cpu_state(self) -> str:
+        """Get PLC CPU operating state via S7CommPlus.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Returns:
+            One of ``"RUN"``, ``"STOP"``, or ``"UNKNOWN"``.
+        """
+        payload = _build_explore_request(Ids.NATIVE_THE_CPU_EXEC_UNIT_RID, [])
+        response = await self._send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
+        return "RUN" if response else "UNKNOWN"
+
+    async def upload_block(self, block_type: int, block_number: int) -> bytes:
+        """Upload (read) a program block from the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            block_type: Block type (e.g. 0x08 for DB, 0x0C for FC).
+            block_number: Block number.
+
+        Returns:
+            Raw block data.
+        """
+        payload = bytearray()
+        payload += struct.pack(">I", self._session_id)
+        payload += encode_uint32_vlq(1)  # item count
+        payload += encode_uint32_vlq(1)  # field count
+        payload += encode_uint32_vlq(block_type)
+        payload += encode_uint32_vlq(block_number)
+        payload += struct.pack(">I", 0)
+
+        response = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, bytes(payload))
+        # Skip return code VLQ
+        offset = 0
+        _, consumed = decode_uint32_vlq(response, offset)
+        offset += consumed
+        return response[offset:]
+
+    async def download_block(self, block_type: int, block_number: int, data: bytes) -> None:
+        """Download (write) a program block to the PLC.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            block_type: Block type.
+            block_number: Block number.
+            data: Raw block data to write.
+        """
+        payload = bytearray()
+        payload += struct.pack(">I", self._session_id)
+        payload += encode_uint32_vlq(1)
+        payload += encode_uint32_vlq(block_type)
+        payload += encode_uint32_vlq(block_number)
+        payload += encode_pvalue_blob(data)
+        payload += struct.pack(">I", 0)
+
+        await self._send_request(FunctionCode.SET_VAR_SUBSTREAMED, bytes(payload))
+
+    async def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+        """Create a data change subscription.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            items: List of (db_number, start_offset, size) tuples to monitor.
+            cycle_ms: Cycle time in milliseconds (0 = on change).
+
+        Returns:
+            Subscription object ID assigned by the PLC.
+        """
+        payload = _build_subscription_request(items, cycle_ms, self._session_id)
+        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload)
+
+        sub_id, consumed = decode_uint32_vlq(response, 0)
+        logger.info(f"Subscription created, id={sub_id:#x}")
+        return sub_id
+
+    async def delete_subscription(self, subscription_id: int) -> None:
+        """Delete a data change subscription.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            subscription_id: ID returned by :meth:`create_subscription`.
+        """
+        payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
+        await self._send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Subscription {subscription_id:#x} deleted")
+
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.
 
@@ -516,6 +560,15 @@ class S7CommPlusAsyncClient:
         if not results or results[0] is None:
             raise RuntimeError("Symbolic read failed")
         return results[0]
+
+    async def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+        """Write a variable using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+        """
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        _parse_write_response(response)
 
     async def list_datablocks(self) -> list[dict[str, Any]]:
         """List all datablocks on the PLC via EXPLORE.
