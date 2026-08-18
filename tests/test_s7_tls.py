@@ -214,6 +214,29 @@ class TestAsyncClientV2WithTLS:
             await client.disconnect()
 
     @pytest.mark.asyncio
+    async def test_sequential_reads_and_writes_keep_integrity_counters_in_sync(
+        self, tls_server: tuple[S7CommPlusServer, str, str]
+    ) -> None:
+        """Multiple V2 operations should succeed as both counters advance."""
+        _, cert_path, _ = tls_server
+
+        client = S7CommPlusAsyncClient()
+        await client.connect("127.0.0.1", port=TEST_PORT_V2_TLS, use_tls=True, tls_ca=cert_path)
+
+        try:
+            initial_read_id = client._integrity_id_read
+            initial_write_id = client._integrity_id_write
+
+            for value in (b"first", b"second", b"third"):
+                await client.db_write(1, 0, value)
+                assert await client.db_read(1, 0, len(value)) == value
+
+            assert client._integrity_id_read == initial_read_id + 3
+            assert client._integrity_id_write == initial_write_id + 3
+        finally:
+            await client.disconnect()
+
+    @pytest.mark.asyncio
     async def test_protocol_version_is_v2(self, tls_server: tuple[S7CommPlusServer, str, str]) -> None:
         """V2 server should report protocol version 2."""
         srv, cert_path, key_path = tls_server
