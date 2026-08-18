@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from s7commplus.async_client import S7CommPlusAsyncClient
 from s7commplus.codec import encode_header, encode_object_qualifier
 from s7commplus.connection import (
     S7CommPlusConnection,
@@ -33,7 +34,6 @@ from s7commplus.protocol import (
 )
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
 from snap7.error import S7ConnectionError
-from s7commplus.async_client import S7CommPlusAsyncClient
 
 
 class TestReadFunctionCodes:
@@ -203,27 +203,23 @@ class TestIntegrityIdTracking:
         conn = S7CommPlusConnection("127.0.0.1")
         assert conn.protocol_version == 0
 
-    def test_tls_v2_response_integrity_id_is_stripped(self) -> None:
-        """TLS/V2 replies put IntegrityId before the application payload."""
+    def test_tls_v2_response_application_payload_is_not_stripped(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
         conn._connected = True
         conn._protocol_version = ProtocolVersion.V2
         conn._session_id = 0x70000001
         conn._with_integrity_id = True
-        conn._integrity_id_read = 7
 
         application_payload = bytes.fromhex("000100100201")
         response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
-        response += encode_uint32_vlq(7) + application_payload
+        response += application_payload
         frame = encode_header(ProtocolVersion.V2, len(response)) + response
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
 
         conn._send_s7_data = MagicMock()
         conn._recv_s7_data = MagicMock(return_value=frame)
 
-        result = conn.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4))
-
-        assert result == application_payload
+        assert conn.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == application_payload
 
 
 class TestIntegrityIdVlqEncoding:
@@ -260,7 +256,7 @@ class TestLegitimationWireFormat:
         expected = struct.pack(">I", 0x01020304)
         expected += bytes([0x20, 0x04, 0x01])
         expected += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
-        expected += encode_object_qualifier()
+        expected += encode_object_qualifier(protocol_version=ProtocolVersion.V2)
         expected += struct.pack(">H", 1)
         expected += struct.pack(">I", 0)
         assert payload == expected

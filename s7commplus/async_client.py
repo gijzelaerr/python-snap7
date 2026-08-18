@@ -390,7 +390,7 @@ class S7CommPlusAsyncClient:
 
     async def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block."""
-        payload = _build_read_payload([(db_number, start, size)])
+        payload = _build_read_payload([(db_number, start, size)], self._protocol_version)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
 
         results = _parse_read_response(response)
@@ -402,20 +402,20 @@ class S7CommPlusAsyncClient:
 
     async def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block."""
-        payload = _build_write_payload([(db_number, start, data)])
+        payload = _build_write_payload([(db_number, start, data)], self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
     async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request."""
-        payload = _build_read_payload(items)
+        payload = _build_read_payload(items, self._protocol_version)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         parsed = _parse_read_response(response)
         return [r if r is not None else b"" for r in parsed]
 
     async def read_area(self, area_rid: int, start: int, size: int) -> bytes:
         """Read raw bytes from a controller memory area (M, I, Q, counters, timers)."""
-        payload = _build_area_read_payload(area_rid, start, size)
+        payload = _build_area_read_payload(area_rid, start, size, self._protocol_version)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -424,7 +424,7 @@ class S7CommPlusAsyncClient:
 
     async def write_area(self, area_rid: int, start: int, data: bytes) -> None:
         """Write raw bytes to a controller memory area (M, I, Q, counters, timers)."""
-        payload = _build_area_write_payload(area_rid, start, data)
+        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -554,7 +554,9 @@ class S7CommPlusAsyncClient:
         .. warning:: This method is **experimental** and may change.
         """
         # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, False, self._integrity_id_read)
+        payload = _build_symbolic_read_payload(
+            access_area, lids, symbol_crc, False, self._integrity_id_read, self._protocol_version
+        )
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -566,7 +568,7 @@ class S7CommPlusAsyncClient:
 
         .. warning:: This method is **experimental** and may change.
         """
-        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -926,7 +928,7 @@ class S7CommPlusAsyncClient:
         # PValue: echo the ServerSessionVersion typed value verbatim (it may be a Struct)
         payload += self._server_session_version
         payload += bytes([0x00])
-        payload += encode_object_qualifier()
+        payload += encode_object_qualifier(protocol_version=self._protocol_version)
         payload += struct.pack(">I", 0)
 
         try:

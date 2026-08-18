@@ -7,18 +7,19 @@ import logging
 import struct
 from typing import Any, Callable, Optional, TypeVar
 
+from snap7.error import S7ConnectionError
+
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
-from .connection import S7CommPlusConnection
-from snap7.error import S7ConnectionError
-from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
-from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
+    decode_pvalue_to_bytes,
     encode_item_address,
     encode_object_qualifier,
     encode_pvalue_blob,
-    decode_pvalue_to_bytes,
 )
+from .connection import S7CommPlusConnection
+from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
+from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ class S7CommPlusClient:
         if self._connection.requires_substreamed:
             return self._db_read_substreamed(db_number, start, size)
 
-        payload = _build_read_payload([(db_number, start, size)])
+        payload = _build_read_payload([(db_number, start, size)], self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results:
@@ -206,7 +207,7 @@ class S7CommPlusClient:
             self._db_write_substreamed(db_number, start, data)
             return
 
-        payload = _build_write_payload([(db_number, start, data)])
+        payload = _build_write_payload([(db_number, start, data)], self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -233,7 +234,7 @@ class S7CommPlusClient:
         if self._connection.requires_substreamed:
             return [self._db_read_substreamed(db, start, size) for db, start, size in items]
 
-        payload = _build_read_payload(items)
+        payload = _build_read_payload(items, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         parsed = _parse_read_response(response)
         return [r if r is not None else b"" for r in parsed]
@@ -260,7 +261,7 @@ class S7CommPlusClient:
             response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
             return _parse_substreamed_read_response(response)
 
-        payload = _build_area_read_payload(area_rid, start, size)
+        payload = _build_area_read_payload(area_rid, start, size, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -285,7 +286,7 @@ class S7CommPlusClient:
             self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
             return
 
-        payload = _build_area_write_payload(area_rid, start, data)
+        payload = _build_area_write_payload(area_rid, start, data, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -327,7 +328,9 @@ class S7CommPlusClient:
             raise RuntimeError("Not connected")
 
         # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, False)
+        payload = _build_symbolic_read_payload(
+            access_area, lids, symbol_crc, False, protocol_version=self._connection.protocol_version
+        )
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -356,7 +359,9 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        payload = _build_symbolic_write_payload(
+            access_area, lids, data, symbol_crc, protocol_version=self._connection.protocol_version
+        )
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -657,7 +662,7 @@ class S7CommPlusClient:
 _SCALAR_RESPONSE_SUFFIX = bytes.fromhex("000400000000")
 
 
-def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
+def _build_read_payload(items: list[tuple[int, int, int]], protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a GetMultiVariables request payload.
 
     Args:
@@ -684,7 +689,7 @@ def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
     payload += encode_uint32_vlq(total_field_count)
     for addr in addresses:
         payload += addr
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
@@ -746,7 +751,7 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
     return results
 
 
-def _build_write_payload(items: list[tuple[int, int, bytes]]) -> bytes:
+def _build_write_payload(items: list[tuple[int, int, bytes]], protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a SetMultiVariables request payload.
 
     Args:
@@ -777,7 +782,7 @@ def _build_write_payload(items: list[tuple[int, int, bytes]]) -> bytes:
         payload += encode_uint32_vlq(i)
         payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
@@ -815,7 +820,7 @@ def _parse_write_response(response: bytes) -> None:
 
 def _build_substreamed_read_payload(session_id: int, access_area: int, access_sub_area: int, lids: list[int]) -> bytes:
     """Build a GET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
-    oq = encode_object_qualifier()
+    oq = encode_object_qualifier(protocol_version=ProtocolVersion.V1)
     payload = bytearray()
     payload += struct.pack(">I", session_id)
     payload += bytes([0x20, 0x04])
@@ -839,7 +844,7 @@ def _build_substreamed_write_payload(
     session_id: int, access_area: int, access_sub_area: int, lids: list[int], data: bytes
 ) -> bytes:
     """Build a SET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
-    oq = encode_object_qualifier()
+    oq = encode_object_qualifier(protocol_version=ProtocolVersion.V1)
     payload = bytearray()
     payload += struct.pack(">I", session_id)
     payload += bytes([0x20, 0x04])
@@ -877,7 +882,7 @@ def _parse_substreamed_read_response(response: bytes) -> bytes:
     return raw_bytes
 
 
-def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:
+def _build_area_read_payload(area_rid: int, start: int, size: int, protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a GetMultiVariables payload for controller memory area access.
 
     Unlike DB access, controller areas (M, I, Q, counters, timers) use a
@@ -894,13 +899,13 @@ def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:
     payload += encode_uint32_vlq(1)
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
 
-def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
+def _build_area_write_payload(area_rid: int, start: int, data: bytes, protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a SetMultiVariables payload for controller memory area access."""
     addr_bytes, field_count = encode_item_address(
         access_area=area_rid,
@@ -916,7 +921,7 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
     payload += encode_uint32_vlq(1)  # item number 1
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
@@ -928,6 +933,7 @@ def _build_symbolic_read_payload(
     symbol_crc: int = 0,
     with_integrity: bool = True,
     integrity_id: int = 1,
+    protocol_version: int = ProtocolVersion.V2,
 ) -> bytes:
     """Build a GetMultiVariables payload for symbolic (LID-based) access.
 
@@ -955,14 +961,20 @@ def _build_symbolic_read_payload(
     payload += encode_uint32_vlq(1)  # one item
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     if with_integrity:
         payload += encode_uint32_vlq(integrity_id)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
 
-def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> bytes:
+def _build_symbolic_write_payload(
+    access_area: int,
+    lids: list[int],
+    data: bytes,
+    symbol_crc: int = 0,
+    protocol_version: int = ProtocolVersion.V2,
+) -> bytes:
     """Build a SetMultiVariables payload for symbolic (LID-based) access."""
     if access_area >= 0x8A0E0000:
         access_sub_area = Ids.DB_VALUE_ACTUAL
@@ -984,7 +996,7 @@ def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes
     payload += encode_uint32_vlq(1)  # item number 1
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)

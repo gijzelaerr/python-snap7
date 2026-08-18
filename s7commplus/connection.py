@@ -97,6 +97,7 @@ def _build_get_var_substreamed_payload(
     address: int,
     key_qualifier: int = 0,
     sequence_field: int = 1,
+    protocol_version: int = ProtocolVersion.V2,
 ) -> bytes:
     """Build the request set used by ``GetVarSubStreamedRequest``.
 
@@ -106,7 +107,7 @@ def _build_get_var_substreamed_payload(
     payload = struct.pack(">I", in_object_id)
     payload += bytes([0x20, DataType.UDINT, 0x01])  # one-element address array
     payload += encode_uint32_vlq(address)
-    payload += encode_object_qualifier(key_qualifier=key_qualifier)
+    payload += encode_object_qualifier(key_qualifier=key_qualifier, protocol_version=protocol_version)
     payload += struct.pack(">H", sequence_field)
     payload += struct.pack(">I", 0)  # fill
     return payload
@@ -762,11 +763,9 @@ class S7CommPlusConnection:
 
         resp_payload = response[resp_offset:]
 
-        # Real PLCs prepend an IntegrityId VLQ whenever response integrity
-        # tracking is active (both TLS/V2 and SessionKey/HMAC sessions). Strip
-        # it so callers receive the application payload beginning with the
-        # ReturnValue.
-        if self._with_integrity_id and len(resp_payload) > 1:
+        # SessionKey/HMAC responses prepend an IntegrityId VLQ. Ordinary
+        # TLS/V2 responses follow the standard application-payload layout.
+        if self._session_key is not None and len(resp_payload) > 1:
             resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
             logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
             resp_payload = resp_payload[iid_consumed:]
@@ -1152,7 +1151,7 @@ class S7CommPlusConnection:
             payload += encode_uint32_vlq(0)
 
         payload += bytes([0x00])  # Fill byte
-        payload += encode_object_qualifier()
+        payload += encode_object_qualifier(protocol_version=self._protocol_version)
         payload += struct.pack(">I", 0)  # Trailing padding
 
         request += bytes(payload)
@@ -1211,6 +1210,7 @@ class S7CommPlusConnection:
             address,
             key_qualifier=self._sequence_number,
             sequence_field=seq_field,
+            protocol_version=ProtocolVersion.V1,
         )
 
     def _session_activate(self) -> None:
@@ -1226,7 +1226,7 @@ class S7CommPlusConnection:
         uint32, and the trailing section is 3 zero bytes (the IntegrityId
         is spliced before them by ``send_request``).
         """
-        oq = encode_object_qualifier(key_qualifier=self._sequence_number)
+        oq = encode_object_qualifier(key_qualifier=self._sequence_number, protocol_version=ProtocolVersion.V1)
 
         payload = struct.pack(">I", self._session_id)
         payload += encode_uint32_vlq(1)  # AddressCount
@@ -1303,7 +1303,7 @@ class S7CommPlusConnection:
         logger.info(f"Legitimation blob generated ({len(legit_blob)} bytes)")
 
         # Step 3: Write solved blob via SET_VAR_SUBSTREAMED to address 1846
-        oq = encode_object_qualifier(key_qualifier=self._sequence_number)
+        oq = encode_object_qualifier(key_qualifier=self._sequence_number, protocol_version=ProtocolVersion.V1)
         svs = struct.pack(">I", self._session_id)
         svs += bytes([0x20, 0x04])
         svs += encode_uint32_vlq(1)
