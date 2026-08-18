@@ -5,7 +5,8 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import struct
-from typing import Any, Callable, Optional, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, TypeVar
 
 from snap7.error import S7ConnectionError
 
@@ -16,9 +17,17 @@ from .codec import (
     encode_item_address,
     encode_object_qualifier,
     encode_pvalue_blob,
+    parse_create_object_session_id,
 )
 from .connection import S7CommPlusConnection
 from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
+from .subscription import (
+    SubscriptionItem,
+    SubscriptionNotification,
+    build_delete_subscription_request,
+    build_subscription_request,
+    parse_subscription_notification,
+)
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
@@ -37,6 +46,8 @@ class S7CommPlusClient:
         # Last-used connect() arguments, kept so operations can transparently
         # reconnect on firmware that RSTs the session after a symbolic read.
         self._connect_params: Optional[dict[str, Any]] = None
+        self._subscription_change_counter = 1
+        self._subscription_relation_id = 0x7FFFC001
 
     @property
     def connected(self) -> bool:
@@ -614,31 +625,64 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return typeinfo.extract_type_info_objects(response)
 
-    def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+    def create_subscription(
+        self,
+        items: Sequence[SubscriptionItem | str],
+        cycle_ms: int = 100,
+        credit_limit: int = -1,
+    ) -> int:
         """Create a data change subscription.
 
         .. warning:: This method is **experimental** and may change.
 
-        The PLC will push data updates for the specified variables. Use
-        ``receive_notification()`` to receive the pushed data.
+        The PLC pushes an initial value and subsequent changes. Access-sequence
+        strings are returned by :meth:`browse`; explicit
+        :class:`SubscriptionItem` objects can supply a symbol CRC, sub-area, or
+        stable reference ID.
 
         Args:
-            items: List of (db_number, start_offset, size) tuples to monitor.
-            cycle_ms: Cycle time in milliseconds (0 = on change).
+            items: Symbolic access-sequence strings or subscription items.
+            cycle_ms: Sampling cycle in milliseconds.
+            credit_limit: Number of notification credits, or ``-1`` for
+                unlimited notifications.
 
         Returns:
             Subscription object ID assigned by the PLC.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
 
-        payload = _build_subscription_request(items, cycle_ms, self._connection.session_id)
-        response = self._connection.send_request(FunctionCode.CREATE_OBJECT, payload)
+        normalized = [SubscriptionItem.from_access_sequence(item) if isinstance(item, str) else item for item in items]
+        payload, integrity_tail = build_subscription_request(
+            self._connection.subscription_container_id,
+            normalized,
+            cycle_ms=cycle_ms,
+            credit_limit=credit_limit,
+            change_counter=self._subscription_change_counter,
+            relation_id=self._subscription_relation_id,
+        )
+        response = self._connection.send_request(
+            FunctionCode.CREATE_OBJECT,
+            payload,
+            integrity_tail=integrity_tail,
+        )
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Subscription creation failed: PLC returned 0x{return_value:X}")
 
-        # Parse the CreateObject response to get the subscription object ID
-        sub_id, consumed = decode_uint32_vlq(response, 0)
-        logger.info(f"Subscription created, id={sub_id:#x}")
-        return sub_id
+        self._subscription_change_counter = self._subscription_change_counter % 0xFF + 1
+        self._subscription_relation_id = (self._subscription_relation_id + 1) & 0xFFFFFFFF
+        subscription_id = object_ids[0]
+        logger.info(f"Subscription created, id={subscription_id:#x}")
+        return subscription_id
+
+    def receive_subscription_notification(self) -> SubscriptionNotification:
+        """Block until the PLC sends one data-subscription notification."""
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        return parse_subscription_notification(self._connection.receive_notification())
 
     def delete_subscription(self, subscription_id: int) -> None:
         """Delete a data change subscription.
@@ -651,7 +695,7 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
+        payload = build_delete_subscription_request(subscription_id, self._connection.protocol_version)
         self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
 
