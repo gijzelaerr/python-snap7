@@ -2705,10 +2705,9 @@ class ServerISOConnection:
         pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
         pdu_length = 6 + len(pdu_size_param)
         base_pdu = struct.pack(
-            ">BBBHHB",
+            ">BBHHB",
             pdu_length,  # PDU length
             self.COTP_CC,  # PDU type
-            0x00,  # Reserved / CDT
             self.dst_ref,  # Destination reference (client's source ref)
             self.src_ref,  # Source reference (our ref)
             0x00,  # Class/option
