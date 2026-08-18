@@ -30,6 +30,7 @@ _SUBMODULES = [
     "logo",
     "optimizer",
     "partner",
+    "ppi",
     "s7protocol",
     "server",
     "tags",

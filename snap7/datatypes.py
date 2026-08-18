@@ -44,6 +44,8 @@ class S7WordLen(IntEnum):
     REAL = 0x08  # 32-bit IEEE float
     COUNTER = 0x1C  # Counter value
     TIMER = 0x1D  # Timer value
+    COUNTER_200 = 0x1E  # S7-200 counter value
+    TIMER_200 = 0x1F  # S7-200 timer value
 
 
 class S7DataTypes:
@@ -61,6 +63,8 @@ class S7DataTypes:
         S7WordLen.REAL: 4,  # 4 bytes
         S7WordLen.COUNTER: 2,  # 2 bytes
         S7WordLen.TIMER: 2,  # 2 bytes
+        S7WordLen.COUNTER_200: 2,  # 2 bytes
+        S7WordLen.TIMER_200: 2,  # 2 bytes
     }
 
     @staticmethod
@@ -94,6 +98,9 @@ class S7DataTypes:
             byte_addr = start // 8
             bit_addr = start % 8
             address = (byte_addr << 3) | bit_addr
+        elif word_len in (S7WordLen.COUNTER_200, S7WordLen.TIMER_200):
+            # S7-200 timer/counter addresses are item indexes, not bit addresses.
+            address = start
         else:
             # For word access: convert to bit address
             address = start * 8
@@ -134,7 +141,13 @@ class S7DataTypes:
                 values.append(data[offset])
                 offset += 1
 
-            elif word_len == S7WordLen.WORD or word_len == S7WordLen.COUNTER or word_len == S7WordLen.TIMER:
+            elif (
+                word_len == S7WordLen.WORD
+                or word_len == S7WordLen.COUNTER
+                or word_len == S7WordLen.TIMER
+                or word_len == S7WordLen.COUNTER_200
+                or word_len == S7WordLen.TIMER_200
+            ):
                 # 16-bit unsigned values (big-endian)
                 value = struct.unpack(">H", data[offset : offset + 2])[0]
                 values.append(value)
@@ -187,7 +200,13 @@ class S7DataTypes:
                 # 8-bit values
                 data.append(int(value) & 0xFF)
 
-            elif word_len == S7WordLen.WORD or word_len == S7WordLen.COUNTER or word_len == S7WordLen.TIMER:
+            elif (
+                word_len == S7WordLen.WORD
+                or word_len == S7WordLen.COUNTER
+                or word_len == S7WordLen.TIMER
+                or word_len == S7WordLen.COUNTER_200
+                or word_len == S7WordLen.TIMER_200
+            ):
                 # 16-bit unsigned values (big-endian)
                 data.extend(struct.pack(">H", int(value) & 0xFFFF))
 
