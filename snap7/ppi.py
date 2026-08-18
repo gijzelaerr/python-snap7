@@ -37,7 +37,7 @@ class PPIArea(IntEnum):
     SM = 0x05
     AI = 0x06
     AQ = 0x07
-    I = 0x81
+    I = 0x81  # noqa: E741 - Siemens names the input area I.
     Q = 0x82
     M = 0x83
     V = 0x84  # V memory is addressed as DB1 on the wire.
@@ -284,9 +284,7 @@ class PPITransport:
                 if response.frame_type != PPIFrameType.SD2:
                     raise S7ProtocolError(f"Expected SD2 PPI response, got {response.frame_type.name}")
                 if response.destination != self.local_station or response.source != self.station:
-                    raise S7ProtocolError(
-                        f"Unexpected PPI response addresses: {response.source} -> {response.destination}"
-                    )
+                    raise S7ProtocolError(f"Unexpected PPI response addresses: {response.source} -> {response.destination}")
                 return response.payload
 
         raise S7ConnectionError("PPI response was not available after polling")
