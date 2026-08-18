@@ -451,9 +451,17 @@ class S7CommPlusAsyncClient:
 
     async def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block."""
-        payload = _build_write_payload([(db_number, start, data)])
+        await self.db_write_multi([(db_number, start, data)])
+
+    async def db_write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+        """Write multiple data block regions in a single request."""
+        payload = _build_write_payload(items)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
+
+    async def write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+        """Alias for :meth:`db_write_multi`."""
+        await self.db_write_multi(items)
 
     async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request."""

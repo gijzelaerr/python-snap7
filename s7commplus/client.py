@@ -137,12 +137,24 @@ class S7CommPlusClient:
             start: Start byte offset
             data: Bytes to write
         """
+        self.db_write_multi([(db_number, start, data)])
+
+    def db_write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+        """Write multiple data block regions in a single request.
+
+        Args:
+            items: List of ``(db_number, start_offset, data)`` tuples.
+        """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_write_payload([(db_number, start, data)])
+        payload = _build_write_payload(items)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
+
+    def write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+        """Alias for :meth:`db_write_multi`."""
+        self.db_write_multi(items)
 
     def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
