@@ -70,6 +70,13 @@ class S7CommPlusClient:
             return False
         return self._connection.tls_active
 
+    @property
+    def protection_level(self) -> Optional[int]:
+        """Effective protection level reported by the PLC (see `AccessLevel`)."""
+        if self._connection is None:
+            return None
+        return self._connection.protection_level
+
     def connect(
         self,
         host: str,
