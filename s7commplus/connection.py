@@ -692,6 +692,26 @@ class S7CommPlusConnection:
 
         return resp_payload
 
+    def receive_notification(self) -> bytes:
+        """Receive one unsolicited S7CommPlus notification frame.
+
+        The call blocks up to the connection's configured socket timeout. It must
+        not run concurrently with :meth:`send_request`, because both consume the
+        same protocol stream.
+        """
+        if not self._connected:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Not connected")
+        frame = self._recv_s7_data()
+        _, data_length, consumed = decode_header(frame)
+        data = frame[consumed : consumed + data_length]
+        if not data or data[0] != Opcode.NOTIFICATION:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Expected an S7CommPlus notification")
+        return frame
+
     # Sanity caps for fragment reassembly — generous vs. any real PLC EXPLORE response,
     # but bounded so a malformed/adversarial stream can't drive unbounded allocation.
     _MAX_REASSEMBLED_BYTES = 16 * 1024 * 1024

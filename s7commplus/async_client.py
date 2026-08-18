@@ -47,6 +47,14 @@ from .client import (
     _parse_explore_datablocks,
     _build_subscription_request,
 )
+from .alarm import (
+    Alarm,
+    AlarmNotification,
+    build_alarm_explore_request,
+    build_alarm_subscription_request,
+    parse_alarm_explore_response,
+    parse_alarm_notification,
+)
 from . import typeinfo
 from .protocol import Ids
 
@@ -596,6 +604,42 @@ class S7CommPlusAsyncClient:
         payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
         await self._send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
+
+    async def create_alarm_subscription(
+        self,
+        language_ids: Optional[list[int]] = None,
+        domains: Optional[list[int]] = None,
+        credit_limit: int = -1,
+    ) -> int:
+        """Subscribe to PLC alarm events and return the subscription ID."""
+        payload = build_alarm_subscription_request(self._session_id, language_ids, domains, credit_limit)
+        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload)
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
+        return object_ids[0]
+
+    async def delete_alarm_subscription(self, subscription_id: int) -> None:
+        """Delete an alarm subscription created by this client."""
+        await self.delete_subscription(subscription_id)
+
+    async def receive_alarm_notification(
+        self, language_ids: Optional[list[int]] = None, timeout: Optional[float] = None
+    ) -> AlarmNotification:
+        """Wait for one alarm notification, optionally with a timeout in seconds."""
+        async with self._lock:
+            if not self._connected:
+                raise RuntimeError("Not connected")
+            receive = self._recv_cotp_dt()
+            frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
+        return parse_alarm_notification(frame, language_ids)
+
+    async def browse_alarms(self, language_ids: Optional[list[int]] = None) -> list[Alarm]:
+        """Return the PLC's current active alarm state."""
+        response = await self._send_request(
+            FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
+        )
+        return parse_alarm_explore_response(response, language_ids)
 
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.

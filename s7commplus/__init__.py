@@ -18,6 +18,7 @@ from .client import S7CommPlusClient as Client
 from .async_client import S7CommPlusAsyncClient as AsyncClient
 from .server import S7CommPlusServer as Server, DataBlock, CPUState
 from .connection import S7CommPlusConnection
+from .alarm import Alarm, AlarmNotification, AlarmText
 from .tag_browser import (
     Tag,
     Member,
@@ -34,6 +35,9 @@ __all__ = [
     "DataBlock",
     "CPUState",
     "S7CommPlusConnection",
+    "Alarm",
+    "AlarmNotification",
+    "AlarmText",
     "decompress_blob",
     "find_and_decompress",
     "Tag",
