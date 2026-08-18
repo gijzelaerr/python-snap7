@@ -501,6 +501,16 @@ class TestClientErrorPaths:
         with pytest.raises(RuntimeError, match="Not connected"):
             client.db_read_multi([(1, 0, 4)])
 
+    def test_db_write_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.db_write_multi([(1, 0, b"data")])
+
+    def test_write_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.write_multi([(1, 0, b"data")])
+
     def test_explore_not_connected(self) -> None:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
