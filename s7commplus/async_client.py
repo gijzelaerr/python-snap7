@@ -204,8 +204,12 @@ class S7CommPlusAsyncClient:
             else:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
                 self._session_setup_ok = False
-            self._protection_level = await self._get_effective_protection_level()
-            logger.info(f"PLC reports protection level: {self._protection_level}")
+
+            # Only a session that completed setup answers attribute reads.
+            if self._session_setup_ok:
+                self._protection_level = await self._get_effective_protection_level()
+                if self._protection_level is not None:
+                    logger.info(f"PLC reports protection level: {self._protection_level}")
 
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
@@ -254,6 +258,11 @@ class S7CommPlusAsyncClient:
                 await self._send_legitimation_legacy(response_data)
 
         logger.info("PLC legitimation completed successfully")
+
+        # Renew protection level
+        self._protection_level = await self._get_effective_protection_level()
+        if self._protection_level is not None:
+            logger.info(f"PLC reports protection level: {self._protection_level}")
 
     async def _activate_tls(
         self,
@@ -337,13 +346,18 @@ class S7CommPlusAsyncClient:
         data = await self._recv_cotp_raw()
         self._incoming_bio.write(data)
 
-    async def _get_effective_protection_level(self) -> int:
-        """
-        Read the session's effective protection level (see `AccessLevel`).
-        """
+    async def _get_effective_protection_level(self) -> Optional[int]:
+        """Read the session's effective protection level (see `AccessLevel`), None if request failed."""
+        from snap7.error import S7ConnectionError
+
         payload = _build_get_var_substreamed_payload(self._session_id, Ids.EFFECTIVE_PROTECTION_LEVEL)
-        resp = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
-        return _parse_protection_level_response(resp)
+        try:
+            resp = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+            level = _parse_protection_level_response(resp)
+        except S7ConnectionError as exc:
+            logger.warning(f"PLC did not report a protection level: {exc}")
+            return None
+        return level
 
     async def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC."""

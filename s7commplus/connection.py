@@ -155,12 +155,30 @@ def _parse_protection_level_response(payload: bytes) -> int:
     """Extract the scalar UDInt value from a GetVarSubStreamed response payload."""
     from snap7.error import S7ConnectionError
 
-    return_value, offset = decode_uint64_vlq(payload, 0)
-    if return_value != 0:
-        raise S7ConnectionError(f"GetVarSubStreamed for the protection level failed: return_value={return_value}")
-    offset += 1  # protocol-defined unknown byte
-    value, _ = decode_uint32_vlq(payload, offset + 2)
-    return value
+    try:
+        return_value, offset = decode_uint64_vlq(payload, 0)
+        if return_value != 0:
+            raise S7ConnectionError(f"GetVarSubStreamed for the protection level failed: return_value={return_value}")
+
+        if offset >= len(payload):
+            raise ValueError("missing response marker")
+        offset += 1  # protocol-defined unknown byte
+
+        if offset + 2 > len(payload):
+            raise ValueError("missing PValue header")
+        flags = payload[offset]
+        datatype = payload[offset + 1]
+        offset += 2
+
+        if datatype != DataType.UDINT or flags & 0x10:
+            raise ValueError(f"expected a scalar UDInt, got flags=0x{flags:02X} datatype=0x{datatype:02X}")
+
+        value, _ = decode_uint32_vlq(payload, offset)
+        return value
+    except S7ConnectionError:
+        raise
+    except (IndexError, ValueError) as exc:
+        raise S7ConnectionError(f"Malformed protection level response: {exc}") from exc
 
 
 def _build_set_variable_payload(in_object_id: int, address: int, value: bytes) -> bytes:
@@ -448,12 +466,16 @@ class S7CommPlusConnection:
 
             self._connected = True
 
-            self._protection_level = self._get_effective_protection_level()
-            logger.info(f"PLC reports protection level: {self._protection_level}")
-
             if self._session_key is not None and self._session_setup_ok:
                 self._session_activate()
                 self._post_auth_legitimation(password=self._connect_password)
+
+            # Only a session that completed setup answers attribute reads
+            if self._session_setup_ok:
+                self._protection_level = self._get_effective_protection_level()
+                if self._protection_level is not None:
+                    logger.info(f"PLC reports protection level: {self._protection_level}")
+
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -513,13 +535,24 @@ class S7CommPlusConnection:
 
         logger.info("PLC legitimation completed successfully")
 
-    def _get_effective_protection_level(self) -> int:
-        """
-        Read the session's effective protection level (see `AccessLevel`).
-        """
+        # Renew protection level
+        self._protection_level = self._get_effective_protection_level()
+        if self._protection_level is not None:
+            logger.info(f"PLC reports protection level: {self._protection_level}")
+
+    def _get_effective_protection_level(self) -> Optional[int]:
+        """Read the session's effective protection level (see `AccessLevel`), None if request failed."""
+        from snap7.error import S7ConnectionError
+
         payload = _build_get_var_substreamed_payload(self._session_id, Ids.EFFECTIVE_PROTECTION_LEVEL)
-        resp = self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
-        return _parse_protection_level_response(resp)
+        try:
+            level = _parse_protection_level_response(
+                self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+            )
+        except S7ConnectionError as exc:
+            logger.warning(f"PLC did not report a protection level: {exc}")
+            return None
+        return level
 
     def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC.

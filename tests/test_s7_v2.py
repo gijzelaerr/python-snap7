@@ -344,6 +344,29 @@ class TestProtectionLevel:
         with pytest.raises(S7ConnectionError, match="return_value=4660"):
             _parse_protection_level_response(encode_uint32_vlq(0x1234))
 
+    def test_parse_rejects_missing_response_marker(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing response marker"):
+            _parse_protection_level_response(bytes([0x00]))
+
+    def test_parse_rejects_truncated_pvalue_header(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing PValue header"):
+            _parse_protection_level_response(bytes([0x00, 0x00, 0x00]))
+
+    def test_parse_rejects_non_udint_datatype(self) -> None:
+        response = bytes([0x00, 0x00, 0x00, DataType.USINT, 0x04])
+        with pytest.raises(S7ConnectionError, match="expected a scalar UDInt, got flags=0x00 datatype=0x02"):
+            _parse_protection_level_response(response)
+
+    def test_parse_rejects_udint_array(self) -> None:
+        response = bytes([0x00, 0x00, 0x10, DataType.UDINT, 0x01, 0x04])
+        with pytest.raises(S7ConnectionError, match="expected a scalar UDInt, got flags=0x10 datatype=0x04"):
+            _parse_protection_level_response(response)
+
+    def test_parse_rejects_truncated_value(self) -> None:
+        response = bytes([0x00, 0x00, 0x00, DataType.UDINT, 0x84])
+        with pytest.raises(S7ConnectionError, match="Malformed protection level response"):
+            _parse_protection_level_response(response)
+
     def test_sync_read_uses_protocol_request_shape(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
         conn._session_id = 0x01020304
