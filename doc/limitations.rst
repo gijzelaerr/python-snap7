@@ -1,8 +1,9 @@
 Protocol Limitations and FAQ
 ============================
 
-python-snap7 implements the S7 protocol over TCP/IP. The following operations
-are **not possible** with this protocol:
+python-snap7 implements both the classic S7 protocol and S7CommPlus over
+TCP/IP. The following limitations apply to the classic protocol exposed by
+``s7.Client``; the native S7CommPlus client has different capabilities:
 
 .. list-table::
    :header-rows: 1
@@ -11,11 +12,13 @@ are **not possible** with this protocol:
    * - Limitation
      - Explanation
    * - Read tag/symbol names from PLC
-     - Symbol names exist only in the TIA Portal project file, not in the PLC.
-       The S7 protocol only addresses data by area, DB number, and byte offset.
+     - The classic S7 protocol only addresses data by area, DB number, and byte
+       offset. The experimental ``s7commplus.Client.browse()`` API can read the
+       symbol tree from supported S7-1200/1500 PLCs.
    * - Get DB structure or layout from PLC
-     - The PLC stores only raw bytes. The structure definition lives in the TIA
-       Portal project. You must define your data layout in your Python code.
+     - Classic S7 reads DBs as raw bytes, so callers must supply the layout.
+       S7CommPlus browsing can reconstruct type information and optimized
+       symbolic access paths on supported S7-1200/1500 PLCs.
    * - Discover PLCs on the network
      - The classic S7 protocol has no broadcast discovery mechanism. However,
        python-snap7 provides PROFINET DCP discovery via the ``s7 discover``

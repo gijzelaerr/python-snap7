@@ -141,11 +141,13 @@ with the ``s7commplus`` extra:
 .. note::
 
    Older S7-1200 firmware (FW < 4.5) negotiates V1 of the S7CommPlus
-   protocol, which predates TLS and uses a different proprietary
-   handshake. ``Client(...)`` falls back transparently to legacy
-   PUT/GET on those PLCs (``db_read`` / ``db_write`` work);
-   ``browse()`` and other CommPlus-only operations are not yet
-   supported on those firmwares — see issue #710.
+   protocol, which predates TLS and uses a SessionKey handshake instead.
+   The synchronous ``Client`` performs this handshake when ``use_tls`` is
+   false; it does not fall back to the classic PUT/GET protocol. V1 support
+   is experimental and the asynchronous client currently supports only the
+   TLS path. See `issue #710
+   <https://github.com/gijzelaerr/python-snap7/issues/710>`_ for the original
+   V1 hardware report.
 
 TLS handshake rejected by the PLC (connection reset)
 ------------------------------------------------------
@@ -207,7 +209,9 @@ PLC Password Authentication
 ----------------------------
 
 If the PLC has a password configured (``Full access (no protection)``
-disabled in TIA Portal), call ``authenticate`` after ``connect``:
+disabled in TIA Portal), pass it to the synchronous client's ``connect``
+method. The client applies it to either the legacy SessionKey flow or the
+TLS legitimation flow, as appropriate for the PLC:
 
 .. code-block:: python
 
@@ -217,15 +221,19 @@ disabled in TIA Portal), call ``authenticate`` after ``connect``:
    client.connect(
        "192.168.1.10",
        use_tls=True,
+       password="hunter2",
    )
-   client.authenticate(password="hunter2")
    data = client.db_read(1, 0, 4)
 
-Authentication requires TLS to be active (``use_tls=True``). The
-client auto-detects whether the PLC firmware uses the legacy SHA-1
-challenge or the newer AES-256-CBC challenge. For accounts with a
-username (TIA Portal V17+ user-based access control), pass it
-explicitly:
+For an older V1 PLC, omit ``use_tls=True``; the password is then used by the
+post-SessionKey legitimation exchange. The asynchronous client currently
+supports password authentication only on TLS connections, using
+``await client.authenticate(...)`` after connecting.
+
+The explicit synchronous ``authenticate`` method is also TLS-only. It
+auto-detects whether the TLS PLC uses the legacy SHA-1 challenge or the newer
+AES-256-CBC challenge. For accounts with a username (TIA Portal V17+
+user-based access control), pass it explicitly:
 
 .. code-block:: python
 

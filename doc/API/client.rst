@@ -21,6 +21,10 @@ s7commplus.Client
 s7commplus.AsyncClient
 ----------------------
 
+The asynchronous client currently supports the TLS connection and
+legitimation path. Legacy V1 SessionKey authentication is available only on
+the synchronous client.
+
 .. code-block:: python
 
    import asyncio
@@ -64,7 +68,8 @@ For PLCs with custom certificates, provide the certificate paths:
 Password authentication
 -----------------------
 
-Password-protected PLCs require the ``password`` keyword argument:
+The synchronous client accepts the ``password`` keyword for both TLS
+legitimation and the post-SessionKey exchange used by older V1 PLCs:
 
 .. code-block:: python
 
@@ -74,6 +79,10 @@ Password-protected PLCs require the ``password`` keyword argument:
    client.connect("192.168.1.10", use_tls=True, password="my_plc_password")
    data = client.db_read(1, 0, 4)
    client.disconnect()
+
+For a V1 PLC, omit ``use_tls=True``. The asynchronous client has no
+``password`` argument on ``connect``; on a TLS connection, authenticate
+explicitly with ``await client.authenticate(password)``.
 
 Concurrent async reads
 ----------------------
