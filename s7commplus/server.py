@@ -23,6 +23,8 @@ Usage::
     server.start(port=11020, use_tls=True, tls_cert="cert.pem", tls_key="key.pem")
 """
 
+import hashlib
+import hmac
 import logging
 import socket
 import ssl
@@ -190,8 +192,8 @@ class S7CommPlusServer:
 
     Emulates an S7-1200/1500 PLC with:
     - Internal data block storage with named variables
-    - S7CommPlus protocol handling (V1 and V2)
-    - V2 TLS support with IntegrityId tracking
+    - S7CommPlus protocol handling (V1, V2, and V3)
+    - V2 TLS and V3 HMAC support with IntegrityId tracking
     - Multi-client support (threaded)
     - CPU state management
     """
@@ -201,6 +203,7 @@ class S7CommPlusServer:
         protocol_version: int = ProtocolVersion.V1,
         public_key_fingerprint: Optional[str] = None,
         session_challenge: Optional[bytes] = None,
+        session_key: Optional[bytes] = None,
         rst_after_symbolic_read: bool = False,
     ) -> None:
         self._data_blocks: dict[int, DataBlock] = {}
@@ -225,6 +228,12 @@ class S7CommPlusServer:
         # the post-auth legitimation flow (GetVarSubStreamed 303 / SetVarSubStreamed 1846).
         self._public_key_fingerprint = public_key_fingerprint
         self._session_challenge = session_challenge
+        if session_key is not None and len(session_key) < 24:
+            raise ValueError("session_key must contain at least 24 bytes")
+        # An emulator cannot recover the client's random key from a blob
+        # encrypted for a real Siemens PLC. Tests may therefore provide the
+        # negotiated key explicitly to exercise V3 framing end to end.
+        self._session_key = session_key
 
         # When True, the server closes the TCP connection after responding
         # to a GetMultiVariables request (emulating firmware like S7-1200
@@ -409,9 +418,16 @@ class S7CommPlusServer:
                             return None
                         tls["in"].write(more)
 
-            def send_app_frame(data: bytes) -> None:
-                frame = encode_header(self._protocol_version, len(data)) + data
-                frame += struct.pack(">BBH", 0x72, self._protocol_version, 0x0000)
+            def send_app_frame(data: bytes, frame_version: int) -> None:
+                if frame_version == ProtocolVersion.V3:
+                    if self._session_key is None:
+                        raise ConnectionError("V3 response requested without a session key")
+                    digest = hmac.new(self._session_key[:24], data, hashlib.sha256).digest()
+                    frame_data = bytes([len(digest)]) + digest + data
+                else:
+                    frame_data = data
+                frame = encode_header(frame_version, len(frame_data)) + frame_data
+                frame += struct.pack(">BBH", 0x72, frame_version, 0x0000)
                 if tls["obj"] is None:
                     self._send_cotp_dt_raw(client_sock, frame)
                 else:
@@ -425,6 +441,15 @@ class S7CommPlusServer:
                     data = recv_app_frame()
                     if data is None:
                         break
+
+                    request_version, data_length, hdr_consumed = decode_header(data)
+                    if request_version == ProtocolVersion.V3:
+                        if self._session_key is None:
+                            raise ConnectionError("V3 request received without a session key")
+                        protected = data[hdr_consumed : hdr_consumed + data_length]
+                        request_data = self._verify_v3_data(protected, self._session_key)
+                        # _process_request consumes a normal S7CommPlus frame.
+                        data = encode_header(request_version, len(request_data)) + request_data
 
                     # Decode the request function code once (used for TLS + IntegrityId).
                     func_code = None
@@ -440,7 +465,12 @@ class S7CommPlusServer:
                     if response is not None:
                         if session_id == 0 and len(response) >= 14:
                             session_id = struct.unpack_from(">I", response, 9)[0]
-                        send_app_frame(response)
+                        if request_version == ProtocolVersion.V3 and func_code is not None:
+                            response_integrity_id = integrity_id_read if func_code in READ_FUNCTION_CODES else integrity_id_write
+                            response = response[:10] + encode_uint32_vlq(response_integrity_id) + response[10:]
+                        send_app_frame(
+                            response, request_version if request_version == ProtocolVersion.V3 else self._protocol_version
+                        )
 
                     if rst:
                         logger.debug(f"RST emulation: closing connection to {address}")
@@ -457,7 +487,11 @@ class S7CommPlusServer:
                         logger.debug(f"TLS activated (COTP-tunneled) for client {address}")
 
                     # Update IntegrityId counters based on function code (V2+).
-                    if self._protocol_version >= ProtocolVersion.V2 and session_id != 0 and func_code is not None:
+                    if (
+                        (self._protocol_version >= ProtocolVersion.V2 or request_version == ProtocolVersion.V3)
+                        and session_id != 0
+                        and func_code is not None
+                    ):
                         if func_code in READ_FUNCTION_CODES:
                             integrity_id_read = (integrity_id_read + 1) & 0xFFFFFFFF
                         elif func_code not in (FunctionCode.INIT_SSL, FunctionCode.CREATE_OBJECT):
@@ -476,6 +510,21 @@ class S7CommPlusServer:
             except Exception:
                 pass
             logger.info(f"Client disconnected: {address}")
+
+    @staticmethod
+    def _verify_v3_data(protected: bytes, session_key: bytes) -> bytes:
+        """Verify and remove a V3 HMAC prefix from application data."""
+        if not protected:
+            raise ConnectionError("Empty V3 frame")
+        digest_length = protected[0]
+        if digest_length != hashlib.sha256().digest_size or len(protected) < 1 + digest_length:
+            raise ConnectionError(f"Invalid V3 HMAC length: {digest_length}")
+        received_digest = protected[1 : 1 + digest_length]
+        application_data = protected[1 + digest_length :]
+        expected_digest = hmac.new(session_key[:24], application_data, hashlib.sha256).digest()
+        if not hmac.compare_digest(received_digest, expected_digest):
+            raise ConnectionError("Invalid V3 HMAC")
+        return bytes(application_data)
 
     def _server_tls_handshake(self, sock: socket.socket) -> tuple[Any, Any, Any]:
         """Perform the server-side TLS handshake, tunneling records through COTP DT frames."""
