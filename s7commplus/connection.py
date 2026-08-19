@@ -1199,19 +1199,22 @@ class S7CommPlusConnection:
         return False
 
     def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
-        """Build a GET_VAR_SUBSTREAMED payload (reused by legitimation).
+        """Build the V1 SessionKey GET_VAR_SUBSTREAMED payload.
 
         The ObjectQualifier KEY_QUALIFIER carries the next sequence number.
-        ``seq_field`` is the two-byte request sequence field; the IntegrityId
-        is spliced before the final four-byte fill by ``send_request``.
+        Unlike the TLS/V2 request shape, the V1 SessionKey exchange encodes
+        ``seq_field`` as a VLQ and has a three-byte fill field. The IntegrityId
+        is spliced immediately before that fill by :meth:`send_request`.
         """
-        return _build_get_var_substreamed_payload(
-            in_object_id,
-            address,
-            key_qualifier=self._sequence_number,
-            sequence_field=seq_field,
-            protocol_version=ProtocolVersion.V1,
-        )
+        oq = encode_object_qualifier(key_qualifier=self._sequence_number, protocol_version=ProtocolVersion.V1)
+        payload = struct.pack(">I", in_object_id)
+        payload += bytes([0x20, DataType.UDINT])
+        payload += encode_uint32_vlq(1)  # field count
+        payload += encode_uint32_vlq(address)
+        payload += oq
+        payload += encode_uint32_vlq(seq_field)
+        payload += bytes(3)  # fill
+        return payload
 
     def _session_activate(self) -> None:
         """Activate the V3 session after the SecurityKey handshake.
@@ -1256,7 +1259,7 @@ class S7CommPlusConnection:
         challenge_resp = self.send_request(
             FunctionCode.GET_VAR_SUBSTREAMED,
             self._build_get_var_substreamed(self._session_id, LegitimationId.SERVER_SESSION_REQUEST),
-            integrity_tail=4,
+            integrity_tail=3,
         )
 
         # Extract the 20-byte challenge from the response.

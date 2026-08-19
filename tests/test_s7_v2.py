@@ -6,7 +6,7 @@ and V2 connection behavior.
 
 import hashlib
 import struct
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -260,6 +260,33 @@ class TestLegitimationWireFormat:
         expected += struct.pack(">H", 1)
         expected += struct.pack(">I", 0)
         assert payload == expected
+
+    def test_build_v1_session_key_challenge_payload(self) -> None:
+        """Match the challenge request accepted by the S7-1200 in GH-710."""
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._sequence_number = 4
+
+        payload = conn._build_get_var_substreamed(0x0000039B, LegitimationId.SERVER_SESSION_REQUEST)
+
+        assert payload == bytes.fromhex("0000039b200401822f000004e88969001200000000896a001300896b00040000000401000000")
+
+    def test_v1_session_key_challenge_splices_integrity_before_three_byte_fill(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_id = 0x0000039B
+        conn._session_challenge = bytes(range(20))
+        conn._session_key = bytes(range(24))
+        conn._session_auth_public_key = bytes(range(24))
+        conn.send_request = MagicMock(side_effect=[b"", b"\x00"])
+
+        with patch("s7commplus.session_auth.legitimate.solve_legitimate_challenge_real_plc", return_value=bytes(248)):
+            conn._post_auth_legitimation()
+
+        first_call = conn.send_request.call_args_list[0]
+        assert first_call.args == (
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            conn._build_get_var_substreamed(0x0000039B, LegitimationId.SERVER_SESSION_REQUEST),
+        )
+        assert first_call.kwargs == {"integrity_tail": 3}
 
     def test_parse_get_var_substreamed_usint_array(self) -> None:
         challenge = bytes(range(20))
