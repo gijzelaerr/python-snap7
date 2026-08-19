@@ -1,43 +1,44 @@
 """Tests for S7CommPlus codec (header encoding, typed values, payload builders)."""
 
 import struct
+
 import pytest
 
+from s7commplus.client import _build_symbolic_read_payload, _build_symbolic_write_payload
 from s7commplus.codec import (
-    encode_header,
+    _pvalue_element_size,
+    decode_float32,
+    decode_float64,
     decode_header,
-    encode_request_header,
+    decode_int16,
+    decode_int32,
+    decode_int64,
+    decode_pvalue_to_bytes,
     decode_response_header,
+    decode_uint8,
+    decode_uint16,
+    decode_uint32,
+    decode_uint64,
+    decode_wstring,
+    encode_float32,
+    encode_float64,
+    encode_header,
+    encode_int16,
+    encode_int32,
+    encode_int64,
+    encode_item_address,
+    encode_object_qualifier,
+    encode_pvalue_blob,
+    encode_request_header,
     encode_typed_value,
     encode_uint8,
-    decode_uint8,
     encode_uint16,
-    decode_uint16,
     encode_uint32,
-    decode_uint32,
     encode_uint64,
-    decode_uint64,
-    encode_int16,
-    decode_int16,
-    encode_int32,
-    decode_int32,
-    encode_int64,
-    decode_int64,
-    encode_float32,
-    decode_float32,
-    encode_float64,
-    decode_float64,
     encode_wstring,
-    decode_wstring,
-    encode_item_address,
-    encode_pvalue_blob,
-    decode_pvalue_to_bytes,
-    encode_object_qualifier,
-    _pvalue_element_size,
 )
-from s7commplus.protocol import PROTOCOL_ID, DataType, Opcode, FunctionCode, Ids
-from s7commplus.vlq import encode_uint32_vlq, encode_int32_vlq, encode_uint64_vlq, encode_int64_vlq
-from s7commplus.client import _build_symbolic_read_payload, _build_symbolic_write_payload
+from s7commplus.protocol import PROTOCOL_ID, DataType, FunctionCode, Ids, Opcode, ProtocolVersion
+from s7commplus.vlq import encode_int32_vlq, encode_int64_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 
 class TestFrameHeader:
@@ -707,11 +708,12 @@ class TestPValueElementSize:
 
 
 class TestObjectQualifier:
-    def test_encode(self) -> None:
-        result = encode_object_qualifier()
-        assert isinstance(result, bytes)
-        assert len(result) > 0
+    def test_encode_v2(self) -> None:
+        result = encode_object_qualifier(2555)
         # Starts with ObjectQualifier ID (1256) as uint32 big-endian
         assert result[:4] == struct.pack(">I", Ids.OBJECT_QUALIFIER)
-        # Ends with null terminator
-        assert result[-1] == 0x00
+        assert result.endswith(bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(2555) + bytes([0x00]))
+
+    def test_encode_v1_uses_fixed_width_key_qualifier(self) -> None:
+        result = encode_object_qualifier(2555, ProtocolVersion.V1)
+        assert result.endswith(bytes([0x00, DataType.UDINT]) + struct.pack(">I", 2555))
