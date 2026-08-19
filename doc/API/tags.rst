@@ -104,28 +104,29 @@ TIA Portal V13+) do not use fixed byte offsets.  The PLC internally
 relocates variables between downloads, so addresses like ``DB1.DBX0.0``
 are unreliable.
 
-For optimized blocks, use :meth:`~snap7.tags.Tag.from_access_string`
-with LIDs discovered via :meth:`~s7commplus.client.S7CommPlusClient.browse`:
+For optimized blocks, use the low-level ``read_symbolic`` and
+``write_symbolic`` methods with access paths discovered via
+:meth:`~s7commplus.client.S7CommPlusClient.browse`. A typed, name-based
+S7CommPlus tag API is not implemented yet; :class:`~snap7.tags.Tag` and the
+``read_tag`` methods above belong to the classic ``s7.Client`` API.
 
 .. code-block:: python
 
+   import struct
+
    from s7commplus import Client
-   from s7.tags import Tag
 
    client = Client()
    client.connect("192.168.1.10")
 
-   # Create a symbolic tag (LIDs come from browse)
-   tag = Tag.from_access_string(
-       "8A0E0001.A",           # DB1, LID 0xA
-       datatype="REAL",
-       name="Motor.Speed",
-       symbol_crc=0x12345678,  # optional layout version check
-   )
+   variables = client.browse()
+   speed_info = next(item for item in variables if item["name"] == "Motor.Speed")
+   path = [int(part, 16) for part in speed_info["access_sequence"].split(".")]
 
-   # Read/write via S7CommPlus symbolic access
-   speed = client.read_tag(tag)
-   client.write_tag(tag, 1500.0)
+   # Symbolic values are currently exposed as raw wire bytes.
+   raw = client.read_symbolic(path[0], path[1:])
+   speed = struct.unpack(">f", raw)[0]
+   client.write_symbolic(path[0], path[1:], struct.pack(">f", 1500.0))
 
 API reference
 -------------
