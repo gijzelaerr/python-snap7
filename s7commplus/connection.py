@@ -293,6 +293,7 @@ class S7CommPlusConnection:
         self._incoming_bio: Optional[ssl.MemoryBIO] = None
         self._outgoing_bio: Optional[ssl.MemoryBIO] = None
         self._session_id: int = 0
+        self._subscription_container_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
@@ -345,6 +346,11 @@ class S7CommPlusConnection:
     def session_id(self) -> int:
         """Session ID assigned by the PLC."""
         return self._session_id
+
+    @property
+    def subscription_container_id(self) -> int:
+        """Object ID assigned to the session's subscription container."""
+        return self._subscription_container_id
 
     @property
     def tls_active(self) -> bool:
@@ -671,6 +677,7 @@ class S7CommPlusConnection:
         self._outgoing_bio = None
         self._oms_secret = None
         self._session_id = 0
+        self._subscription_container_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
         self._server_session_version = None
@@ -843,6 +850,26 @@ class S7CommPlusConnection:
             logger.debug(f"  Trailer ({len(trailer)} bytes): {trailer.hex(' ')}")
 
         return resp_payload
+
+    def receive_notification(self) -> bytes:
+        """Receive one unsolicited S7CommPlus notification frame.
+
+        The call blocks up to the connection's configured socket timeout. It must
+        not run concurrently with :meth:`send_request`, because both consume the
+        same protocol stream.
+        """
+        if not self._connected:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Not connected")
+        frame = self._recv_s7_data()
+        _, data_length, consumed = decode_header(frame)
+        data = frame[consumed : consumed + data_length]
+        if not data or data[0] != Opcode.NOTIFICATION:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Expected an S7CommPlus notification")
+        return frame
 
     # Sanity caps for fragment reassembly — generous vs. any real PLC EXPLORE response,
     # but bounded so a malformed/adversarial stream can't drive unbounded allocation.
@@ -1082,8 +1109,9 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response has no session ObjectId")
 
-        # First ObjectId is the new session id; second (if any) is for notifications.
+        # First ObjectId is the session; the second is its subscription container.
         self._session_id = object_ids[0]
+        self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         self._protocol_version = version
 
         logger.debug(
