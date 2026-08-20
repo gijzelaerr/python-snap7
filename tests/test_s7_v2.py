@@ -6,7 +6,7 @@ and V2 connection behavior.
 
 import hashlib
 import struct
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -36,7 +36,7 @@ from s7commplus.protocol import (
     ProtocolVersion,
 )
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
-from snap7.error import S7ConnectionError
+from snap7.error import S7ConnectionError, S7ProtocolError
 
 
 class TestReadFunctionCodes:
@@ -214,7 +214,7 @@ class TestIntegrityIdTracking:
         conn._with_integrity_id = True
 
         application_payload = bytes.fromhex("000100100201")
-        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
         response += application_payload
         frame = encode_header(ProtocolVersion.V2, len(response)) + response
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
@@ -223,6 +223,62 @@ class TestIntegrityIdTracking:
         conn._recv_s7_data = MagicMock(return_value=frame)
 
         assert conn.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == application_payload
+
+    def test_nonfatal_system_event_is_consumed_before_sync_response(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V3
+        conn._session_id = 0x0000039B
+
+        confirmation = bytes.fromhex("00000000000002f60000000000000000")
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
+        application_payload = b"\x00\x01"
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.SET_VAR_SUBSTREAMED, 0, 0, 0x34)
+        response += application_payload
+        response_frame = encode_header(ProtocolVersion.V3, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V3, 0)
+
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(side_effect=[event_frame, response_frame])
+
+        assert conn.send_request(FunctionCode.SET_VAR_SUBSTREAMED) == application_payload
+        assert conn._recv_s7_data.call_count == 2
+
+    def test_fatal_system_event_raises_protocol_error(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V3
+        conn._session_id = 0x0000039B
+
+        fatal = bytes(16)
+        fatal += bytes.fromhex("0000001700009d6c")
+        fatal += struct.pack(">I", 40305) + bytes.fromhex("00000009") + (-1).to_bytes(8, "big", signed=True)
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(fatal)) + fatal
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(return_value=event_frame)
+
+        with pytest.raises(S7ProtocolError, match="Fatal S7CommPlus SystemEvent"):
+            conn.send_request(FunctionCode.SET_VAR_SUBSTREAMED)
+
+    @pytest.mark.asyncio
+    async def test_nonfatal_system_event_is_consumed_before_async_response(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+
+        confirmation = bytes.fromhex("00000000000002f60000000000000000")
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
+        response += b"\x00\x01"
+        response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(side_effect=[event_frame, response_frame])
+
+        assert await client._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == b"\x00\x01"
+        assert client._recv_cotp_dt.await_count == 2
 
 
 class TestIntegrityIdVlqEncoding:
@@ -263,6 +319,33 @@ class TestLegitimationWireFormat:
         expected += struct.pack(">H", 1)
         expected += struct.pack(">I", 0)
         assert payload == expected
+
+    def test_build_v1_session_key_challenge_payload(self) -> None:
+        """Match the challenge request accepted by the S7-1200 in GH-710."""
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._sequence_number = 4
+
+        payload = conn._build_get_var_substreamed(0x0000039B, LegitimationId.SERVER_SESSION_REQUEST)
+
+        assert payload == bytes.fromhex("0000039b200401822f000004e88969001200000000896a001300896b00040000000401000000")
+
+    def test_v1_session_key_challenge_splices_integrity_before_three_byte_fill(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_id = 0x0000039B
+        conn._session_challenge = bytes(range(20))
+        conn._session_key = bytes(range(24))
+        conn._session_auth_public_key = bytes(range(24))
+        conn.send_request = MagicMock(side_effect=[b"", b"\x00"])
+
+        with patch("s7commplus.session_auth.legitimate.solve_legitimate_challenge_real_plc", return_value=bytes(248)):
+            conn._post_auth_legitimation()
+
+        first_call = conn.send_request.call_args_list[0]
+        assert first_call.args == (
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            conn._build_get_var_substreamed(0x0000039B, LegitimationId.SERVER_SESSION_REQUEST),
+        )
+        assert first_call.kwargs == {"integrity_tail": 3}
 
     def test_parse_get_var_substreamed_usint_array(self) -> None:
         challenge = bytes(range(20))

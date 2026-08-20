@@ -20,7 +20,7 @@ from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_se
 from s7commplus.codec import encode_object_qualifier, encode_pvalue_blob
 from s7commplus.codec import _pvalue_element_size as _element_size
 from s7commplus.codec import skip_typed_value, parse_server_session_version
-from s7commplus.protocol import DataType, ElementID, ObjectId
+from s7commplus.protocol import DataType, ElementID, ObjectId, ProtocolVersion
 from s7commplus.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -641,6 +641,17 @@ class TestReassembledPayload:
     def test_multiple_fragments_split_across_reads(self) -> None:
         conn = self._conn_yielding([self._frag(b"abc"), self._frag(b"de"), self._TRAILER])
         assert conn._recv_reassembled_payload() == b"abcde"
+
+    def test_v3_session_key_hmac_is_stripped_from_each_fragment(self) -> None:
+        conn = self._conn_yielding([])
+        conn._session_key = bytes(24)
+
+        def v3_frag(data: bytes) -> bytes:
+            protected = b"\x20" + bytes(32) + data
+            return bytes([0x72, ProtocolVersion.V3, 0, len(protected)]) + protected
+
+        initial = v3_frag(b"abc") + v3_frag(b"de") + bytes([0x72, ProtocolVersion.V3, 0, 0])
+        assert conn._recv_reassembled_payload(initial) == b"abcde"
 
     def test_bad_fragment_header_raises(self) -> None:
         from snap7.error import S7ConnectionError

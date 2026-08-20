@@ -36,9 +36,11 @@ from .codec import (
     parse_server_session_version,
 )
 from .connection import (
+    _MAX_SYSTEM_EVENTS_PER_RESPONSE,
     _S7_CIPHERS,
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
+    _check_system_event,
     _check_set_variable_response,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
@@ -764,16 +766,22 @@ class S7CommPlusAsyncClient:
                 else:
                     self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
+            response_data = await self._recv_response_frame()
+
             # Large responses (e.g. Explore) are split across several S7CommPlus PDUs.
             if reassemble:
-                data = await self._recv_reassembled_payload()
+                data = await self._recv_reassembled_payload(response_data)
                 if len(data) < 10:
                     raise RuntimeError("Response too short")
+                resp_func = struct.unpack_from(">H", data, 3)[0]
+                resp_seq = struct.unpack_from(">H", data, 7)[0]
+                if resp_seq != seq_num:
+                    raise RuntimeError(
+                        f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
+                    )
                 return bytes(data[10:])
 
-            response_data = await self._recv_cotp_dt()
-
-            version, data_length, consumed = decode_header(response_data)
+            _, data_length, consumed = decode_header(response_data)
             response = response_data[consumed : consumed + data_length]
 
             if len(response) < 10:
@@ -782,9 +790,25 @@ class S7CommPlusAsyncClient:
             # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
             # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
             # IntegrityId travels at the END of the payload and is ignored by the parsers.
+            resp_func = struct.unpack_from(">H", response, 3)[0]
+            resp_seq = struct.unpack_from(">H", response, 7)[0]
+            if resp_seq != seq_num:
+                raise RuntimeError(
+                    f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
+                )
             return response[10:]
 
-    async def _recv_reassembled_payload(self) -> bytes:
+    async def _recv_response_frame(self) -> bytes:
+        """Receive the next application response, consuming non-fatal SystemEvents."""
+        for _ in range(_MAX_SYSTEM_EVENTS_PER_RESPONSE + 1):
+            response_data = await self._recv_cotp_dt()
+            version, data_length, consumed = decode_header(response_data)
+            if version != ProtocolVersion.SYSTEM_EVENT:
+                return response_data
+            _check_system_event(bytes(response_data[consumed : consumed + data_length]))
+        raise RuntimeError("Too many S7CommPlus SystemEvents while waiting for a response")
+
+    async def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
         """Receive a possibly-fragmented S7CommPlus response, returning its data section.
 
         A large response is split into several S7CommPlus PDUs. Each fragment is
@@ -793,7 +817,7 @@ class S7CommPlusAsyncClient:
         of every fragment until the trailer is seen. Works for single-PDU responses
         too (one fragment immediately followed by the trailer).
         """
-        buf = bytearray()
+        buf = bytearray(initial_data)
 
         async def ensure(n: int) -> None:
             while len(buf) < n:
