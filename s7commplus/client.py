@@ -629,7 +629,7 @@ class S7CommPlusClient:
         self,
         items: Sequence[SubscriptionItem | str],
         cycle_ms: int = 100,
-        credit_limit: int = -1,
+        credit_limit: int = 10,
     ) -> int:
         """Create a data change subscription.
 
@@ -643,8 +643,8 @@ class S7CommPlusClient:
         Args:
             items: Symbolic access-sequence strings or subscription items.
             cycle_ms: Sampling cycle in milliseconds.
-            credit_limit: Number of notification credits, or ``-1`` for
-                unlimited notifications.
+            credit_limit: Number of notification credits. The default of 10
+                matches the value accepted by real S7-1500 PLCs.
 
         Returns:
             Subscription object ID assigned by the PLC.
@@ -694,8 +694,12 @@ class S7CommPlusClient:
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
 
-        payload = build_delete_subscription_request(subscription_id, self._connection.protocol_version)
+        # Subscription children are owned by the session's second CreateObject
+        # result. The reference driver deletes that container, not the child ID.
+        payload = build_delete_subscription_request(self._connection.subscription_container_id, self._connection.protocol_version)
         self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
 

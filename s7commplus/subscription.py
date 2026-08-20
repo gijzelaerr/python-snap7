@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from .codec import decode_header, decode_pvalue_to_bytes, encode_object_qualifier
 from .protocol import DataType, ElementID, Ids, Opcode, ProtocolVersion
-from .vlq import decode_uint32_vlq, encode_uint32_vlq
+from .vlq import decode_uint32_vlq, encode_int64_vlq, encode_uint32_vlq
 
 
 @dataclass(frozen=True)
@@ -127,10 +127,10 @@ def build_subscription_request(
     items: Sequence[SubscriptionItem],
     *,
     cycle_ms: int = 100,
-    credit_limit: int = -1,
+    credit_limit: int = 10,
     change_counter: int = 1,
     relation_id: int = 0x7FFFC001,
-    route_mode: int = 0x20,
+    route_mode: int = 0x14,
 ) -> tuple[bytes, int]:
     """Build a CreateObject payload and its IntegrityId insertion tail.
 
@@ -160,14 +160,14 @@ def build_subscription_request(
     payload += encode_uint32_vlq(0)
     payload += encode_uint32_vlq(0)
 
-    name = f"python-snap7-subscription-{relation_id:08x}".encode()
+    name = f"Subscription_{relation_id}".encode()
     payload += _attribute(
         Ids.OBJECT_VARIABLE_TYPE_NAME,
         _scalar(DataType.WSTRING, encode_uint32_vlq(len(name)) + name),
     )
     payload += _attribute(Ids.SUBSCRIPTION_FUNCTION_CLASS_ID, _scalar(DataType.USINT, b"\x00"))
     payload += _attribute(Ids.SUBSCRIPTION_MISSED_SENDINGS, _scalar(DataType.UINT, struct.pack(">H", 0)))
-    payload += _attribute(Ids.SUBSCRIPTION_SUBSYSTEM_ERROR, _scalar(DataType.LINT, struct.pack(">q", 0)))
+    payload += _attribute(Ids.SUBSCRIPTION_SUBSYSTEM_ERROR, _scalar(DataType.LINT, encode_int64_vlq(0)))
     payload += _attribute(Ids.SUBSCRIPTION_ROUTE_MODE, _scalar(DataType.USINT, bytes([route_mode & 0xFF])))
     payload += _attribute(Ids.SUBSCRIPTION_ACTIVE, _scalar(DataType.BOOL, b"\x01"))
     payload += _attribute(Ids.SUBSCRIPTION_REFERENCE_LIST, _reference_list(items, change_counter))

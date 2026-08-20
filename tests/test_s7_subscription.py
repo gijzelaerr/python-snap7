@@ -54,6 +54,29 @@ class TestSubscriptionItem:
 
 
 class TestSubscriptionRequest:
+    def test_matches_real_plc_reference_trace(self) -> None:
+        item = SubscriptionItem.from_access_sequence("8A0E0027.25.1A")
+        payload, integrity_tail = build_subscription_request(
+            0x70000CB8,
+            [item],
+            cycle_ms=100,
+            relation_id=0x7FFFC001,
+        )
+
+        # Before TLS encryption, captured from the working C# reference driver.
+        # The request's IntegrityId 2 appears at offset 11 and is inserted later
+        # by send_request(), so remove it when comparing the builder output.
+        captured = bytes.fromhex(
+            "70000cb80004000000000002a17fffc00187690000a38169001517"
+            "537562736372697074696f6e5f32313437343637323635a3883a000200"
+            "a3876a00030000a3876b000900a38810000214a38811000101a388182004"
+            "0b888084800000018880908003010088d0b88027009376251aa38819000464"
+            "a3881b000200a3881c000200a3881d0007000aa3881e0003ffffa3881f000200"
+            "a200000000"
+        )
+        assert payload == captured[:11] + captured[12:]
+        assert integrity_tail == len(payload) - 11
+
     def test_uses_subscription_container_and_symbolic_reference_list(self) -> None:
         item = SubscriptionItem.from_access_sequence("8A0E0007.A.2", symbol_crc=0x1234, reference_id=7)
         payload, integrity_tail = build_subscription_request(0x3C2, [item], cycle_ms=250)
@@ -87,6 +110,11 @@ class TestSubscriptionRequest:
         assert payload.startswith(struct.pack(">I", 0x70400025) + b"\x00")
         assert payload.endswith(struct.pack(">I", 0))
         assert len(payload) > 9
+
+    def test_delete_request_matches_real_plc_reference_trace(self) -> None:
+        payload = build_delete_subscription_request(0x70000CB8, ProtocolVersion.V2)
+        wire_payload = payload[:-4] + b"\x03" + payload[-4:]
+        assert wire_payload == bytes.fromhex("70000cb800000004e88969001200000000896a001300896b000400000300000000")
 
 
 class TestSubscriptionNotification:
@@ -129,7 +157,7 @@ class TestSubscriptionClient:
     def test_create_receive_and_delete(self) -> None:
         connection = MagicMock()
         connection.subscription_container_id = 0x3C2
-        connection.protocol_version = ProtocolVersion.V1
+        connection.protocol_version = ProtocolVersion.V2
         create_response = encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x70400025)
         connection.send_request.return_value = create_response
         connection.receive_notification.return_value = _notification_frame()
@@ -147,7 +175,7 @@ class TestSubscriptionClient:
         client.delete_subscription(subscription_id)
         delete_call = connection.send_request.call_args_list[1]
         assert delete_call.args[0] == FunctionCode.DELETE_OBJECT
-        assert delete_call.args[1].startswith(struct.pack(">I", subscription_id))
+        assert delete_call.args[1].startswith(struct.pack(">I", connection.subscription_container_id))
 
 
 class TestNotificationQueue:
