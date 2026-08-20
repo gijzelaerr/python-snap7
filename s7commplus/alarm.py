@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import struct
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from enum import IntEnum
 from typing import Any
 
+from .codec import encode_object_qualifier
 from .protocol import DataType, ElementID, Ids, Opcode
 from .vlq import decode_int32_vlq, decode_int64_vlq, decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
@@ -13,11 +16,38 @@ _ALARM_SUBSCRIPTION_RELATION_ID = 0x7FFFC001
 _ALARM_REFERENCE_RELATION_ID = 0x51010001
 
 
+class LanguageId(IntEnum):
+    """Windows locale identifiers (LCIDs) commonly supported by Siemens HMIs."""
+
+    CHINESE_TRADITIONAL = 1028
+    CZECH = 1029
+    DANISH = 1030
+    GERMAN_GERMANY = 1031
+    GREEK = 1032
+    ENGLISH_UNITED_STATES = 1033
+    SPANISH_TRADITIONAL = 1034
+    FINNISH = 1035
+    FRENCH_FRANCE = 1036
+    HUNGARIAN = 1038
+    ITALIAN_ITALY = 1040
+    JAPANESE = 1041
+    KOREAN = 1042
+    DUTCH_NETHERLANDS = 1043
+    POLISH = 1045
+    PORTUGUESE_BRAZIL = 1046
+    RUSSIAN = 1049
+    SWEDISH = 1053
+    TURKISH = 1055
+    CHINESE_SIMPLIFIED = 2052
+    DUTCH_BELGIUM = 2067
+    PORTUGUESE_PORTUGAL = 2070
+
+
 @dataclass(frozen=True)
 class AlarmText:
     """The texts for one alarm in one PLC language."""
 
-    language_id: int
+    language_id: LanguageId | int
     info_text: str = ""
     alarm_text: str = ""
     additional_texts: tuple[str, ...] = ()
@@ -87,10 +117,10 @@ def _uint_array(values: list[int], flags: int = 0x10) -> bytes:
 
 
 def build_alarm_subscription_request(
-    session_id: int,
-    language_ids: list[int] | None = None,
+    subscription_container_id: int,
+    language_ids: Sequence[LanguageId | int] | None = None,
     domains: list[int] | None = None,
-    credit_limit: int = -1,
+    credit_limit: int = 10,
 ) -> bytes:
     """Build an alarm-subscription CREATE_OBJECT payload."""
     if not -1 <= credit_limit <= 255:
@@ -103,7 +133,7 @@ def build_alarm_subscription_request(
         raise ValueError("language IDs must be UInt32 values")
 
     payload = bytearray()
-    payload += struct.pack(">I", session_id)
+    payload += struct.pack(">I", subscription_container_id)
     payload += bytes([0, DataType.UDINT]) + encode_uint32_vlq(0)
     payload += struct.pack(">I", 0)
     payload += bytes([ElementID.START_OF_OBJECT])
@@ -111,7 +141,9 @@ def build_alarm_subscription_request(
     payload += encode_uint32_vlq(Ids.CLASS_SUBSCRIPTION)
     payload += encode_uint32_vlq(0) + encode_uint32_vlq(0)
     payload += _attribute(
-        Ids.OBJECT_VARIABLE_TYPE_NAME, DataType.WSTRING, _wstring(f"PyAlarm_{_ALARM_SUBSCRIPTION_RELATION_ID:#x}")
+        Ids.OBJECT_VARIABLE_TYPE_NAME,
+        DataType.WSTRING,
+        _wstring(f"Subscription_{_ALARM_SUBSCRIPTION_RELATION_ID}"),
     )
     payload += _attribute(Ids.SUBSCRIPTION_FUNCTION_CLASS_ID, DataType.USINT, b"\x02")
     payload += _attribute(Ids.SUBSCRIPTION_MISSED_SENDINGS, DataType.UINT, struct.pack(">H", 0))
@@ -131,7 +163,7 @@ def build_alarm_subscription_request(
     payload += struct.pack(">I", _ALARM_REFERENCE_RELATION_ID)
     payload += encode_uint32_vlq(Ids.ALARM_SUBSCRIPTION_REF_CLASS_RID)
     payload += encode_uint32_vlq(0) + encode_uint32_vlq(0)
-    payload += _attribute(Ids.OBJECT_VARIABLE_TYPE_NAME, DataType.WSTRING, _wstring("python-snap7 alarms"))
+    payload += _attribute(Ids.OBJECT_VARIABLE_TYPE_NAME, DataType.WSTRING, _wstring("S7pDriver_Alarming"))
     payload += _attribute(Ids.SUBSCRIPTION_REFERENCE_TRIGGER_MODE, DataType.USINT, b"\x03")
     payload += bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(Ids.ALARM_SUBSCRIPTION_REF_ALARM_DOMAIN)
     payload += _uint_array([0] * 10)
@@ -146,6 +178,16 @@ def build_alarm_subscription_request(
     payload += bytes([ElementID.TERMINATING_OBJECT, ElementID.TERMINATING_OBJECT])
     payload += struct.pack(">I", 0)
     return bytes(payload)
+
+
+def build_delete_alarm_subscription_request(subscription_container_id: int, protocol_version: int) -> bytes:
+    """Build the DeleteObject payload used for an alarm subscription container."""
+    return (
+        struct.pack(">I", subscription_container_id)
+        + b"\x00"
+        + encode_object_qualifier(protocol_version=protocol_version)
+        + struct.pack(">I", 0)
+    )
 
 
 def build_alarm_explore_request() -> bytes:
@@ -315,7 +357,7 @@ def _decode_objects(data: bytes, offset: int) -> tuple[list[_Object], int]:
     return objects, offset
 
 
-def _alarm_texts(value: Any, language_ids: set[int] | None) -> dict[int, AlarmText]:
+def _alarm_texts(value: Any, language_ids: set[LanguageId | int] | None) -> dict[int, AlarmText]:
     grouped: dict[int, dict[int, str]] = {}
     if not isinstance(value, dict):
         return {}
@@ -333,7 +375,7 @@ def _alarm_texts(value: Any, language_ids: set[int] | None) -> dict[int, AlarmTe
     return result
 
 
-def _alarm_from_object(obj: _Object, language_ids: set[int] | None) -> Alarm:
+def _alarm_from_object(obj: _Object, language_ids: set[LanguageId | int] | None) -> Alarm:
     attrs = obj.attributes
     state_id = Ids.ALARM_DAI_COMING if Ids.ALARM_DAI_COMING in attrs else Ids.ALARM_DAI_GOING
     state_value = attrs.get(state_id)
@@ -366,7 +408,7 @@ def _alarm_from_object(obj: _Object, language_ids: set[int] | None) -> Alarm:
     )
 
 
-def parse_alarm_explore_response(response: bytes, language_ids: list[int] | None = None) -> list[Alarm]:
+def parse_alarm_explore_response(response: bytes, language_ids: Sequence[LanguageId | int] | None = None) -> list[Alarm]:
     """Parse the payload returned by an alarm-subsystem EXPLORE request."""
     return_value, offset = _read_vlq64(response, 0)
     if return_value != 0:
@@ -382,7 +424,7 @@ def parse_alarm_explore_response(response: bytes, language_ids: list[int] | None
     return [_alarm_from_object(obj, wanted) for obj in objects if obj.class_id == Ids.ALARM_DAI_CLASS_RID]
 
 
-def parse_alarm_notification(frame: bytes, language_ids: list[int] | None = None) -> AlarmNotification:
+def parse_alarm_notification(frame: bytes, language_ids: Sequence[LanguageId | int] | None = None) -> AlarmNotification:
     """Parse one complete S7CommPlus notification frame."""
     if len(frame) < 5 or frame[0] != 0x72:
         raise ValueError("Invalid S7CommPlus notification frame")

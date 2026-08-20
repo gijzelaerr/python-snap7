@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from s7commplus import Alarm, AlarmNotification, AlarmText
+from s7commplus import Alarm, AlarmNotification, AlarmText, LanguageId
 from s7commplus.alarm import (
     build_alarm_explore_request,
     build_alarm_subscription_request,
+    build_delete_alarm_subscription_request,
     parse_alarm_explore_response,
     parse_alarm_notification,
 )
@@ -68,6 +69,29 @@ def test_alarm_models_are_public() -> None:
     assert Alarm.__module__ == "s7commplus.alarm"
     assert AlarmNotification.__module__ == "s7commplus.alarm"
     assert AlarmText.__module__ == "s7commplus.alarm"
+    assert LanguageId.ENGLISH_UNITED_STATES == 1033
+
+
+def test_alarm_subscription_matches_real_plc_reference_trace() -> None:
+    payload = build_alarm_subscription_request(0x70000CB8)
+    captured = bytes.fromhex(
+        "70000cb80004000000000002a17fffc00187690000a38169001517"
+        "537562736372697074696f6e5f32313437343637323635a3883a000202"
+        "a3876a00030000a3876b000900a38810000202a38811000101a388182004"
+        "0388808480000000a38819000400a3881a000400a3881b000200a3881c000200"
+        "a3881d0007000aa3881e0003ffffa15101000194660000a38169001512"
+        "5337704472697665725f416c61726d696e67a3876d000203a3946310030a"
+        "0000000000000000000000000000000000000000a3bc33200301ffff"
+        "a3bf75200400a3bf6d000101a4946400000008a2a200000000"
+    )
+    # The write IntegrityId 2 is inserted by _send_request at offset 11.
+    assert payload == captured[:11] + captured[12:]
+
+
+def test_alarm_delete_matches_real_plc_reference_trace() -> None:
+    payload = build_delete_alarm_subscription_request(0x70000CB8, ProtocolVersion.V2)
+    wire_payload = payload[:-4] + b"\x03" + payload[-4:]
+    assert wire_payload == bytes.fromhex("70000cb800000004e88969001200000000896a001300896b000400000300000000")
 
 
 def test_build_alarm_subscription_request_contains_filters() -> None:
@@ -117,6 +141,8 @@ def test_sync_alarm_client_apis() -> None:
     client = S7CommPlusClient()
     connection = MagicMock()
     connection.session_id = 0x1234
+    connection.subscription_container_id = 0x1235
+    connection.protocol_version = ProtocolVersion.V2
     connection.send_request.side_effect = [
         encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x55667788),
         _explore_response(),
@@ -126,10 +152,15 @@ def test_sync_alarm_client_apis() -> None:
     client._connection = connection
 
     assert client.create_alarm_subscription([1031]) == 0x55667788
+    create_call = connection.send_request.call_args_list[0]
+    assert create_call.kwargs["integrity_tail"] == len(create_call.args[1]) - 11
+    assert create_call.args[1].startswith(struct.pack(">I", 0x1235))
     assert client.browse_alarms([1031])[0].texts[1031].alarm_text == "Alarm"
     assert client.receive_alarm_notification().alarms[0].cpu_alarm_id == 0x8A7E0001002A0000
     client.delete_alarm_subscription(0x55667788)
-    assert connection.send_request.call_args_list[-1].args[0] == FunctionCode.DELETE_OBJECT
+    delete_call = connection.send_request.call_args_list[-1]
+    assert delete_call.args[0] == FunctionCode.DELETE_OBJECT
+    assert delete_call.args[1].startswith(struct.pack(">I", 0x1235))
 
 
 @pytest.mark.asyncio
@@ -137,6 +168,8 @@ async def test_async_alarm_client_apis() -> None:
     client = S7CommPlusAsyncClient()
     client._connected = True
     client._session_id = 0x1234
+    client._subscription_container_id = 0x1235
+    client._protocol_version = ProtocolVersion.V2
     client._send_request = AsyncMock(
         side_effect=[
             encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x55667788),

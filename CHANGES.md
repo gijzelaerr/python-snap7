@@ -12,6 +12,7 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus PLC start/stop via INVOKE
 * S7CommPlus object browsing via EXPLORE
 * S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* S7CommPlus active-alarm browsing and alarm subscriptions (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)
 * **Symbolic (LID-based) access for optimized DBs** (experimental):
@@ -135,6 +136,7 @@ Feature and bug fix release for the pure Python S7 communication library.
 
 ### Thanks
 
+* [@bonk-dev](https://github.com/bonk-dev) — [HarpoS7](https://github.com/bonk-dev/HarpoS7): the session authentication implementation in `s7commplus/session_auth/` is a Python port of HarpoS7 (MIT license, see `s7commplus/session_auth/LICENSE-HarpoS7`)
 * [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
 * [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
 

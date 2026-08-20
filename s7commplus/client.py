@@ -5,30 +5,36 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import struct
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar
+
+from snap7.error import S7ConnectionError
 
 from . import typeinfo
 from .alarm import (
     Alarm,
     AlarmNotification,
+    LanguageId,
     build_alarm_explore_request,
     build_alarm_subscription_request,
+    build_delete_alarm_subscription_request,
     parse_alarm_explore_response,
     parse_alarm_notification,
 )
 from .blob_decompressor import find_and_decompress
-from .connection import S7CommPlusConnection
-from .protocol import FunctionCode, Ids, ElementID, DataType, ObjectId
-from .vlq import encode_uint32_vlq, decode_uint32_vlq, decode_uint64_vlq
 from .codec import (
+    decode_pvalue_to_bytes,
     encode_item_address,
     encode_object_qualifier,
     encode_pvalue_blob,
-    decode_pvalue_to_bytes,
     parse_create_object_session_id,
 )
+from .connection import S7CommPlusConnection
+from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
+from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 
 class S7CommPlusClient:
@@ -39,6 +45,9 @@ class S7CommPlusClient:
 
     def __init__(self) -> None:
         self._connection: Optional[S7CommPlusConnection] = None
+        # Last-used connect() arguments, kept so operations can transparently
+        # reconnect on firmware that RSTs the session after a symbolic read.
+        self._connect_params: Optional[dict[str, Any]] = None
 
     @property
     def connected(self) -> bool:
@@ -97,23 +106,67 @@ class S7CommPlusClient:
             tls_ca: Path to CA certificate for PLC verification (PEM)
             password: PLC password for legitimation (V2+ with TLS)
         """
-        self._connection = S7CommPlusConnection(host=host, port=port)
-        self._connection.connect(
-            use_tls=use_tls,
-            tls_cert=tls_cert,
-            tls_key=tls_key,
-            tls_ca=tls_ca,
-        )
+        self._connect_params = {
+            "host": host,
+            "port": port,
+            "use_tls": use_tls,
+            "tls_cert": tls_cert,
+            "tls_key": tls_key,
+            "tls_ca": tls_ca,
+            "password": password,
+        }
+        self._open_connection()
 
-        if password is not None and self._connection.tls_active:
+    def _open_connection(self) -> None:
+        """(Re)open the connection using the stored ``connect()`` arguments."""
+        if self._connect_params is None:
+            raise RuntimeError("Not connected")
+        p = self._connect_params
+        self._connection = S7CommPlusConnection(host=p["host"], port=p["port"])
+        self._connection.connect(
+            use_tls=p["use_tls"],
+            tls_cert=p["tls_cert"],
+            tls_key=p["tls_key"],
+            tls_ca=p["tls_ca"],
+            password=p["password"] or "",
+        )
+        if p["password"] is not None and self._connection.tls_active and not self._connection.requires_substreamed:
             logger.info("Performing PLC legitimation (password authentication)")
-            self._connection.authenticate(password)
+            self._connection.authenticate(p["password"])
+
+    def _reconnect(self) -> None:
+        """Tear down and re-establish the connection with the same parameters.
+
+        Some firmware (e.g. S7-1200 FW V4.1) sends a TCP RST after the first
+        symbolic ``GetMultiVariables`` read per connection, so multi-step flows
+        such as :meth:`browse` need a fresh session to continue.
+        """
+        if self._connection is not None:
+            try:
+                self._connection.disconnect()
+            except Exception:
+                pass
+        self._open_connection()
+
+    def _with_reconnect(self, op: Callable[[], "_T"]) -> "_T":
+        """Run ``op``; if the socket was RST by the PLC, reconnect once and retry.
+
+        Well-behaved firmware never triggers the retry (the first call succeeds);
+        RST-happy firmware reconnects only when a send actually fails.
+        """
+        try:
+            return op()
+        except S7ConnectionError as exc:
+            logger.info("Connection dropped by PLC (%s); reconnecting and retrying", exc)
+            self._reconnect()
+            return op()
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
         if self._connection:
             self._connection.disconnect()
             self._connection = None
+        self._connect_params = None
 
     def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block.
@@ -129,7 +182,10 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_read_payload([(db_number, start, size)])
+        if self._connection.requires_substreamed:
+            return self._db_read_substreamed(db_number, start, size)
+
+        payload = _build_read_payload([(db_number, start, size)], self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results:
@@ -137,6 +193,15 @@ class S7CommPlusClient:
         if results[0] is None:
             raise RuntimeError("Read failed: PLC returned error for item")
         return results[0]
+
+    def _db_read_substreamed(self, db_number: int, start: int, size: int) -> bytes:
+        assert self._connection is not None
+        access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
+        payload = _build_substreamed_read_payload(
+            self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, size]
+        )
+        response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
+        return _parse_substreamed_read_response(response)
 
     def db_write(self, db_number: int, start: int, data: bytes) -> None:
         """Write raw bytes to a data block.
@@ -149,9 +214,21 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_write_payload([(db_number, start, data)])
+        if self._connection.requires_substreamed:
+            self._db_write_substreamed(db_number, start, data)
+            return
+
+        payload = _build_write_payload([(db_number, start, data)], self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
+
+    def _db_write_substreamed(self, db_number: int, start: int, data: bytes) -> None:
+        assert self._connection is not None
+        access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
+        payload = _build_substreamed_write_payload(
+            self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, len(data)], data
+        )
+        self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
 
     def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request.
@@ -165,7 +242,10 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_read_payload(items)
+        if self._connection.requires_substreamed:
+            return [self._db_read_substreamed(db, start, size) for db, start, size in items]
+
+        payload = _build_read_payload(items, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         parsed = _parse_read_response(response)
         return [r if r is not None else b"" for r in parsed]
@@ -185,7 +265,14 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_area_read_payload(area_rid, start, size)
+        if self._connection.requires_substreamed:
+            payload = _build_substreamed_read_payload(
+                self._connection.session_id, area_rid, Ids.CONTROLLER_AREA_VALUE_ACTUAL, [start + 1, size]
+            )
+            response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
+            return _parse_substreamed_read_response(response)
+
+        payload = _build_area_read_payload(area_rid, start, size, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -203,7 +290,14 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_area_write_payload(area_rid, start, data)
+        if self._connection.requires_substreamed:
+            payload = _build_substreamed_write_payload(
+                self._connection.session_id, area_rid, Ids.CONTROLLER_AREA_VALUE_ACTUAL, [start + 1, len(data)], data
+            )
+            self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
+            return
+
+        payload = _build_area_write_payload(area_rid, start, data, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -245,7 +339,9 @@ class S7CommPlusClient:
             raise RuntimeError("Not connected")
 
         # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, False)
+        payload = _build_symbolic_read_payload(
+            access_area, lids, symbol_crc, False, protocol_version=self._connection.protocol_version
+        )
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -274,7 +370,9 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc)
+        payload = _build_symbolic_write_payload(
+            access_area, lids, data, symbol_crc, protocol_version=self._connection.protocol_version
+        )
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -290,7 +388,10 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_explore_payload(explore_id)
+        if self._connection._session_key is not None:
+            payload = _build_explore_payload_v3(explore_id if explore_id else 0x38)
+        else:
+            payload = _build_explore_payload(explore_id)
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return response
 
@@ -414,7 +515,14 @@ class S7CommPlusClient:
         if self._connection is None:
             raise RuntimeError("Not connected")
 
-        payload = _build_explore_request(Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER])
+        if self._connection._session_key is not None:
+            # V1-initial PLCs: explore the DB wildcard address (0x8A11FFFF)
+            # matching TIA Portal's browse pattern
+            payload = _build_explore_payload_v3(0x8A11FFFF)
+        else:
+            payload = _build_explore_request(
+                Ids.NATIVE_THE_PLC_PROGRAM_RID, [Ids.OBJECT_VARIABLE_TYPE_NAME, Ids.BLOCK_BLOCK_NUMBER]
+            )
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return _parse_explore_datablocks(response)
 
@@ -442,7 +550,9 @@ class S7CommPlusClient:
         for db_info in self.list_datablocks():
             if db_info.get("number", 0) <= 0 or db_info.get("rid", 0) == 0:
                 continue
-            ti_rid = self._read_typeinfo_rid(db_info["rid"])
+            # A symbolic read may prompt a TCP RST on RST-happy firmware; retry once
+            # on a fresh session so the read still resolves.
+            ti_rid = self._with_reconnect(lambda: self._read_typeinfo_rid(db_info["rid"]))
             if ti_rid == 0:
                 continue  # load-memory-only DB, skip
             root_nodes.append(
@@ -464,7 +574,9 @@ class S7CommPlusClient:
             )
 
         # Phase D: explore the OMS type-info container (a large, multi-fragment PDU).
-        type_objects = self._explore_type_info_container()
+        # The symbolic reads above may have left the socket RST on some firmware;
+        # reconnect and retry if so.
+        type_objects = self._with_reconnect(self._explore_type_info_container)
 
         # Phase E: recombine type-info with the DB/area nodes and flatten.
         typeinfo.build_tree(root_nodes, type_objects)
@@ -491,12 +603,17 @@ class S7CommPlusClient:
         """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
         try:
             raw = self.read_symbolic(db_rid, [1], 0)
+        except S7ConnectionError:
+            # Socket was RST by the PLC — let the caller reconnect and retry.
+            raise
         except Exception:
             return 0
         return struct.unpack(">I", raw[:4])[0] if len(raw) >= 4 else 0
 
     def _explore_type_info_container(self) -> list["typeinfo.PObject"]:
         """EXPLORE the OMS type-info container and return its per-type objects."""
+        if self._connection is None:
+            raise RuntimeError("Not connected")
         payload = _build_explore_request(Ids.OBJECT_OMS_TYPE_INFO_CONTAINER, [])
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return typeinfo.extract_type_info_objects(response)
@@ -544,9 +661,9 @@ class S7CommPlusClient:
 
     def create_alarm_subscription(
         self,
-        language_ids: Optional[list[int]] = None,
+        language_ids: Optional[list[LanguageId | int]] = None,
         domains: Optional[list[int]] = None,
-        credit_limit: int = -1,
+        credit_limit: int = 10,
     ) -> int:
         """Subscribe to PLC alarm events.
 
@@ -554,15 +671,24 @@ class S7CommPlusClient:
             language_ids: Windows LCIDs for texts included with notifications.
                 ``None`` requests every configured language.
             domains: Alarm-domain IDs to include. ``None`` subscribes to all.
-            credit_limit: Notification credit limit; ``-1`` means unlimited.
+            credit_limit: Notification credit limit. The default of 10 matches
+                the working S7-1500 reference trace.
 
         Returns:
             Subscription object ID assigned by the PLC.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
-        payload = build_alarm_subscription_request(self._connection.session_id, language_ids, domains, credit_limit)
-        response = self._connection.send_request(FunctionCode.CREATE_OBJECT, payload)
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_alarm_subscription_request(
+            self._connection.subscription_container_id, language_ids, domains, credit_limit
+        )
+        response = self._connection.send_request(
+            FunctionCode.CREATE_OBJECT,
+            payload,
+            integrity_tail=len(payload) - 11,
+        )
         object_ids, _, return_value = parse_create_object_session_id(response)
         if return_value != 0 or not object_ids:
             raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
@@ -570,15 +696,23 @@ class S7CommPlusClient:
 
     def delete_alarm_subscription(self, subscription_id: int) -> None:
         """Delete an alarm subscription created by this client."""
-        self.delete_subscription(subscription_id)
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_delete_alarm_subscription_request(
+            self._connection.subscription_container_id, self._connection.protocol_version
+        )
+        self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Alarm subscription {subscription_id:#x} deleted")
 
-    def receive_alarm_notification(self, language_ids: Optional[list[int]] = None) -> AlarmNotification:
+    def receive_alarm_notification(self, language_ids: Optional[list[LanguageId | int]] = None) -> AlarmNotification:
         """Block until the PLC sends one alarm notification."""
         if self._connection is None:
             raise RuntimeError("Not connected")
         return parse_alarm_notification(self._connection.receive_notification(), language_ids)
 
-    def browse_alarms(self, language_ids: Optional[list[int]] = None) -> list[Alarm]:
+    def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
         """Return the PLC's current active alarm state.
 
         Args:
@@ -606,7 +740,7 @@ class S7CommPlusClient:
 _SCALAR_RESPONSE_SUFFIX = bytes.fromhex("000400000000")
 
 
-def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
+def _build_read_payload(items: list[tuple[int, int, int]], protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a GetMultiVariables request payload.
 
     Args:
@@ -633,7 +767,7 @@ def _build_read_payload(items: list[tuple[int, int, int]]) -> bytes:
     payload += encode_uint32_vlq(total_field_count)
     for addr in addresses:
         payload += addr
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
@@ -661,7 +795,7 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
     offset += consumed
 
     if return_value != 0:
-        logger.error(f"_parse_read_response: PLC returned error: {return_value}")
+        logger.error(f"_parse_read_response: PLC returned error 0x{return_value:X}")
         return []
 
     values: dict[int, bytes] = {}
@@ -695,7 +829,7 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
     return results
 
 
-def _build_write_payload(items: list[tuple[int, int, bytes]]) -> bytes:
+def _build_write_payload(items: list[tuple[int, int, bytes]], protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a SetMultiVariables request payload.
 
     Args:
@@ -726,7 +860,7 @@ def _build_write_payload(items: list[tuple[int, int, bytes]]) -> bytes:
         payload += encode_uint32_vlq(i)
         payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
@@ -762,7 +896,71 @@ def _parse_write_response(response: bytes) -> None:
         raise RuntimeError(f"Write failed: {err_str}")
 
 
-def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:
+def _build_substreamed_read_payload(session_id: int, access_area: int, access_sub_area: int, lids: list[int]) -> bytes:
+    """Build a GET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
+    oq = encode_object_qualifier(protocol_version=ProtocolVersion.V1)
+    payload = bytearray()
+    payload += struct.pack(">I", session_id)
+    payload += bytes([0x20, 0x04])
+    num_fields = 4 + len(lids)
+    payload += encode_uint32_vlq(num_fields)
+    payload += encode_uint32_vlq(0)  # SymbolCRC
+    payload += encode_uint32_vlq(access_area)
+    payload += encode_uint32_vlq(len(lids) + 1)
+    payload += encode_uint32_vlq(access_sub_area)
+    for lid in lids:
+        payload += encode_uint32_vlq(lid)
+    payload += oq
+    payload += bytes([0x00])
+    payload += encode_uint32_vlq(1)
+    payload += encode_uint32_vlq(1)
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _build_substreamed_write_payload(
+    session_id: int, access_area: int, access_sub_area: int, lids: list[int], data: bytes
+) -> bytes:
+    """Build a SET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
+    oq = encode_object_qualifier(protocol_version=ProtocolVersion.V1)
+    payload = bytearray()
+    payload += struct.pack(">I", session_id)
+    payload += bytes([0x20, 0x04])
+    num_fields = 4 + len(lids)
+    payload += encode_uint32_vlq(num_fields)
+    payload += encode_uint32_vlq(0)  # SymbolCRC
+    payload += encode_uint32_vlq(access_area)
+    payload += encode_uint32_vlq(len(lids) + 1)
+    payload += encode_uint32_vlq(access_sub_area)
+    for lid in lids:
+        payload += encode_uint32_vlq(lid)
+    payload += oq
+    payload += bytes([0x00])
+    payload += encode_uint32_vlq(1)
+    payload += encode_pvalue_blob(data)
+    payload += encode_uint32_vlq(1)
+    payload += struct.pack(">I", 0)
+    return bytes(payload)
+
+
+def _parse_substreamed_read_response(response: bytes) -> bytes:
+    """Parse a GET_VAR_SUBSTREAMED response and extract the data bytes."""
+    offset = 0
+    return_value, consumed = decode_uint64_vlq(response, offset)
+    offset += consumed
+    if return_value != 0:
+        raise RuntimeError(
+            f"Substreamed read failed: PLC returned error 0x{return_value:X}. "
+            f"This may indicate the addressed object does not exist or the PLC "
+            f"does not support GET_VAR_SUBSTREAMED for data reads."
+        )
+    if offset >= len(response):
+        raise RuntimeError("Substreamed read response empty")
+    raw_bytes, consumed = decode_pvalue_to_bytes(response, offset)
+    return raw_bytes
+
+
+def _build_area_read_payload(area_rid: int, start: int, size: int, protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a GetMultiVariables payload for controller memory area access.
 
     Unlike DB access, controller areas (M, I, Q, counters, timers) use a
@@ -779,13 +977,13 @@ def _build_area_read_payload(area_rid: int, start: int, size: int) -> bytes:
     payload += encode_uint32_vlq(1)
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
 
-def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
+def _build_area_write_payload(area_rid: int, start: int, data: bytes, protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a SetMultiVariables payload for controller memory area access."""
     addr_bytes, field_count = encode_item_address(
         access_area=area_rid,
@@ -801,7 +999,7 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes) -> bytes:
     payload += encode_uint32_vlq(1)  # item number 1
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
@@ -813,6 +1011,7 @@ def _build_symbolic_read_payload(
     symbol_crc: int = 0,
     with_integrity: bool = True,
     integrity_id: int = 1,
+    protocol_version: int = ProtocolVersion.V2,
 ) -> bytes:
     """Build a GetMultiVariables payload for symbolic (LID-based) access.
 
@@ -840,14 +1039,20 @@ def _build_symbolic_read_payload(
     payload += encode_uint32_vlq(1)  # one item
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     if with_integrity:
         payload += encode_uint32_vlq(integrity_id)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
 
-def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> bytes:
+def _build_symbolic_write_payload(
+    access_area: int,
+    lids: list[int],
+    data: bytes,
+    symbol_crc: int = 0,
+    protocol_version: int = ProtocolVersion.V2,
+) -> bytes:
     """Build a SetMultiVariables payload for symbolic (LID-based) access."""
     if access_area >= 0x8A0E0000:
         access_sub_area = Ids.DB_VALUE_ACTUAL
@@ -869,7 +1074,7 @@ def _build_symbolic_write_payload(access_area: int, lids: list[int], data: bytes
     payload += encode_uint32_vlq(1)  # item number 1
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
-    payload += encode_object_qualifier()
+    payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
@@ -887,6 +1092,19 @@ def _build_explore_payload(explore_id: int = 0) -> bytes:
     payload = bytearray()
     payload += encode_uint32_vlq(explore_id)
     return bytes(payload)
+
+
+def _build_explore_payload_v3(explore_id: int, sequence: int = 10) -> bytes:
+    """Build a V3-style EXPLORE request payload matching TIA Portal format.
+
+    V1-initial PLCs use a 4-byte big-endian InObjectId followed by
+    fixed parameters, rather than the VLQ-based format.
+    """
+    payload = struct.pack(">I", explore_id)
+    payload += bytes([0x00, 0x01, 0x00, 0x01, 0x00, 0x00])
+    payload += bytes([sequence & 0xFF])
+    payload += bytes([0x00, 0x00, 0x00, 0x00, 0x00])
+    return payload
 
 
 def _build_invoke_payload(state: int) -> bytes:
