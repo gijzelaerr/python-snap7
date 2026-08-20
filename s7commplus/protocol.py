@@ -206,6 +206,10 @@ class Ids(IntEnum):
     ALARM_SUBSCRIPTION_REF_ALARM_DOMAIN = 2659
     ALARM_SUBSCRIPTION_REF_ITS_ALARM_SUBSYSTEM = 2660
 
+    # Session's effective protection level, readable via GetVarSubStreamed
+    EFFECTIVE_PROTECTION_LEVEL = 1842
+    ACTIVE_PROTECTION_LEVEL = 1843
+
     # DB AccessArea base (add DB number to get area ID)
     DB_ACCESS_AREA_BASE = 0x8A0E0000
 
@@ -221,6 +225,26 @@ READ_FUNCTION_CODES: frozenset[int] = frozenset(
         FunctionCode.GET_VARIABLES_ADDRESS,
     }
 )
+
+
+class AccessLevel(IntEnum):
+    """Protection levels reported by `Ids.EFFECTIVE_PROTECTION_LEVEL`.
+
+    Lower is more privileged. A successful legitimation lowers the level; the
+    level reached depends on which password was configured for which role, so
+    it does not necessarily become `FULL_ACCESS`.
+
+    `NONE` is not in the C# reference; PLCs with no protection configured
+    report it.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/AccessLevel.cs
+    """
+
+    NONE = 0
+    FULL_ACCESS = 1
+    READ_ACCESS = 2
+    HMI_ACCESS = 3
+    NO_ACCESS = 4
 
 
 class LegitimationId(IntEnum):

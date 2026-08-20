@@ -41,6 +41,7 @@ from .connection import (
     _build_set_variable_payload,
     _check_set_variable_response,
     _parse_get_var_substreamed_response,
+    _parse_protection_level_response,
     _set_s7_groups,
 )
 from .protocol import (
@@ -96,6 +97,8 @@ class S7CommPlusAsyncClient:
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
         self._server_session_version: Optional[bytes] = None
         self._session_setup_ok: bool = False
+        # Effective protection level, read once the session is up
+        self._protection_level: Optional[int] = None
 
     @property
     def connected(self) -> bool:
@@ -123,6 +126,11 @@ class S7CommPlusAsyncClient:
     def oms_secret(self) -> Optional[bytes]:
         """OMS exporter secret from TLS session (None if TLS not active)."""
         return self._oms_secret
+
+    @property
+    def protection_level(self) -> Optional[int]:
+        """Effective protection level reported by the PLC (see `AccessLevel`)."""
+        return self._protection_level
 
     async def connect(
         self,
@@ -196,6 +204,13 @@ class S7CommPlusAsyncClient:
             else:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
                 self._session_setup_ok = False
+
+            # Only a session that completed setup answers attribute reads.
+            if self._session_setup_ok:
+                self._protection_level = await self._get_effective_protection_level()
+                if self._protection_level is not None:
+                    logger.info(f"PLC reports protection level: {self._protection_level}")
+
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -243,6 +258,11 @@ class S7CommPlusAsyncClient:
                 await self._send_legitimation_legacy(response_data)
 
         logger.info("PLC legitimation completed successfully")
+
+        # Renew protection level
+        self._protection_level = await self._get_effective_protection_level()
+        if self._protection_level is not None:
+            logger.info(f"PLC reports protection level: {self._protection_level}")
 
     async def _activate_tls(
         self,
@@ -326,6 +346,19 @@ class S7CommPlusAsyncClient:
         data = await self._recv_cotp_raw()
         self._incoming_bio.write(data)
 
+    async def _get_effective_protection_level(self) -> Optional[int]:
+        """Read the session's effective protection level (see `AccessLevel`), None if request failed."""
+        from snap7.error import S7ConnectionError
+
+        payload = _build_get_var_substreamed_payload(self._session_id, Ids.EFFECTIVE_PROTECTION_LEVEL)
+        try:
+            resp = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+            level = _parse_protection_level_response(resp)
+        except S7ConnectionError as exc:
+            logger.warning(f"PLC did not report a protection level: {exc}")
+            return None
+        return level
+
     async def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC."""
         from .protocol import LegitimationId
@@ -378,6 +411,7 @@ class S7CommPlusAsyncClient:
         self._oms_secret = None
         self._server_session_version = None
         self._session_setup_ok = False
+        self._protection_level = None
 
         if self._writer:
             try:
