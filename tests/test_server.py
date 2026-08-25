@@ -327,6 +327,49 @@ class TestServerISOConnectionLimits:
         assert connection_confirm == bytes.fromhex("09d0000f000100c00109")
         assert connection_confirm[0] == len(connection_confirm) - 1
 
+    def test_disconnect_confirm_has_valid_length(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection.dst_ref = 0x000F
+        connection.src_ref = 0x0001
+
+        disconnect_confirm = connection._build_cotp_dc()
+
+        assert disconnect_confirm == bytes.fromhex("05c0000f0001")
+        assert disconnect_confirm[0] == len(disconnect_confirm) - 1
+
+    def test_a_disconnect_request_ends_the_connection_normally(self) -> None:
+        # The client sends a COTP DR when it disconnects; treating it as an
+        # unexpected PDU logs an error for an ordinary goodbye.
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection._recv_exact = MagicMock(
+            side_effect=[
+                b"\x03\x00\x00\x0b",
+                b"\x06\x80\x00\x00\x01\x00\x00",
+            ]
+        )
+
+        with pytest.raises(ConnectionAbortedError):
+            connection.receive_data()
+
+        sent = b"".join(call.args[0] for call in client_socket.sendall.call_args_list)
+        assert sent[5:6] == bytes([connection.COTP_DC]), "the disconnect is confirmed"
+
+    def test_a_disconnect_request_is_confirmed_even_if_the_peer_is_gone(self) -> None:
+        client_socket = MagicMock()
+        client_socket.sendall.side_effect = OSError("broken pipe")
+        connection = ServerISOConnection(client_socket)
+        connection._recv_exact = MagicMock(
+            side_effect=[
+                b"\x03\x00\x00\x0b",
+                b"\x06\x80\x00\x00\x01\x00\x00",
+            ]
+        )
+
+        with pytest.raises(ConnectionAbortedError):
+            connection.receive_data()
+
     def test_partial_frame_timeout_closes_connection(self) -> None:
         client_socket = MagicMock()
         client_socket.recv.side_effect = [b"\x03", TimeoutError()]
