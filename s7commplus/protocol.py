@@ -210,6 +210,16 @@ class Ids(IntEnum):
     EFFECTIVE_PROTECTION_LEVEL = 1842
     ACTIVE_PROTECTION_LEVEL = 1843
 
+    # ServerSessionVersion struct element carrying the device "PAOM string"
+    # which selects the legitimation mode.
+    SESSION_VERSION_SYSTEM_PAOM_STRING = 319
+
+    # Struct and element IDs of the encrypted new-mode legitimation payload
+    LEGITIMATION_PAYLOAD_STRUCT = 40400
+    LEGITIMATION_PAYLOAD_TYPE = 40401
+    LEGITIMATION_PAYLOAD_USERNAME = 40402
+    LEGITIMATION_PAYLOAD_PASSWORD = 40403
+
     # DB AccessArea base (add DB number to get area ID)
     DB_ACCESS_AREA_BASE = 0x8A0E0000
 
@@ -265,6 +275,16 @@ class AccessLevel(IntEnum):
     READ_ACCESS = 2
     HMI_ACCESS = 3
     NO_ACCESS = 4
+
+
+class LegitimationType(IntEnum):
+    """Legitimation mode.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/LegitimationType.cs
+    """
+
+    LEGACY = 1
+    NEW = 2
 
 
 class LegitimationId(IntEnum):
