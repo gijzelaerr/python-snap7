@@ -226,6 +226,26 @@ READ_FUNCTION_CODES: frozenset[int] = frozenset(
     }
 )
 
+# Function codes whose requests carry transport flags 0x34. The reference sets
+# this per request class rather than by read/write, so it is a different split
+# than READ_FUNCTION_CODES: the writes SetVariable, SetMultiVariables and
+# DeleteObject use 0x34 too. Only CreateObject (0x36) and InitSSL (0x30) differ,
+# and a session-setup CreateObject sent with 0x34 makes the PLC reset the
+# connection. Subscription and alarm CreateObjects are the documented exception:
+# the reference overrides those to 0x34.
+#
+# Reference: TransportFlags in thomas-v2/S7CommPlusDriver/Core/*Request.cs
+FLAGS_34_FUNCTION_CODES: frozenset[int] = frozenset(
+    {
+        FunctionCode.DELETE_OBJECT,
+        FunctionCode.EXPLORE,
+        FunctionCode.GET_MULTI_VARIABLES,
+        FunctionCode.GET_VAR_SUBSTREAMED,
+        FunctionCode.SET_MULTI_VARIABLES,
+        FunctionCode.SET_VARIABLE,
+    }
+)
+
 
 class AccessLevel(IntEnum):
     """Protection levels reported by `Ids.EFFECTIVE_PROTECTION_LEVEL`.

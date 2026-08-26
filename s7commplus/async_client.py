@@ -45,6 +45,7 @@ from .connection import (
     _set_s7_groups,
 )
 from .protocol import (
+    FLAGS_34_FUNCTION_CODES,
     READ_FUNCTION_CODES,
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
@@ -737,8 +738,8 @@ class S7CommPlusAsyncClient:
                 0x0000,
                 seq_num,
                 self._session_id,
-                # Transport flags: 0x34 for GetMultiVariables and Explore, 0x36 otherwise.
-                0x34 if function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE) else 0x36,
+                # Transport flags: 0x34 for the function codes the reference sends with 0x34.
+                0x34 if function_code in FLAGS_34_FUNCTION_CODES else 0x36,
             )
 
             integrity_id_bytes = b""
@@ -992,7 +993,7 @@ class S7CommPlusAsyncClient:
             0x0000,
             seq_num,
             self._session_id,
-            0x36,
+            0x34,
         )
         request += struct.pack(">I", 0)
 
