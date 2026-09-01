@@ -5,6 +5,7 @@ and V2 connection behavior.
 """
 
 import hashlib
+import logging
 import struct
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +18,7 @@ from s7commplus.connection import (
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
     _check_set_variable_response,
+    _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
 )
@@ -534,3 +536,20 @@ class TestAuthenticate:
         conn._tls_active = False
         with pytest.raises(S7ConnectionError, match="requires TLS"):
             conn.authenticate("password")
+
+
+class TestCreateObjectStatusLogging:
+    """A CreateObject status alone does not identify a TLS requirement."""
+
+    def test_plain_connection_does_not_recommend_tls(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="s7commplus.connection"):
+            _log_create_object_return_value(0x4000800000000011, tls_active=False)
+
+        assert "continuing to parse the returned session data" in caplog.text
+        assert "TLS" not in caplog.text
+
+    def test_success_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.DEBUG, logger="s7commplus.connection"):
+            _log_create_object_return_value(0, tls_active=False)
+
+        assert caplog.text == ""
