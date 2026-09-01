@@ -232,8 +232,6 @@ pytest tests/
 - **Ensure mypy and ruff pass**: Run `mypy snap7 tests example` and `ruff check snap7 tests example` with no errors before opening a PR.
 - **Always run `uv run pre-commit run --all-files` before every `git push`.** Individual `ruff check` / `ruff format --check` commands don't exercise every hook (`ruff format` is the one that actually reformats files, not the `--check` variant). Skipping pre-commit is the single most common reason CI fails on the ruff-format hook right after a push. If the hook reformats, amend and re-push — do not rely on "it passed locally" via other commands.
 - **If using AI coding assistants**: Review the generated code carefully before submitting. AI-generated PRs that are large, unfocused, or not thoroughly reviewed are likely to be rejected.
-- **No Co-Authored-By trailers**: Do not add `Co-Authored-By` lines for AI assistants in commit messages. It adds noise to the git log.
-
 ## Library Architecture Notes
 
 ### Key Design Patterns
