@@ -135,6 +135,7 @@ Feature and bug fix release for the pure Python S7 communication library.
 
 ### Thanks
 
+* [@bonk-dev](https://github.com/bonk-dev) — [HarpoS7](https://github.com/bonk-dev/HarpoS7): the session authentication implementation in `s7commplus/session_auth/` is a Python port of HarpoS7 (MIT license, see `s7commplus/session_auth/LICENSE-HarpoS7`)
 * [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
 * [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
 
