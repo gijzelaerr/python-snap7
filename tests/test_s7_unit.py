@@ -1,6 +1,8 @@
 """Unit tests for S7CommPlus client payload builders, connection parsing, and error paths."""
 
 import struct
+from unittest.mock import MagicMock, call
+
 import pytest
 
 from s7commplus.client import (
@@ -15,12 +17,13 @@ from s7commplus.client import (
     _build_area_write_payload,
     _build_symbolic_read_payload,
     _build_symbolic_write_payload,
+    _build_substreamed_write_payload,
 )
-from s7commplus.connection import S7CommPlusConnection
+from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_session_version
 from s7commplus.codec import encode_object_qualifier, encode_pvalue_blob
 from s7commplus.codec import _pvalue_element_size as _element_size
 from s7commplus.codec import skip_typed_value, parse_server_session_version
-from s7commplus.protocol import DataType, ElementID, ObjectId
+from s7commplus.protocol import DataType, ElementID, FunctionCode, Ids, ObjectId
 from s7commplus.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -474,6 +477,58 @@ class TestParseCreateObjectResponse:
         result = parse_server_session_version(bytes(payload))
         assert result == bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(3)
 
+    def test_strip_paom_string(self) -> None:
+        # Real ServerSessionVersion struct from an S7-1200 (FW v4.2). Element 319
+        # carries the device PAOM string "1;6ES7 215-1BG40-0XB0 ;V4.2".
+        captured = bytes.fromhex(
+            "00170000013a"
+            "823b00048400823c00048400823d00048480c200823e00048480c200"
+            "823f00151b313b36455337203231352d31424734302d30584230203b56342e32"
+            "8240001506323b3130383282410003000300"
+        )
+        stripped = _strip_paom_string_in_session_version(captured)
+        # Element 319 should now be an empty WString (length-VLQ 0x00).
+        assert b"\x82\x3f\x00\x15\x00\x82\x40" in stripped
+        assert b"6ES7 215-1BG40-0XB0" not in stripped
+
+    def test_strip_paom_string_idempotent_on_already_empty(self) -> None:
+        # Already-stripped struct: no PAOM string content present.
+        already_stripped = bytes.fromhex("00170000013a823f001500824000150000")
+        assert _strip_paom_string_in_session_version(already_stripped) == already_stripped
+
+    def test_strip_paom_string_no_match_returns_unchanged(self) -> None:
+        # Struct without element 319 at all — helper should leave it alone.
+        nopaom = bytes.fromhex("00170000013a823b0004840000")
+        assert _strip_paom_string_in_session_version(nopaom) == nopaom
+
+    def test_parse_public_key_checksum(self) -> None:
+        from s7commplus.codec import parse_create_object_attributes
+
+        payload = bytearray()
+        payload += bytes([ElementID.ATTRIBUTE])
+        payload += encode_uint32_vlq(233)  # ObjectVariableTypeName
+        payload += bytes([0x00, DataType.WSTRING])
+        text = "01:BD426B091F08731A"
+        payload += encode_uint32_vlq(len(text))
+        payload += text.encode("utf-8")
+        attrs = parse_create_object_attributes(bytes(payload))
+        assert attrs.public_key_fingerprint == "01:BD426B091F08731A"
+
+    def test_parse_struct_version(self) -> None:
+        from s7commplus.codec import parse_create_object_attributes
+
+        payload = bytearray()
+        payload += bytes([ElementID.ATTRIBUTE])
+        payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        struct_value = bytes([0x00, DataType.STRUCT])
+        struct_value += struct.pack(">I", 314)
+        struct_value += encode_uint32_vlq(315) + bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(512)
+        struct_value += encode_uint32_vlq(319) + bytes([0x00, DataType.WSTRING]) + encode_uint32_vlq(0)
+        struct_value += bytes([0x00])
+        payload += struct_value
+        attrs = parse_create_object_attributes(bytes(payload))
+        assert attrs.server_session_version == struct_value
+
 
 # -- Client error path tests --
 
@@ -510,6 +565,32 @@ class TestClientErrorPaths:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
             client.write_multi([(1, 0, b"data")])
+
+    def test_db_write_multi_uses_one_substreamed_request_per_item(self) -> None:
+        client = S7CommPlusClient()
+        connection = MagicMock()
+        connection.requires_substreamed = True
+        connection.session_id = 0x70000001
+        client._connection = connection
+        items = [(1, 0, b"first"), (2, 10, b"second")]
+
+        client.db_write_multi(items)
+
+        connection.send_request.assert_has_calls(
+            [
+                call(
+                    FunctionCode.SET_VAR_SUBSTREAMED,
+                    _build_substreamed_write_payload(
+                        connection.session_id,
+                        Ids.DB_ACCESS_AREA_BASE + db_number,
+                        Ids.DB_VALUE_ACTUAL,
+                        [start + 1, len(data)],
+                        data,
+                    ),
+                )
+                for db_number, start, data in items
+            ]
+        )
 
     def test_explore_not_connected(self) -> None:
         client = S7CommPlusClient()

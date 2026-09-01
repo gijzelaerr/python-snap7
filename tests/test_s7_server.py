@@ -1,16 +1,17 @@
 """Integration tests for S7CommPlus server, client, and async client."""
 
+import asyncio
 import struct
 import time
 from collections.abc import Generator
 
 import pytest
-import asyncio
 
-from s7commplus.server import S7CommPlusServer, CPUState, DataBlock
-from s7commplus.client import S7CommPlusClient
 from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.client import S7CommPlusClient
+from s7commplus.connection import _parse_get_var_substreamed_response
 from s7commplus.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
+from s7commplus.server import CPUState, DataBlock, S7CommPlusServer
 from s7commplus.vlq import encode_uint32_vlq
 
 # Use a high port to avoid conflicts
@@ -391,6 +392,59 @@ class TestAsyncClientServerIntegration:
             assert result is None
 
 
+RST_PORT = 11122
+
+
+class TestRstAfterSymbolicRead:
+    """Test RST-after-symbolic-read emulation and client reconnect."""
+
+    @pytest.fixture()
+    def rst_server(self) -> Generator[S7CommPlusServer, None, None]:
+        srv = S7CommPlusServer(rst_after_symbolic_read=True)
+        srv.register_db(
+            1,
+            {
+                "temperature": ("Real", 0),
+                "pressure": ("Real", 4),
+            },
+        )
+        db1 = srv.get_db(1)
+        assert db1 is not None
+        struct.pack_into(">f", db1.data, 0, 23.5)
+        srv.start(port=RST_PORT)
+        time.sleep(0.1)
+        yield srv
+        srv.stop()
+
+    def test_db_read_survives_rst(self, rst_server: S7CommPlusServer) -> None:
+        """A plain db_read triggers GetMultiVariables which RSTs the socket.
+
+        The first db_read succeeds (the response is sent before the RST),
+        but a second call on the same client hits a dead socket.
+        """
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=RST_PORT)
+        try:
+            data = client.db_read(1, 0, 4)
+            value = struct.unpack(">f", data)[0]
+            assert abs(value - 23.5) < 0.001
+        finally:
+            client.disconnect()
+
+    def test_browse_reconnects_on_rst(self, rst_server: S7CommPlusServer) -> None:
+        """browse() should complete despite the server RST-ing after each
+        GetMultiVariables — the _with_reconnect wrapper retries on a fresh
+        session.
+        """
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=RST_PORT)
+        try:
+            variables = client.browse()
+            assert isinstance(variables, list)
+        finally:
+            client.disconnect()
+
+
 class TestSessionKeyServer:
     """Test the server's SessionKey handshake emulation."""
 
@@ -455,6 +509,7 @@ class TestSessionKeyServer:
         assert len(response) > 0
         # The response should contain the challenge bytes
         assert TEST_CHALLENGE in response
+        assert _parse_get_var_substreamed_response(response[10:]) == TEST_CHALLENGE
 
     def test_set_var_substreamed_accepts_blob(self) -> None:
         """SetVarSubStreamed should accept any blob (legitimation response)."""

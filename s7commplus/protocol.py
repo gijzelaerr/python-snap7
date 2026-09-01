@@ -158,6 +158,11 @@ class Ids(IntEnum):
     # is 3736 (0xE98). Ref: thomas-v2/S7CommPlusDriver/Core/Ids.cs.
     CONTROLLER_AREA_VALUE_ACTUAL = 3736
 
+    # SecurityKey struct IDs (from tkh-software/s7plus.net S7Ids.cs)
+    STRUCT_SECURITY_KEY = 1800
+    SECURITY_KEY_ID = 1825
+    SESSION_KEY = 1830
+
     # ObjectQualifier structure IDs
     OBJECT_QUALIFIER = 1256
     PARENT_RID = 1257
@@ -201,6 +206,10 @@ class Ids(IntEnum):
     ALARM_SUBSCRIPTION_REF_ALARM_DOMAIN = 2659
     ALARM_SUBSCRIPTION_REF_ITS_ALARM_SUBSYSTEM = 2660
 
+    # Session's effective protection level, readable via GetVarSubStreamed
+    EFFECTIVE_PROTECTION_LEVEL = 1842
+    ACTIVE_PROTECTION_LEVEL = 1843
+
     # DB AccessArea base (add DB number to get area ID)
     DB_ACCESS_AREA_BASE = 0x8A0E0000
 
@@ -218,6 +227,26 @@ READ_FUNCTION_CODES: frozenset[int] = frozenset(
 )
 
 
+class AccessLevel(IntEnum):
+    """Protection levels reported by `Ids.EFFECTIVE_PROTECTION_LEVEL`.
+
+    Lower is more privileged. A successful legitimation lowers the level; the
+    level reached depends on which password was configured for which role, so
+    it does not necessarily become `FULL_ACCESS`.
+
+    `NONE` is not in the C# reference; PLCs with no protection configured
+    report it.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/AccessLevel.cs
+    """
+
+    NONE = 0
+    FULL_ACCESS = 1
+    READ_ACCESS = 2
+    HMI_ACCESS = 3
+    NO_ACCESS = 4
+
+
 class LegitimationId(IntEnum):
     """Legitimation IDs used in password authentication (V2+).
 
@@ -226,6 +255,9 @@ class LegitimationId(IntEnum):
 
     SERVER_SESSION_REQUEST = 303
     SERVER_SESSION_RESPONSE = 304
+    # V2 session-setup legitimation, written alongside ServerSessionVersion
+    # in the same SetMultiVariables on V1-initial S7-1200 firmware. Distinct
+    # from LEGITIMATE (1846) which is the password-auth challenge response.
     SESSION_SETUP_LEGITIMATION = 1830
     LEGITIMATE = 1846
 
