@@ -6,20 +6,39 @@ and V2 connection behavior.
 
 import hashlib
 import struct
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from s7commplus.codec import encode_header
-from s7commplus.connection import S7CommPlusConnection
+from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.codec import encode_header, encode_object_qualifier
+from s7commplus.connection import (
+    S7CommPlusConnection,
+    _build_get_var_substreamed_payload,
+    _build_set_variable_payload,
+    _check_set_variable_response,
+    _parse_get_var_substreamed_response,
+    _parse_protection_level_response,
+)
 from s7commplus.legitimation import (
     LegitimationState,
     _build_legitimation_payload,
     build_legacy_response,
     derive_legitimation_key,
 )
-from s7commplus.protocol import READ_FUNCTION_CODES, FunctionCode, LegitimationId, Opcode, ProtocolVersion
+from s7commplus.protocol import (
+    READ_FUNCTION_CODES,
+    AccessLevel,
+    DataType,
+    FunctionCode,
+    Ids,
+    LegitimationId,
+    Opcode,
+    ProtocolVersion,
+)
 from s7commplus.server import S7CommPlusServer
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
+from snap7.error import S7ConnectionError
 
 
 class TestReadFunctionCodes:
@@ -189,6 +208,24 @@ class TestIntegrityIdTracking:
         conn = S7CommPlusConnection("127.0.0.1")
         assert conn.protocol_version == 0
 
+    def test_tls_v2_response_application_payload_is_not_stripped(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V2
+        conn._session_id = 0x70000001
+        conn._with_integrity_id = True
+
+        application_payload = bytes.fromhex("000100100201")
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        response += application_payload
+        frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(return_value=frame)
+
+        assert conn.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == application_payload
+
 
 class TestServerResponseIntegrityId:
     """Test V2 response IntegrityId selection and encoding."""
@@ -222,21 +259,27 @@ class TestServerResponseIntegrityId:
         server = S7CommPlusServer(protocol_version=ProtocolVersion.V2)
         request = self._request(function_code)
 
-        initial_response = server._process_request(request, 0x12345678)
-        advanced_response = server._process_request(request, 0x12345678, integrity_id_read=128, integrity_id_write=16384)
+        initial_response, initial_rst = server._process_request(request, 0x12345678)
+        advanced_response, advanced_rst = server._process_request(
+            request, 0x12345678, integrity_id_read=128, integrity_id_write=16384
+        )
 
         assert initial_response is not None
         assert advanced_response is not None
         assert advanced_response == initial_response[:-1] + encode_uint32_vlq(expected_integrity_id)
+        assert not initial_rst
+        assert not advanced_rst
 
     def test_v1_response_keeps_legacy_integrity_field(self) -> None:
         server = S7CommPlusServer(protocol_version=ProtocolVersion.V1)
         request = self._request(FunctionCode.GET_MULTI_VARIABLES)
 
-        initial_response = server._process_request(request, 0x12345678)
-        advanced_response = server._process_request(request, 0x12345678, integrity_id_read=128)
+        initial_response, initial_rst = server._process_request(request, 0x12345678)
+        advanced_response, advanced_rst = server._process_request(request, 0x12345678, integrity_id_read=128)
 
         assert advanced_response == initial_response
+        assert not initial_rst
+        assert not advanced_rst
 
 
 class TestIntegrityIdVlqEncoding:
@@ -262,6 +305,161 @@ class TestIntegrityIdVlqEncoding:
             decoded, consumed = decode_uint32_vlq(encoded)
             assert decoded == val
             assert consumed == len(encoded)
+
+
+class TestLegitimationWireFormat:
+    """Protocol fixtures matching the upstream S7CommPlus driver."""
+
+    def test_build_get_var_substreamed_payload(self) -> None:
+        payload = _build_get_var_substreamed_payload(0x01020304, LegitimationId.SERVER_SESSION_REQUEST)
+
+        expected = struct.pack(">I", 0x01020304)
+        expected += bytes([0x20, 0x04, 0x01])
+        expected += encode_uint32_vlq(LegitimationId.SERVER_SESSION_REQUEST)
+        expected += encode_object_qualifier(protocol_version=ProtocolVersion.V2)
+        expected += struct.pack(">H", 1)
+        expected += struct.pack(">I", 0)
+        assert payload == expected
+
+    def test_parse_get_var_substreamed_usint_array(self) -> None:
+        challenge = bytes(range(20))
+        response = bytes([0x00, 0x00, 0x10, 0x02])
+        response += encode_uint32_vlq(len(challenge)) + challenge
+        response += encode_uint32_vlq(7)  # trailing IntegrityId
+
+        assert _parse_get_var_substreamed_response(response) == challenge
+
+    def test_parse_get_var_substreamed_blob(self) -> None:
+        challenge = bytes(range(16))
+        response = bytes([0x00, 0x00, 0x00, DataType.BLOB, 0x00])
+        response += encode_uint32_vlq(len(challenge)) + challenge
+        response += encode_uint32_vlq(3)
+
+        assert _parse_get_var_substreamed_response(response) == challenge
+
+    def test_parse_get_var_substreamed_error(self) -> None:
+        with pytest.raises(S7ConnectionError, match="return_value=0x1234"):
+            _parse_get_var_substreamed_response(encode_uint32_vlq(0x1234))
+
+    def test_build_set_variable_payload(self) -> None:
+        value = bytes([0x10, 0x02, 0x02, 0xAA, 0xBB])
+        payload = _build_set_variable_payload(0x01020304, LegitimationId.SERVER_SESSION_RESPONSE, value)
+
+        expected = struct.pack(">I", 0x01020304)
+        expected += encode_uint32_vlq(1)
+        expected += encode_uint32_vlq(LegitimationId.SERVER_SESSION_RESPONSE)
+        expected += value
+        expected += encode_object_qualifier()
+        expected += bytes([0x00])
+        expected += struct.pack(">I", 0)
+        assert payload == expected
+
+    def test_set_variable_response_rejects_nonzero_return(self) -> None:
+        with pytest.raises(S7ConnectionError, match="return_value=0x8104"):
+            _check_set_variable_response(encode_uint32_vlq(0x8104))
+
+    def test_sync_challenge_uses_protocol_request_shape(self) -> None:
+        challenge = bytes(range(20))
+        response = bytes([0x00, 0x00, 0x10, 0x02, len(challenge)]) + challenge + bytes([0x00])
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_id = 0x01020304
+        conn.send_request = MagicMock(return_value=response)
+
+        assert conn._get_legitimation_challenge() == challenge
+        conn.send_request.assert_called_once_with(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            _build_get_var_substreamed_payload(0x01020304, LegitimationId.SERVER_SESSION_REQUEST),
+            integrity_tail=4,
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_challenge_uses_protocol_request_shape(self) -> None:
+        challenge = bytes(range(20))
+        response = bytes([0x00, 0x00, 0x10, 0x02, len(challenge)]) + challenge + bytes([0x00])
+        client = S7CommPlusAsyncClient()
+        client._session_id = 0x01020304
+        client._send_request = AsyncMock(return_value=response)
+
+        assert await client._get_legitimation_challenge() == challenge
+        client._send_request.assert_awaited_once_with(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            _build_get_var_substreamed_payload(0x01020304, LegitimationId.SERVER_SESSION_REQUEST),
+            integrity_tail=4,
+        )
+
+
+class TestProtectionLevel:
+    """The effective protection level read that precedes legitimation."""
+
+    # Captured from a password-protected S7-1512: UDInt(4), trailing IntegrityId 7.
+    RESPONSE = bytes.fromhex("00000004040700000000")
+
+    def test_parse_scalar_udint(self) -> None:
+        assert _parse_protection_level_response(self.RESPONSE) == AccessLevel.NO_ACCESS
+
+    def test_parse_rejects_nonzero_return(self) -> None:
+        with pytest.raises(S7ConnectionError, match="return_value=4660"):
+            _parse_protection_level_response(encode_uint32_vlq(0x1234))
+
+    def test_parse_rejects_missing_response_marker(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing response marker"):
+            _parse_protection_level_response(bytes([0x00]))
+
+    def test_parse_rejects_truncated_pvalue_header(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing PValue header"):
+            _parse_protection_level_response(bytes([0x00, 0x00, 0x00]))
+
+    def test_parse_rejects_non_udint_datatype(self) -> None:
+        response = bytes([0x00, 0x00, 0x00, DataType.USINT, 0x04])
+        with pytest.raises(S7ConnectionError, match="expected a scalar UDInt, got flags=0x00 datatype=0x02"):
+            _parse_protection_level_response(response)
+
+    def test_parse_rejects_udint_array(self) -> None:
+        response = bytes([0x00, 0x00, 0x10, DataType.UDINT, 0x01, 0x04])
+        with pytest.raises(S7ConnectionError, match="expected a scalar UDInt, got flags=0x10 datatype=0x04"):
+            _parse_protection_level_response(response)
+
+    def test_parse_rejects_truncated_value(self) -> None:
+        response = bytes([0x00, 0x00, 0x00, DataType.UDINT, 0x84])
+        with pytest.raises(S7ConnectionError, match="Malformed protection level response"):
+            _parse_protection_level_response(response)
+
+    def test_sync_read_uses_protocol_request_shape(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_id = 0x01020304
+        conn.send_request = MagicMock(return_value=self.RESPONSE)
+
+        assert conn._get_effective_protection_level() == AccessLevel.NO_ACCESS
+        conn.send_request.assert_called_once_with(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            _build_get_var_substreamed_payload(0x01020304, Ids.EFFECTIVE_PROTECTION_LEVEL),
+            integrity_tail=4,
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_read_uses_protocol_request_shape(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._session_id = 0x01020304
+        client._send_request = AsyncMock(return_value=self.RESPONSE)
+
+        assert await client._get_effective_protection_level() == AccessLevel.NO_ACCESS
+        client._send_request.assert_awaited_once_with(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            _build_get_var_substreamed_payload(0x01020304, Ids.EFFECTIVE_PROTECTION_LEVEL),
+            integrity_tail=4,
+        )
+
+
+class TestSessionKeySelection:
+    def test_tls_v2_does_not_attempt_session_key_auth(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._tls_active = True
+        conn._protocol_version = ProtocolVersion.V2
+        conn._public_key_fingerprint = "01:BD426B091F08731A"
+        conn._session_challenge = bytes(range(20))
+
+        assert conn._try_session_key_auth() is None
+        assert conn._session_key is None
 
 
 class TestProtocolVersionV2:
@@ -341,13 +539,14 @@ class TestBuildNewResponse:
 
     def test_new_response_decryptable(self) -> None:
         """Verify the response can be decrypted back to the original payload."""
+        from cryptography.hazmat.primitives import padding
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
         from s7commplus.legitimation import (
+            _build_legitimation_payload,
             build_new_response,
             derive_legitimation_key,
-            _build_legitimation_payload,
         )
-        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-        from cryptography.hazmat.primitives import padding
 
         challenge = b"\x12\x34\x56\x78" * 4  # 16-byte IV
         oms_secret = b"\xaa\xbb\xcc\xdd" * 8  # 32 bytes
@@ -375,6 +574,7 @@ class TestAuthenticate:
 
     def test_authenticate_requires_connection(self) -> None:
         import pytest
+
         from snap7.error import S7ConnectionError
 
         conn = S7CommPlusConnection("127.0.0.1")
@@ -383,6 +583,7 @@ class TestAuthenticate:
 
     def test_authenticate_requires_tls(self) -> None:
         import pytest
+
         from snap7.error import S7ConnectionError
 
         conn = S7CommPlusConnection("127.0.0.1")

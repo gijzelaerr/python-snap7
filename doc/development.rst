@@ -81,6 +81,8 @@ Special thanks to:
 * Davide Nardella for creating snap7
 * Thomas Hergenhahn for his libnodave
 * Thomas W for his S7comm wireshark plugin
+* `bonk-dev <https://github.com/bonk-dev>`_ for `HarpoS7 <https://github.com/bonk-dev/HarpoS7>`_ — the S7CommPlus session authentication (``s7commplus/session_auth/``) is a Python port of HarpoS7 (MIT)
+* Thomas W (thomas-v2) for `S7CommPlusDriver <https://github.com/thomas-v2/S7CommPlusDriver>`_ — the zlib preset dictionaries and S7CommPlus protocol reference (LGPL-3.0)
 * `Fabian Beitler <https://github.com/swamper123>`_
 * `Nikteliy <https://github.com/nikteliy>`_
 * `Lautaro Nahuel Dapino <https://github.com/lautarodapin>`_
