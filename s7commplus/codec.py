@@ -15,14 +15,14 @@ Reference: thomas-v2/S7CommPlusDriver/Core/S7p.cs
 import struct
 from typing import Any, Optional
 
-from .protocol import PROTOCOL_ID, DataType, ElementID, Ids, ObjectId
+from .protocol import PROTOCOL_ID, DataType, ElementID, Ids, ObjectId, ProtocolVersion
 from .vlq import (
-    encode_uint32_vlq,
     decode_uint32_vlq,
-    encode_int32_vlq,
-    encode_uint64_vlq,
     decode_uint64_vlq,
+    encode_int32_vlq,
     encode_int64_vlq,
+    encode_uint32_vlq,
+    encode_uint64_vlq,
 )
 
 
@@ -301,11 +301,18 @@ def encode_typed_value(datatype: int, value: Any) -> bytes:
 # -- S7CommPlus request/response payload helpers --
 
 
-def encode_object_qualifier() -> bytes:
+def encode_object_qualifier(key_qualifier: int = 0, protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Encode the S7CommPlus ObjectQualifier structure.
 
     This fixed structure is appended to GetMultiVariables and
     SetMultiVariables requests.
+
+    Args:
+        key_qualifier: Sequence number for KEY_QUALIFIER field. TIA Portal
+            sets this to the current S7CommPlus sequence number.
+        protocol_version: Initial protocol version negotiated with the PLC.
+            V1-initial sessions use a fixed-width uint32; V2 sessions use a
+            VLQ followed by a terminator byte.
 
     Reference: thomas-v2/S7CommPlusDriver/Core/S7p.cs EncodeObjectQualifier
     """
@@ -317,11 +324,14 @@ def encode_object_qualifier() -> bytes:
     # CompositionAID = AID(0)
     result += encode_uint32_vlq(Ids.COMPOSITION_AID)
     result += bytes([0x00, DataType.AID]) + encode_uint32_vlq(0)
-    # KeyQualifier = UDInt(0)
+    # KeyQualifier = UDInt(key_qualifier)
     result += encode_uint32_vlq(Ids.KEY_QUALIFIER)
-    result += bytes([0x00, DataType.UDINT]) + encode_uint32_vlq(0)
-    # Terminator
-    result += bytes([0x00])
+    result += bytes([0x00, DataType.UDINT])
+    if protocol_version == ProtocolVersion.V1:
+        result += struct.pack(">I", key_qualifier)
+    else:
+        result += encode_uint32_vlq(key_qualifier)
+        result += bytes([0x00])
     return bytes(result)
 
 
@@ -632,13 +642,33 @@ def parse_create_object_session_id(body: bytes) -> tuple[list[int], int, int]:
     return object_ids, boff, return_value
 
 
-def parse_server_session_version(payload: bytes) -> Optional[bytes]:
-    """Scan a CreateObject response payload for the ServerSessionVersion attribute (306).
+class CreateObjectAttributes:
+    """Attributes parsed from a CreateObject response PObject tree."""
 
-    Returns the raw typed value (flags + datatype + data) to echo back during session
-    setup, or ``None`` if the attribute is not present. Real S7-1500 PLCs send it as a
-    Struct (0x17).
+    __slots__ = ("server_session_version", "public_key_fingerprint", "session_challenge")
+
+    def __init__(self) -> None:
+        self.server_session_version: Optional[bytes] = None
+        self.public_key_fingerprint: Optional[str] = None
+        self.session_challenge: Optional[bytes] = None
+
+
+def parse_create_object_attributes(payload: bytes) -> CreateObjectAttributes:
+    """Scan a CreateObject response payload for session-setup attributes.
+
+    Extracts up to three attributes from the PObject tree:
+
+    - ``306`` (ServerSessionVersion) — raw typed value echoed back in session setup.
+    - ``233`` (ObjectVariableTypeName) — ``"FF:HHHHHHHHHHHHHHHH"`` public key
+      fingerprint on V1-initial PLCs with SessionKey auth.
+    - ``303`` (ServerSessionRequest) — 20-byte session challenge (USINT array)
+      on V1-initial PLCs.
+
+    Returns a :class:`CreateObjectAttributes` with whichever attributes were found.
     """
+    from .protocol import DataType
+
+    result = CreateObjectAttributes()
     offset = 0
     while offset < len(payload):
         tag = payload[offset]
@@ -658,7 +688,33 @@ def parse_server_session_version(payload: bytes) -> Optional[bytes]:
             if attr_id == ObjectId.SERVER_SESSION_VERSION:
                 value_start = offset
                 end = skip_typed_value(payload, offset + 2, datatype, flags)
-                return bytes(payload[value_start:end])
+                result.server_session_version = bytes(payload[value_start:end])
+                offset = end
+
+            elif attr_id == Ids.OBJECT_VARIABLE_TYPE_NAME and datatype == DataType.WSTRING:
+                offset += 2
+                length, consumed = decode_uint32_vlq(payload, offset)
+                offset += consumed
+                raw = bytes(payload[offset : offset + length])
+                offset += length
+                try:
+                    text = raw.decode("utf-8")
+                    if len(text) == 19 and text[2] == ":":
+                        result.public_key_fingerprint = text
+                except (UnicodeDecodeError, ValueError):
+                    pass
+
+            elif attr_id == 303 and result.session_challenge is None:
+                is_array = bool(flags & 0x10)
+                offset += 2
+                if is_array and datatype == DataType.USINT:
+                    count, consumed = decode_uint32_vlq(payload, offset)
+                    offset += consumed
+                    result.session_challenge = bytes(payload[offset : offset + count])
+                    offset += count
+                else:
+                    offset = skip_typed_value(payload, offset, datatype, flags)
+
             else:
                 offset = skip_typed_value(payload, offset + 2, datatype, flags)
 
@@ -666,16 +722,27 @@ def parse_server_session_version(payload: bytes) -> Optional[bytes]:
             offset += 1
             if offset + 4 > len(payload):
                 break
-            offset += 4  # RelationId (fixed)
-            for _ in range(3):  # ClassId, ClassFlags, AttributeId (each VLQ)
+            offset += 4
+            for _ in range(3):
                 _, consumed = decode_uint32_vlq(payload, offset)
                 offset += consumed
 
         elif tag == ElementID.TERMINATING_OBJECT:
             offset += 1
         elif tag == 0x00:
-            offset += 1  # null terminator / padding
+            offset += 1
         else:
-            offset += 1  # unknown tag — skip
+            offset += 1
 
-    return None
+    return result
+
+
+def parse_server_session_version(payload: bytes) -> Optional[bytes]:
+    """Scan a CreateObject response payload for the ServerSessionVersion attribute (306).
+
+    Returns the raw typed value (flags + datatype + data) to echo back during session
+    setup, or ``None`` if the attribute is not present.
+
+    .. deprecated:: Use :func:`parse_create_object_attributes` for new code.
+    """
+    return parse_create_object_attributes(payload).server_session_version
