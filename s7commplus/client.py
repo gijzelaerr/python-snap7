@@ -70,6 +70,13 @@ class S7CommPlusClient:
             return False
         return self._connection.tls_active
 
+    @property
+    def protection_level(self) -> Optional[int]:
+        """Effective protection level reported by the PLC (see `AccessLevel`)."""
+        if self._connection is None:
+            return None
+        return self._connection.protection_level
+
     def connect(
         self,
         host: str,
@@ -521,7 +528,8 @@ class S7CommPlusClient:
         .. warning:: This method is **experimental** and may change.
 
         Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
-        (the dot-separated hex LID path usable with ``read_tag()``), ``data_type``,
+        (the dot-separated hex path whose first component is the access area and
+        remaining components are LIDs for :meth:`read_symbolic`), ``data_type``,
         and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
         each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
         then recombine into the symbol tree.

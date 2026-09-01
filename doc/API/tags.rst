@@ -117,7 +117,7 @@ S7CommPlus tag API is not implemented yet; :class:`~snap7.tags.Tag` and the
    from s7commplus import Client
 
    client = Client()
-   client.connect("192.168.1.10")
+   client.connect("192.168.1.10", use_tls=True)
 
    variables = client.browse()
    speed_info = next(item for item in variables if item["name"] == "Motor.Speed")

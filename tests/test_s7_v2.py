@@ -18,6 +18,7 @@ from s7commplus.connection import (
     _build_set_variable_payload,
     _check_set_variable_response,
     _parse_get_var_substreamed_response,
+    _parse_protection_level_response,
 )
 from s7commplus.legitimation import (
     LegitimationState,
@@ -27,8 +28,10 @@ from s7commplus.legitimation import (
 )
 from s7commplus.protocol import (
     READ_FUNCTION_CODES,
+    AccessLevel,
     DataType,
     FunctionCode,
+    Ids,
     LegitimationId,
     ProtocolVersion,
 )
@@ -324,6 +327,68 @@ class TestLegitimationWireFormat:
         client._send_request.assert_awaited_once_with(
             FunctionCode.GET_VAR_SUBSTREAMED,
             _build_get_var_substreamed_payload(0x01020304, LegitimationId.SERVER_SESSION_REQUEST),
+            integrity_tail=4,
+        )
+
+
+class TestProtectionLevel:
+    """The effective protection level read that precedes legitimation."""
+
+    # Captured from a password-protected S7-1512: UDInt(4), trailing IntegrityId 7.
+    RESPONSE = bytes.fromhex("00000004040700000000")
+
+    def test_parse_scalar_udint(self) -> None:
+        assert _parse_protection_level_response(self.RESPONSE) == AccessLevel.NO_ACCESS
+
+    def test_parse_rejects_nonzero_return(self) -> None:
+        with pytest.raises(S7ConnectionError, match="return_value=4660"):
+            _parse_protection_level_response(encode_uint32_vlq(0x1234))
+
+    def test_parse_rejects_missing_response_marker(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing response marker"):
+            _parse_protection_level_response(bytes([0x00]))
+
+    def test_parse_rejects_truncated_pvalue_header(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing PValue header"):
+            _parse_protection_level_response(bytes([0x00, 0x00, 0x00]))
+
+    def test_parse_rejects_non_udint_datatype(self) -> None:
+        response = bytes([0x00, 0x00, 0x00, DataType.USINT, 0x04])
+        with pytest.raises(S7ConnectionError, match="expected a scalar UDInt, got flags=0x00 datatype=0x02"):
+            _parse_protection_level_response(response)
+
+    def test_parse_rejects_udint_array(self) -> None:
+        response = bytes([0x00, 0x00, 0x10, DataType.UDINT, 0x01, 0x04])
+        with pytest.raises(S7ConnectionError, match="expected a scalar UDInt, got flags=0x10 datatype=0x04"):
+            _parse_protection_level_response(response)
+
+    def test_parse_rejects_truncated_value(self) -> None:
+        response = bytes([0x00, 0x00, 0x00, DataType.UDINT, 0x84])
+        with pytest.raises(S7ConnectionError, match="Malformed protection level response"):
+            _parse_protection_level_response(response)
+
+    def test_sync_read_uses_protocol_request_shape(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_id = 0x01020304
+        conn.send_request = MagicMock(return_value=self.RESPONSE)
+
+        assert conn._get_effective_protection_level() == AccessLevel.NO_ACCESS
+        conn.send_request.assert_called_once_with(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            _build_get_var_substreamed_payload(0x01020304, Ids.EFFECTIVE_PROTECTION_LEVEL),
+            integrity_tail=4,
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_read_uses_protocol_request_shape(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._session_id = 0x01020304
+        client._send_request = AsyncMock(return_value=self.RESPONSE)
+
+        assert await client._get_effective_protection_level() == AccessLevel.NO_ACCESS
+        client._send_request.assert_awaited_once_with(
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            _build_get_var_substreamed_payload(0x01020304, Ids.EFFECTIVE_PROTECTION_LEVEL),
             integrity_tail=4,
         )
 
