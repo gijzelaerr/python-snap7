@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.client import S7CommPlusClient
 from s7commplus.codec import encode_header, encode_object_qualifier
 from s7commplus.connection import (
     S7CommPlusConnection,
@@ -37,6 +38,58 @@ from s7commplus.protocol import (
 )
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
 from snap7.error import S7ConnectionError, S7ProtocolError
+
+
+class TestTypeInfoRidErrorHandling:
+    def test_sync_returns_rid(self) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", return_value=struct.pack(">I", 0x12345678)):
+            assert client._read_typeinfo_rid(1) == 0x12345678
+
+    def test_sync_returns_zero_for_short_read(self) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", return_value=b"\x01\x02\x03"):
+            assert client._read_typeinfo_rid(1) == 0
+
+    def test_sync_returns_zero_for_unreadable_db(self) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", side_effect=RuntimeError("Symbolic read failed")):
+            assert client._read_typeinfo_rid(1) == 0
+
+    @pytest.mark.parametrize("error", [S7ConnectionError("reset"), S7ProtocolError("fatal event")])
+    def test_sync_propagates_transport_and_protocol_errors(self, error: Exception) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", side_effect=error), pytest.raises(type(error), match=str(error)):
+            client._read_typeinfo_rid(1)
+
+    @pytest.mark.asyncio
+    async def test_async_returns_rid(self) -> None:
+        client = S7CommPlusAsyncClient()
+        with patch.object(client, "read_symbolic", new=AsyncMock(return_value=struct.pack(">I", 0x12345678))):
+            assert await client._read_typeinfo_rid(1) == 0x12345678
+
+    @pytest.mark.asyncio
+    async def test_async_returns_zero_for_short_read(self) -> None:
+        client = S7CommPlusAsyncClient()
+        with patch.object(client, "read_symbolic", new=AsyncMock(return_value=b"\x01\x02\x03")):
+            assert await client._read_typeinfo_rid(1) == 0
+
+    @pytest.mark.asyncio
+    async def test_async_returns_zero_for_unreadable_db(self) -> None:
+        client = S7CommPlusAsyncClient()
+        error = RuntimeError("Symbolic read failed")
+        with patch.object(client, "read_symbolic", new=AsyncMock(side_effect=error)):
+            assert await client._read_typeinfo_rid(1) == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("error", [S7ConnectionError("reset"), S7ProtocolError("fatal event")])
+    async def test_async_propagates_transport_and_protocol_errors(self, error: Exception) -> None:
+        client = S7CommPlusAsyncClient()
+        with (
+            patch.object(client, "read_symbolic", new=AsyncMock(side_effect=error)),
+            pytest.raises(type(error), match=str(error)),
+        ):
+            await client._read_typeinfo_rid(1)
 
 
 class TestReadFunctionCodes:

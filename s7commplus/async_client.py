@@ -9,6 +9,8 @@ import ssl
 import struct
 from typing import Any, Optional
 
+from snap7.error import S7ConnectionError, S7ProtocolError
+
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
 from .client import (
@@ -687,6 +689,8 @@ class S7CommPlusAsyncClient:
         """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
         try:
             raw = await self.read_symbolic(db_rid, [1], 0)
+        except (S7ConnectionError, S7ProtocolError):
+            raise
         except Exception:
             return 0
         return struct.unpack(">I", raw[:4])[0] if len(raw) >= 4 else 0
