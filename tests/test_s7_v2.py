@@ -28,12 +28,15 @@ from s7commplus.legitimation import (
     derive_legitimation_key,
 )
 from s7commplus.protocol import (
+    FLAGS_34_FUNCTION_CODES,
     READ_FUNCTION_CODES,
     AccessLevel,
     DataType,
     FunctionCode,
     Ids,
     LegitimationId,
+    ObjectId,
+    Opcode,
     ProtocolVersion,
 )
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
@@ -144,6 +147,43 @@ class TestReadFunctionCodes:
 
     def test_delete_object_is_write(self) -> None:
         assert FunctionCode.DELETE_OBJECT not in READ_FUNCTION_CODES
+
+
+class TestFlags34FunctionCodes:
+    """Test FLAGS_34_FUNCTION_CODES classification."""
+
+    def test_delete_object_uses_flags_34(self) -> None:
+        assert FunctionCode.DELETE_OBJECT in FLAGS_34_FUNCTION_CODES
+
+    def test_explore_uses_flags_34(self) -> None:
+        assert FunctionCode.EXPLORE in FLAGS_34_FUNCTION_CODES
+
+    def test_get_multi_variables_uses_flags_34(self) -> None:
+        assert FunctionCode.GET_MULTI_VARIABLES in FLAGS_34_FUNCTION_CODES
+
+    def test_get_var_substreamed_uses_flags_34(self) -> None:
+        assert FunctionCode.GET_VAR_SUBSTREAMED in FLAGS_34_FUNCTION_CODES
+
+    def test_set_multi_variables_uses_flags_34(self) -> None:
+        assert FunctionCode.SET_MULTI_VARIABLES in FLAGS_34_FUNCTION_CODES
+
+    def test_set_variable_uses_flags_34(self) -> None:
+        assert FunctionCode.SET_VARIABLE in FLAGS_34_FUNCTION_CODES
+
+    def test_create_object_uses_flags_36(self) -> None:
+        assert FunctionCode.CREATE_OBJECT not in FLAGS_34_FUNCTION_CODES
+
+    def test_init_ssl_uses_flags_36(self) -> None:
+        assert FunctionCode.INIT_SSL not in FLAGS_34_FUNCTION_CODES
+
+    def test_get_variable_uses_flags_36(self) -> None:
+        assert FunctionCode.GET_VARIABLE not in FLAGS_34_FUNCTION_CODES
+
+    def test_get_variables_address_uses_flags_36(self) -> None:
+        assert FunctionCode.GET_VARIABLES_ADDRESS not in FLAGS_34_FUNCTION_CODES
+
+    def test_get_link_uses_flags_36(self) -> None:
+        assert FunctionCode.GET_LINK not in FLAGS_34_FUNCTION_CODES
 
 
 class TestLegitimationId:
@@ -296,6 +336,9 @@ class TestIntegrityIdTracking:
         conn._recv_s7_data = MagicMock(return_value=frame)
 
         assert conn.send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == application_payload
+
+        # GetMultiVariables is in FLAGS_34_FUNCTION_CODES
+        assert conn._send_s7_data.call_args[0][0][17] == 0x34
 
     def test_nonfatal_system_event_is_consumed_before_sync_response(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
@@ -563,6 +606,116 @@ class TestLegitimationWireFormat:
         )
 
 
+class TestCreateSessionRequest:
+    """The CreateObject request that opens an S7CommPlus session."""
+
+    def test_sync_request_shape(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._send_s7_data = MagicMock()
+        # Frame header declaring a zero-length body: _create_session bails out on the
+        # length check, by which point the request is already on the wire.
+        conn._recv_s7_data = MagicMock(return_value=bytes.fromhex("72010000"))
+
+        with pytest.raises(S7ConnectionError, match="CreateObject response too short"):
+            conn._create_session()
+
+        frame = conn._send_s7_data.call_args[0][0]
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.CREATE_OBJECT,
+            0x0000,
+            0,  # first sequence number on a fresh connection
+            ObjectId.OBJECT_NULL_SERVER_SESSION,
+            0x36,
+        )
+        request += struct.pack(">I", ObjectId.OBJECT_SERVER_SESSION_CONTAINER)
+        expected = encode_header(ProtocolVersion.V1, len(frame) - 8) + request
+        assert frame[: len(expected)] == expected
+        assert frame[-4:] == struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
+
+    @pytest.mark.asyncio
+    async def test_async_request_shape(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=bytes.fromhex("72010000"))
+
+        with pytest.raises(RuntimeError, match="CreateObject response too short"):
+            await client._create_session()
+
+        client._send_cotp_dt.assert_awaited_once()
+        assert client._send_cotp_dt.await_args is not None
+        frame = client._send_cotp_dt.await_args[0][0]
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.CREATE_OBJECT,
+            0x0000,
+            0,
+            ObjectId.OBJECT_NULL_SERVER_SESSION,
+            0x36,
+        )
+        request += struct.pack(">I", ObjectId.OBJECT_SERVER_SESSION_CONTAINER)
+        expected = encode_header(ProtocolVersion.V1, len(frame) - 8) + request
+        assert frame[: len(expected)] == expected
+        assert frame[-4:] == struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
+
+
+class TestDeleteSessionRequest:
+    """The DeleteObject request that closes an S7CommPlus session."""
+
+    def test_sync_request_shape(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V2
+        conn._session_id = 0x70000001
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(side_effect=OSError("no reply"))
+
+        conn._delete_session()
+
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.DELETE_OBJECT,
+            0x0000,
+            0,  # first sequence number on a fresh connection
+            0x70000001,
+            0x34,
+        )
+        request += struct.pack(">I", 0)
+        expected = encode_header(ProtocolVersion.V2, len(request)) + request
+        expected += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0x0000)
+        conn._send_s7_data.assert_called_once_with(expected)
+
+    @pytest.mark.asyncio
+    async def test_async_request_shape(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._protocol_version = ProtocolVersion.V2
+        client._session_id = 0x70000001
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(side_effect=OSError("no reply"))
+
+        await client._delete_session()
+
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.DELETE_OBJECT,
+            0x0000,
+            0,
+            0x70000001,
+            0x34,
+        )
+        request += struct.pack(">I", 0)
+        expected = encode_header(ProtocolVersion.V2, len(request)) + request
+        expected += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0x0000)
+        client._send_cotp_dt.assert_awaited_once_with(expected)
+
+
 class TestProtectionLevel:
     """The effective protection level read that precedes legitimation."""
 
@@ -623,6 +776,39 @@ class TestProtectionLevel:
             _build_get_var_substreamed_payload(0x01020304, Ids.EFFECTIVE_PROTECTION_LEVEL),
             integrity_tail=4,
         )
+
+
+class TestSessionKeyTransportFlags:
+    """After SessionKey auth, requests use V3 HMAC framing and transport flags 0x34."""
+
+    def test_session_key_request_frame_structure(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V2
+        conn._session_id = 0x70000001
+        conn._session_key = bytes(32)
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(side_effect=OSError("no reply"))
+
+        with pytest.raises(OSError, match="no reply"):
+            conn.send_request(FunctionCode.GET_VARIABLE, bytes(4))
+
+        frame = conn._send_s7_data.call_args[0][0]
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0x0000,
+            FunctionCode.GET_VARIABLE,
+            0x0000,
+            0,  # first sequence number on a fresh connection
+            0x70000001,
+            0x34,  # the session key forces 0x34 even for a function code outside FLAGS_34_FUNCTION_CODES
+        )
+        request += bytes(4)
+        assert frame[:4] == encode_header(ProtocolVersion.V3, len(frame) - 8)
+        assert frame[4] == 0x20  # hash-length marker before the 32-byte HMAC digest
+        assert frame[37:-4] == request
+        assert frame[-4:] == struct.pack(">BBH", 0x72, ProtocolVersion.V3, 0x0000)
 
 
 class TestSessionKeySelection:
