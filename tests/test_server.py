@@ -339,8 +339,6 @@ class TestServerISOConnectionLimits:
         assert disconnect_confirm[0] == len(disconnect_confirm) - 1
 
     def test_a_disconnect_request_ends_the_connection_normally(self) -> None:
-        # The client sends a COTP DR when it disconnects; treating it as an
-        # unexpected PDU logs an error for an ordinary goodbye.
         client_socket = MagicMock()
         connection = ServerISOConnection(client_socket)
         connection._recv_exact = MagicMock(
@@ -828,6 +826,71 @@ class TestServerPLCControl(unittest.TestCase):
         """copy_ram_to_rom should succeed."""
         result = self.client.copy_ram_to_rom(timeout=1000)
         self.assertEqual(result, 0)
+
+
+@pytest.mark.server
+class TestHandshakeLogging(unittest.TestCase):
+    """A peer that leaves before the ISO handshake completes must not raise the log level."""
+
+    server: Server = None  # type: ignore
+    port: int = 0
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.server = Server()
+        cls.server.start(0)
+        assert cls.server.server_socket is not None
+        cls.port = cls.server.server_socket.getsockname()[1]
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls.server:
+            cls.server.stop()
+            cls.server.destroy()
+
+    def _wait_for_record(self, logs, fragment: str, timeout: float = 10.0) -> None:
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            if any(fragment in record.getMessage() for record in logs.records):
+                return
+            time.sleep(0.02)
+        self.fail(f"log containing {fragment!r} did not appear, got: {[r.getMessage() for r in logs.records]}")
+
+    def _assert_no_warnings(self, logs) -> None:
+        warnings = [r.getMessage() for r in logs.records if r.levelno >= logging.WARNING]
+        self.assertEqual(warnings, [])
+
+    def test_connect_and_close_logs_no_warning(self) -> None:
+        with self.assertLogs("snap7.server", level="DEBUG") as logs:
+            sock = socket.create_connection(("127.0.0.1", self.port), timeout=2)
+            sock.close()
+            self._wait_for_record(logs, "Peer left before the ISO connection")
+        self._assert_no_warnings(logs)
+
+    def test_partial_tpkt_then_close_logs_no_warning(self) -> None:
+        with self.assertLogs("snap7.server", level="DEBUG") as logs:
+            sock = socket.create_connection(("127.0.0.1", self.port), timeout=2)
+            sock.sendall(b"\x03\x00")
+            sock.close()
+            self._wait_for_record(logs, "Peer left before the ISO connection")
+        self._assert_no_warnings(logs)
+
+    def test_malformed_tpkt_still_logs_an_error(self) -> None:
+        with self.assertLogs("snap7.server", level="DEBUG") as logs:
+            sock = socket.create_connection(("127.0.0.1", self.port), timeout=2)
+            sock.sendall(b"\x05\x00\x00\x08garbage!")
+            self._wait_for_record(logs, "Invalid TPKT version")
+            sock.close()
+        self.assertTrue(any(r.levelno == logging.ERROR for r in logs.records))
+        self.assertFalse(any(r.levelno == logging.WARNING for r in logs.records))
+
+    def test_client_connect_and_disconnect_logs_no_warning(self) -> None:
+        with self.assertLogs("snap7.server", level="DEBUG") as logs:
+            client = Client()
+            client.connect(ip, 0, 1, self.port)
+            client.disconnect()
+            self._wait_for_record(logs, "disconnected")
+        self._assert_no_warnings(logs)
 
 
 @pytest.mark.server

@@ -625,7 +625,6 @@ class Server:
 
             # Handle ISO connection setup
             if not connection.accept_connection():
-                logger.warning(f"Failed to establish ISO connection with {address}")
                 return
 
             logger.info(f"ISO connection established with {address}")
@@ -2607,9 +2606,6 @@ class ServerISOConnection:
             return True
 
         except (ConnectionResetError, ConnectionAbortedError, TimeoutError) as e:
-            # A peer that goes away before the ISO handshake completes is
-            # routine - port scans, health checks, a cancelled connect - and
-            # says nothing about this server.
             logger.info(f"Peer left before the ISO connection was established: {e}")
             return False
         except Exception as e:
@@ -2645,8 +2641,6 @@ class ServerISOConnection:
             pdu_len, pdu_type, eot_num = struct.unpack(">BBB", payload[:3])
 
             if pdu_type == self.COTP_DR:
-                # The peer is closing the connection the way ISO 8073 says to;
-                # confirm it and let the caller treat this as a normal end.
                 logger.debug("Received COTP DR from client")
                 try:
                     self.socket.sendall(self._build_tpkt(self._build_cotp_dc()))
