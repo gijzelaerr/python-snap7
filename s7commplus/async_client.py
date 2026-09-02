@@ -7,7 +7,7 @@ import asyncio
 import logging
 import ssl
 import struct
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from snap7.error import S7ConnectionError, S7ProtocolError
 
@@ -64,6 +64,8 @@ from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 # COTP constants
 _COTP_CR = 0xE0
 _COTP_CC = 0xD0
@@ -84,6 +86,7 @@ class S7CommPlusAsyncClient:
         self._protocol_version: int = 0
         self._connected = False
         self._lock = asyncio.Lock()
+        self._connect_params: Optional[dict[str, Any]] = None
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -160,6 +163,16 @@ class S7CommPlusAsyncClient:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
+        self._connect_params = {
+            "host": host,
+            "port": port,
+            "rack": rack,
+            "slot": slot,
+            "use_tls": use_tls,
+            "tls_cert": tls_cert,
+            "tls_key": tls_key,
+            "tls_ca": tls_ca,
+        }
         self._host = host
 
         # TCP connect
@@ -425,6 +438,24 @@ class S7CommPlusAsyncClient:
                 pass
             self._writer = None
             self._reader = None
+        self._connect_params = None
+
+    async def _reconnect(self) -> None:
+        """Tear down and re-establish the connection with the same parameters."""
+        if self._connect_params is None:
+            raise RuntimeError("Not connected")
+        params = self._connect_params.copy()
+        await self.disconnect()
+        await self.connect(**params)
+
+    async def _with_reconnect(self, op: Callable[[], Awaitable[_T]]) -> _T:
+        """Run ``op``; if the PLC dropped the socket, reconnect once and retry."""
+        try:
+            return await op()
+        except S7ConnectionError as exc:
+            logger.info("Connection dropped by PLC (%s); reconnecting and retrying", exc)
+            await self._reconnect()
+            return await op()
 
     async def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block."""
@@ -640,7 +671,7 @@ class S7CommPlusAsyncClient:
         for db_info in await self.list_datablocks():
             if db_info.get("number", 0) <= 0 or db_info.get("rid", 0) == 0:
                 continue
-            ti_rid = await self._read_typeinfo_rid(db_info["rid"])
+            ti_rid = await self._with_reconnect(lambda: self._read_typeinfo_rid(db_info["rid"]))
             if ti_rid == 0:
                 continue  # load-memory-only DB, skip
             root_nodes.append(
@@ -662,7 +693,7 @@ class S7CommPlusAsyncClient:
             )
 
         # Phase D: explore the OMS type-info container (a large, multi-fragment PDU).
-        type_objects = await self._explore_type_info_container()
+        type_objects = await self._with_reconnect(self._explore_type_info_container)
 
         # Phase E: recombine type-info with the DB/area nodes and flatten.
         typeinfo.build_tree(root_nodes, type_objects)
@@ -776,11 +807,11 @@ class S7CommPlusAsyncClient:
             if reassemble:
                 data = await self._recv_reassembled_payload(response_data)
                 if len(data) < 10:
-                    raise RuntimeError("Response too short")
+                    raise S7ConnectionError("Response too short")
                 resp_func = struct.unpack_from(">H", data, 3)[0]
                 resp_seq = struct.unpack_from(">H", data, 7)[0]
                 if resp_seq != seq_num:
-                    raise RuntimeError(
+                    raise S7ProtocolError(
                         f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
                     )
                 return bytes(data[10:])
@@ -789,7 +820,7 @@ class S7CommPlusAsyncClient:
             response = response_data[consumed : consumed + data_length]
 
             if len(response) < 10:
-                raise RuntimeError("Response too short")
+                raise S7ConnectionError("Response too short")
 
             # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
             # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
@@ -797,7 +828,7 @@ class S7CommPlusAsyncClient:
             resp_func = struct.unpack_from(">H", response, 3)[0]
             resp_seq = struct.unpack_from(">H", response, 7)[0]
             if resp_seq != seq_num:
-                raise RuntimeError(
+                raise S7ProtocolError(
                     f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
                 )
             return response[10:]
@@ -810,7 +841,7 @@ class S7CommPlusAsyncClient:
             if version != ProtocolVersion.SYSTEM_EVENT:
                 return response_data
             _check_system_event(bytes(response_data[consumed : consumed + data_length]))
-        raise RuntimeError("Too many S7CommPlus SystemEvents while waiting for a response")
+        raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
 
     async def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
         """Receive a possibly-fragmented S7CommPlus response, returning its data section.
@@ -827,7 +858,7 @@ class S7CommPlusAsyncClient:
             while len(buf) < n:
                 chunk = await self._recv_cotp_dt()
                 if not chunk:
-                    raise RuntimeError("Connection closed during response reassembly")
+                    raise S7ConnectionError("Connection closed during response reassembly")
                 buf.extend(chunk)
 
         data = bytearray()
@@ -835,7 +866,7 @@ class S7CommPlusAsyncClient:
         while True:
             await ensure(4)
             if buf[0] != 0x72:
-                raise RuntimeError("Expected S7CommPlus fragment header (0x72)")
+                raise S7ConnectionError("Expected S7CommPlus fragment header (0x72)")
             frag_len = (buf[2] << 8) | buf[3]
             del buf[:4]
             if frag_len == 0:
@@ -845,7 +876,7 @@ class S7CommPlusAsyncClient:
             del buf[:frag_len]
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
-                raise RuntimeError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
+                raise S7ConnectionError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
             # The next 4 bytes are either the trailer (0x72 ver 0x0000) or the next
             # fragment's header (0x72 ver len>0).
             await ensure(4)

@@ -91,6 +91,26 @@ class TestTypeInfoRidErrorHandling:
         ):
             await client._read_typeinfo_rid(1)
 
+    @pytest.mark.asyncio
+    async def test_async_reconnect_wrapper_retries_connection_error_once(self) -> None:
+        client = S7CommPlusAsyncClient()
+        operation = AsyncMock(side_effect=[S7ConnectionError("reset"), 42])
+        client._reconnect = AsyncMock()  # type: ignore[method-assign]
+
+        assert await client._with_reconnect(operation) == 42
+        client._reconnect.assert_awaited_once()
+        assert operation.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_async_reconnect_wrapper_does_not_retry_protocol_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        operation = AsyncMock(side_effect=S7ProtocolError("fatal event"))
+        client._reconnect = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(S7ProtocolError, match="fatal event"):
+            await client._with_reconnect(operation)
+        client._reconnect.assert_not_awaited()
+
 
 class TestReadFunctionCodes:
     """Test READ_FUNCTION_CODES classification."""
@@ -332,6 +352,82 @@ class TestIntegrityIdTracking:
 
         assert await client._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == b"\x00\x01"
         assert client._recv_cotp_dt.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_too_many_async_system_events_raise_protocol_error_from_typeinfo_read(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+
+        confirmation = bytes.fromhex("00000000000002f60000000000000000")
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=event_frame)
+
+        with pytest.raises(S7ProtocolError, match="Too many S7CommPlus SystemEvents"):
+            await client._read_typeinfo_rid(0x8A0E0001)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reassemble", [False, True])
+    async def test_async_short_response_raises_connection_error(self, reassemble: bool) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+        response = b"short"
+        response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=response_frame)
+
+        with pytest.raises(S7ConnectionError, match="Response too short"):
+            await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"", reassemble=reassemble)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reassemble", [False, True])
+    async def test_async_sequence_mismatch_raises_protocol_error(self, reassemble: bool) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 99, 0x34)
+        response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=response_frame)
+
+        with pytest.raises(S7ProtocolError, match="Response sequence mismatch"):
+            await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"", reassemble=reassemble)
+
+
+class TestAsyncReassembledPayloadErrors:
+    @pytest.mark.asyncio
+    async def test_closed_connection_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._recv_cotp_dt = AsyncMock(return_value=b"")
+
+        with pytest.raises(S7ConnectionError, match="closed during"):
+            await client._recv_reassembled_payload()
+
+    @pytest.mark.asyncio
+    async def test_bad_fragment_header_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+
+        with pytest.raises(S7ConnectionError, match="fragment header"):
+            await client._recv_reassembled_payload(b"\x99\x02\x00\x01x")
+
+    @pytest.mark.asyncio
+    async def test_fragment_limit_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._MAX_REASSEMBLED_FRAGMENTS = 1
+        fragments = b"\x72\x02\x00\x01a\x72\x02\x00\x01b\x72\x02\x00\x00"
+
+        with pytest.raises(S7ConnectionError, match="exceeds limits"):
+            await client._recv_reassembled_payload(fragments)
 
 
 class TestIntegrityIdVlqEncoding:
