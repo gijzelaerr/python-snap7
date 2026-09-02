@@ -23,6 +23,11 @@ def _attribute(attribute_id: int, datatype: int, value: bytes, flags: int = 0) -
     return bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(attribute_id) + bytes([flags, datatype]) + value
 
 
+def _blob(root_id: int, value: bytes) -> bytes:
+    metadata = bytes(8) + b"\x03" if root_id > 1 else b""
+    return encode_uint32_vlq(root_id) + metadata + encode_uint32_vlq(len(value)) + value
+
+
 def _alarm_object() -> bytes:
     result = bytearray([ElementID.START_OF_OBJECT])
     result += struct.pack(">I", 0x8A7E0001)
@@ -38,11 +43,25 @@ def _alarm_object() -> bytes:
 
     coming = bytearray(struct.pack(">I", Ids.ALARM_DAI_COMING))
     coming += encode_uint32_vlq(3475) + bytes([0, DataType.TIMESTAMP]) + struct.pack(">Q", 123456789)
+    associated_values = [
+        _blob(1, b"type-info"),
+        _blob(0x02000005, struct.pack(">h", 4)),
+        _blob(1, b""),
+        _blob(1, b""),
+        _blob(1, b""),
+        _blob(0x020A00FE, b"\xfe\x09=F6+S2-G1"),
+    ]
+    coming += encode_uint32_vlq(3476) + bytes([0x10, DataType.BLOB]) + encode_uint32_vlq(len(associated_values))
+    coming += b"".join(associated_values)
     coming += b"\x00"
     result += _attribute(Ids.ALARM_DAI_COMING, DataType.STRUCT, bytes(coming))
 
     texts = bytearray()
-    for language_id, text_id, text in ((1031, 1, "Info"), (1031, 2, "Alarm"), (1033, 2, "Alert")):
+    for language_id, text_id, text in (
+        (1031, 1, "Info"),
+        (1031, 2, "Alarm @1%d@ @5%s@"),
+        (1033, 2, "Alert"),
+    ):
         raw = text.encode()
         texts += encode_uint32_vlq((language_id << 16) | text_id)
         texts += encode_uint32_vlq(0) + encode_uint32_vlq(len(raw)) + raw
@@ -125,7 +144,9 @@ def test_parse_alarm_explore_response_with_language_filter() -> None:
     assert alarm.state == "coming"
     assert alarm.timestamp == 123456789
     assert alarm.hmi_info == b"hmi"
-    assert alarm.texts == {1031: AlarmText(1031, "Info", "Alarm", ("",) * 9)}
+    assert alarm.associated_values[1] == b"\x00\x04"
+    assert alarm.associated_values[5] == b"\xfe\x09=F6+S2-G1"
+    assert alarm.texts == {1031: AlarmText(1031, "Info", "Alarm 4 =F6+S2-G1", ("",) * 9)}
 
 
 def test_parse_alarm_notification() -> None:
@@ -146,6 +167,7 @@ def test_sync_alarm_client_apis() -> None:
     connection.send_request.side_effect = [
         encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x55667788),
         _explore_response(),
+        _explore_response(),
         b"\x00",
     ]
     connection.receive_notification.return_value = _notification_frame()
@@ -155,7 +177,8 @@ def test_sync_alarm_client_apis() -> None:
     create_call = connection.send_request.call_args_list[0]
     assert create_call.kwargs["integrity_tail"] == len(create_call.args[1]) - 11
     assert create_call.args[1].startswith(struct.pack(">I", 0x1235))
-    assert client.browse_alarms([1031])[0].texts[1031].alarm_text == "Alarm"
+    assert client.read_alarms([1031])[0].texts[1031].alarm_text == "Alarm 4 =F6+S2-G1"
+    assert client.browse_alarms([1031])[0].name == "Motor1"
     assert client.receive_alarm_notification().alarms[0].cpu_alarm_id == 0x8A7E0001002A0000
     client.delete_alarm_subscription(0x55667788)
     delete_call = connection.send_request.call_args_list[-1]
@@ -174,12 +197,14 @@ async def test_async_alarm_client_apis() -> None:
         side_effect=[
             encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x55667788),
             _explore_response(),
+            _explore_response(),
             b"\x00",
         ]
     )
     client._recv_cotp_dt = AsyncMock(return_value=_notification_frame())
 
     assert await client.create_alarm_subscription([1031]) == 0x55667788
+    assert (await client.read_alarms([1031]))[0].texts[1031].alarm_text == "Alarm 4 =F6+S2-G1"
     assert (await client.browse_alarms([1031]))[0].name == "Motor1"
     assert (await client.receive_alarm_notification(timeout=1)).credit_tick == 5
     await client.delete_alarm_subscription(0x55667788)
@@ -189,6 +214,7 @@ async def test_async_alarm_client_apis() -> None:
     "method,args",
     [
         ("create_alarm_subscription", ()),
+        ("read_alarms", ()),
         ("browse_alarms", ()),
         ("receive_alarm_notification", ()),
         ("delete_alarm_subscription", (1,)),

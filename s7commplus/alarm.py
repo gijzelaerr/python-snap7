@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import struct
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -14,6 +15,28 @@ from .vlq import decode_int32_vlq, decode_int64_vlq, decode_uint32_vlq, decode_u
 
 _ALARM_SUBSCRIPTION_RELATION_ID = 0x7FFFC001
 _ALARM_REFERENCE_RELATION_ID = 0x51010001
+_ASSOCIATED_VALUE_TOKEN = re.compile(r"@(\d+)(%[^@]+)@")
+
+_SOFTDATATYPE_BOOL = 0x02000001
+_SOFTDATATYPE_BYTE = 0x02000002
+_SOFTDATATYPE_CHAR = 0x02000003
+_SOFTDATATYPE_WORD = 0x02000004
+_SOFTDATATYPE_INT = 0x02000005
+_SOFTDATATYPE_DWORD = 0x02000006
+_SOFTDATATYPE_DINT = 0x02000007
+_SOFTDATATYPE_REAL = 0x02000008
+_SOFTDATATYPE_STRING = 0x02000013
+_SOFTDATATYPE_LREAL = 0x02000030
+_SOFTDATATYPE_USINT = 0x02000034
+_SOFTDATATYPE_UINT = 0x02000035
+_SOFTDATATYPE_UDINT = 0x02000036
+_SOFTDATATYPE_SINT = 0x02000037
+_SOFTDATATYPE_WCHAR = 0x0200003D
+_SOFTDATATYPE_WSTRING = 0x0200003E
+_STRING_TYPE_MIN = 0x020A0000
+_STRING_TYPE_MAX = 0x020AFFFF
+_WSTRING_TYPE_MIN = 0x020B0000
+_WSTRING_TYPE_MAX = 0x020BFFFF
 
 
 class LanguageId(IntEnum):
@@ -357,7 +380,62 @@ def _decode_objects(data: bytes, offset: int) -> tuple[list[_Object], int]:
     return objects, offset
 
 
-def _alarm_texts(value: Any, language_ids: set[LanguageId | int] | None) -> dict[int, AlarmText]:
+def _decode_associated_value(blob: _Blob) -> object | None:
+    """Decode an alarm SD value using its Softdatatype root ID."""
+    root_id, value = blob.root_id, blob.value
+    try:
+        if root_id == _SOFTDATATYPE_STRING or _STRING_TYPE_MIN <= root_id <= _STRING_TYPE_MAX:
+            size = value[1]
+            return value[2 : 2 + size].decode("latin-1", errors="replace")
+        if root_id == _SOFTDATATYPE_WSTRING or _WSTRING_TYPE_MIN <= root_id <= _WSTRING_TYPE_MAX:
+            size = struct.unpack_from(">H", value, 2)[0]
+            return value[4 : 4 + 2 * size].decode("utf-16-be", errors="replace")
+        if root_id == _SOFTDATATYPE_BOOL:
+            return bool(value[0])
+        if root_id in (_SOFTDATATYPE_BYTE, _SOFTDATATYPE_USINT):
+            return value[0]
+        if root_id == _SOFTDATATYPE_CHAR:
+            return value[:1].decode("latin-1", errors="replace")
+        if root_id == _SOFTDATATYPE_SINT:
+            return struct.unpack(">b", value)[0]
+        if root_id in (_SOFTDATATYPE_WORD, _SOFTDATATYPE_UINT):
+            return struct.unpack(">H", value)[0]
+        if root_id == _SOFTDATATYPE_INT:
+            return struct.unpack(">h", value)[0]
+        if root_id in (_SOFTDATATYPE_DWORD, _SOFTDATATYPE_UDINT):
+            return struct.unpack(">I", value)[0]
+        if root_id == _SOFTDATATYPE_DINT:
+            return struct.unpack(">i", value)[0]
+        if root_id == _SOFTDATATYPE_REAL:
+            return struct.unpack(">f", value)[0]
+        if root_id == _SOFTDATATYPE_LREAL:
+            return struct.unpack(">d", value)[0]
+        if root_id == _SOFTDATATYPE_WCHAR:
+            return value[:2].decode("utf-16-be", errors="replace")
+    except (IndexError, struct.error):
+        return None
+    return None
+
+
+def _interpolate_associated_values(text: str, values: Sequence[_Blob]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        index = int(match.group(1))
+        if index >= len(values):
+            return match.group(0)
+        value = _decode_associated_value(values[index])
+        if value is None:
+            return match.group(0)
+        try:
+            return match.group(2) % value
+        except (TypeError, ValueError):
+            return match.group(0)
+
+    return _ASSOCIATED_VALUE_TOKEN.sub(replace, text)
+
+
+def _alarm_texts(
+    value: Any, language_ids: set[LanguageId | int] | None, associated_values: Sequence[_Blob]
+) -> dict[int, AlarmText]:
     grouped: dict[int, dict[int, str]] = {}
     if not isinstance(value, dict):
         return {}
@@ -367,7 +445,8 @@ def _alarm_texts(value: Any, language_ids: set[LanguageId | int] | None) -> dict
         language_id, text_id = key >> 16, key & 0xFFFF
         if language_ids is not None and language_id not in language_ids:
             continue
-        grouped.setdefault(language_id, {})[text_id] = blob.value.decode("utf-8", errors="replace")
+        text = blob.value.decode("utf-8", errors="replace")
+        grouped.setdefault(language_id, {})[text_id] = _interpolate_associated_values(text, associated_values)
     result = {}
     for language_id, texts in grouped.items():
         additional = tuple(texts.get(i, "") for i in range(3, 12))
@@ -382,7 +461,7 @@ def _alarm_from_object(obj: _Object, language_ids: set[LanguageId | int] | None)
     state = "coming" if state_id == Ids.ALARM_DAI_COMING else "going"
     timestamp: int | None = None
     acknowledge_timestamp: int | None = None
-    associated_values: tuple[bytes, ...] = ()
+    associated_blobs: tuple[_Blob, ...] = ()
     if isinstance(state_value, dict):
         timestamp_value = state_value.get(3475)
         acknowledge_value = state_value.get(3646)
@@ -390,7 +469,7 @@ def _alarm_from_object(obj: _Object, language_ids: set[LanguageId | int] | None)
         acknowledge_timestamp = acknowledge_value if isinstance(acknowledge_value, int) else None
         raw_values = state_value.get(3476)
         if isinstance(raw_values, list):
-            associated_values = tuple(value.value for value in raw_values if isinstance(value, _Blob))
+            associated_blobs = tuple(value for value in raw_values if isinstance(value, _Blob))
     hmi = attrs.get(Ids.ALARM_DAI_HMI_INFO)
     return Alarm(
         cpu_alarm_id=int(attrs.get(Ids.ALARM_DAI_CPU_ALARM_ID, 0)),
@@ -403,8 +482,8 @@ def _alarm_from_object(obj: _Object, language_ids: set[LanguageId | int] | None)
         timestamp=timestamp,
         acknowledge_timestamp=acknowledge_timestamp,
         hmi_info=hmi.value if isinstance(hmi, _Blob) else b"",
-        associated_values=associated_values,
-        texts=_alarm_texts(attrs.get(Ids.ALARM_DAI_TEXTS), language_ids),
+        associated_values=tuple(blob.value for blob in associated_blobs),
+        texts=_alarm_texts(attrs.get(Ids.ALARM_DAI_TEXTS), language_ids, associated_blobs),
     )
 
 

@@ -707,13 +707,20 @@ class S7CommPlusClient:
         logger.info(f"Alarm subscription {subscription_id:#x} deleted")
 
     def receive_alarm_notification(self, language_ids: Optional[list[LanguageId | int]] = None) -> AlarmNotification:
-        """Block until the PLC sends one alarm notification."""
+        """Block until the PLC sends one alarm notification.
+
+        Do not run this alongside a data-subscription receive loop on the same
+        connection: mixed notification dispatch is not supported yet.
+        """
         if self._connection is None:
             raise RuntimeError("Not connected")
         return parse_alarm_notification(self._connection.receive_notification(), language_ids)
 
-    def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+    def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
         """Return the PLC's current active alarm state.
+
+        This is a snapshot read and does not create or consume a subscription,
+        so it can be used before or while an alarm subscription exists.
 
         Args:
             language_ids: Optional Windows LCIDs used to filter returned texts.
@@ -725,6 +732,10 @@ class S7CommPlusClient:
             FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
         )
         return parse_alarm_explore_response(response, language_ids)
+
+    def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Alias for :meth:`read_alarms` retained for compatibility."""
+        return self.read_alarms(language_ids)
 
     def __enter__(self) -> "S7CommPlusClient":
         return self

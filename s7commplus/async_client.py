@@ -592,7 +592,11 @@ class S7CommPlusAsyncClient:
     async def receive_alarm_notification(
         self, language_ids: Optional[list[LanguageId | int]] = None, timeout: Optional[float] = None
     ) -> AlarmNotification:
-        """Wait for one alarm notification, optionally with a timeout in seconds."""
+        """Wait for one alarm notification, optionally with a timeout in seconds.
+
+        Do not run this alongside a data-subscription receive loop on the same
+        connection: mixed notification dispatch is not supported yet.
+        """
         async with self._lock:
             if not self._connected:
                 raise RuntimeError("Not connected")
@@ -600,12 +604,16 @@ class S7CommPlusAsyncClient:
             frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
         return parse_alarm_notification(frame, language_ids)
 
-    async def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
-        """Return the PLC's current active alarm state."""
+    async def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Return a snapshot of the PLC's active alarms without consuming notifications."""
         response = await self._send_request(
             FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
         )
         return parse_alarm_explore_response(response, language_ids)
+
+    async def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Alias for :meth:`read_alarms` retained for compatibility."""
+        return await self.read_alarms(language_ids)
 
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.
