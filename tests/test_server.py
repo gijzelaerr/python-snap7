@@ -1,18 +1,19 @@
-from ctypes import c_char
 import logging
 import socket
 import time
-from datetime import datetime
-
-import pytest
 import unittest
+from ctypes import c_char
+from datetime import datetime
 from threading import Thread
 from unittest.mock import MagicMock
 
+import pytest
+
 from snap7.client import Client
-from snap7.error import server_errors, error_text, S7ConnectionError
-from snap7.server import Server, ServerISOConnection
-from snap7.type import SrvEvent, mkEvent, mkLog, SrvArea, Parameter, Block
+from snap7.datatypes import S7Area, S7WordLen
+from snap7.error import S7ConnectionError, error_text, server_errors
+from snap7.server import EVC_DATA_READ, EVC_DATA_WRITE, EVC_SERVER_STARTED, EVC_SERVER_STOPPED, Server, ServerISOConnection
+from snap7.type import Block, Parameter, SrvArea, SrvEvent, mkEvent, mkLog
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -98,16 +99,71 @@ class TestServer(unittest.TestCase):
         self.server.unregister_area(area_code, index)
 
     def test_events_callback(self) -> None:
+        events: list[SrvEvent] = []
+
         def event_call_back(event: SrvEvent) -> None:
-            logging.debug(event)
+            events.append(event)
 
         self.server.set_events_callback(event_call_back)
+        self.server.clear_events()
+
+        self.server.register_area(SrvArea.DB, 1, bytearray(8))
+        address = ("127.0.0.1", 102)
+
+        read_pdu = self.server.protocol.build_read_request(S7Area.DB, 1, 2, S7WordLen.BYTE, 3)
+        self.server._handle_read_area(self.server._parse_request(read_pdu), address)
+
+        write_pdu = self.server.protocol.build_write_request(S7Area.DB, 1, 4, S7WordLen.BYTE, b"\x01\x02")
+        self.server._handle_write_area(self.server._parse_request(write_pdu), address)
+
+        self.assertEqual([event.EvtCode for event in events], [EVC_DATA_READ, EVC_DATA_WRITE])
+        self.assertEqual(
+            [(event.EvtParam1, event.EvtParam2, event.EvtParam3, event.EvtParam4) for event in events],
+            [(SrvArea.DB, 1, 2, 3), (SrvArea.DB, 1, 4, 2)],
+        )
+        read_event = self.server.pick_event()
+        write_event = self.server.pick_event()
+        self.assertIsInstance(read_event, SrvEvent)
+        self.assertIsInstance(write_event, SrvEvent)
+        assert isinstance(read_event, SrvEvent)
+        assert isinstance(write_event, SrvEvent)
+        self.assertEqual(read_event.EvtCode, EVC_DATA_READ)
+        self.assertEqual(write_event.EvtCode, EVC_DATA_WRITE)
+        self.assertFalse(self.server.pick_event())
 
     def test_read_events_callback(self) -> None:
+        events: list[SrvEvent] = []
+
         def read_events_call_back(event: SrvEvent) -> None:
-            logging.debug(event)
+            events.append(event)
 
         self.server.set_read_events_callback(read_events_call_back)
+        self.server.register_area(SrvArea.DB, 1, bytearray(4))
+
+        read_pdu = self.server.protocol.build_read_request(S7Area.DB, 1, 0, S7WordLen.BYTE, 4)
+        self.server._handle_read_area(self.server._parse_request(read_pdu), ("127.0.0.1", 102))
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].EvtCode, EVC_DATA_READ)
+
+    def test_lifecycle_events_reach_callback_and_queue(self) -> None:
+        server = Server(log=False)
+        events: list[SrvEvent] = []
+        server.set_events_callback(events.append)
+
+        try:
+            server.start(tcp_port=0)
+            server.stop()
+        finally:
+            server.destroy()
+
+        self.assertEqual([event.EvtCode for event in events], [EVC_SERVER_STARTED, EVC_SERVER_STOPPED])
+        started_event = server.pick_event()
+        stopped_event = server.pick_event()
+        assert isinstance(started_event, SrvEvent)
+        assert isinstance(stopped_event, SrvEvent)
+        self.assertEqual(started_event.EvtCode, EVC_SERVER_STARTED)
+        self.assertEqual(stopped_event.EvtCode, EVC_SERVER_STOPPED)
 
     def test_pick_event(self) -> None:
         event = self.server.pick_event()

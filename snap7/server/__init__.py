@@ -6,23 +6,35 @@ projects, use ``s7.Server`` instead, which supports both legacy S7 and
 S7CommPlus clients.
 """
 
+import logging
 import socket
 import struct
 import sys
 import threading
 import time
-import logging
-from typing import Dict, Optional, List, Callable, Any, Tuple, Type, Union
-from types import TracebackType
-from enum import IntEnum
 from ctypes import Array, c_char
+from enum import IntEnum
+from types import TracebackType
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
-from ..s7protocol import S7Protocol, S7Function, S7PDUType, S7UserDataGroup, S7UserDataSubfunction
 from ..datatypes import S7Area, S7WordLen
 from ..error import S7ConnectionError, S7ProtocolError
-from ..type import SrvArea, SrvEvent, Parameter
+from ..s7protocol import S7Function, S7PDUType, S7Protocol, S7UserDataGroup, S7UserDataSubfunction
+from ..type import Parameter, SrvArea, SrvEvent
 
 logger = logging.getLogger(__name__)
+
+
+# Event codes from the Snap7 server API.
+EVC_SERVER_STARTED = 0x00000001
+EVC_SERVER_STOPPED = 0x00000002
+EVC_LISTENER_CANNOT_START = 0x00000004
+EVC_CLIENT_ADDED = 0x00000008
+EVC_CLIENT_NO_ROOM = 0x00000020
+EVC_CLIENT_EXCEPTION = 0x00000040
+EVC_CLIENT_DISCONNECTED = 0x00000080
+EVC_DATA_READ = 0x00020000
+EVC_DATA_WRITE = 0x00040000
 
 
 class ServerState(IntEnum):
@@ -97,6 +109,7 @@ class Server:
 
         # Event queue for pick_event
         self._event_queue: List[SrvEvent] = []
+        self._event_lock = threading.Lock()
 
         # Logging
         self._log_enabled = log
@@ -144,10 +157,7 @@ class Server:
             self.server_thread = threading.Thread(target=self._server_loop, daemon=True)
             self.server_thread.start()
 
-            # Add startup event to queue
-            startup_event = SrvEvent()
-            startup_event.EvtCode = 0x00010000  # Server started
-            self._event_queue.append(startup_event)
+            self._emit_event(EVC_SERVER_STARTED)
 
             logger.info(f"S7 Server started on {self.host}:{self.port}")
             return 0
@@ -158,6 +168,7 @@ class Server:
             if self.server_socket:
                 self.server_socket.close()
                 self.server_socket = None
+            self._emit_event(EVC_LISTENER_CANNOT_START)
             raise S7ConnectionError(f"Failed to start server: {e}")
 
     def stop(self) -> int:
@@ -195,6 +206,7 @@ class Server:
             self.clients.clear()
             self.client_count = 0
 
+        self._emit_event(EVC_SERVER_STOPPED)
         logger.info("S7 Server stopped")
         return 0
 
@@ -408,10 +420,15 @@ class Server:
             Event description string
         """
         event_texts = {
-            0x00004000: "Read operation completed",
-            0x00004001: "Write operation completed",
-            0x00008000: "Client connected",
-            0x00008001: "Client disconnected",
+            EVC_SERVER_STARTED: "Server started",
+            EVC_SERVER_STOPPED: "Server stopped",
+            EVC_LISTENER_CANNOT_START: "Listener cannot start",
+            EVC_CLIENT_ADDED: "Client connected",
+            EVC_CLIENT_NO_ROOM: "Client rejected: no room",
+            EVC_CLIENT_EXCEPTION: "Client exception",
+            EVC_CLIENT_DISCONNECTED: "Client disconnected",
+            EVC_DATA_READ: "Read operation completed",
+            EVC_DATA_WRITE: "Write operation completed",
         }
 
         return event_texts.get(event.EvtCode, f"Event code: {event.EvtCode:#08x}")
@@ -556,8 +573,9 @@ class Server:
         Returns:
             Server event if available, False if no events
         """
-        if self._event_queue:
-            return self._event_queue.pop(0)
+        with self._event_lock:
+            if self._event_queue:
+                return self._event_queue.pop(0)
         return False
 
     def clear_events(self) -> int:
@@ -567,8 +585,64 @@ class Server:
         Returns:
             0 on success
         """
-        self._event_queue.clear()
+        with self._event_lock:
+            self._event_queue.clear()
         return 0
+
+    def _emit_event(
+        self,
+        code: int,
+        ret_code: int = 0,
+        param1: int = 0,
+        param2: int = 0,
+        param3: int = 0,
+        param4: int = 0,
+        *,
+        sender: int = 0,
+        notify_read_callback: bool = False,
+    ) -> None:
+        """Queue a server event and notify the configured callbacks."""
+        event = SrvEvent()
+        event.EvtTime = int(time.time())
+        event.EvtSender = sender
+        event.EvtCode = code
+        event.EvtRetCode = ret_code
+        event.EvtParam1 = param1
+        event.EvtParam2 = param2
+        event.EvtParam3 = param3
+        event.EvtParam4 = param4
+
+        with self._event_lock:
+            self._event_queue.append(event)
+
+        if notify_read_callback and self.read_callback:
+            try:
+                self.read_callback(event)
+            except Exception as e:  # noqa: BLE001 -- user callbacks must not terminate the server
+                logger.error(f"Error in read callback: {e}")
+
+        if self.event_callback:
+            try:
+                self.event_callback(event)
+            except Exception as e:  # noqa: BLE001 -- user callbacks must not terminate the server
+                logger.error(f"Error in event callback: {e}")
+
+    @staticmethod
+    def _event_area(area: S7Area) -> int:
+        """Convert an S7 wire-area value to the area code used by SrvEvent."""
+        return {
+            S7Area.PE: SrvArea.PE,
+            S7Area.PA: SrvArea.PA,
+            S7Area.MK: SrvArea.MK,
+            S7Area.CT: SrvArea.CT,
+            S7Area.TM: SrvArea.TM,
+            S7Area.DB: SrvArea.DB,
+        }[area]
+
+    @staticmethod
+    def _event_sender(address: Tuple[str, int]) -> int:
+        """Encode a client's IPv4 address like the native Snap7 event sender."""
+        return int.from_bytes(socket.inet_aton(address[0]), "big")
 
     def _set_log_callback(self) -> None:
         """Set up default logging callback."""
@@ -597,11 +671,13 @@ class Server:
                     with self.client_lock:
                         if self.client_count >= self.max_clients:
                             logger.warning(f"Rejecting client {address}: maximum of {self.max_clients} clients reached")
+                            self._emit_event(EVC_CLIENT_NO_ROOM, sender=self._event_sender(address))
                             client_socket.close()
                             continue
                         self.clients.append(client_thread)
                         self.client_count += 1
 
+                    self._emit_event(EVC_CLIENT_ADDED, sender=self._event_sender(address))
                     client_thread.start()
 
                 except socket.timeout:
@@ -649,6 +725,7 @@ class Server:
                     break
                 except Exception as e:
                     logger.error(f"Error handling client {address}: {e}")
+                    self._emit_event(EVC_CLIENT_EXCEPTION, sender=self._event_sender(address))
                     break
 
         except Exception as e:
@@ -670,6 +747,7 @@ class Server:
             if hasattr(self, "_upload_contexts"):
                 self._upload_contexts.pop(address, None)
 
+            self._emit_event(EVC_CLIENT_DISCONNECTED, sender=self._event_sender(address))
             logger.info(f"Client {address} handler finished")
 
     def _process_request(self, request_data: bytes, client_address: Tuple[str, int]) -> Optional[bytes]:
@@ -800,20 +878,15 @@ class Server:
 
             data_section = struct.pack(">BBH", 0xFF, 0x04, len(read_data) * 8) + read_data
 
-            if self.read_callback:
-                event = SrvEvent()
-                event.EvtTime = int(time.time())
-                event.EvtSender = 0
-                event.EvtCode = 0x00004000
-                event.EvtRetCode = 0
-                event.EvtParam1 = 1
-                event.EvtParam2 = 0
-                event.EvtParam3 = len(read_data)
-                event.EvtParam4 = 0
-                try:
-                    self.read_callback(event)
-                except Exception as e:
-                    logger.error(f"Error in read callback: {e}")
+            self._emit_event(
+                EVC_DATA_READ,
+                param1=self._event_area(area),
+                param2=db_number,
+                param3=start,
+                param4=len(read_data),
+                sender=self._event_sender(client_address),
+                notify_read_callback=True,
+            )
 
             return header + parameters + data_section
 
@@ -860,6 +933,16 @@ class Server:
                 # Fill byte for even alignment (not after last item)
                 if i < item_count - 1 and len(read_data) % 2 != 0:
                     data_parts.append(0x00)
+
+            self._emit_event(
+                EVC_DATA_READ,
+                param1=self._event_area(area),
+                param2=db_number,
+                param3=start,
+                param4=byte_count,
+                sender=self._event_sender(client_address),
+                notify_read_callback=True,
+            )
 
         data_len = len(data_parts)
 
@@ -1005,6 +1088,15 @@ class Server:
 
             # Data section (write response)
             data_section = b"\xff"  # Success return code
+
+            self._emit_event(
+                EVC_DATA_WRITE,
+                param1=self._event_area(area),
+                param2=db_number,
+                param3=start,
+                param4=len(write_data),
+                sender=self._event_sender(client_address),
+            )
 
             return header + parameters + data_section
 
