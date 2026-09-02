@@ -641,7 +641,7 @@ class TestCreateSessionRequest:
         client._send_cotp_dt = AsyncMock()
         client._recv_cotp_dt = AsyncMock(return_value=bytes.fromhex("72010000"))
 
-        with pytest.raises(RuntimeError, match="CreateObject response too short"):
+        with pytest.raises(S7ConnectionError, match="CreateObject response too short"):
             await client._create_session()
 
         client._send_cotp_dt.assert_awaited_once()
@@ -661,6 +661,26 @@ class TestCreateSessionRequest:
         expected = encode_header(ProtocolVersion.V1, len(frame) - 8) + request
         assert frame[: len(expected)] == expected
         assert frame[-4:] == struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
+
+
+class TestInitSSLResponse:
+    @pytest.mark.asyncio
+    async def test_async_short_response_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=bytes.fromhex("72010000"))
+
+        with pytest.raises(S7ConnectionError, match="InitSSL response too short"):
+            await client._init_ssl()
+
+    @pytest.mark.asyncio
+    async def test_async_ten_byte_response_is_accepted(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._send_cotp_dt = AsyncMock()
+        response = bytes(10)
+        client._recv_cotp_dt = AsyncMock(return_value=encode_header(ProtocolVersion.V1, len(response)) + response)
+
+        await client._init_ssl()
 
 
 class TestDeleteSessionRequest:

@@ -934,8 +934,8 @@ class S7CommPlusAsyncClient:
         version, data_length, consumed = decode_header(response_data)
         response = response_data[consumed : consumed + data_length]
 
-        if len(response) < 14:
-            raise RuntimeError("InitSSL response too short")
+        if len(response) < 10:
+            raise S7ConnectionError("InitSSL response too short")
 
         logger.debug(f"InitSSL response received, version=V{version}")
 
@@ -987,7 +987,7 @@ class S7CommPlusAsyncClient:
         response = response_data[consumed : consumed + data_length]
 
         if len(response) < 10:
-            raise RuntimeError("CreateObject response too short")
+            raise S7ConnectionError("CreateObject response too short")
 
         # Response header is 10 bytes (opcode+reserved+func+reserved+seq+transport).
         # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
