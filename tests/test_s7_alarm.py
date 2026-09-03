@@ -167,7 +167,6 @@ def test_sync_alarm_client_apis() -> None:
     connection.send_request.side_effect = [
         encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x55667788),
         _explore_response(),
-        _explore_response(),
         b"\x00",
     ]
     connection.receive_notification.return_value = _notification_frame()
@@ -178,7 +177,6 @@ def test_sync_alarm_client_apis() -> None:
     assert create_call.kwargs["integrity_tail"] == len(create_call.args[1]) - 11
     assert create_call.args[1].startswith(struct.pack(">I", 0x1235))
     assert client.read_alarms([1031])[0].texts[1031].alarm_text == "Alarm 4 =F6+S2-G1"
-    assert client.browse_alarms([1031])[0].name == "Motor1"
     assert client.receive_alarm_notification().alarms[0].cpu_alarm_id == 0x8A7E0001002A0000
     client.delete_alarm_subscription(0x55667788)
     delete_call = connection.send_request.call_args_list[-1]
@@ -197,7 +195,6 @@ async def test_async_alarm_client_apis() -> None:
         side_effect=[
             encode_uint64_vlq(0) + b"\x01" + encode_uint32_vlq(0x55667788),
             _explore_response(),
-            _explore_response(),
             b"\x00",
         ]
     )
@@ -205,7 +202,6 @@ async def test_async_alarm_client_apis() -> None:
 
     assert await client.create_alarm_subscription([1031]) == 0x55667788
     assert (await client.read_alarms([1031]))[0].texts[1031].alarm_text == "Alarm 4 =F6+S2-G1"
-    assert (await client.browse_alarms([1031]))[0].name == "Motor1"
     assert (await client.receive_alarm_notification(timeout=1)).credit_tick == 5
     await client.delete_alarm_subscription(0x55667788)
 
@@ -215,7 +211,6 @@ async def test_async_alarm_client_apis() -> None:
     [
         ("create_alarm_subscription", ()),
         ("read_alarms", ()),
-        ("browse_alarms", ()),
         ("receive_alarm_notification", ()),
         ("delete_alarm_subscription", (1,)),
     ],

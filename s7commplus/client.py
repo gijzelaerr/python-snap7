@@ -81,6 +81,13 @@ class S7CommPlusClient:
             return False
         return self._connection.tls_active
 
+    @property
+    def protection_level(self) -> Optional[int]:
+        """Effective protection level reported by the PLC (see `AccessLevel`)."""
+        if self._connection is None:
+            return None
+        return self._connection.protection_level
+
     def connect(
         self,
         host: str,
@@ -732,10 +739,6 @@ class S7CommPlusClient:
             FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
         )
         return parse_alarm_explore_response(response, language_ids)
-
-    def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
-        """Alias for :meth:`read_alarms` retained for compatibility."""
-        return self.read_alarms(language_ids)
 
     def __enter__(self) -> "S7CommPlusClient":
         return self

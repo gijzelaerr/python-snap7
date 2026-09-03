@@ -41,6 +41,7 @@ from .connection import (
     _build_set_variable_payload,
     _check_set_variable_response,
     _parse_get_var_substreamed_response,
+    _parse_protection_level_response,
     _set_s7_groups,
 )
 from .alarm import (
@@ -53,14 +54,24 @@ from .alarm import (
     parse_alarm_explore_response,
     parse_alarm_notification,
 )
+from .legitimation import (
+    build_legacy_response,
+    build_new_response,
+    decide_legitimation_mode,
+    derive_legitimation_key,
+    extract_session_version_string,
+)
 from .protocol import (
+    FLAGS_34_FUNCTION_CODES,
     READ_FUNCTION_CODES,
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
+    AccessLevel,
     DataType,
     ElementID,
     FunctionCode,
     Ids,
+    LegitimationType,
     ObjectId,
     Opcode,
     ProtocolVersion,
@@ -107,6 +118,8 @@ class S7CommPlusAsyncClient:
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
         self._server_session_version: Optional[bytes] = None
         self._session_setup_ok: bool = False
+        # Effective protection level, read once the session is up
+        self._protection_level: Optional[int] = None
 
     @property
     def connected(self) -> bool:
@@ -139,6 +152,11 @@ class S7CommPlusAsyncClient:
     def oms_secret(self) -> Optional[bytes]:
         """OMS exporter secret from TLS session (None if TLS not active)."""
         return self._oms_secret
+
+    @property
+    def protection_level(self) -> Optional[int]:
+        """Effective protection level reported by the PLC (see `AccessLevel`)."""
+        return self._protection_level
 
     async def connect(
         self,
@@ -212,6 +230,13 @@ class S7CommPlusAsyncClient:
             else:
                 logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
                 self._session_setup_ok = False
+
+            # Only a session that completed setup answers attribute reads.
+            if self._session_setup_ok:
+                self._protection_level = await self._get_effective_protection_level()
+                if self._protection_level is not None:
+                    logger.info(f"PLC reports protection level: {self._protection_level}")
+
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -227,38 +252,76 @@ class S7CommPlusAsyncClient:
 
         Args:
             password: PLC password
-            username: Username for new-style auth (optional)
+            username: Username for the new-mode exchange (leave empty for legacy)
 
         Raises:
-            S7ConnectionError: If not connected, TLS not active, or auth fails
+            S7ConnectionError: If not connected, TLS is not active, the firmware
+                does not support legitimation, or the password was refused
         """
-        if not self._connected:
-            from snap7.error import S7ConnectionError
+        from snap7.error import S7ConnectionError
 
+        if not self._connected:
             raise S7ConnectionError("Not connected")
 
-        if not self._tls_active or self._oms_secret is None:
-            from snap7.error import S7ConnectionError
-
+        if not self._tls_active:
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
 
+        level_before = self._protection_level
+        if level_before is None:
+            raise S7ConnectionError("PLC does not report a protection level, so legitimation cannot be verified")
+
+        if level_before <= AccessLevel.FULL_ACCESS:
+            logger.info("PLC already grants full access, legitimation is not required")
+            return
+        if not password:
+            logger.warning(f"PLC restricts access (level {level_before}) but no password was provided")
+            return
+
+        # Step 1: Auto-detect legacy vs new from the firmware version
+        mode = self._decide_legitimation_mode()
+        if mode is None:
+            raise S7ConnectionError("PLC firmware version does not support legitimation")
+        logger.info(f"Using {mode.name.lower()} legitimation")
+
+        # Step 2: Get challenge from PLC via GetVarSubStreamed
         challenge = await self._get_legitimation_challenge()
         logger.info(f"Received legitimation challenge ({len(challenge)} bytes)")
 
-        from .legitimation import build_legacy_response, build_new_response
-
-        if username:
-            response_data = build_new_response(password, challenge, self._oms_secret, username)
-            await self._send_legitimation_new(response_data)
+        if mode is LegitimationType.LEGACY:
+            # A legacy challenge is XORed with a SHA-1 password hash, so it is that long.
+            if len(challenge) != 20:
+                raise S7ConnectionError(f"Unexpected legacy challenge length: {len(challenge)}")
+            await self._send_legitimation_legacy(build_legacy_response(password, challenge))
         else:
-            try:
-                response_data = build_new_response(password, challenge, self._oms_secret, "")
-                await self._send_legitimation_new(response_data)
-            except NotImplementedError:
-                response_data = build_legacy_response(password, challenge)
-                await self._send_legitimation_legacy(response_data)
+            if self._oms_secret is None:
+                raise S7ConnectionError(
+                    "New legitimation requires the TLS OMS exporter secret, which could not be derived from this TLS session."
+                )
+            await self._send_legitimation_new(build_new_response(password, challenge, self._oms_secret, username))
+            # The PLC rolls the key after every attempt; mirror it so a second
+            # legitimation on the same session encrypts with the same key.
+            self._oms_secret = derive_legitimation_key(self._oms_secret)
 
-        logger.info("PLC legitimation completed successfully")
+        # Step 3: Renew protection level, which is what verifies the outcome
+        self._protection_level = await self._get_effective_protection_level()
+        if self._protection_level is None:
+            raise S7ConnectionError("Legitimation outcome is unverifiable: the PLC stopped reporting its protection level")
+        if self._protection_level >= level_before:
+            raise S7ConnectionError(
+                f"Legitimation failed, protection level unchanged at {self._protection_level}: the password was refused"
+            )
+        logger.info(f"PLC legitimation completed, protection level {level_before} -> {self._protection_level}")
+
+    def _decide_legitimation_mode(self) -> Optional[LegitimationType]:
+        """Return the legitimation exchange the PLC firmware expects, None if unsupported."""
+        if self._server_session_version is None:
+            return None
+        version_string = extract_session_version_string(self._server_session_version)
+        if version_string is None:
+            logger.warning("ServerSessionVersion carries no device string, cannot pick a legitimation mode")
+            return None
+        logger.debug(f"PLC device string: {version_string}")
+        return decide_legitimation_mode(version_string)
 
     async def _activate_tls(
         self,
@@ -342,6 +405,19 @@ class S7CommPlusAsyncClient:
         data = await self._recv_cotp_raw()
         self._incoming_bio.write(data)
 
+    async def _get_effective_protection_level(self) -> Optional[int]:
+        """Read the session's effective protection level (see `AccessLevel`), None if request failed."""
+        from snap7.error import S7ConnectionError
+
+        payload = _build_get_var_substreamed_payload(self._session_id, Ids.EFFECTIVE_PROTECTION_LEVEL)
+        try:
+            resp = await self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+            level = _parse_protection_level_response(resp)
+        except S7ConnectionError as exc:
+            logger.warning(f"PLC did not report a protection level: {exc}")
+            return None
+        return level
+
     async def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC."""
         from .protocol import LegitimationId
@@ -395,6 +471,7 @@ class S7CommPlusAsyncClient:
         self._oms_secret = None
         self._server_session_version = None
         self._session_setup_ok = False
+        self._protection_level = None
 
         if self._writer:
             try:
@@ -611,10 +688,6 @@ class S7CommPlusAsyncClient:
         )
         return parse_alarm_explore_response(response, language_ids)
 
-    async def browse_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
-        """Alias for :meth:`read_alarms` retained for compatibility."""
-        return await self.read_alarms(language_ids)
-
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.
 
@@ -770,8 +843,8 @@ class S7CommPlusAsyncClient:
                 0x0000,
                 seq_num,
                 self._session_id,
-                # Transport flags: 0x34 for GetMultiVariables and Explore, 0x36 otherwise.
-                0x34 if function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE) else 0x36,
+                # Transport flags: 0x34 for the function codes the reference sends with 0x34.
+                0x34 if function_code in FLAGS_34_FUNCTION_CODES else 0x36,
             )
 
             integrity_id_bytes = b""
@@ -1027,7 +1100,7 @@ class S7CommPlusAsyncClient:
             0x0000,
             seq_num,
             self._session_id,
-            0x36,
+            0x34,
         )
         request += struct.pack(">I", 0)
 

@@ -230,6 +230,20 @@ class Ids(IntEnum):
     ALARM_DAI_HMI_INFO = 7813
     ALARM_DAI_SEQUENCE_COUNTER = 7917
 
+    # Session's effective protection level, readable via GetVarSubStreamed
+    EFFECTIVE_PROTECTION_LEVEL = 1842
+    ACTIVE_PROTECTION_LEVEL = 1843
+
+    # ServerSessionVersion struct element carrying the device "PAOM string"
+    # which selects the legitimation mode.
+    SESSION_VERSION_SYSTEM_PAOM_STRING = 319
+
+    # Struct and element IDs of the encrypted new-mode legitimation payload
+    LEGITIMATION_PAYLOAD_STRUCT = 40400
+    LEGITIMATION_PAYLOAD_TYPE = 40401
+    LEGITIMATION_PAYLOAD_USERNAME = 40402
+    LEGITIMATION_PAYLOAD_PASSWORD = 40403
+
     # DB AccessArea base (add DB number to get area ID)
     DB_ACCESS_AREA_BASE = 0x8A0E0000
 
@@ -245,6 +259,56 @@ READ_FUNCTION_CODES: frozenset[int] = frozenset(
         FunctionCode.GET_VARIABLES_ADDRESS,
     }
 )
+
+# Function codes whose requests carry transport flags 0x34. The reference sets
+# this per request class rather than by read/write, so it is a different split
+# than READ_FUNCTION_CODES: the writes SetVariable, SetMultiVariables and
+# DeleteObject use 0x34 too. Only CreateObject (0x36) and InitSSL (0x30) differ,
+# and a session-setup CreateObject sent with 0x34 makes the PLC reset the
+# connection. Subscription and alarm CreateObjects are the documented exception:
+# the reference overrides those to 0x34.
+#
+# Reference: TransportFlags in thomas-v2/S7CommPlusDriver/Core/*Request.cs
+FLAGS_34_FUNCTION_CODES: frozenset[int] = frozenset(
+    {
+        FunctionCode.DELETE_OBJECT,
+        FunctionCode.EXPLORE,
+        FunctionCode.GET_MULTI_VARIABLES,
+        FunctionCode.GET_VAR_SUBSTREAMED,
+        FunctionCode.SET_MULTI_VARIABLES,
+        FunctionCode.SET_VARIABLE,
+    }
+)
+
+
+class AccessLevel(IntEnum):
+    """Protection levels reported by `Ids.EFFECTIVE_PROTECTION_LEVEL`.
+
+    Lower is more privileged. A successful legitimation lowers the level; the
+    level reached depends on which password was configured for which role, so
+    it does not necessarily become `FULL_ACCESS`.
+
+    `NONE` is not in the C# reference; PLCs with no protection configured
+    report it.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/AccessLevel.cs
+    """
+
+    NONE = 0
+    FULL_ACCESS = 1
+    READ_ACCESS = 2
+    HMI_ACCESS = 3
+    NO_ACCESS = 4
+
+
+class LegitimationType(IntEnum):
+    """Legitimation mode.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/LegitimationType.cs
+    """
+
+    LEGACY = 1
+    NEW = 2
 
 
 class LegitimationId(IntEnum):

@@ -51,15 +51,25 @@ from typing import Any, Optional, Type
 from snap7.connection import ISOTCPConnection
 
 from .codec import decode_header, encode_header, encode_object_qualifier, parse_create_object_attributes
+from .legitimation import (
+    build_legacy_response,
+    build_new_response,
+    decide_legitimation_mode,
+    derive_legitimation_key,
+    extract_session_version_string,
+)
 from .protocol import (
+    FLAGS_34_FUNCTION_CODES,
     READ_FUNCTION_CODES,
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
+    AccessLevel,
     DataType,
     ElementID,
     FunctionCode,
     Ids,
     LegitimationId,
+    LegitimationType,
     ObjectId,
     Opcode,
     ProtocolVersion,
@@ -151,6 +161,36 @@ def _parse_get_var_substreamed_response(payload: bytes) -> bytes:
         raise S7ConnectionError(f"Malformed GetVarSubStreamed response: {exc}") from exc
 
 
+def _parse_protection_level_response(payload: bytes) -> int:
+    """Extract the scalar UDInt value from a GetVarSubStreamed response payload."""
+    from snap7.error import S7ConnectionError
+
+    try:
+        return_value, offset = decode_uint64_vlq(payload, 0)
+        if return_value != 0:
+            raise S7ConnectionError(f"GetVarSubStreamed for the protection level failed: return_value={return_value}")
+
+        if offset >= len(payload):
+            raise ValueError("missing response marker")
+        offset += 1  # protocol-defined unknown byte
+
+        if offset + 2 > len(payload):
+            raise ValueError("missing PValue header")
+        flags = payload[offset]
+        datatype = payload[offset + 1]
+        offset += 2
+
+        if datatype != DataType.UDINT or flags & 0x10:
+            raise ValueError(f"expected a scalar UDInt, got flags=0x{flags:02X} datatype=0x{datatype:02X}")
+
+        value, _ = decode_uint32_vlq(payload, offset)
+        return value
+    except S7ConnectionError:
+        raise
+    except (IndexError, ValueError) as exc:
+        raise S7ConnectionError(f"Malformed protection level response: {exc}") from exc
+
+
 def _build_set_variable_payload(in_object_id: int, address: int, value: bytes) -> bytes:
     """Build a SetVariable request set around an already encoded PValue."""
     payload = struct.pack(">I", in_object_id)
@@ -164,7 +204,10 @@ def _build_set_variable_payload(in_object_id: int, address: int, value: bytes) -
 
 
 def _check_set_variable_response(payload: bytes) -> None:
-    """Raise when a SetVariable response reports a non-zero return value."""
+    """Raise when a SetVariable response reports a refused legitimation.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/Legitimation.cs
+    """
     from snap7.error import S7ConnectionError
 
     if not payload:
@@ -173,7 +216,9 @@ def _check_set_variable_response(payload: bytes) -> None:
         return_value, _ = decode_uint64_vlq(payload, 0)
     except ValueError as exc:
         raise S7ConnectionError(f"Malformed SetVariable response: {exc}") from exc
-    if return_value != 0:
+    # The low 16 bits of the status word are a signed error code; the reference
+    # driver casts them with (Int16) and rejects negatives, i.e. the sign bit.
+    if return_value & 0x8000:
         raise S7ConnectionError(f"Legitimation rejected by PLC: return_value=0x{return_value:X}")
 
 
@@ -300,6 +345,9 @@ class S7CommPlusConnection:
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
 
+        # Effective protection level, read once the session is up
+        self._protection_level: Optional[int] = None
+
     @property
     def connected(self) -> bool:
         return self._connected
@@ -354,6 +402,11 @@ class S7CommPlusConnection:
     def oms_secret(self) -> Optional[bytes]:
         """OMS exporter secret from TLS session (for legitimation)."""
         return self._oms_secret
+
+    @property
+    def protection_level(self) -> Optional[int]:
+        """Effective protection level reported by the PLC (see `AccessLevel`)."""
+        return self._protection_level
 
     def connect(
         self,
@@ -437,6 +490,14 @@ class S7CommPlusConnection:
             if self._session_key is not None and self._session_setup_ok:
                 self._session_activate()
                 self._post_auth_legitimation(password=self._connect_password)
+
+            # Only a session that completed setup answers attribute reads; the
+            # V1-initial band falls back to legacy PUT/GET and never gets here.
+            if self._session_setup_ok:
+                self._protection_level = self._get_effective_protection_level()
+                if self._protection_level is not None:
+                    logger.info(f"PLC reports protection level: {self._protection_level}")
+
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
                 f"version=V{self._protocol_version}, session={self._session_id}, "
@@ -458,43 +519,90 @@ class S7CommPlusConnection:
 
         Args:
             password: PLC password
-            username: Username for new-style auth (optional)
+            username: Username for the new-mode exchange (leave empty for legacy)
 
         Raises:
-            S7ConnectionError: If not connected, TLS not active, or auth fails
+            S7ConnectionError: If not connected, TLS is not active, the firmware
+                does not support legitimation, or the password was refused
         """
-        if not self._connected:
-            from snap7.error import S7ConnectionError
+        from snap7.error import S7ConnectionError
 
+        if not self._connected:
             raise S7ConnectionError("Not connected")
 
-        if not self._tls_active or self._oms_secret is None:
-            from snap7.error import S7ConnectionError
-
+        if not self._tls_active:
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
 
-        # Step 1: Get challenge from PLC via GetVarSubStreamed
+        level_before = self._protection_level
+        if level_before is None:
+            raise S7ConnectionError("PLC does not report a protection level, so legitimation cannot be verified")
+
+        if level_before <= AccessLevel.FULL_ACCESS:
+            logger.info("PLC already grants full access, legitimation is not required")
+            return
+        if not password:
+            logger.warning(f"PLC restricts access (level {level_before}) but no password was provided")
+            return
+
+        # Step 1: Auto-detect legacy vs new from the firmware version
+        mode = self._decide_legitimation_mode()
+        if mode is None:
+            raise S7ConnectionError("PLC firmware version does not support legitimation")
+        logger.info(f"Using {mode.name.lower()} legitimation")
+
+        # Step 2: Get challenge from PLC via GetVarSubStreamed
         challenge = self._get_legitimation_challenge()
         logger.info(f"Received legitimation challenge ({len(challenge)} bytes)")
 
-        # Step 2: Build response (auto-detect legacy vs new)
-        from .legitimation import build_legacy_response, build_new_response
-
-        if username:
-            # New-style auth with username always uses AES-256-CBC
-            response_data = build_new_response(password, challenge, self._oms_secret, username)
-            self._send_legitimation_new(response_data)
+        if mode is LegitimationType.LEGACY:
+            # A legacy challenge is XORed with a SHA-1 password hash, so it is that long.
+            if len(challenge) != 20:
+                raise S7ConnectionError(f"Unexpected legacy challenge length: {len(challenge)}")
+            self._send_legitimation_legacy(build_legacy_response(password, challenge))
         else:
-            # Try new-style first, fall back to legacy SHA-1 XOR
-            try:
-                response_data = build_new_response(password, challenge, self._oms_secret, "")
-                self._send_legitimation_new(response_data)
-            except NotImplementedError:
-                # cryptography package not available, use legacy
-                response_data = build_legacy_response(password, challenge)
-                self._send_legitimation_legacy(response_data)
+            if self._oms_secret is None:
+                raise S7ConnectionError(
+                    "New legitimation requires the TLS OMS exporter secret, which could not be derived from this TLS session."
+                )
+            self._send_legitimation_new(build_new_response(password, challenge, self._oms_secret, username))
+            # The PLC rolls the key after every attempt; mirror it so a second
+            # legitimation on the same session encrypts with the same key.
+            self._oms_secret = derive_legitimation_key(self._oms_secret)
 
-        logger.info("PLC legitimation completed successfully")
+        # Step 3: Renew protection level, which is what verifies the outcome
+        self._protection_level = self._get_effective_protection_level()
+        if self._protection_level is None:
+            raise S7ConnectionError("Legitimation outcome is unverifiable: the PLC stopped reporting its protection level")
+        if self._protection_level >= level_before:
+            raise S7ConnectionError(
+                f"Legitimation failed, protection level unchanged at {self._protection_level}: the password was refused"
+            )
+        logger.info(f"PLC legitimation completed, protection level {level_before} -> {self._protection_level}")
+
+    def _decide_legitimation_mode(self) -> Optional[LegitimationType]:
+        """Return the legitimation exchange the PLC firmware expects, None if unsupported."""
+        if self._server_session_version is None:
+            return None
+        version_string = extract_session_version_string(self._server_session_version)
+        if version_string is None:
+            logger.warning("ServerSessionVersion carries no device string, cannot pick a legitimation mode")
+            return None
+        logger.debug(f"PLC device string: {version_string}")
+        return decide_legitimation_mode(version_string)
+
+    def _get_effective_protection_level(self) -> Optional[int]:
+        """Read the session's effective protection level (see `AccessLevel`), None if request failed."""
+        from snap7.error import S7ConnectionError
+
+        payload = _build_get_var_substreamed_payload(self._session_id, Ids.EFFECTIVE_PROTECTION_LEVEL)
+        try:
+            level = _parse_protection_level_response(
+                self.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload, integrity_tail=4)
+            )
+        except S7ConnectionError as exc:
+            logger.warning(f"PLC did not report a protection level: {exc}")
+            return None
+        return level
 
     def _get_legitimation_challenge(self) -> bytes:
         """Request legitimation challenge from PLC.
@@ -620,6 +728,7 @@ class S7CommPlusConnection:
         self._with_integrity_id = False
         self._integrity_id_read = 0
         self._integrity_id_write = 0
+        self._protection_level = None
         self._iso_conn.disconnect()
 
     def send_request(self, function_code: int, payload: bytes = b"", integrity_tail: int = 4, reassemble: bool = False) -> bytes:
@@ -658,10 +767,8 @@ class S7CommPlusConnection:
             seq_num,
             self._session_id,
             # Transport flags: 0x34 after SessionKey auth (matches TIA Portal),
-            # also for GetMultiVariables and Explore; 0x36 for other V1/TLS requests.
-            0x34
-            if self._session_key is not None or function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE)
-            else 0x36,
+            # and for the function codes the reference sends with 0x34.
+            0x34 if self._session_key is not None or function_code in FLAGS_34_FUNCTION_CODES else 0x36,
         )
 
         integrity_id_bytes = b""
@@ -1433,7 +1540,7 @@ class S7CommPlusConnection:
             0x0000,
             seq_num,
             self._session_id,
-            0x36,
+            0x34,
         )
         request += struct.pack(">I", 0)
 
