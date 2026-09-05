@@ -7,6 +7,7 @@ S7CommPlus clients.
 """
 
 import logging
+import queue
 import socket
 import struct
 import sys
@@ -35,6 +36,8 @@ EVC_CLIENT_EXCEPTION = 0x00000040
 EVC_CLIENT_DISCONNECTED = 0x00000080
 EVC_DATA_READ = 0x00020000
 EVC_DATA_WRITE = 0x00040000
+
+_EVENT_QUEUE_CAPACITY = 1024
 
 
 class ServerState(IntEnum):
@@ -108,8 +111,7 @@ class Server:
         self.max_clients = max_clients
 
         # Event queue for pick_event
-        self._event_queue: List[SrvEvent] = []
-        self._event_lock = threading.Lock()
+        self._event_queue: queue.Queue[SrvEvent] = queue.Queue(maxsize=_EVENT_QUEUE_CAPACITY)
 
         # Logging
         self._log_enabled = log
@@ -568,15 +570,19 @@ class Server:
 
     def pick_event(self) -> Union[SrvEvent, bool]:
         """
-        Pick an event from the queue.
+        Return the oldest queued event without waiting.
+
+        Poll this method when callbacks are not convenient. Applications that
+        need immediate delivery should use :meth:`set_events_callback` instead;
+        callbacks do not need to call ``pick_event()`` themselves.
 
         Returns:
             Server event if available, False if no events
         """
-        with self._event_lock:
-            if self._event_queue:
-                return self._event_queue.pop(0)
-        return False
+        try:
+            return self._event_queue.get_nowait()
+        except queue.Empty:
+            return False
 
     def clear_events(self) -> int:
         """
@@ -585,8 +591,11 @@ class Server:
         Returns:
             0 on success
         """
-        with self._event_lock:
-            self._event_queue.clear()
+        while True:
+            try:
+                self._event_queue.get_nowait()
+            except queue.Empty:
+                break
         return 0
 
     def _emit_event(
@@ -612,8 +621,19 @@ class Server:
         event.EvtParam3 = param3
         event.EvtParam4 = param4
 
-        with self._event_lock:
-            self._event_queue.append(event)
+        try:
+            self._event_queue.put_nowait(event)
+        except queue.Full:
+            # Never block protocol handling on an application that is not
+            # draining events. Retain the most recent bounded history.
+            try:
+                self._event_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._event_queue.put_nowait(event)
+            except queue.Full:
+                logger.warning("Server event queue is full; dropping event %#x", event.EvtCode)
 
         if notify_read_callback and self.read_callback:
             try:

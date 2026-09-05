@@ -123,13 +123,27 @@ class TestServer(unittest.TestCase):
         )
         read_event = self.server.pick_event()
         write_event = self.server.pick_event()
-        self.assertIsInstance(read_event, SrvEvent)
-        self.assertIsInstance(write_event, SrvEvent)
         assert isinstance(read_event, SrvEvent)
         assert isinstance(write_event, SrvEvent)
+        self.assertEqual((read_event, write_event), tuple(events))
         self.assertEqual(read_event.EvtCode, EVC_DATA_READ)
         self.assertEqual(write_event.EvtCode, EVC_DATA_WRITE)
         self.assertFalse(self.server.pick_event())
+
+    def test_event_queue_is_bounded(self) -> None:
+        self.server.clear_events()
+
+        for param in range(1025):
+            self.server._emit_event(EVC_DATA_READ, param1=param)
+
+        first_event = self.server.pick_event()
+        assert isinstance(first_event, SrvEvent)
+        self.assertEqual(first_event.EvtParam1, 1)
+
+        events = [first_event]
+        while event := self.server.pick_event():
+            events.append(event)
+        self.assertEqual(len(events), 1024)
 
     def test_read_events_callback(self) -> None:
         events: list[SrvEvent] = []
