@@ -6,11 +6,12 @@ and V2 connection behavior.
 
 import hashlib
 import struct
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.client import S7CommPlusClient
 from s7commplus.codec import encode_header, encode_object_qualifier
 from s7commplus.connection import (
     S7CommPlusConnection,
@@ -40,7 +41,79 @@ from s7commplus.protocol import (
     ProtocolVersion,
 )
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
-from snap7.error import S7ConnectionError
+from snap7.error import S7ConnectionError, S7ProtocolError
+
+
+class TestTypeInfoRidErrorHandling:
+    def test_sync_returns_rid(self) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", return_value=struct.pack(">I", 0x12345678)):
+            assert client._read_typeinfo_rid(1) == 0x12345678
+
+    def test_sync_returns_zero_for_short_read(self) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", return_value=b"\x01\x02\x03"):
+            assert client._read_typeinfo_rid(1) == 0
+
+    def test_sync_returns_zero_for_unreadable_db(self) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", side_effect=RuntimeError("Symbolic read failed")):
+            assert client._read_typeinfo_rid(1) == 0
+
+    @pytest.mark.parametrize("error", [S7ConnectionError("reset"), S7ProtocolError("fatal event")])
+    def test_sync_propagates_transport_and_protocol_errors(self, error: Exception) -> None:
+        client = S7CommPlusClient()
+        with patch.object(client, "read_symbolic", side_effect=error), pytest.raises(type(error), match=str(error)):
+            client._read_typeinfo_rid(1)
+
+    @pytest.mark.asyncio
+    async def test_async_returns_rid(self) -> None:
+        client = S7CommPlusAsyncClient()
+        with patch.object(client, "read_symbolic", new=AsyncMock(return_value=struct.pack(">I", 0x12345678))):
+            assert await client._read_typeinfo_rid(1) == 0x12345678
+
+    @pytest.mark.asyncio
+    async def test_async_returns_zero_for_short_read(self) -> None:
+        client = S7CommPlusAsyncClient()
+        with patch.object(client, "read_symbolic", new=AsyncMock(return_value=b"\x01\x02\x03")):
+            assert await client._read_typeinfo_rid(1) == 0
+
+    @pytest.mark.asyncio
+    async def test_async_returns_zero_for_unreadable_db(self) -> None:
+        client = S7CommPlusAsyncClient()
+        error = RuntimeError("Symbolic read failed")
+        with patch.object(client, "read_symbolic", new=AsyncMock(side_effect=error)):
+            assert await client._read_typeinfo_rid(1) == 0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("error", [S7ConnectionError("reset"), S7ProtocolError("fatal event")])
+    async def test_async_propagates_transport_and_protocol_errors(self, error: Exception) -> None:
+        client = S7CommPlusAsyncClient()
+        with (
+            patch.object(client, "read_symbolic", new=AsyncMock(side_effect=error)),
+            pytest.raises(type(error), match=str(error)),
+        ):
+            await client._read_typeinfo_rid(1)
+
+    @pytest.mark.asyncio
+    async def test_async_reconnect_wrapper_retries_connection_error_once(self) -> None:
+        client = S7CommPlusAsyncClient()
+        operation = AsyncMock(side_effect=[S7ConnectionError("reset"), 42])
+        client._reconnect = AsyncMock()  # type: ignore[method-assign]
+
+        assert await client._with_reconnect(operation) == 42
+        client._reconnect.assert_awaited_once()
+        assert operation.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_async_reconnect_wrapper_does_not_retry_protocol_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        operation = AsyncMock(side_effect=S7ProtocolError("fatal event"))
+        client._reconnect = AsyncMock()  # type: ignore[method-assign]
+
+        with pytest.raises(S7ProtocolError, match="fatal event"):
+            await client._with_reconnect(operation)
+        client._reconnect.assert_not_awaited()
 
 
 class TestReadFunctionCodes:
@@ -299,7 +372,7 @@ class TestIntegrityIdTracking:
         conn._with_integrity_id = True
 
         application_payload = bytes.fromhex("000100100201")
-        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
         response += application_payload
         frame = encode_header(ProtocolVersion.V2, len(response)) + response
         frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
@@ -311,6 +384,138 @@ class TestIntegrityIdTracking:
 
         # GetMultiVariables is in FLAGS_34_FUNCTION_CODES
         assert conn._send_s7_data.call_args[0][0][17] == 0x34
+
+    def test_nonfatal_system_event_is_consumed_before_sync_response(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V3
+        conn._session_id = 0x0000039B
+
+        confirmation = bytes.fromhex("00000000000002f60000000000000000")
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
+        application_payload = b"\x00\x01"
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.SET_VAR_SUBSTREAMED, 0, 0, 0x34)
+        response += application_payload
+        response_frame = encode_header(ProtocolVersion.V3, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V3, 0)
+
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(side_effect=[event_frame, response_frame])
+
+        assert conn.send_request(FunctionCode.SET_VAR_SUBSTREAMED) == application_payload
+        assert conn._recv_s7_data.call_count == 2
+
+    def test_fatal_system_event_raises_protocol_error(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V3
+        conn._session_id = 0x0000039B
+
+        fatal = bytes(16)
+        fatal += bytes.fromhex("0000001700009d6c")
+        fatal += struct.pack(">I", 40305) + bytes.fromhex("00000009") + (-1).to_bytes(8, "big", signed=True)
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(fatal)) + fatal
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(return_value=event_frame)
+
+        with pytest.raises(S7ProtocolError, match="Fatal S7CommPlus SystemEvent"):
+            conn.send_request(FunctionCode.SET_VAR_SUBSTREAMED)
+
+    @pytest.mark.asyncio
+    async def test_nonfatal_system_event_is_consumed_before_async_response(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+
+        confirmation = bytes.fromhex("00000000000002f60000000000000000")
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
+        response += b"\x00\x01"
+        response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(side_effect=[event_frame, response_frame])
+
+        assert await client._send_request(FunctionCode.GET_MULTI_VARIABLES, bytes(4)) == b"\x00\x01"
+        assert client._recv_cotp_dt.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_too_many_async_system_events_raise_protocol_error_from_typeinfo_read(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+
+        confirmation = bytes.fromhex("00000000000002f60000000000000000")
+        event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=event_frame)
+
+        with pytest.raises(S7ProtocolError, match="Too many S7CommPlus SystemEvents"):
+            await client._read_typeinfo_rid(0x8A0E0001)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reassemble", [False, True])
+    async def test_async_short_response_raises_connection_error(self, reassemble: bool) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+        response = b"short"
+        response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=response_frame)
+
+        with pytest.raises(S7ConnectionError, match="Response too short"):
+            await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"", reassemble=reassemble)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reassemble", [False, True])
+    async def test_async_sequence_mismatch_raises_protocol_error(self, reassemble: bool) -> None:
+        client = S7CommPlusAsyncClient()
+        client._connected = True
+        client._reader = MagicMock()
+        client._writer = MagicMock()
+        client._protocol_version = ProtocolVersion.V2
+        response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 99, 0x34)
+        response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=response_frame)
+
+        with pytest.raises(S7ProtocolError, match="Response sequence mismatch"):
+            await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"", reassemble=reassemble)
+
+
+class TestAsyncReassembledPayloadErrors:
+    @pytest.mark.asyncio
+    async def test_closed_connection_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._recv_cotp_dt = AsyncMock(return_value=b"")
+
+        with pytest.raises(S7ConnectionError, match="closed during"):
+            await client._recv_reassembled_payload()
+
+    @pytest.mark.asyncio
+    async def test_bad_fragment_header_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+
+        with pytest.raises(S7ConnectionError, match="fragment header"):
+            await client._recv_reassembled_payload(b"\x99\x02\x00\x01x")
+
+    @pytest.mark.asyncio
+    async def test_fragment_limit_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._MAX_REASSEMBLED_FRAGMENTS = 1
+        fragments = b"\x72\x02\x00\x01a\x72\x02\x00\x01b\x72\x02\x00\x00"
+
+        with pytest.raises(S7ConnectionError, match="exceeds limits"):
+            await client._recv_reassembled_payload(fragments)
 
 
 class TestIntegrityIdVlqEncoding:
@@ -351,6 +556,33 @@ class TestLegitimationWireFormat:
         expected += struct.pack(">H", 1)
         expected += struct.pack(">I", 0)
         assert payload == expected
+
+    def test_build_v1_session_key_challenge_payload(self) -> None:
+        """Match the challenge request accepted by the S7-1200 in GH-710."""
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._sequence_number = 4
+
+        payload = conn._build_get_var_substreamed(0x0000039B, LegitimationId.SERVER_SESSION_REQUEST)
+
+        assert payload == bytes.fromhex("0000039b200401822f000004e88969001200000000896a001300896b00040000000401000000")
+
+    def test_v1_session_key_challenge_splices_integrity_before_three_byte_fill(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_id = 0x0000039B
+        conn._session_challenge = bytes(range(20))
+        conn._session_key = bytes(range(24))
+        conn._session_auth_public_key = bytes(range(24))
+        conn.send_request = MagicMock(side_effect=[b"", b"\x00"])
+
+        with patch("s7commplus.session_auth.legitimate.solve_legitimate_challenge_real_plc", return_value=bytes(248)):
+            conn._post_auth_legitimation()
+
+        first_call = conn.send_request.call_args_list[0]
+        assert first_call.args == (
+            FunctionCode.GET_VAR_SUBSTREAMED,
+            conn._build_get_var_substreamed(0x0000039B, LegitimationId.SERVER_SESSION_REQUEST),
+        )
+        assert first_call.kwargs == {"integrity_tail": 3}
 
     def test_parse_get_var_substreamed_usint_array(self) -> None:
         challenge = bytes(range(20))
@@ -536,7 +768,7 @@ class TestCreateSessionRequest:
         client._send_cotp_dt = AsyncMock()
         client._recv_cotp_dt = AsyncMock(return_value=bytes.fromhex("72010000"))
 
-        with pytest.raises(RuntimeError, match="CreateObject response too short"):
+        with pytest.raises(S7ConnectionError, match="CreateObject response too short"):
             await client._create_session()
 
         client._send_cotp_dt.assert_awaited_once()
@@ -556,6 +788,26 @@ class TestCreateSessionRequest:
         expected = encode_header(ProtocolVersion.V1, len(frame) - 8) + request
         assert frame[: len(expected)] == expected
         assert frame[-4:] == struct.pack(">BBH", 0x72, ProtocolVersion.V1, 0x0000)
+
+
+class TestInitSSLResponse:
+    @pytest.mark.asyncio
+    async def test_async_short_response_raises_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._send_cotp_dt = AsyncMock()
+        client._recv_cotp_dt = AsyncMock(return_value=bytes.fromhex("72010000"))
+
+        with pytest.raises(S7ConnectionError, match="InitSSL response too short"):
+            await client._init_ssl()
+
+    @pytest.mark.asyncio
+    async def test_async_ten_byte_response_is_accepted(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._send_cotp_dt = AsyncMock()
+        response = bytes(10)
+        client._recv_cotp_dt = AsyncMock(return_value=encode_header(ProtocolVersion.V1, len(response)) + response)
+
+        await client._init_ssl()
 
 
 class TestDeleteSessionRequest:

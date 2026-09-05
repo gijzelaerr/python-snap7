@@ -12,6 +12,9 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus PLC start/stop via INVOKE
 * S7CommPlus object browsing via EXPLORE
 * S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* Fix V1 SessionKey challenge requests being rejected by S7-1200 FW 4.2 PLCs,
+  consume non-fatal SystemEvents while waiting for the matching response, and
+  strip per-fragment V3 HMACs from browse responses (#710)
 * S7CommPlus symbolic data subscriptions and notification decoding (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)

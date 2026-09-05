@@ -8,7 +8,7 @@ import struct
 from collections.abc import Callable, Sequence
 from typing import Any, Optional, TypeVar
 
-from snap7.error import S7ConnectionError
+from snap7.error import S7ConnectionError, S7ProtocolError
 
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
@@ -610,8 +610,9 @@ class S7CommPlusClient:
         """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
         try:
             raw = self.read_symbolic(db_rid, [1], 0)
-        except S7ConnectionError:
-            # Socket was RST by the PLC — let the caller reconnect and retry.
+        except (S7ConnectionError, S7ProtocolError):
+            # Connection failures are eligible for reconnect; protocol failures
+            # must reach the caller instead of looking like an unreadable DB.
             raise
         except Exception:
             return 0
