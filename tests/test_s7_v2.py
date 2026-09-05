@@ -26,6 +26,7 @@ from s7commplus.legitimation import (
     _build_legitimation_payload,
     build_legacy_response,
     derive_legitimation_key,
+    extract_session_version_string,
 )
 from s7commplus.protocol import (
     FLAGS_34_FUNCTION_CODES,
@@ -244,6 +245,52 @@ class TestLegacyResponse:
         expected = hashlib.sha1(password.encode("utf-8")).digest()  # noqa: S324
         assert response == expected
 
+    def test_legacy_response_matches_reference_driver(self) -> None:
+        """
+        SHA-1(password) XOR challenge, against a vector computed by the C# driver.
+        The challenge is a genuine 20-byte challenge from an S7-1512 (FW V2.9).
+        """
+        challenge = bytes.fromhex("7d8f8470d20590efc1d740416b4a073296bf463b")
+        response = build_legacy_response("foobar", challenge)
+        assert response == bytes.fromhex("f5cc5389f613b1f2283cf9229406e5b3b32c6e43")
+
+
+class TestExtractSessionVersionString:
+    """Test PAOM string extraction from a raw ServerSessionVersion value."""
+
+    @pytest.mark.parametrize(
+        "paom_string",
+        [
+            "1;6ES7 214-1AG40-0XB0 ;V4.5",  # S7-1214C, trailing space
+            "1;6ES7 510-1DJ01-0AB0;V2.9",  # S7-1510SP
+            "1;6ES7 672-7FC01-0YA0;V21.9",  # S7-1507SF
+        ],
+    )
+    def test_extracts_paom_string(self, paom_string: str) -> None:
+        """Device strings from thomas-v2/S7CommPlusDriver, plain and behind a decoy key."""
+        text = paom_string.encode("utf-8")
+        header = bytes([0x00, DataType.STRUCT]) + struct.pack(">I", ObjectId.SERVER_SESSION_VERSION)
+        # [VLQ key][flags][WString][VLQ length][utf-8 text]
+        element = encode_uint32_vlq(Ids.SESSION_VERSION_SYSTEM_PAOM_STRING)
+        element += bytes([0x00, DataType.WSTRING]) + encode_uint32_vlq(len(text)) + text
+
+        assert extract_session_version_string(header + element) == paom_string
+
+        # The needle also matches payload bytes, so the search must continue past them.
+        decoy = encode_uint32_vlq(Ids.EFFECTIVE_PROTECTION_LEVEL) + bytes([0x00, DataType.UDINT])
+        decoy += encode_uint32_vlq(Ids.SESSION_VERSION_SYSTEM_PAOM_STRING)
+        assert extract_session_version_string(header + decoy + element) == paom_string
+
+    def test_returns_none_when_unusable(self) -> None:
+        """Value truncated past the end of the buffer, or no element 319 at all."""
+        text = b"1;6ES7 510-1DJ01-0AB0;V2.9"
+        value = bytes([0x00, DataType.STRUCT]) + struct.pack(">I", ObjectId.SERVER_SESSION_VERSION)
+        value += encode_uint32_vlq(Ids.SESSION_VERSION_SYSTEM_PAOM_STRING)
+        value += bytes([0x00, DataType.WSTRING]) + encode_uint32_vlq(len(text)) + text
+
+        assert extract_session_version_string(value[:-1]) is None
+        assert extract_session_version_string(value[:2]) is None
+
 
 class TestLegitimationPayload:
     """Test legitimation payload building."""
@@ -261,18 +308,16 @@ class TestLegitimationPayload:
     def test_payload_legit_type_1_without_username(self) -> None:
         """Without username, legitimation type should be 1 (legacy)."""
         payload = _build_legitimation_payload("password")
-        # After struct header (flags=0x00, type=0x17, count VLQ), the first
-        # element is flags=0x00, type=UDInt(0x04), then legit_type value
-        # The exact structure: [0x00, 0x17, count, 0x00, 0x04, legit_type, ...]
-        # legit_type=1 is at offset 5 (VLQ encoded)
-        assert payload[4] == 0x04  # UDInt type for legit_type
-        assert payload[5] == 0x01  # legit_type = 1
+        # [flags=0x00, type=0x17, struct id (4 bytes), key VLQ (3 bytes),
+        #  flags=0x00, type=UDInt(0x04), legit_type VLQ]
+        assert payload[10] == 0x04  # UDInt type for legit_type
+        assert payload[11] == 0x01  # legit_type = 1
 
     def test_payload_legit_type_2_with_username(self) -> None:
         """With username, legitimation type should be 2 (new)."""
         payload = _build_legitimation_payload("password", "admin")
-        assert payload[4] == 0x04  # UDInt type for legit_type
-        assert payload[5] == 0x02  # legit_type = 2
+        assert payload[10] == 0x04  # UDInt type for legit_type
+        assert payload[11] == 0x02  # legit_type = 2
 
 
 class TestLegitimationState:
@@ -604,6 +649,88 @@ class TestLegitimationWireFormat:
             _build_get_var_substreamed_payload(0x01020304, LegitimationId.SERVER_SESSION_REQUEST),
             integrity_tail=4,
         )
+
+    @pytest.mark.conformance
+    def test_challenge_request_frame(self) -> None:
+        challenge = bytes.fromhex("7d8f8470d20590efc1d740416b4a073296bf463b")
+        payload = bytes([0x00, 0x00, 0x10, DataType.USINT]) + encode_uint32_vlq(len(challenge)) + challenge + bytes([0x00])
+        body = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_VAR_SUBSTREAMED, 0, 6, 0x34) + payload
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V2
+        conn._session_id = 0x70000CB7
+        conn._sequence_number = 6
+        conn._with_integrity_id = True
+        conn._integrity_id_read = 3
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(
+            return_value=encode_header(ProtocolVersion.V2, len(body)) + body + struct.pack(">BBH", 0x72, 0x02, 0)
+        )
+
+        assert conn._get_legitimation_challenge() == challenge
+        conn._send_s7_data.assert_called_once_with(
+            bytes.fromhex(
+                "72020035"  # header, data length 0x35
+                "310000058600000006"  # request, GetVarSubStreamed, seq 6
+                "70000cb734"  # session id, transport flags
+                "70000cb7"  # InObjectId
+                "200401822f"  # address array header + id 303
+                "000004e88969001200000000896a001300896b00040000"  # ObjectQualifier
+                "0001"  # unknown
+                "03"  # IntegrityId (read)
+                "00000000"  # fill
+                "72020000"  # trailer
+            )
+        )
+
+    @pytest.mark.conformance
+    def test_legitimation_request_frame(self) -> None:
+        response = bytes.fromhex("f5cc5389f613b1f2283cf9229406e5b3b32c6e43")
+        body = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.SET_VARIABLE, 0, 7, 0x34) + encode_uint32_vlq(0)
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._protocol_version = ProtocolVersion.V2
+        conn._session_id = 0x70000CB7
+        conn._sequence_number = 7
+        conn._with_integrity_id = True
+        conn._integrity_id_write = 1
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(
+            return_value=encode_header(ProtocolVersion.V2, len(body)) + body + struct.pack(">BBH", 0x72, 0x02, 0)
+        )
+
+        conn._send_legitimation_legacy(response)
+
+        conn._send_s7_data.assert_called_once_with(
+            bytes.fromhex(
+                "72020049"  # header, data length 0x49
+                "31000004f200000007"  # request, SetVariable, seq 7
+                "70000cb734"  # session id, transport flags
+                "70000cb7"  # InObjectId
+                "018230"  # always-1, address id 304
+                "100214"  # USInt array of 20
+            )
+            + response
+            + bytes.fromhex(
+                "000004e88969001200000000896a001300896b00040000"  # ObjectQualifier
+                "00"  # unknown
+                "01"  # IntegrityId (write)
+                "00000000"  # fill
+                "72020000"  # trailer
+            )
+        )
+
+    @pytest.mark.conformance
+    def test_non_zero_return_value_is_accepted(self) -> None:
+        """The PLC signals success with a non-zero status word. Response captured from an S7-1512."""
+        _check_set_variable_response(bytes.fromhex("9381b0808099a68019"))
+
+    @pytest.mark.conformance
+    def test_refusal_is_invisible_in_the_return_value(self) -> None:
+        """A refused password is indistinguishable from an accepted one here. Response captured from an S7-1512."""
+        _check_set_variable_response(bytes.fromhex("9381b390809aca8016"))
 
 
 class TestCreateSessionRequest:
