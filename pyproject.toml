@@ -38,6 +38,7 @@ cli = ["rich", "click" ]
 demo = ["psutil", "rich", "click"]
 doc = ["sphinx", "sphinx_rtd_theme"]
 discovery = ["pnio-dcp"]
+ppi = ["pyserial>=3.5"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed"]
