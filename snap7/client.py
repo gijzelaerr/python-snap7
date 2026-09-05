@@ -28,6 +28,7 @@ from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketErr
 from .client_base import ClientMixin
 from .log import PLCLoggerAdapter, OperationLogger
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
+from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
 from .tags import Tag, _STRING_RE
 from . import util
 
@@ -296,6 +297,10 @@ class Client(ClientMixin):
         backoff_factor: float = 2.0,
         max_delay: float = 30.0,
         heartbeat_interval: float = 0,
+        max_requests_per_second: float = 0,
+        rate_limit_algorithm: RateLimitAlgorithm = "fixed",
+        rate_limit_behavior: RateLimitBehavior = "block",
+        rate_limit_burst: int | None = None,
         on_disconnect: Optional[Callable[[], None]] = None,
         on_reconnect: Optional[Callable[[], None]] = None,
         **kwargs: Any,
@@ -311,6 +316,10 @@ class Client(ClientMixin):
             backoff_factor: Multiplier for exponential backoff between retries.
             max_delay: Maximum delay between reconnection attempts in seconds.
             heartbeat_interval: Interval in seconds for heartbeat probes (0=disabled).
+            max_requests_per_second: Maximum outbound PLC requests per second (0=disabled).
+            rate_limit_algorithm: ``fixed`` for even spacing or ``token_bucket`` for bursts.
+            rate_limit_behavior: ``block`` to wait, or ``raise``/``drop`` to reject immediately.
+            rate_limit_burst: Token bucket capacity. Defaults to one second of requests.
             on_disconnect: Optional callback invoked when connection is lost.
             on_reconnect: Optional callback invoked after successful reconnection.
             **kwargs: Ignored. Kept for backwards compatibility.
@@ -370,6 +379,12 @@ class Client(ClientMixin):
         self._max_delay = max_delay
         self._on_disconnect = on_disconnect
         self._on_reconnect = on_reconnect
+        self._rate_limiter = RequestRateLimiter(
+            max_requests_per_second,
+            algorithm=rate_limit_algorithm,
+            behavior=rate_limit_behavior,
+            burst_capacity=rate_limit_burst,
+        )
 
         # Heartbeat settings
         self._heartbeat_interval = heartbeat_interval
@@ -402,6 +417,11 @@ class Client(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
         return self.connection
 
+    def _send_data(self, conn: ISOTCPConnection, request: bytes) -> None:
+        """Apply the per-client rate limit and send one S7 request PDU."""
+        self._rate_limiter.acquire()
+        conn.send_data(request)
+
     def _send_receive(self, request: bytes, max_stale_retries: int = 3) -> dict[str, Any]:
         """Send a request and receive/parse the response with stale packet retry.
 
@@ -424,7 +444,7 @@ class Client(ClientMixin):
         conn = self._get_connection()
 
         with self._reconnect_lock:
-            conn.send_data(request)
+            self._send_data(conn, request)
 
             for attempt in range(max_stale_retries + 1):
                 response_data = conn.receive_data()
@@ -1222,7 +1242,7 @@ class Client(ClientMixin):
 
             # Send all requests back-to-back
             for _, pdu in requests:
-                conn.send_data(pdu)
+                self._send_data(conn, pdu)
 
             # Receive responses, matching by sequence number
             results: dict[int, dict[str, Any]] = {}
@@ -1495,7 +1515,7 @@ class Client(ClientMixin):
                 break
 
             followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-            conn.send_data(followup)
+            self._send_data(conn, followup)
 
             response_data = conn.receive_data()
             response = self.protocol.parse_response(response_data)
@@ -1673,7 +1693,7 @@ class Client(ClientMixin):
             len(data_section),  # Data length
         )
 
-        conn.send_data(header + param_data + data_section)
+        self._send_data(conn, header + param_data + data_section)
 
         response_data = conn.receive_data()
         self.protocol.parse_response(response_data)
@@ -1691,7 +1711,7 @@ class Client(ClientMixin):
             0x0000,  # Data length
         )
 
-        conn.send_data(header + param_data)
+        self._send_data(conn, header + param_data)
 
         response_data = conn.receive_data()
         self.protocol.parse_response(response_data)
@@ -2149,7 +2169,7 @@ class Client(ClientMixin):
                 break
 
             followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-            conn.send_data(followup)
+            self._send_data(conn, followup)
 
             response_data = conn.receive_data()
             response = self.protocol.parse_response(response_data)
@@ -2269,7 +2289,7 @@ class Client(ClientMixin):
         """
         conn = self._get_connection()
 
-        conn.send_data(bytes(data))
+        self._send_data(conn, bytes(data))
         response = conn.receive_data()
         return bytearray(response)
 
