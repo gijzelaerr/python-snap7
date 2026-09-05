@@ -11,6 +11,16 @@ from typing import Any, Optional, TypeVar
 from snap7.error import S7ConnectionError
 
 from . import typeinfo
+from .alarm import (
+    Alarm,
+    AlarmNotification,
+    LanguageId,
+    build_alarm_explore_request,
+    build_alarm_subscription_request,
+    build_delete_alarm_subscription_request,
+    parse_alarm_explore_response,
+    parse_alarm_notification,
+)
 from .blob_decompressor import find_and_decompress
 from .codec import (
     decode_pvalue_to_bytes,
@@ -702,6 +712,80 @@ class S7CommPlusClient:
         payload = build_delete_subscription_request(self._connection.subscription_container_id, self._connection.protocol_version)
         self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
+
+    def create_alarm_subscription(
+        self,
+        language_ids: Optional[list[LanguageId | int]] = None,
+        domains: Optional[list[int]] = None,
+        credit_limit: int = 10,
+    ) -> int:
+        """Subscribe to PLC alarm events.
+
+        Args:
+            language_ids: Windows LCIDs for texts included with notifications.
+                ``None`` requests every configured language.
+            domains: Alarm-domain IDs to include. ``None`` subscribes to all.
+            credit_limit: Notification credit limit. The default of 10 matches
+                the working S7-1500 reference trace.
+
+        Returns:
+            Subscription object ID assigned by the PLC.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_alarm_subscription_request(
+            self._connection.subscription_container_id, language_ids, domains, credit_limit
+        )
+        response = self._connection.send_request(
+            FunctionCode.CREATE_OBJECT,
+            payload,
+            integrity_tail=len(payload) - 11,
+        )
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
+        return object_ids[0]
+
+    def delete_alarm_subscription(self, subscription_id: int) -> None:
+        """Delete an alarm subscription created by this client."""
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_delete_alarm_subscription_request(
+            self._connection.subscription_container_id, self._connection.protocol_version
+        )
+        self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Alarm subscription {subscription_id:#x} deleted")
+
+    def receive_alarm_notification(self, language_ids: Optional[list[LanguageId | int]] = None) -> AlarmNotification:
+        """Block until the PLC sends one alarm notification.
+
+        Do not run this alongside a data-subscription receive loop on the same
+        connection: mixed notification dispatch is not supported yet.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        return parse_alarm_notification(self._connection.receive_notification(), language_ids)
+
+    def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Return the PLC's current active alarm state.
+
+        This is a snapshot read and does not create or consume a subscription,
+        so it can be used before or while an alarm subscription exists.
+
+        Args:
+            language_ids: Optional Windows LCIDs used to filter returned texts.
+                Omitting the filter retains every language sent by the PLC.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        response = self._connection.send_request(
+            FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
+        )
+        return parse_alarm_explore_response(response, language_ids)
 
     def __enter__(self) -> "S7CommPlusClient":
         return self

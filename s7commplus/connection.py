@@ -1170,7 +1170,7 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response has no session ObjectId")
 
-        # First ObjectId is the new session id; second (if any) is for notifications.
+        # First ObjectId is the session; the second is its subscription container.
         self._session_id = object_ids[0]
         self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         self._protocol_version = version
