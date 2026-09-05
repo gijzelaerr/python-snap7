@@ -45,6 +45,7 @@ import os
 import ssl
 import struct
 import tempfile
+from collections import deque
 from types import TracebackType
 from typing import Any, Optional, Type
 
@@ -344,6 +345,7 @@ class S7CommPlusConnection:
 
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
+        self._notification_frames: deque[bytes] = deque()
 
         # Effective protection level, read once the session is up
         self._protection_level: Optional[int] = None
@@ -729,6 +731,7 @@ class S7CommPlusConnection:
         self._integrity_id_read = 0
         self._integrity_id_write = 0
         self._protection_level = None
+        self._notification_frames.clear()
         self._iso_conn.disconnect()
 
     def send_request(self, function_code: int, payload: bytes = b"", integrity_tail: int = 4, reassemble: bool = False) -> bytes:
@@ -834,6 +837,9 @@ class S7CommPlusConnection:
 
         # Receive response
         response_frame = self._recv_s7_data()
+        while self._is_notification_frame(response_frame):
+            self._notification_frames.append(response_frame)
+            response_frame = self._recv_s7_data()
         logger.debug(f"=== RECV RESPONSE === raw frame ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse frame header, use data_length to exclude trailer
@@ -893,21 +899,34 @@ class S7CommPlusConnection:
 
         return resp_payload
 
+    @staticmethod
+    def _is_notification_frame(frame: bytes) -> bool:
+        """Return whether a complete frame contains an unsolicited notification."""
+        try:
+            version, data_length, consumed = decode_header(frame)
+        except (IndexError, ValueError):
+            return False
+        data = frame[consumed : consumed + data_length]
+        if version == ProtocolVersion.V3 and data:
+            hash_length = data[0]
+            if hash_length and len(data) > 1 + hash_length:
+                data = data[1 + hash_length :]
+        return bool(data) and data[0] == Opcode.NOTIFICATION
+
     def receive_notification(self) -> bytes:
         """Receive one unsolicited S7CommPlus notification frame.
 
-        The call blocks up to the connection's configured socket timeout. It must
-        not run concurrently with :meth:`send_request`, because both consume the
-        same protocol stream.
+        Notifications observed while waiting for a request response are queued,
+        so callers do not lose updates when protocol traffic interleaves. This
+        method must not run concurrently with :meth:`send_request` because both
+        consume the same connection stream.
         """
         if not self._connected:
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Not connected")
-        frame = self._recv_s7_data()
-        _, data_length, consumed = decode_header(frame)
-        data = frame[consumed : consumed + data_length]
-        if not data or data[0] != Opcode.NOTIFICATION:
+        frame = self._notification_frames.popleft() if self._notification_frames else self._recv_s7_data()
+        if not self._is_notification_frame(frame):
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Expected an S7CommPlus notification")
