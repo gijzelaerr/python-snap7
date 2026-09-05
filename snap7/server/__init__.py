@@ -701,7 +701,6 @@ class Server:
 
             # Handle ISO connection setup
             if not connection.accept_connection():
-                logger.warning(f"Failed to establish ISO connection with {address}")
                 return
 
             logger.info(f"ISO connection established with {address}")
@@ -2698,6 +2697,9 @@ class ServerISOConnection:
             logger.debug("ISO connection established")
             return True
 
+        except (ConnectionResetError, ConnectionAbortedError, TimeoutError) as e:
+            logger.info(f"Peer left before the ISO connection was established: {e}")
+            return False
         except Exception as e:
             logger.error(f"Error accepting ISO connection: {e}")
             return False
@@ -2729,6 +2731,14 @@ class ServerISOConnection:
                 raise S7ConnectionError("Invalid COTP DT: too short")
 
             pdu_len, pdu_type, eot_num = struct.unpack(">BBB", payload[:3])
+
+            if pdu_type == self.COTP_DR:
+                logger.debug("Received COTP DR from client")
+                try:
+                    self.socket.sendall(self._build_tpkt(self._build_cotp_dc()))
+                except OSError:
+                    pass  # the peer may already be gone
+                raise ConnectionAbortedError("Client requested disconnect")
 
             if pdu_type != self.COTP_DT:
                 raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
@@ -2806,6 +2816,16 @@ class ServerISOConnection:
         )
 
         return base_pdu + pdu_size_param
+
+    def _build_cotp_dc(self) -> bytes:
+        """Build COTP Disconnect Confirm."""
+        return struct.pack(
+            ">BBHH",
+            5,  # PDU length
+            self.COTP_DC,  # PDU type
+            self.dst_ref,  # Destination reference
+            self.src_ref,  # Source reference
+        )
 
     def _recv_exact(self, size: int, deadline: float | None = None) -> bytes:
         """Receive exactly the specified bytes within one absolute deadline."""
