@@ -39,6 +39,7 @@ from s7commplus.protocol import (
     Opcode,
     ProtocolVersion,
 )
+from s7commplus.server import S7CommPlusServer
 from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
 from snap7.error import S7ConnectionError
 
@@ -311,6 +312,61 @@ class TestIntegrityIdTracking:
 
         # GetMultiVariables is in FLAGS_34_FUNCTION_CODES
         assert conn._send_s7_data.call_args[0][0][17] == 0x34
+
+
+class TestServerResponseIntegrityId:
+    """Test V2 response IntegrityId selection and encoding."""
+
+    @staticmethod
+    def _request(function_code: int) -> bytes:
+        request = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0,
+            function_code,
+            0,
+            1,
+            0x12345678,
+            0x34,
+        )
+        return encode_header(ProtocolVersion.V2, len(request)) + request
+
+    @pytest.mark.parametrize(
+        ("function_code", "expected_integrity_id"),
+        [
+            (FunctionCode.GET_MULTI_VARIABLES, 128),
+            (FunctionCode.EXPLORE, 128),
+            (FunctionCode.GET_VAR_SUBSTREAMED, 128),
+            (FunctionCode.SET_MULTI_VARIABLES, 16384),
+            (FunctionCode.SET_VAR_SUBSTREAMED, 16384),
+            (FunctionCode.DELETE_OBJECT, 16384),
+        ],
+    )
+    def test_v2_response_appends_function_counter(self, function_code: int, expected_integrity_id: int) -> None:
+        server = S7CommPlusServer(protocol_version=ProtocolVersion.V2)
+        request = self._request(function_code)
+
+        initial_response, initial_rst = server._process_request(request, 0x12345678)
+        advanced_response, advanced_rst = server._process_request(
+            request, 0x12345678, integrity_id_read=128, integrity_id_write=16384
+        )
+
+        assert initial_response is not None
+        assert advanced_response is not None
+        assert advanced_response == initial_response[:-1] + encode_uint32_vlq(expected_integrity_id)
+        assert not initial_rst
+        assert not advanced_rst
+
+    def test_v1_response_keeps_legacy_integrity_field(self) -> None:
+        server = S7CommPlusServer(protocol_version=ProtocolVersion.V1)
+        request = self._request(FunctionCode.GET_MULTI_VARIABLES)
+
+        initial_response, initial_rst = server._process_request(request, 0x12345678)
+        advanced_response, advanced_rst = server._process_request(request, 0x12345678, integrity_id_read=128)
+
+        assert advanced_response == initial_response
+        assert not initial_rst
+        assert not advanced_rst
 
 
 class TestIntegrityIdVlqEncoding:
