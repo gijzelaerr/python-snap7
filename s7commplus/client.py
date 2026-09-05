@@ -218,16 +218,29 @@ class S7CommPlusClient:
             start: Start byte offset
             data: Bytes to write
         """
+        self.db_write_multi([(db_number, start, data)])
+
+    def db_write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+        """Write multiple data block regions in a single request.
+
+        Args:
+            items: List of ``(db_number, start_offset, data)`` tuples.
+        """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
         if self._connection.requires_substreamed:
-            self._db_write_substreamed(db_number, start, data)
+            for db_number, start, data in items:
+                self._db_write_substreamed(db_number, start, data)
             return
 
-        payload = _build_write_payload([(db_number, start, data)], self._connection.protocol_version)
+        payload = _build_write_payload(items, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
+
+    def write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+        """Alias for :meth:`db_write_multi`."""
+        self.db_write_multi(items)
 
     def _db_write_substreamed(self, db_number: int, start: int, data: bytes) -> None:
         assert self._connection is not None

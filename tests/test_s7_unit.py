@@ -1,6 +1,8 @@
 """Unit tests for S7CommPlus client payload builders, connection parsing, and error paths."""
 
 import struct
+from unittest.mock import MagicMock, call
+
 import pytest
 
 from s7commplus.client import (
@@ -15,12 +17,13 @@ from s7commplus.client import (
     _build_area_write_payload,
     _build_symbolic_read_payload,
     _build_symbolic_write_payload,
+    _build_substreamed_write_payload,
 )
 from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_session_version
 from s7commplus.codec import encode_object_qualifier, encode_pvalue_blob
 from s7commplus.codec import _pvalue_element_size as _element_size
 from s7commplus.codec import skip_typed_value, parse_server_session_version
-from s7commplus.protocol import DataType, ElementID, ObjectId
+from s7commplus.protocol import DataType, ElementID, FunctionCode, Ids, ObjectId
 from s7commplus.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -552,6 +555,42 @@ class TestClientErrorPaths:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
             client.db_read_multi([(1, 0, 4)])
+
+    def test_db_write_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.db_write_multi([(1, 0, b"data")])
+
+    def test_write_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.write_multi([(1, 0, b"data")])
+
+    def test_db_write_multi_uses_one_substreamed_request_per_item(self) -> None:
+        client = S7CommPlusClient()
+        connection = MagicMock()
+        connection.requires_substreamed = True
+        connection.session_id = 0x70000001
+        client._connection = connection
+        items = [(1, 0, b"first"), (2, 10, b"second")]
+
+        client.db_write_multi(items)
+
+        connection.send_request.assert_has_calls(
+            [
+                call(
+                    FunctionCode.SET_VAR_SUBSTREAMED,
+                    _build_substreamed_write_payload(
+                        connection.session_id,
+                        Ids.DB_ACCESS_AREA_BASE + db_number,
+                        Ids.DB_VALUE_ACTUAL,
+                        [start + 1, len(data)],
+                        data,
+                    ),
+                )
+                for db_number, start, data in items
+            ]
+        )
 
     def test_explore_not_connected(self) -> None:
         client = S7CommPlusClient()

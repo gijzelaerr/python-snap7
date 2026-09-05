@@ -208,6 +208,24 @@ class TestClientServerIntegration:
         finally:
             client.disconnect()
 
+    def test_multi_write(self, server: S7CommPlusServer) -> None:
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=TEST_PORT)
+        try:
+            client.db_write_multi(
+                [
+                    (1, 0, b"first"),
+                    (1, 10, b"second"),
+                    (2, 20, b"third"),
+                ]
+            )
+
+            assert client.db_read(1, 0, 5) == b"first"
+            assert client.db_read(1, 10, 6) == b"second"
+            assert client.db_read(2, 20, 5) == b"third"
+        finally:
+            client.disconnect()
+
     def test_explore(self, server: S7CommPlusServer) -> None:
         client = S7CommPlusClient()
         client.connect("127.0.0.1", port=TEST_PORT)
@@ -304,6 +322,21 @@ class TestAsyncClientServerIntegration:
             assert len(results) == 2
             temp = struct.unpack(">f", results[0])[0]
             assert abs(temp - 23.5) < 0.1  # May be modified by earlier test
+
+    async def test_multi_write(self, server: S7CommPlusServer) -> None:
+        async with S7CommPlusAsyncClient() as client:
+            await client.connect("127.0.0.1", port=TEST_PORT)
+            await client.write_multi(
+                [
+                    (1, 0, b"alpha"),
+                    (1, 10, b"beta"),
+                    (2, 20, b"gamma"),
+                ]
+            )
+
+            assert await client.db_read(1, 0, 5) == b"alpha"
+            assert await client.db_read(1, 10, 4) == b"beta"
+            assert await client.db_read(2, 20, 5) == b"gamma"
 
     async def test_explore(self, server: S7CommPlusServer) -> None:
         async with S7CommPlusAsyncClient() as client:
