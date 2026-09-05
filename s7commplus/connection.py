@@ -45,6 +45,7 @@ import os
 import ssl
 import struct
 import tempfile
+from collections import deque
 from types import TracebackType
 from typing import Any, Optional, Type
 
@@ -389,6 +390,7 @@ class S7CommPlusConnection:
         self._incoming_bio: Optional[ssl.MemoryBIO] = None
         self._outgoing_bio: Optional[ssl.MemoryBIO] = None
         self._session_id: int = 0
+        self._subscription_container_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
@@ -424,6 +426,7 @@ class S7CommPlusConnection:
 
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
+        self._notification_frames: deque[bytes] = deque()
 
         # Effective protection level, read once the session is up
         self._protection_level: Optional[int] = None
@@ -441,6 +444,11 @@ class S7CommPlusConnection:
     def session_id(self) -> int:
         """Session ID assigned by the PLC."""
         return self._session_id
+
+    @property
+    def subscription_container_id(self) -> int:
+        """Object ID assigned to the session's subscription container."""
+        return self._subscription_container_id
 
     @property
     def tls_active(self) -> bool:
@@ -796,6 +804,7 @@ class S7CommPlusConnection:
         self._outgoing_bio = None
         self._oms_secret = None
         self._session_id = 0
+        self._subscription_container_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
         self._server_session_version = None
@@ -803,6 +812,7 @@ class S7CommPlusConnection:
         self._integrity_id_read = 0
         self._integrity_id_write = 0
         self._protection_level = None
+        self._notification_frames.clear()
         self._iso_conn.disconnect()
 
     def send_request(self, function_code: int, payload: bytes = b"", integrity_tail: int = 4, reassemble: bool = False) -> bytes:
@@ -981,16 +991,56 @@ class S7CommPlusConnection:
         return resp_payload
 
     def _recv_response_frame(self) -> bytes:
-        """Receive the next application response, consuming non-fatal SystemEvents."""
+        """Receive the next response, queueing notifications and consuming non-fatal SystemEvents."""
         from snap7.error import S7ProtocolError
 
-        for _ in range(_MAX_SYSTEM_EVENTS_PER_RESPONSE + 1):
+        system_events = 0
+        while True:
             response_frame = self._recv_s7_data()
             version, data_length, consumed = decode_header(response_frame)
-            if version != ProtocolVersion.SYSTEM_EVENT:
-                return response_frame
-            _check_system_event(bytes(response_frame[consumed : consumed + data_length]))
-        raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+            if version == ProtocolVersion.SYSTEM_EVENT:
+                _check_system_event(bytes(response_frame[consumed : consumed + data_length]))
+                system_events += 1
+                if system_events > _MAX_SYSTEM_EVENTS_PER_RESPONSE:
+                    raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+                continue
+            if self._is_notification_frame(response_frame):
+                self._notification_frames.append(response_frame)
+                continue
+            return response_frame
+
+    @staticmethod
+    def _is_notification_frame(frame: bytes) -> bool:
+        """Return whether a complete frame contains an unsolicited notification."""
+        try:
+            version, data_length, consumed = decode_header(frame)
+        except (IndexError, ValueError):
+            return False
+        data = frame[consumed : consumed + data_length]
+        if version == ProtocolVersion.V3 and data:
+            hash_length = data[0]
+            if hash_length and len(data) > 1 + hash_length:
+                data = data[1 + hash_length :]
+        return bool(data) and data[0] == Opcode.NOTIFICATION
+
+    def receive_notification(self) -> bytes:
+        """Receive one unsolicited S7CommPlus notification frame.
+
+        Notifications observed while waiting for a request response are queued,
+        so callers do not lose updates when protocol traffic interleaves. This
+        method must not run concurrently with :meth:`send_request` because both
+        consume the same connection stream.
+        """
+        if not self._connected:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Not connected")
+        frame = self._notification_frames.popleft() if self._notification_frames else self._recv_s7_data()
+        if not self._is_notification_frame(frame):
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Expected an S7CommPlus notification")
+        return frame
 
     # Sanity caps for fragment reassembly — generous vs. any real PLC EXPLORE response,
     # but bounded so a malformed/adversarial stream can't drive unbounded allocation.
@@ -1241,6 +1291,7 @@ class S7CommPlusConnection:
 
         # First ObjectId is the new session id; second (if any) is for notifications.
         self._session_id = object_ids[0]
+        self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         self._protocol_version = version
 
         logger.debug(
