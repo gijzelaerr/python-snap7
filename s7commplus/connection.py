@@ -103,6 +103,23 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
     logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
 
 
+def _verify_v3_hmac(protected: bytes, session_key: bytes) -> bytes:
+    """Verify and remove the V3 HMAC prefix from application data."""
+    from snap7.error import S7ConnectionError
+
+    if not protected:
+        raise S7ConnectionError("Empty V3 frame")
+    digest_length = protected[0]
+    if digest_length != hashlib.sha256().digest_size or len(protected) < 1 + digest_length:
+        raise S7ConnectionError(f"Invalid V3 HMAC length: {digest_length}")
+    received_digest = protected[1 : 1 + digest_length]
+    application_data = protected[1 + digest_length :]
+    expected_digest = hmac.new(session_key[:24], application_data, hashlib.sha256).digest()
+    if not hmac.compare_digest(received_digest, expected_digest):
+        raise S7ConnectionError("Invalid V3 HMAC")
+    return bytes(application_data)
+
+
 def _build_get_var_substreamed_payload(
     in_object_id: int,
     address: int,
@@ -833,7 +850,12 @@ class S7CommPlusConnection:
 
                 raise S7ConnectionError("Response too short")
             logger.debug(f"  Reassembled response ({len(data)} bytes), payload {len(data) - 10} bytes")
-            return bytes(data[10:])
+            resp_payload = bytes(data[10:])
+            if self._session_key is not None:
+                resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
+                logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
+                resp_payload = resp_payload[iid_consumed:]
+            return resp_payload
 
         # Receive response
         response_frame = self._recv_s7_data()
@@ -848,12 +870,14 @@ class S7CommPlusConnection:
 
         response = response_frame[consumed : consumed + data_length]
 
-        # V3 responses have a hash-length byte + HMAC prefix before the payload
-        if version == ProtocolVersion.V3 and len(response) > 33:
-            hash_len = response[0]
-            response_hmac = response[1 : 1 + hash_len]
-            response = response[1 + hash_len :]
-            logger.debug(f"  V3 HMAC ({hash_len} bytes): {response_hmac.hex()}")
+        # V3 responses have a hash-length byte + HMAC prefix before the payload.
+        if version == ProtocolVersion.V3:
+            if self._session_key is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("V3 response received without a session key")
+            response = _verify_v3_hmac(response, self._session_key)
+            logger.debug("  V3 HMAC verified")
 
         # V254 frames have no standard header — return raw data
         if version == ProtocolVersion.SYSTEM_EVENT:
@@ -963,13 +987,19 @@ class S7CommPlusConnection:
             ensure(4)
             if buf[0] != 0x72:
                 raise S7ConnectionError("Expected S7CommPlus fragment header (0x72)")
+            fragment_version = buf[1]
             frag_len = (buf[2] << 8) | buf[3]
             del buf[:4]
             if frag_len == 0:
                 break  # standalone trailer (defensive)
             ensure(frag_len)
-            data.extend(buf[:frag_len])
+            fragment_data = bytes(buf[:frag_len])
             del buf[:frag_len]
+            if fragment_version == ProtocolVersion.V3:
+                if self._session_key is None:
+                    raise S7ConnectionError("V3 response received without a session key")
+                fragment_data = _verify_v3_hmac(fragment_data, self._session_key)
+            data.extend(fragment_data)
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
                 raise S7ConnectionError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
