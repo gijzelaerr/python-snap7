@@ -40,6 +40,7 @@ from .connection import (
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
     _check_set_variable_response,
+    _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
     _set_s7_groups,
@@ -982,8 +983,7 @@ class S7CommPlusAsyncClient:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
         self._protocol_version = version
 
-        if return_value != 0:
-            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+        _log_create_object_return_value(return_value, self._tls_active)
 
         self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
