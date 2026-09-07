@@ -12,7 +12,7 @@ import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from types import TracebackType
-from typing import Any, Protocol, cast
+from typing import Any, Callable, Protocol, cast
 
 from .datatypes import S7Area, S7WordLen
 from .error import S7ConnectionError, S7ProtocolError
@@ -265,7 +265,7 @@ class PPITransport:
                 self._write_frame(request)
                 try:
                     acknowledgement = self._read_frame()
-                except S7ConnectionError:
+                except (S7ConnectionError, S7ProtocolError):
                     if attempt + 1 == self.retries:
                         raise
                     continue
@@ -276,7 +276,13 @@ class PPITransport:
             poll_control = 0x5C
             self._write_frame(encode_sd1(self.station, self.local_station, poll_control))
             for _ in range(self.retries * 2):
-                response = self._read_frame()
+                try:
+                    response = self._read_frame()
+                except S7ProtocolError:
+                    # A corrupt frame can precede a valid response already
+                    # buffered by the serial adapter. Keep scanning within the
+                    # bounded poll window instead of discarding that response.
+                    continue
                 if response.frame_type == PPIFrameType.SC:
                     poll_control = 0x7C if poll_control == 0x5C else 0x5C
                     self._write_frame(encode_sd1(self.station, self.local_station, poll_control))
@@ -313,13 +319,13 @@ class PPIClient:
         self.protocol = S7Protocol()
         self.connected = False
         self.pdu_length = 240
+        self._lock = threading.Lock()
 
     def connect(self) -> "PPIClient":
         """Open the serial port and negotiate the S7 PDU length."""
         self.transport.open()
         try:
-            request = self.protocol.build_setup_communication_request(pdu_length=self.pdu_length)
-            response = self._exchange(request)
+            response = self._exchange(lambda: self.protocol.build_setup_communication_request(pdu_length=self.pdu_length))
             parameters = response.get("parameters") or {}
             negotiated = int(parameters.get("pdu_length", self.pdu_length))
             # SD2's one-byte length field permits at most 249 body bytes;
@@ -336,10 +342,21 @@ class PPIClient:
         self.transport.close()
         self.connected = False
 
-    def _exchange(self, request: bytes) -> dict[str, Any]:
-        response = self.protocol.parse_response(self.transport.exchange(request))
-        self.protocol.validate_pdu_reference(int(response["sequence"]))
-        return response
+    def _exchange(self, request_builder: Callable[[], bytes]) -> dict[str, Any]:
+        """Build and exchange one request while owning the sequence lock."""
+        with self._lock:
+            request = request_builder()
+            response = self.protocol.parse_response(self.transport.exchange(request))
+            self.protocol.validate_pdu_reference(int(response["sequence"]))
+            return response
+
+    @staticmethod
+    def _validate_start(start: int, word_len: S7WordLen) -> None:
+        # S7 item specifications carry a 24-bit address. Most areas convert
+        # byte offsets to bit addresses; S7-200 timers/counters use item indexes.
+        max_start = (1 << 24) - 1 if word_len in (S7WordLen.COUNTER_200, S7WordLen.TIMER_200) else (1 << 21) - 1
+        if not 0 <= start <= max_start:
+            raise ValueError(f"start must be between 0 and {max_start}, got {start}")
 
     @staticmethod
     def _area_spec(area: PPIArea) -> tuple[S7Area, int, S7WordLen]:
@@ -363,11 +380,11 @@ class PPIClient:
         if count < 1:
             raise ValueError("count must be at least 1")
         wire_area, db_number, word_len = self._area_spec(area)
+        self._validate_start(start, word_len)
         item_size = 2 if word_len in (S7WordLen.WORD, S7WordLen.COUNTER_200, S7WordLen.TIMER_200) else 1
         if count * item_size > self.pdu_length - 18:
             raise ValueError("PPI read exceeds the negotiated PDU size")
-        request = self.protocol.build_read_request(wire_area, db_number, start, word_len, count)
-        response = self._exchange(request)
+        response = self._exchange(lambda: self.protocol.build_read_request(wire_area, db_number, start, word_len, count))
         return bytearray(self.protocol.extract_read_data(response, word_len, count))
 
     def write_area(self, area: PPIArea, start: int, data: bytes | bytearray) -> None:
@@ -375,13 +392,14 @@ class PPIClient:
         if not self.connected:
             raise S7ConnectionError("PPI client is not connected")
         wire_area, db_number, word_len = self._area_spec(area)
+        self._validate_start(start, word_len)
         item_size = 2 if word_len in (S7WordLen.WORD, S7WordLen.COUNTER_200, S7WordLen.TIMER_200) else 1
         if not data or len(data) % item_size:
             raise ValueError(f"data length must be a non-zero multiple of {item_size}")
         if len(data) > self.pdu_length - 35:
             raise ValueError("PPI write exceeds the negotiated PDU size")
-        request = self.protocol.build_write_request(wire_area, db_number, start, word_len, bytes(data))
-        self.protocol.check_write_response(self._exchange(request))
+        response = self._exchange(lambda: self.protocol.build_write_request(wire_area, db_number, start, word_len, bytes(data)))
+        self.protocol.check_write_response(response)
 
     def v_read(self, start: int, size: int) -> bytearray:
         """Read bytes from S7-200 V memory (wire-level DB1)."""

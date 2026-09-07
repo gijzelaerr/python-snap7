@@ -160,6 +160,22 @@ def test_serial_timeout_is_reported() -> None:
         transport.exchange(b"request")
 
 
+def test_serial_exchange_retries_corrupt_acknowledgement() -> None:
+    incoming = b"\x99" + bytes((PPIFrameType.SC,)) + encode_sd2(0, 2, 0x08, b"response")
+    serial = FakeSerial(incoming)
+    transport = PPITransport("test", retries=2, serial_port=serial)
+
+    assert transport.exchange(b"request") == b"response"
+    assert serial.writes[:2] == [encode_sd2(2, 0, 0x6C, b"request")] * 2
+
+
+def test_serial_exchange_skips_corrupt_frame_before_response() -> None:
+    incoming = bytes((PPIFrameType.SC, 0x99)) + encode_sd2(0, 2, 0x08, b"response")
+    transport = PPITransport("test", retries=2, serial_port=FakeSerial(incoming))
+
+    assert transport.exchange(b"request") == b"response"
+
+
 def test_client_negotiates_and_reads_writes_v_memory_as_db1() -> None:
     transport = StubTransport()
     client = PPIClient("test", transport=transport).connect()
@@ -195,6 +211,16 @@ def test_client_encodes_analog_and_counter_item_addresses() -> None:
     assert counter_request[15] == PPIArea.C
     assert counter_request[20] == PPIArea.C
     assert counter_request[21:24] == b"\x00\x00\x03"  # item index, not bit address
+
+
+@pytest.mark.parametrize("start", [-1, 1 << 21, 1 << 31])
+def test_client_rejects_unencodable_start_address(start: int) -> None:
+    client = PPIClient("test", transport=StubTransport()).connect()
+
+    with pytest.raises(ValueError, match="start must be between"):
+        client.read_area(PPIArea.V, start, 1)
+    with pytest.raises(ValueError, match="start must be between"):
+        client.write_area(PPIArea.V, start, b"\x00")
 
 
 @pytest.mark.parametrize(
