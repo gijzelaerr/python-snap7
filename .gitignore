@@ -62,4 +62,5 @@ venv*/
 snap7.dll
 
 .claude/
+.codex/config.toml
 .hypothesis/
