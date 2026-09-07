@@ -486,7 +486,7 @@ class S7CommPlusAsyncClient:
     async def _reconnect(self) -> None:
         """Tear down and re-establish the connection with the same parameters."""
         if self._connect_params is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
         params = self._connect_params.copy()
         await self.disconnect()
         await self.connect(**params)
@@ -805,7 +805,7 @@ class S7CommPlusAsyncClient:
         """
         async with self._lock:
             if not self._connected or self._writer is None or self._reader is None:
-                raise RuntimeError("Not connected")
+                raise S7ConnectionError("Not connected")
 
             seq_num = self._next_sequence_number()
 
@@ -931,7 +931,7 @@ class S7CommPlusAsyncClient:
     async def _cotp_connect(self, local_tsap: int, remote_tsap: bytes) -> None:
         """Perform COTP Connection Request / Confirm handshake."""
         if self._writer is None or self._reader is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
 
         base_pdu = struct.pack(">BBHHB", 6, _COTP_CR, 0x0000, 0x0001, 0x00)
         calling_tsap = struct.pack(">BBH", 0xC1, 2, local_tsap)
@@ -949,8 +949,10 @@ class S7CommPlusAsyncClient:
         _, _, length = struct.unpack(">BBH", tpkt_header)
         payload = await self._reader.readexactly(length - 4)
 
-        if len(payload) < 7 or payload[1] != _COTP_CC:
-            raise RuntimeError(f"Expected COTP CC, got {payload[1]:#04x}")
+        if len(payload) < 7:
+            raise S7ConnectionError(f"COTP CC response too short: {len(payload)} bytes")
+        if payload[1] != _COTP_CC:
+            raise S7ConnectionError(f"Expected COTP CC, got {payload[1]:#04x}")
 
     async def _init_ssl(self) -> None:
         """Send InitSSL request (required before CreateObject)."""
@@ -1131,7 +1133,7 @@ class S7CommPlusAsyncClient:
     async def _send_cotp_raw(self, data: bytes) -> None:
         """Send raw bytes wrapped in COTP DT + TPKT (no TLS)."""
         if self._writer is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
 
         cotp_dt = struct.pack(">BBB", 2, _COTP_DT, 0x80) + data
         tpkt = struct.pack(">BBH", 3, 0, 4 + len(cotp_dt)) + cotp_dt
@@ -1141,14 +1143,16 @@ class S7CommPlusAsyncClient:
     async def _recv_cotp_raw(self) -> bytes:
         """Receive one TPKT + COTP DT frame and return the payload (no TLS)."""
         if self._reader is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
 
         tpkt_header = await self._reader.readexactly(4)
         _, _, length = struct.unpack(">BBH", tpkt_header)
         payload = await self._reader.readexactly(length - 4)
 
-        if len(payload) < 3 or payload[1] != _COTP_DT:
-            raise RuntimeError(f"Expected COTP DT, got {payload[1]:#04x}")
+        if len(payload) < 3:
+            raise S7ConnectionError(f"COTP DT response too short: {len(payload)} bytes")
+        if payload[1] != _COTP_DT:
+            raise S7ConnectionError(f"Expected COTP DT, got {payload[1]:#04x}")
 
         return payload[3:]
 

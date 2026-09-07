@@ -4,6 +4,7 @@ Tests IntegrityId tracking, legitimation helpers, protocol constants,
 and V2 connection behavior.
 """
 
+import asyncio
 import hashlib
 import struct
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -114,6 +115,29 @@ class TestTypeInfoRidErrorHandling:
         with pytest.raises(S7ProtocolError, match="fatal event"):
             await client._with_reconnect(operation)
         client._reconnect.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_async_request_disconnected_is_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        with pytest.raises(S7ConnectionError, match="Not connected"):
+            await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"")
+
+    @pytest.mark.asyncio
+    async def test_async_reconnect_without_parameters_is_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        with pytest.raises(S7ConnectionError, match="Not connected"):
+            await client._reconnect()
+
+    @pytest.mark.asyncio
+    async def test_async_non_data_cotp_frame_is_connection_error(self) -> None:
+        client = S7CommPlusAsyncClient()
+        client._reader = asyncio.StreamReader()
+        payload = bytes.fromhex("02e080")
+        client._reader.feed_data(struct.pack(">BBH", 3, 0, len(payload) + 4) + payload)
+        client._reader.feed_eof()
+
+        with pytest.raises(S7ConnectionError, match="Expected COTP DT"):
+            await client._recv_cotp_raw()
 
 
 class TestReadFunctionCodes:
