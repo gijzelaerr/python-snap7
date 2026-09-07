@@ -79,6 +79,25 @@ from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode
 
 logger = logging.getLogger(__name__)
 
+
+def _log_create_object_return_value(return_value: int, tls_active: bool) -> None:
+    """Log a non-zero CreateObject status without guessing at TLS requirements."""
+    if return_value == 0:
+        return
+    if tls_active:
+        # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero value on a
+        # usable TLS session, so keep this informational.
+        logger.debug(
+            "CreateObject returned non-zero 0x%X on an active TLS session; continuing to parse the returned session data",
+            return_value,
+        )
+        return
+    logger.warning(
+        "CreateObject returned non-zero 0x%X; continuing to parse the returned session data",
+        return_value,
+    )
+
+
 # TLS cipher suites for S7 PLC compatibility.
 # ECDHE suites are preferred (forward secrecy); RSA-kx kept as fallback for
 # older firmware.  The key to Siemens PLC compatibility is restricting the
@@ -542,12 +561,9 @@ class S7CommPlusConnection:
                 self._session_setup_ok = self._setup_session()
             else:
                 logger.warning(
-                    "PLC did not provide a scalar ServerSessionVersion attribute. "
-                    "This is the V1-initial S7-1200 firmware band (FW < 4.5 "
-                    "predating TLS) which sends a Struct(314) value and requires "
-                    "the proprietary SessionKey handshake — not yet implemented "
-                    "in python-snap7 (tracked in issue #710). Falling back to "
-                    "legacy PUT/GET: db_read/db_write will work, browse() will not."
+                    "PLC did not provide a usable ServerSessionVersion attribute; "
+                    "S7CommPlus session setup cannot continue. No automatic fallback "
+                    "to the classic PUT/GET protocol is performed."
                 )
                 self._session_setup_ok = False
 
@@ -1289,7 +1305,7 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response has no session ObjectId")
 
-        # First ObjectId is the new session id; second (if any) is for notifications.
+        # First ObjectId is the session; the second is its subscription container.
         self._session_id = object_ids[0]
         self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         self._protocol_version = version
@@ -1301,13 +1317,7 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: return_value={return_value} object_ids={[hex(i) for i in object_ids]}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
-        if return_value != 0:
-            if self._tls_active:
-                # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero CreateObject
-                # value on a perfectly usable TLS session, so this is informational only.
-                logger.debug(f"CreateObject returned non-zero 0x{return_value:X} on an active TLS session (session still usable)")
-            else:
-                logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+        _log_create_object_return_value(return_value, self._tls_active)
 
         # Parse remaining payload (the ResponseObject tree) for session attributes
         attrs = parse_create_object_attributes(response[offset:])

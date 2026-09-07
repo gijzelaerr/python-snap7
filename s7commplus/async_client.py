@@ -44,9 +44,20 @@ from .connection import (
     _build_set_variable_payload,
     _check_system_event,
     _check_set_variable_response,
+    _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
     _set_s7_groups,
+)
+from .alarm import (
+    Alarm,
+    AlarmNotification,
+    LanguageId,
+    build_alarm_explore_request,
+    build_alarm_subscription_request,
+    build_delete_alarm_subscription_request,
+    parse_alarm_explore_response,
+    parse_alarm_notification,
 )
 from .legitimation import (
     build_legacy_response,
@@ -92,6 +103,7 @@ class S7CommPlusAsyncClient:
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._session_id: int = 0
+        self._subscription_container_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0
         self._connected = False
@@ -128,6 +140,11 @@ class S7CommPlusAsyncClient:
     @property
     def session_id(self) -> int:
         return self._session_id
+
+    @property
+    def subscription_container_id(self) -> int:
+        """Object ID assigned to the session's subscription container."""
+        return self._subscription_container_id
 
     @property
     def session_setup_ok(self) -> bool:
@@ -459,6 +476,7 @@ class S7CommPlusAsyncClient:
 
         self._connected = False
         self._session_id = 0
+        self._subscription_container_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
         self._with_integrity_id = False
@@ -660,6 +678,52 @@ class S7CommPlusAsyncClient:
         await self._send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
 
+    async def create_alarm_subscription(
+        self,
+        language_ids: Optional[list[LanguageId | int]] = None,
+        domains: Optional[list[int]] = None,
+        credit_limit: int = 10,
+    ) -> int:
+        """Subscribe to PLC alarm events and return the subscription ID."""
+        if self._subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_alarm_subscription_request(self._subscription_container_id, language_ids, domains, credit_limit)
+        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload, integrity_tail=len(payload) - 11)
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
+        return object_ids[0]
+
+    async def delete_alarm_subscription(self, subscription_id: int) -> None:
+        """Delete an alarm subscription created by this client."""
+        if self._subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_delete_alarm_subscription_request(self._subscription_container_id, self._protocol_version)
+        await self._send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Alarm subscription {subscription_id:#x} deleted")
+
+    async def receive_alarm_notification(
+        self, language_ids: Optional[list[LanguageId | int]] = None, timeout: Optional[float] = None
+    ) -> AlarmNotification:
+        """Wait for one alarm notification, optionally with a timeout in seconds.
+
+        Do not run this alongside a data-subscription receive loop on the same
+        connection: mixed notification dispatch is not supported yet.
+        """
+        async with self._lock:
+            if not self._connected:
+                raise RuntimeError("Not connected")
+            receive = self._recv_cotp_dt()
+            frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
+        return parse_alarm_notification(frame, language_ids)
+
+    async def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Return a snapshot of the PLC's active alarms without consuming notifications."""
+        response = await self._send_request(
+            FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
+        )
+        return parse_alarm_explore_response(response, language_ids)
+
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.
 
@@ -699,7 +763,8 @@ class S7CommPlusAsyncClient:
         .. warning:: This method is **experimental** and may change.
 
         Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
-        (the dot-separated hex LID path usable with ``read_tag()``), ``data_type``,
+        (the dot-separated hex path whose first component is the access area and
+        remaining components are LIDs for :meth:`read_symbolic`), ``data_type``,
         and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
         each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
         then recombine into the symbol tree.
@@ -1039,12 +1104,13 @@ class S7CommPlusAsyncClient:
         object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
+            self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         else:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
+            self._subscription_container_id = 0
         self._protocol_version = version
 
-        if return_value != 0:
-            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+        _log_create_object_return_value(return_value, self._tls_active)
 
         self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
