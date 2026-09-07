@@ -12,6 +12,7 @@ from typing import Any, Optional
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
 from .client import (
+    DBWriteItem,
     _build_area_read_payload,
     _build_area_write_payload,
     _build_explore_payload,
@@ -434,17 +435,17 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Read failed: PLC returned error for item")
         return results[0]
 
-    async def db_write(self, db_number: int, start: int, data: bytes) -> None:
-        """Write raw bytes to a data block."""
-        await self.db_write_multi([(db_number, start, data)])
+    async def db_write(self, db_number: int, start: int, data: bytes, datatype: DataType = DataType.BLOB) -> None:
+        """Write raw bytes to a data block with an optional explicit PValue datatype."""
+        await self.db_write_multi([(db_number, start, data, datatype)])
 
-    async def db_write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
-        """Write multiple data block regions in a single request."""
+    async def db_write_multi(self, items: list[DBWriteItem]) -> None:
+        """Write multiple regions, optionally adding a DataType as each tuple's fourth item."""
         payload = _build_write_payload(items, self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
-    async def write_multi(self, items: list[tuple[int, int, bytes]]) -> None:
+    async def write_multi(self, items: list[DBWriteItem]) -> None:
         """Alias for :meth:`db_write_multi`."""
         await self.db_write_multi(items)
 
@@ -595,10 +596,7 @@ class S7CommPlusAsyncClient:
 
         .. warning:: This method is **experimental** and may change.
         """
-        # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(
-            access_area, lids, symbol_crc, False, self._integrity_id_read, self._protocol_version
-        )
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, self._protocol_version)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:

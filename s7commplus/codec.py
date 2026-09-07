@@ -379,6 +379,42 @@ def encode_pvalue_blob(data: bytes) -> bytes:
     return bytes(result)
 
 
+def encode_pvalue_typed(datatype: DataType, data: bytes) -> bytes:
+    """Encode already-serialized value bytes with an explicit PValue type.
+
+    Raw DB offsets do not carry enough metadata to infer the PLC datatype.
+    Callers writing anything other than a byte-array/BLOB must therefore
+    provide the type reported by the PLC's symbol information.
+    """
+    datatype = DataType(datatype)
+    fixed_sizes = {
+        DataType.BOOL: 1,
+        DataType.USINT: 1,
+        DataType.BYTE: 1,
+        DataType.SINT: 1,
+        DataType.UINT: 2,
+        DataType.WORD: 2,
+        DataType.INT: 2,
+        DataType.DWORD: 4,
+        DataType.REAL: 4,
+        DataType.LWORD: 8,
+        DataType.LREAL: 8,
+        DataType.TIMESTAMP: 8,
+        DataType.RID: 4,
+    }
+    expected_size = fixed_sizes.get(datatype)
+    if expected_size is not None and len(data) != expected_size:
+        raise ValueError(f"{datatype.name} requires {expected_size} encoded bytes, got {len(data)}")
+    if datatype == DataType.NULL and data:
+        raise ValueError("NULL requires an empty value")
+
+    result = bytearray((0x00, datatype))
+    if datatype in (DataType.BLOB, DataType.WSTRING, DataType.S7STRING):
+        result += encode_uint32_vlq(len(data))
+    result += data
+    return bytes(result)
+
+
 def decode_pvalue_to_bytes(data: bytes, offset: int) -> tuple[bytes, int]:
     """Decode a PValue from S7CommPlus response to raw bytes.
 

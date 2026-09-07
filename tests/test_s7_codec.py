@@ -29,6 +29,7 @@ from s7commplus.codec import (
     encode_item_address,
     encode_object_qualifier,
     encode_pvalue_blob,
+    encode_pvalue_typed,
     encode_request_header,
     encode_typed_value,
     encode_uint8,
@@ -407,6 +408,15 @@ class TestPValueBlob:
         decoded, consumed = decode_pvalue_to_bytes(encoded, 0)
         assert decoded == data
         assert consumed == len(encoded)
+
+
+class TestPValueTyped:
+    def test_word_uses_raw_big_endian_bytes(self) -> None:
+        assert encode_pvalue_typed(DataType.WORD, b"\x02\x00") == bytes((0x00, DataType.WORD, 0x02, 0x00))
+
+    def test_rejects_wrong_fixed_width(self) -> None:
+        with pytest.raises(ValueError, match="REAL requires 4 encoded bytes"):
+            encode_pvalue_typed(DataType.REAL, b"\x00\x00")
 
 
 class TestDecodePValue:
