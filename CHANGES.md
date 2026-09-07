@@ -12,6 +12,7 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus PLC start/stop via INVOKE
 * S7CommPlus object browsing via EXPLORE
 * S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* S7CommPlus active-alarm browsing and alarm subscriptions (experimental)
 * S7CommPlus symbolic data subscriptions and notification decoding (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)
