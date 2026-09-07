@@ -195,20 +195,54 @@ class Ids(IntEnum):
     # Subscription classes (for data change notifications)
     CLASS_SUBSCRIPTIONS = 255
     CLASS_SUBSCRIPTION = 1001
+    SUBSCRIPTION_MISSED_SENDINGS = 1002
+    SUBSCRIPTION_SUBSYSTEM_ERROR = 1003
+    SUBSCRIPTION_ROUTE_MODE = 1040
     SUBSCRIPTION_CYCLE_TIME = 1049
     SUBSCRIPTION_ACTIVE = 1041
     SUBSCRIPTION_CREDIT_LIMIT = 1053
     SUBSCRIPTION_REFERENCE_LIST = 1048
     SUBSCRIPTION_FUNCTION_CLASS_ID = 1082
+    SUBSCRIPTION_REFERENCE_TRIGGER_MODE = 1005
+    SUBSCRIPTION_DELAY_TIME = 1050
+    SUBSCRIPTION_DISABLED = 1051
+    SUBSCRIPTION_COUNT = 1052
+    SUBSCRIPTION_TICKS = 1054
 
     # Alarm subscription
     ALARM_SUBSCRIPTION_REF_CLASS_RID = 2662
     ALARM_SUBSCRIPTION_REF_ALARM_DOMAIN = 2659
     ALARM_SUBSCRIPTION_REF_ITS_ALARM_SUBSYSTEM = 2660
+    ALARM_SUBSCRIPTION_REF_ALARM_DOMAIN_FILTER = 7731
+    ALARM_SUBSCRIPTION_REF_SEND_TEXTS = 8173
+    ALARM_SUBSCRIPTION_REF_TEXT_LANGUAGES = 8181
+
+    # Alarm objects and text libraries
+    ALARM_SUBSYSTEM_UPDATE_RELEVANT_DAI = 2667
+    ALARM_DAI_CPU_ALARM_ID = 2670
+    ALARM_DAI_ALL_STATES_INFO = 2671
+    ALARM_DAI_DOMAIN = 2672
+    ALARM_DAI_COMING = 2673
+    ALARM_DAI_GOING = 2677
+    ALARM_DAI_CLASS_RID = 2681
+    ALARM_DAI_TEXTS = 2715
+    ALARM_DAI_MESSAGE_TYPE = 4079
+    ALARM_DAI_HMI_INFO = 7813
+    ALARM_DAI_SEQUENCE_COUNTER = 7917
 
     # Session's effective protection level, readable via GetVarSubStreamed
     EFFECTIVE_PROTECTION_LEVEL = 1842
     ACTIVE_PROTECTION_LEVEL = 1843
+
+    # ServerSessionVersion struct element carrying the device "PAOM string"
+    # which selects the legitimation mode.
+    SESSION_VERSION_SYSTEM_PAOM_STRING = 319
+
+    # Struct and element IDs of the encrypted new-mode legitimation payload
+    LEGITIMATION_PAYLOAD_STRUCT = 40400
+    LEGITIMATION_PAYLOAD_TYPE = 40401
+    LEGITIMATION_PAYLOAD_USERNAME = 40402
+    LEGITIMATION_PAYLOAD_PASSWORD = 40403
 
     # DB AccessArea base (add DB number to get area ID)
     DB_ACCESS_AREA_BASE = 0x8A0E0000
@@ -223,6 +257,26 @@ READ_FUNCTION_CODES: frozenset[int] = frozenset(
         FunctionCode.GET_LINK,
         FunctionCode.GET_VARIABLE,
         FunctionCode.GET_VARIABLES_ADDRESS,
+    }
+)
+
+# Function codes whose requests carry transport flags 0x34. The reference sets
+# this per request class rather than by read/write, so it is a different split
+# than READ_FUNCTION_CODES: the writes SetVariable, SetMultiVariables and
+# DeleteObject use 0x34 too. Only CreateObject (0x36) and InitSSL (0x30) differ,
+# and a session-setup CreateObject sent with 0x34 makes the PLC reset the
+# connection. Subscription and alarm CreateObjects are the documented exception:
+# the reference overrides those to 0x34.
+#
+# Reference: TransportFlags in thomas-v2/S7CommPlusDriver/Core/*Request.cs
+FLAGS_34_FUNCTION_CODES: frozenset[int] = frozenset(
+    {
+        FunctionCode.DELETE_OBJECT,
+        FunctionCode.EXPLORE,
+        FunctionCode.GET_MULTI_VARIABLES,
+        FunctionCode.GET_VAR_SUBSTREAMED,
+        FunctionCode.SET_MULTI_VARIABLES,
+        FunctionCode.SET_VARIABLE,
     }
 )
 
@@ -245,6 +299,16 @@ class AccessLevel(IntEnum):
     READ_ACCESS = 2
     HMI_ACCESS = 3
     NO_ACCESS = 4
+
+
+class LegitimationType(IntEnum):
+    """Legitimation mode.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/LegitimationType.cs
+    """
+
+    LEGACY = 1
+    NEW = 2
 
 
 class LegitimationId(IntEnum):

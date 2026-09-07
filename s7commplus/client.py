@@ -5,11 +5,22 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import struct
-from typing import Any, Callable, Optional, TypeAlias, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, TypeAlias, TypeVar
 
 from snap7.error import S7ConnectionError
 
 from . import typeinfo
+from .alarm import (
+    Alarm,
+    AlarmNotification,
+    LanguageId,
+    build_alarm_explore_request,
+    build_alarm_subscription_request,
+    build_delete_alarm_subscription_request,
+    parse_alarm_explore_response,
+    parse_alarm_notification,
+)
 from .blob_decompressor import find_and_decompress
 from .codec import (
     decode_pvalue_to_bytes,
@@ -17,9 +28,17 @@ from .codec import (
     encode_object_qualifier,
     encode_pvalue_blob,
     encode_pvalue_typed,
+    parse_create_object_session_id,
 )
 from .connection import S7CommPlusConnection
 from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
+from .subscription import (
+    SubscriptionItem,
+    SubscriptionNotification,
+    build_delete_subscription_request,
+    build_subscription_request,
+    parse_subscription_notification,
+)
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
@@ -47,6 +66,8 @@ class S7CommPlusClient:
         # Last-used connect() arguments, kept so operations can transparently
         # reconnect on firmware that RSTs the session after a symbolic read.
         self._connect_params: Optional[dict[str, Any]] = None
+        self._subscription_change_counter = 1
+        self._subscription_relation_id = 0x7FFFC001
 
     @property
     def connected(self) -> bool:
@@ -552,7 +573,8 @@ class S7CommPlusClient:
         .. warning:: This method is **experimental** and may change.
 
         Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
-        (the dot-separated hex LID path usable with ``read_tag()``), ``data_type``,
+        (the dot-separated hex path whose first component is the access area and
+        remaining components are LIDs for :meth:`read_symbolic`), ``data_type``,
         and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
         each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
         then recombine into the symbol tree.
@@ -638,31 +660,64 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
         return typeinfo.extract_type_info_objects(response)
 
-    def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+    def create_subscription(
+        self,
+        items: Sequence[SubscriptionItem | str],
+        cycle_ms: int = 100,
+        credit_limit: int = 10,
+    ) -> int:
         """Create a data change subscription.
 
         .. warning:: This method is **experimental** and may change.
 
-        The PLC will push data updates for the specified variables. Use
-        ``receive_notification()`` to receive the pushed data.
+        The PLC pushes an initial value and subsequent changes. Access-sequence
+        strings are returned by :meth:`browse`; explicit
+        :class:`SubscriptionItem` objects can supply a symbol CRC, sub-area, or
+        stable reference ID.
 
         Args:
-            items: List of (db_number, start_offset, size) tuples to monitor.
-            cycle_ms: Cycle time in milliseconds (0 = on change).
+            items: Symbolic access-sequence strings or subscription items.
+            cycle_ms: Sampling cycle in milliseconds.
+            credit_limit: Number of notification credits. The default of 10
+                matches the value accepted by real S7-1500 PLCs.
 
         Returns:
             Subscription object ID assigned by the PLC.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
 
-        payload = _build_subscription_request(items, cycle_ms, self._connection.session_id)
-        response = self._connection.send_request(FunctionCode.CREATE_OBJECT, payload)
+        normalized = [SubscriptionItem.from_access_sequence(item) if isinstance(item, str) else item for item in items]
+        payload, integrity_tail = build_subscription_request(
+            self._connection.subscription_container_id,
+            normalized,
+            cycle_ms=cycle_ms,
+            credit_limit=credit_limit,
+            change_counter=self._subscription_change_counter,
+            relation_id=self._subscription_relation_id,
+        )
+        response = self._connection.send_request(
+            FunctionCode.CREATE_OBJECT,
+            payload,
+            integrity_tail=integrity_tail,
+        )
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Subscription creation failed: PLC returned 0x{return_value:X}")
 
-        # Parse the CreateObject response to get the subscription object ID
-        sub_id, consumed = decode_uint32_vlq(response, 0)
-        logger.info(f"Subscription created, id={sub_id:#x}")
-        return sub_id
+        self._subscription_change_counter = self._subscription_change_counter % 0xFF + 1
+        self._subscription_relation_id = (self._subscription_relation_id + 1) & 0xFFFFFFFF
+        subscription_id = object_ids[0]
+        logger.info(f"Subscription created, id={subscription_id:#x}")
+        return subscription_id
+
+    def receive_subscription_notification(self) -> SubscriptionNotification:
+        """Block until the PLC sends one data-subscription notification."""
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        return parse_subscription_notification(self._connection.receive_notification())
 
     def delete_subscription(self, subscription_id: int) -> None:
         """Delete a data change subscription.
@@ -674,10 +729,88 @@ class S7CommPlusClient:
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
 
-        payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
+        # Subscription children are owned by the session's second CreateObject
+        # result. The reference driver deletes that container, not the child ID.
+        payload = build_delete_subscription_request(self._connection.subscription_container_id, self._connection.protocol_version)
         self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
+
+    def create_alarm_subscription(
+        self,
+        language_ids: Optional[list[LanguageId | int]] = None,
+        domains: Optional[list[int]] = None,
+        credit_limit: int = 10,
+    ) -> int:
+        """Subscribe to PLC alarm events.
+
+        Args:
+            language_ids: Windows LCIDs for texts included with notifications.
+                ``None`` requests every configured language.
+            domains: Alarm-domain IDs to include. ``None`` subscribes to all.
+            credit_limit: Notification credit limit. The default of 10 matches
+                the working S7-1500 reference trace.
+
+        Returns:
+            Subscription object ID assigned by the PLC.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_alarm_subscription_request(
+            self._connection.subscription_container_id, language_ids, domains, credit_limit
+        )
+        response = self._connection.send_request(
+            FunctionCode.CREATE_OBJECT,
+            payload,
+            integrity_tail=len(payload) - 11,
+        )
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
+        return object_ids[0]
+
+    def delete_alarm_subscription(self, subscription_id: int) -> None:
+        """Delete an alarm subscription created by this client."""
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if self._connection.subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_delete_alarm_subscription_request(
+            self._connection.subscription_container_id, self._connection.protocol_version
+        )
+        self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Alarm subscription {subscription_id:#x} deleted")
+
+    def receive_alarm_notification(self, language_ids: Optional[list[LanguageId | int]] = None) -> AlarmNotification:
+        """Block until the PLC sends one alarm notification.
+
+        Do not run this alongside a data-subscription receive loop on the same
+        connection: mixed notification dispatch is not supported yet.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        return parse_alarm_notification(self._connection.receive_notification(), language_ids)
+
+    def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Return the PLC's current active alarm state.
+
+        This is a snapshot read and does not create or consume a subscription,
+        so it can be used before or while an alarm subscription exists.
+
+        Args:
+            language_ids: Optional Windows LCIDs used to filter returned texts.
+                Omitting the filter retains every language sent by the PLC.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        response = self._connection.send_request(
+            FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
+        )
+        return parse_alarm_explore_response(response, language_ids)
 
     def __enter__(self) -> "S7CommPlusClient":
         return self

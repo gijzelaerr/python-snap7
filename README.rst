@@ -95,6 +95,22 @@ PUT/GET enabled.
 * **S7 routing** -- connect to PLCs on remote subnets via a gateway PLC
 * **Symbolic addressing** -- read/write by tag name instead of raw addresses
 * **Live symbol browsing** -- resolve tag names directly from the PLC
+* **Symbolic data subscriptions** -- monitor values using access sequences
+  returned by ``browse()``::
+
+      from s7commplus import Client
+
+      client = Client()
+      client.connect("192.168.1.10", 0, 1, password="secret")
+      subscription_id = client.create_subscription(["8A0E0007.A"], cycle_ms=100)
+      notification = client.receive_subscription_notification()
+      value = notification.values[1]
+      client.delete_subscription(subscription_id)
+      client.disconnect()
+
+  Reference IDs default to the one-based position of each access sequence.
+  Subscriptions use symbolic LIDs and therefore cannot be created from raw DB
+  byte offsets.
 * **TIA Portal XML import** -- import symbol tables from TIA Portal exports
 
 **Help us test!** If you have access to any Siemens S7 PLC, we would greatly
