@@ -1383,9 +1383,10 @@ class Client(ClientMixin):
             raise ValueError(f"Too many items: {len(items)} exceeds MAX_VARS ({self.MAX_VARS})")
 
         # Handle S7DataItem list (ctypes)
-        if hasattr(items[0], "Area"):
-            s7_items = cast(List[S7DataItem], items)
-            for s7_item in s7_items:
+        if isinstance(items[0], S7DataItem):
+            for s7_item in items:
+                if not isinstance(s7_item, S7DataItem):
+                    raise TypeError("items must contain either only S7DataItem objects or only dictionaries")
                 area = Area(s7_item.Area)
                 db_number = s7_item.DBNumber
                 start = s7_item.Start
@@ -1401,8 +1402,9 @@ class Client(ClientMixin):
             return 0
 
         # Handle dict list
-        dict_items = cast(List[dict[str, Any]], items)
-        for dict_item in dict_items:
+        for dict_item in items:
+            if not isinstance(dict_item, dict):
+                raise TypeError("items must contain either only S7DataItem objects or only dictionaries")
             area = dict_item["area"]
             db_number = dict_item.get("db_number", 0)
             start = dict_item["start"]
