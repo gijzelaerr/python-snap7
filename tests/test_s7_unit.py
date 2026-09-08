@@ -20,10 +20,10 @@ from s7commplus.client import (
     _build_substreamed_write_payload,
 )
 from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_session_version
-from s7commplus.codec import encode_object_qualifier, encode_pvalue_blob
+from s7commplus.codec import encode_header, encode_object_qualifier, encode_pvalue_blob
 from s7commplus.codec import _pvalue_element_size as _element_size
 from s7commplus.codec import skip_typed_value, parse_server_session_version
-from s7commplus.protocol import DataType, ElementID, FunctionCode, Ids, ObjectId
+from s7commplus.protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, Opcode, ProtocolVersion
 from s7commplus.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -238,6 +238,29 @@ class TestIntegrityPlaceholder:
     def test_write_payload_encodes_explicit_datatype(self) -> None:
         payload = _build_write_payload([(1, 0, struct.pack(">f", 2.0), DataType.REAL)])
         assert bytes((0x00, DataType.REAL)) + struct.pack(">f", 2.0) in payload
+
+    @pytest.mark.parametrize(("with_integrity", "integrity_id"), [(False, 0), (True, 7)])
+    def test_connection_conditionally_inserts_integrity_id(self, with_integrity: bool, integrity_id: int) -> None:
+        payload = _build_read_payload([(1, 0, 4)])
+        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        connection = S7CommPlusConnection("127.0.0.1")
+        connection._connected = True
+        connection._protocol_version = ProtocolVersion.V2
+        connection._with_integrity_id = with_integrity
+        connection._integrity_id_read = integrity_id
+        connection._send_s7_data = MagicMock()
+        connection._recv_s7_data = MagicMock(
+            return_value=encode_header(ProtocolVersion.V2, len(response))
+            + response
+            + struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0),
+        )
+
+        connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+
+        frame = connection._send_s7_data.call_args.args[0]
+        sent_payload = frame[4 + 14 : -4]
+        expected = payload[:-4] + (encode_uint32_vlq(integrity_id) if with_integrity else b"") + payload[-4:]
+        assert sent_payload == expected
 
 
 # -- Connection unit tests --

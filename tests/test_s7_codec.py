@@ -414,9 +414,26 @@ class TestPValueTyped:
     def test_word_uses_raw_big_endian_bytes(self) -> None:
         assert encode_pvalue_typed(DataType.WORD, b"\x02\x00") == bytes((0x00, DataType.WORD, 0x02, 0x00))
 
+    @pytest.mark.parametrize(
+        ("datatype", "data", "encoded_value"),
+        [
+            (DataType.UDINT, struct.pack(">I", 300), b"\x82\x2c"),
+            (DataType.DINT, struct.pack(">i", -5), b"\x7b"),
+            (DataType.ULINT, struct.pack(">Q", 300), b"\x82\x2c"),
+            (DataType.LINT, struct.pack(">q", -5), b"\x7b"),
+            (DataType.TIMESPAN, struct.pack(">q", -5), b"\x7b"),
+            (DataType.AID, struct.pack(">I", 300), b"\x82\x2c"),
+        ],
+    )
+    def test_variable_length_integer_types_use_vlq(self, datatype: DataType, data: bytes, encoded_value: bytes) -> None:
+        assert encode_pvalue_typed(datatype, data) == bytes((0x00, datatype)) + encoded_value
+
     def test_rejects_wrong_fixed_width(self) -> None:
         with pytest.raises(ValueError, match="REAL requires 4 encoded bytes"):
             encode_pvalue_typed(DataType.REAL, b"\x00\x00")
+
+        with pytest.raises(ValueError, match="UDINT requires 4 encoded bytes"):
+            encode_pvalue_typed(DataType.UDINT, b"\x00\x00")
 
 
 class TestDecodePValue:

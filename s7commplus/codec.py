@@ -395,12 +395,18 @@ def encode_pvalue_typed(datatype: DataType, data: bytes) -> bytes:
         DataType.UINT: 2,
         DataType.WORD: 2,
         DataType.INT: 2,
+        DataType.UDINT: 4,
         DataType.DWORD: 4,
+        DataType.DINT: 4,
         DataType.REAL: 4,
+        DataType.ULINT: 8,
         DataType.LWORD: 8,
+        DataType.LINT: 8,
         DataType.LREAL: 8,
         DataType.TIMESTAMP: 8,
+        DataType.TIMESPAN: 8,
         DataType.RID: 4,
+        DataType.AID: 4,
     }
     expected_size = fixed_sizes.get(datatype)
     if expected_size is not None and len(data) != expected_size:
@@ -411,7 +417,16 @@ def encode_pvalue_typed(datatype: DataType, data: bytes) -> bytes:
     result = bytearray((0x00, datatype))
     if datatype in (DataType.BLOB, DataType.WSTRING, DataType.S7STRING):
         result += encode_uint32_vlq(len(data))
-    result += data
+    if datatype in (DataType.UDINT, DataType.AID):
+        result += encode_uint32_vlq(int.from_bytes(data, "big"))
+    elif datatype == DataType.ULINT:
+        result += encode_uint64_vlq(int.from_bytes(data, "big"))
+    elif datatype == DataType.DINT:
+        result += encode_int32_vlq(int.from_bytes(data, "big", signed=True))
+    elif datatype in (DataType.LINT, DataType.TIMESPAN):
+        result += encode_int64_vlq(int.from_bytes(data, "big", signed=True))
+    else:
+        result += data
     return bytes(result)
 
 
