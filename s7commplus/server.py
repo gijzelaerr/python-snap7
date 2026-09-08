@@ -39,6 +39,7 @@ from .codec import (
     encode_header,
     encode_pvalue_blob,
     encode_typed_value,
+    skip_typed_value,
 )
 from .connection import _S7_CIPHERS, _set_s7_groups
 from .protocol import (
@@ -53,7 +54,7 @@ from .protocol import (
     ProtocolVersion,
     SoftDataType,
 )
-from .vlq import decode_uint32_vlq, encode_uint32_vlq, encode_uint64_vlq
+from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,7 @@ class S7CommPlusServer:
         # encrypted for a real Siemens PLC. Tests may therefore provide the
         # negotiated key explicitly to exercise V3 framing end to end.
         self._session_key = session_key
+        self._accepted_session_key_setups = 0
 
         # When True, the server closes the TCP connection after responding
         # to a GetMultiVariables request (emulating firmware like S7-1200
@@ -775,10 +777,7 @@ class S7CommPlusServer:
             # Public key fingerprint (attribute 233) as WString
             response += bytes([ElementID.ATTRIBUTE])
             response += encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
-            fp_bytes = self._public_key_fingerprint.encode("utf-16-be")
-            response += bytes([0x00, DataType.WSTRING])
-            response += encode_uint32_vlq(len(fp_bytes))
-            response += fp_bytes
+            response += bytes([0x00]) + encode_typed_value(DataType.WSTRING, self._public_key_fingerprint)
 
             # Session challenge (attribute 303) as USINT array
             response += bytes([ElementID.ATTRIBUTE])
@@ -971,8 +970,18 @@ class S7CommPlusServer:
         response += self._build_response_header(FunctionCode.SET_MULTI_VARIABLES, seq_num)
 
         if self._is_session_setup_write(request_data):
-            logger.debug("SetMultiVariables: accepting session setup write")
-            response += encode_uint64_vlq(0)  # ReturnValue: success
+            return_value = 0
+            if self._session_key is not None:
+                if self._is_valid_session_key_setup(request_data):
+                    with self._lock:
+                        self._accepted_session_key_setups += 1
+                    logger.debug("SetMultiVariables: accepted authenticated session setup write")
+                else:
+                    return_value = 1
+                    logger.warning("SetMultiVariables: rejected missing or malformed SecurityKey setup")
+            else:
+                logger.debug("SetMultiVariables: accepting session setup write")
+            response += encode_uint64_vlq(return_value)
             response += encode_uint32_vlq(0)  # Empty error list
             response += encode_uint32_vlq(0)  # IntegrityId
             return bytes(response)
@@ -1028,6 +1037,110 @@ class S7CommPlusServer:
             ObjectId.SERVER_SESSION_VERSION,
             LegitimationId.SESSION_SETUP_LEGITIMATION,
         )
+
+    def _is_valid_session_key_setup(self, request_data: bytes) -> bool:
+        """Validate the SecurityKey shape and configured public-key descriptor."""
+        if self._session_key is None or self._public_key_fingerprint is None:
+            return False
+
+        try:
+            from .session_auth.blob_metadata import get_public_key_flags, get_symmetric_key_flags
+            from .session_auth.keys import get_public_key, parse_fingerprint
+            from .session_auth.utils import derive_key_id
+
+            family, _ = parse_fingerprint(self._public_key_fingerprint)
+            public_key = get_public_key(self._public_key_fingerprint)
+            expected_public_id = int.from_bytes(derive_key_id(public_key), "little")
+
+            offset = 4  # InObjectId
+
+            def read_u32() -> int:
+                nonlocal offset
+                value, consumed = decode_uint32_vlq(request_data, offset)
+                offset += consumed
+                return value
+
+            def read_u64() -> int:
+                nonlocal offset
+                value, consumed = decode_uint64_vlq(request_data, offset)
+                offset += consumed
+                return value
+
+            def expect_bytes(expected: bytes) -> None:
+                nonlocal offset
+                end = offset + len(expected)
+                if request_data[offset:end] != expected:
+                    raise ValueError("unexpected SecurityKey field")
+                offset = end
+
+            def read_udint(attribute_id: int) -> int:
+                if read_u32() != attribute_id:
+                    raise ValueError("unexpected SecurityKey attribute")
+                expect_bytes(bytes([0x00, DataType.UDINT]))
+                return read_u32()
+
+            def read_key_descriptor() -> tuple[int, int]:
+                nonlocal offset
+                expect_bytes(bytes([0x00, DataType.STRUCT]))
+                if struct.unpack_from(">I", request_data, offset)[0] != Ids.SECURITY_KEY_ID:
+                    raise ValueError("unexpected key descriptor type")
+                offset += 4
+                if read_u32() != 1826:
+                    raise ValueError("missing key id")
+                expect_bytes(bytes([0x00, DataType.ULINT]))
+                key_id = read_u64()
+                key_flags = read_udint(1827)
+                if read_udint(1828) != 0:
+                    raise ValueError("invalid internal key flags")
+                expect_bytes(b"\x00")
+                return key_id, key_flags
+
+            if read_u32() != 2 or read_u32() != 2:
+                return False
+            if read_u32() != LegitimationId.SESSION_SETUP_LEGITIMATION:
+                return False
+            if read_u32() != ObjectId.SERVER_SESSION_VERSION or read_u32() != 1:
+                return False
+
+            expect_bytes(bytes([0x00, DataType.STRUCT]))
+            if struct.unpack_from(">I", request_data, offset)[0] != Ids.STRUCT_SECURITY_KEY:
+                return False
+            offset += 4
+            if read_udint(1801) != 0:
+                return False
+            if read_u32() != 1802:
+                return False
+            expect_bytes(bytes([0x00, DataType.USINT, 0x00]))
+
+            if read_u32() != 1803:
+                return False
+            public_id, public_flags = read_key_descriptor()
+            if read_u32() != 1804:
+                return False
+            _symmetric_id, symmetric_flags = read_key_descriptor()
+
+            if read_u32() != 1805:
+                return False
+            expect_bytes(bytes([0x00, DataType.BLOB, 0x00]))
+            blob_length = read_u32()
+            if blob_length == 0 or offset + blob_length > len(request_data):
+                return False
+            offset += blob_length
+            expect_bytes(b"\x00")
+
+            if read_u32() != 2 or offset + 2 > len(request_data):
+                return False
+            flags = request_data[offset]
+            datatype = request_data[offset + 1]
+            offset = skip_typed_value(request_data, offset + 2, datatype, flags)
+
+            return (
+                public_id == expected_public_id
+                and public_flags == get_public_key_flags(family)
+                and symmetric_flags == get_symmetric_key_flags(family) | 0x10000
+            )
+        except (IndexError, LookupError, ValueError, struct.error):
+            return False
 
     def _handle_get_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:
         """Handle GetVarSubStreamed — return legitimation challenge or finalization data.
