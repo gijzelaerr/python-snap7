@@ -1,15 +1,18 @@
 """Integration tests for S7CommPlus server, client, and async client."""
 
 import asyncio
+import hashlib
+import hmac
 import struct
 import time
 from collections.abc import Generator
 
 import pytest
 
+from snap7.error import S7ConnectionError
 from s7commplus.async_client import S7CommPlusAsyncClient
 from s7commplus.client import S7CommPlusClient
-from s7commplus.connection import _parse_get_var_substreamed_response
+from s7commplus.connection import S7CommPlusConnection, _parse_get_var_substreamed_response, _verify_v3_hmac
 from s7commplus.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
 from s7commplus.server import CPUState, DataBlock, S7CommPlusServer
 from s7commplus.vlq import encode_uint32_vlq
@@ -25,6 +28,7 @@ TEST_FINGERPRINT = "01:BD426B091F08731A"
 
 # Fixed 20-byte challenge for deterministic tests
 TEST_CHALLENGE = bytes(range(20))
+TEST_SESSION_KEY = bytes(range(24))
 
 
 @pytest.fixture()
@@ -419,9 +423,28 @@ class TestSessionKeyServer:
         srv = S7CommPlusServer(
             public_key_fingerprint=TEST_FINGERPRINT,
             session_challenge=TEST_CHALLENGE,
+            session_key=TEST_SESSION_KEY,
         )
         assert srv._public_key_fingerprint == TEST_FINGERPRINT
         assert srv._session_challenge == TEST_CHALLENGE
+        assert srv._session_key == TEST_SESSION_KEY
+
+    def test_short_session_key_rejected(self) -> None:
+        with pytest.raises(ValueError, match="at least 24 bytes"):
+            S7CommPlusServer(session_key=b"too short")
+
+    def test_v3_hmac_verification(self) -> None:
+        application_data = b"S7CommPlus request"
+        digest = hmac.new(TEST_SESSION_KEY, application_data, hashlib.sha256).digest()
+        protected = bytes([len(digest)]) + digest + application_data
+        assert S7CommPlusServer._verify_v3_data(protected, TEST_SESSION_KEY) == application_data
+        assert _verify_v3_hmac(protected, TEST_SESSION_KEY) == application_data
+
+        tampered = protected[:-1] + bytes([protected[-1] ^ 0x01])
+        with pytest.raises(ConnectionError, match="Invalid V3 HMAC"):
+            S7CommPlusServer._verify_v3_data(tampered, TEST_SESSION_KEY)
+        with pytest.raises(S7ConnectionError, match="Invalid V3 HMAC"):
+            _verify_v3_hmac(tampered, TEST_SESSION_KEY)
 
     def test_create_object_response_contains_fingerprint_and_challenge(self) -> None:
         """Verify the CreateObject response includes attributes 233 and 303."""
@@ -498,10 +521,23 @@ class TestSessionKeyIntegration:
     """
 
     @pytest.fixture()
-    def session_key_server(self) -> Generator[S7CommPlusServer, None, None]:
+    def session_key_server(self, monkeypatch: pytest.MonkeyPatch) -> Generator[S7CommPlusServer, None, None]:
+        # The emulator does not own Siemens' private key, so make the client-side
+        # key exchange deterministic and configure the matching negotiated key.
+        from s7commplus.session_auth import legitimate
+        from s7commplus.session_auth.keys import KeyFamily
+
+        def authenticate(_connection: S7CommPlusConnection) -> tuple[bytes, bytes]:
+            _connection._session_auth_public_key = bytes(40)
+            _connection._session_auth_family = KeyFamily.S7_1200
+            return bytes(180), TEST_SESSION_KEY
+
+        monkeypatch.setattr(S7CommPlusConnection, "_try_session_key_auth", authenticate)
+        monkeypatch.setattr(legitimate, "solve_legitimate_challenge_real_plc", lambda *args: bytes(248))
         srv = S7CommPlusServer(
             public_key_fingerprint=TEST_FINGERPRINT,
             session_challenge=TEST_CHALLENGE,
+            session_key=TEST_SESSION_KEY,
         )
         srv.register_db(1, {"temperature": ("Real", 0)})
         db1 = srv.get_db(1)
@@ -519,6 +555,8 @@ class TestSessionKeyIntegration:
         assert client.connected
         assert client.session_id != 0
         assert client.session_setup_ok
+        assert client._connection is not None
+        assert client._connection._session_key == TEST_SESSION_KEY
         client.disconnect()
 
     def test_read_write_after_session_setup(self, session_key_server: S7CommPlusServer) -> None:
@@ -534,5 +572,14 @@ class TestSessionKeyIntegration:
             data = client.db_read(1, 0, 4)
             value = struct.unpack(">f", data)[0]
             assert abs(value - 42.0) < 0.001
+        finally:
+            client.disconnect()
+
+    def test_explore_after_session_setup(self, session_key_server: S7CommPlusServer) -> None:
+        """Explore reassembly verifies V3 HMAC and removes the response IntegrityId."""
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=SESSION_KEY_PORT)
+        try:
+            assert client.list_datablocks() == [{"name": "DB1", "number": 1, "rid": 0x8A0E0001}]
         finally:
             client.disconnect()
