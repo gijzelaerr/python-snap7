@@ -6,6 +6,7 @@ and V2 connection behavior.
 
 import asyncio
 import hashlib
+import hmac
 import logging
 import struct
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -416,13 +417,16 @@ class TestIntegrityIdTracking:
         conn._connected = True
         conn._protocol_version = ProtocolVersion.V3
         conn._session_id = 0x0000039B
+        conn._session_key = bytes(range(24))
 
         confirmation = bytes.fromhex("00000000000002f60000000000000000")
         event_frame = encode_header(ProtocolVersion.SYSTEM_EVENT, len(confirmation)) + confirmation
         application_payload = b"\x00\x01"
         response = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.SET_VAR_SUBSTREAMED, 0, 0, 0x34)
-        response += application_payload
-        response_frame = encode_header(ProtocolVersion.V3, len(response)) + response
+        response += encode_uint32_vlq(0) + application_payload
+        digest = hmac.new(conn._session_key, response, hashlib.sha256).digest()
+        protected_response = bytes([len(digest)]) + digest + response
+        response_frame = encode_header(ProtocolVersion.V3, len(protected_response)) + protected_response
         response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V3, 0)
 
         conn._send_s7_data = MagicMock()
