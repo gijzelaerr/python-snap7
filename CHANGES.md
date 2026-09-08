@@ -16,6 +16,8 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus symbolic data subscriptions and notification decoding (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)
+* Fix the legacy SecurityKey descriptor to identify the newly generated
+  session key instead of an all-zero placeholder.
 * **Symbolic (LID-based) access for optimized DBs** (experimental):
   `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
   `client.read_tag(tag)` routes to S7CommPlus LID-based access via the
