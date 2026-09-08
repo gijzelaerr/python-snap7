@@ -39,21 +39,8 @@ def test_fixed_rate_can_reject_without_waiting() -> None:
     limiter = RequestRateLimiter(10, behavior="raise", _clock=fake.monotonic)
 
     limiter.acquire()
-    with pytest.raises(S7RateLimitError) as exc_info:
+    with pytest.raises(S7RateLimitError, match="Request rejected"):
         limiter.acquire()
-
-    assert not exc_info.value.dropped
-
-
-def test_drop_marks_request_as_dropped() -> None:
-    fake = FakeTime()
-    limiter = RequestRateLimiter(10, behavior="drop", _clock=fake.monotonic)
-
-    limiter.acquire()
-    with pytest.raises(S7RateLimitError) as exc_info:
-        limiter.acquire()
-
-    assert exc_info.value.dropped
 
 
 def test_token_bucket_allows_configured_burst() -> None:
@@ -71,6 +58,32 @@ def test_token_bucket_allows_configured_burst() -> None:
     limiter.acquire()
 
     assert fake.delays == [0.5]
+
+
+def test_token_bucket_can_limit_burst_below_refill_rate() -> None:
+    fake = FakeTime()
+    limiter = RequestRateLimiter(
+        10,
+        algorithm="token_bucket",
+        burst_capacity=1,
+        _clock=fake.monotonic,
+        _sleep=fake.sleep,
+    )
+
+    limiter.acquire()
+    limiter.acquire()
+    limiter.acquire()
+
+    assert fake.delays == pytest.approx([0.1, 0.1])
+
+
+def test_token_bucket_reserves_distinct_slots_before_callers_sleep() -> None:
+    fake = FakeTime()
+    limiter = RequestRateLimiter(10, algorithm="token_bucket", burst_capacity=1, _clock=fake.monotonic)
+
+    delays = [limiter._reserve() for _ in range(3)]
+
+    assert delays == pytest.approx([0.0, 0.1, 0.2])
 
 
 def test_disabled_limiter_never_waits() -> None:

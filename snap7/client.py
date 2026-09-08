@@ -318,7 +318,7 @@ class Client(ClientMixin):
             heartbeat_interval: Interval in seconds for heartbeat probes (0=disabled).
             max_requests_per_second: Maximum outbound PLC requests per second (0=disabled).
             rate_limit_algorithm: ``fixed`` for even spacing or ``token_bucket`` for bursts.
-            rate_limit_behavior: ``block`` to wait, or ``raise``/``drop`` to reject immediately.
+            rate_limit_behavior: ``block`` to wait or ``raise`` to reject immediately.
             rate_limit_burst: Token bucket capacity. Defaults to one second of requests.
             on_disconnect: Optional callback invoked when connection is lost.
             on_reconnect: Optional callback invoked after successful reconnection.

@@ -10,15 +10,16 @@ from typing import Literal
 from .error import S7RateLimitError
 
 RateLimitAlgorithm = Literal["fixed", "token_bucket"]
-RateLimitBehavior = Literal["block", "raise", "drop"]
+RateLimitBehavior = Literal["block", "raise"]
 
 
 class RequestRateLimiter:
-    """Thread-safe per-client request rate limiter.
+    """Per-client request rate limiter with thread-safe accounting.
 
     ``fixed`` spaces requests evenly. ``token_bucket`` permits bursts up to
     ``burst_capacity`` and then refills continuously at the configured rate.
-    A rate of zero disables limiting.
+    A rate of zero disables limiting. This lock protects only limiter state;
+    it does not make the synchronous client safe for concurrent use.
     """
 
     def __init__(
@@ -35,8 +36,8 @@ class RequestRateLimiter:
             raise ValueError("max_requests_per_second must be a finite non-negative number")
         if algorithm not in ("fixed", "token_bucket"):
             raise ValueError("rate_limit_algorithm must be 'fixed' or 'token_bucket'")
-        if behavior not in ("block", "raise", "drop"):
-            raise ValueError("rate_limit_behavior must be 'block', 'raise', or 'drop'")
+        if behavior not in ("block", "raise"):
+            raise ValueError("rate_limit_behavior must be 'block' or 'raise'")
         if burst_capacity is not None and burst_capacity < 1:
             raise ValueError("rate_limit_burst must be at least 1")
 
@@ -74,7 +75,8 @@ class RequestRateLimiter:
                 return delay
 
             # Refill only through the current time. A future _last_refill
-            # represents tokens already reserved by blocking callers.
+            # represents capacity reserved by another acquire call whose
+            # sleep happens after it releases this accounting lock.
             if now > self._last_refill:
                 elapsed = now - self._last_refill
                 self._tokens = min(float(self.burst_capacity), self._tokens + elapsed * self.rate)
@@ -84,7 +86,7 @@ class RequestRateLimiter:
                 self._tokens -= 1.0
                 return 0.0
 
-            queued_delay = max(0.0, self._last_refill - now)
+            queued_delay = self._last_refill - now
             delay = queued_delay + ((1.0 - self._tokens) / self.rate)
             if self.behavior != "block":
                 self._reject()
@@ -93,9 +95,7 @@ class RequestRateLimiter:
             return delay
 
     def _reject(self) -> None:
-        dropped = self.behavior == "drop"
-        action = "dropped" if dropped else "rejected"
-        raise S7RateLimitError(f"Request {action}: rate limit of {self.rate:g} requests/second exceeded", dropped=dropped)
+        raise S7RateLimitError(f"Request rejected: rate limit of {self.rate:g} requests/second exceeded")
 
     def acquire(self) -> None:
         """Wait for or reserve permission to send one synchronous request."""

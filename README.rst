@@ -57,15 +57,15 @@ across several PDUs counts each PDU::
    client = Client(
        max_requests_per_second=10,
        rate_limit_algorithm="fixed",       # or "token_bucket"
-       rate_limit_behavior="block",         # or "raise" / "drop"
+       rate_limit_behavior="block",         # or "raise"
    )
 
 ``fixed`` spaces requests evenly. ``token_bucket`` permits a burst (one second
 of requests by default, configurable with ``rate_limit_burst``) and then
-refills at the configured rate. The default rate is ``0``, which disables the
-limiter. ``raise`` and ``drop`` both raise ``S7RateLimitError`` immediately;
-for ``drop``, its ``dropped`` attribute is true. This avoids waiting for a PLC
-response to a request that was intentionally not sent.
+refills at the configured rate. A smaller burst capacity can cap the number of
+requests sent at once without changing the refill rate. The default rate is
+``0``, which disables the limiter. ``raise`` raises ``S7RateLimitError``
+immediately instead of waiting for capacity.
 
 .. note::
 

@@ -43,9 +43,7 @@ class S7AuthenticationError(S7Error):
 class S7RateLimitError(S7Error):
     """Raised when a non-blocking request rate limit is reached."""
 
-    def __init__(self, message: str, *, dropped: bool = False):
-        super().__init__(message)
-        self.dropped = dropped
+    pass
 
 
 # S7 client error codes
