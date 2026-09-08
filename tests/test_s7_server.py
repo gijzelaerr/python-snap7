@@ -156,6 +156,19 @@ class TestClientServerIntegration:
         finally:
             client.disconnect()
 
+    def test_read_symbolic_multi(self, server: S7CommPlusServer) -> None:
+        client = S7CommPlusClient()
+        client.connect("127.0.0.1", port=TEST_PORT)
+        try:
+            # LIDs are (1-based offset, size): temperature at 0, pressure at 4
+            results = client.read_symbolic_multi([(0x8A0E0001, [1, 4]), (0x8A0E0001, [5, 4])])
+            assert len(results) == 2
+            assert results[0] is not None and results[1] is not None
+            assert abs(struct.unpack(">f", results[0])[0] - 23.5) < 0.001
+            assert abs(struct.unpack(">f", results[1])[0] - 1.013) < 0.001
+        finally:
+            client.disconnect()
+
     def test_write_and_read_back(self, server: S7CommPlusServer) -> None:
         client = S7CommPlusClient()
         client.connect("127.0.0.1", port=TEST_PORT)

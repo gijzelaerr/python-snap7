@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 DBWriteItem: TypeAlias = tuple[int, int, bytes] | tuple[int, int, bytes, DataType]
+SymbolicReadItem: TypeAlias = tuple[int, list[int]] | tuple[int, list[int], int]
 
 
 def _normalize_write_item(item: DBWriteItem) -> tuple[int, int, bytes, DataType]:
@@ -53,6 +54,14 @@ def _normalize_write_item(item: DBWriteItem) -> tuple[int, int, bytes, DataType]
         return db_number, start, data, DataType.BLOB
     db_number, start, data, datatype = item
     return db_number, start, data, DataType(datatype)
+
+
+def _normalize_symbolic_read_item(item: SymbolicReadItem) -> tuple[int, list[int], int]:
+    if len(item) == 2:
+        access_area, lids = item
+        return access_area, lids, 0
+    access_area, lids, symbol_crc = item
+    return access_area, lids, symbol_crc
 
 
 class S7CommPlusClient:
@@ -388,6 +397,33 @@ class S7CommPlusClient:
         if not results or results[0] is None:
             raise RuntimeError("Symbolic read failed")
         return results[0]
+
+    def read_symbolic_multi(self, items: list[SymbolicReadItem]) -> list[Optional[bytes]]:
+        """Read multiple variables using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            items: ``(access_area, lids)`` tuples, or three-tuples adding a
+                symbol CRC.
+
+        Returns:
+            One entry per requested item, in request order.
+
+        Raises:
+            RuntimeError: If the PLC does not answer every requested item.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if not items:
+            return []
+
+        payload = _build_multi_symbolic_read_payload(items, self._connection.protocol_version)
+        response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response)
+        if len(results) != len(items):
+            raise RuntimeError(f"Symbolic multi-read failed: PLC returned {len(results)} of {len(items)} items")
+        return results
 
     def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
         """Write a variable using S7CommPlus symbolic (LID-based) access.
@@ -1102,29 +1138,49 @@ def _build_symbolic_read_payload(
     """Build a GetMultiVariables payload for symbolic (LID-based) access.
 
     Used for optimized block access on S7-1200/1500 where byte offsets
-    are unreliable.  The PLC navigates its symbol tree using the LIDs.
+    are unreliable. The PLC navigates its symbol tree using the LIDs.
 
     For DBs, ``access_sub_area`` is ``DB_VALUE_ACTUAL``.  For controller
     areas (M/I/Q), it's ``CONTROLLER_AREA_VALUE_ACTUAL``.
     """
-    # Determine sub-area based on access_area
-    if access_area >= 0x8A0E0000:
-        access_sub_area = Ids.DB_VALUE_ACTUAL
-    else:
-        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
+    return _build_multi_symbolic_read_payload([(access_area, lids, symbol_crc)], protocol_version=protocol_version)
 
-    addr_bytes, field_count = encode_item_address(
-        access_area=access_area,
-        access_sub_area=access_sub_area,
-        lids=lids,
-        symbol_crc=symbol_crc,
-    )
+
+def _build_multi_symbolic_read_payload(items: list[SymbolicReadItem], protocol_version: int = ProtocolVersion.V2) -> bytes:
+    """Build a GetMultiVariables payload for reading multiple symbolic LID addresses at once.
+
+    Used for optimized block access on S7-1200/1500 where byte offsets
+    are unreliable. The PLC navigates its symbol tree using the LIDs.
+
+    For DBs, ``access_sub_area`` is ``DB_VALUE_ACTUAL``.  For controller
+    areas (M/I/Q), it's ``CONTROLLER_AREA_VALUE_ACTUAL``.
+
+    Args:
+        items: List of ``(access_area, lids)`` tuples, or three-tuples adding a
+            symbol CRC, one per variable.
+
+    Returns:
+        Encoded payload bytes.
+    """
+    addresses: list[bytes] = []
+    total_field_count = 0
+    for access_area, lids, symbol_crc in (_normalize_symbolic_read_item(item) for item in items):
+        access_sub_area = Ids.DB_VALUE_ACTUAL if access_area >= 0x8A0E0000 else Ids.CONTROLLER_AREA_VALUE_ACTUAL
+        addr_bytes, field_count = encode_item_address(
+            access_area=access_area,
+            access_sub_area=access_sub_area,
+            lids=lids,
+            symbol_crc=symbol_crc,
+        )
+        addresses.append(addr_bytes)
+        total_field_count += field_count
 
     payload = bytearray()
     payload += struct.pack(">I", 0)
-    payload += encode_uint32_vlq(1)  # one item
-    payload += encode_uint32_vlq(field_count)
-    payload += addr_bytes
+    payload += encode_uint32_vlq(len(items))
+    payload += encode_uint32_vlq(total_field_count)
+    for addr in addresses:
+        payload += addr
     payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += struct.pack(">I", 0)
     return bytes(payload)
