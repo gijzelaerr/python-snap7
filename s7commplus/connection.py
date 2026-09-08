@@ -349,6 +349,7 @@ class S7CommPlusConnection:
         self._sequence_number: int = 0
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
+        self._session_ready = False
         self._connected = False
         # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
@@ -492,16 +493,21 @@ class S7CommPlusConnection:
             if self._tls_active:
                 self._protocol_version = ProtocolVersion.V2
 
-            # Step 5: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None:
-                self._session_setup_ok = self._setup_session()
-            else:
-                logger.warning(
-                    "PLC did not provide a usable ServerSessionVersion attribute; "
-                    "S7CommPlus session setup cannot continue. No automatic fallback "
-                    "to the classic PUT/GET protocol is performed."
+            # Step 5: Session setup - echo ServerSessionVersion back to PLC.
+            # Transport establishment and CreateObject alone do not make the
+            # public client usable.
+            if self._server_session_version is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    "PLC did not provide a usable ServerSessionVersion attribute; S7CommPlus session setup cannot continue"
                 )
-                self._session_setup_ok = False
+            self._session_setup_ok = self._setup_session()
+            if not self._session_setup_ok:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("S7CommPlus session setup was rejected by the PLC")
+            self._session_ready = True
 
             # Step 6: Version-specific post-setup
             if self._protocol_version >= ProtocolVersion.V3:
@@ -520,8 +526,6 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            self._connected = True
-
             if self._session_key is not None and self._session_setup_ok:
                 self._session_activate()
                 self._post_auth_legitimation(password=self._connect_password)
@@ -532,6 +536,8 @@ class S7CommPlusConnection:
                 self._protection_level = self._get_effective_protection_level()
                 if self._protection_level is not None:
                     logger.info(f"PLC reports protection level: {self._protection_level}")
+
+            self._connected = True
 
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
@@ -742,13 +748,14 @@ class S7CommPlusConnection:
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
-        if self._connected and self._session_id:
+        if self._session_ready and self._session_id:
             try:
                 self._delete_session()
             except Exception:
                 pass
 
         self._connected = False
+        self._session_ready = False
         self._session_setup_ok = False
         self._tls_active = False
         self._ssl_object = None
@@ -760,6 +767,12 @@ class S7CommPlusConnection:
         self._sequence_number = 0
         self._protocol_version = 0
         self._server_session_version = None
+        self._public_key_checksum = None
+        self._public_key_fingerprint = None
+        self._session_challenge = None
+        self._session_key = None
+        self._session_auth_public_key = b""
+        self._session_auth_family = 0
         self._with_integrity_id = False
         self._integrity_id_read = 0
         self._integrity_id_write = 0
@@ -786,7 +799,7 @@ class S7CommPlusConnection:
         Returns:
             Response payload (after the 10-byte response header)
         """
-        if not self._connected:
+        if not (self._connected or self._session_ready):
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Not connected")
@@ -1350,13 +1363,6 @@ class S7CommPlusConnection:
 
         request += bytes(payload)
 
-        if include_security_key:
-            self._session_key = session_key
-            self._with_integrity_id = True
-            self._integrity_id_read = 0
-            self._integrity_id_write = 0
-            logger.info("SecurityKey blob included in session setup, IntegrityId tracking enabled")
-
         # Outer S7+ frame is always V2 for the setup write, even if the PLC
         # negotiated V1 on the initial CreateObject.
         frame = encode_header(ProtocolVersion.V2, len(request)) + request
@@ -1388,6 +1394,12 @@ class S7CommPlusConnection:
                 logger.warning(f"SetupSession: PLC returned error {return_value}")
                 return False
             else:
+                if include_security_key and auth_result is not None:
+                    self._session_key = session_key
+                    self._with_integrity_id = True
+                    self._integrity_id_read = 0
+                    self._integrity_id_write = 0
+                    logger.info("SecurityKey accepted by PLC, IntegrityId tracking enabled")
                 logger.info("Session setup completed successfully")
                 return True
         return False
