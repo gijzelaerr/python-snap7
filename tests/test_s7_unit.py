@@ -1,6 +1,8 @@
 """Unit tests for S7CommPlus client payload builders, connection parsing, and error paths."""
 
 import struct
+from unittest.mock import MagicMock, call
+
 import pytest
 
 from s7commplus.client import (
@@ -15,12 +17,13 @@ from s7commplus.client import (
     _build_area_write_payload,
     _build_symbolic_read_payload,
     _build_symbolic_write_payload,
+    _build_substreamed_write_payload,
 )
 from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_session_version
-from s7commplus.codec import encode_object_qualifier, encode_pvalue_blob
+from s7commplus.codec import encode_header, encode_object_qualifier, encode_pvalue_blob
 from s7commplus.codec import _pvalue_element_size as _element_size
 from s7commplus.codec import skip_typed_value, parse_server_session_version
-from s7commplus.protocol import DataType, ElementID, ObjectId
+from s7commplus.protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, Opcode, ProtocolVersion
 from s7commplus.vlq import (
     encode_uint32_vlq,
     encode_uint64_vlq,
@@ -198,40 +201,66 @@ class TestPayloadAgreement:
         assert isinstance(write_payload, bytes)
 
 
-class TestSequenceNumber:
-    """Verify all payload builders include a SequenceNumber after ObjectQualifier."""
+class TestIntegrityPlaceholder:
+    """Verify payload builders leave IntegrityId insertion to the connection."""
 
     @staticmethod
-    def _has_sequence_number(payload: bytes) -> bool:
+    def _has_only_trailing_fill(payload: bytes) -> bool:
         oq = encode_object_qualifier()
         idx = bytes(payload).find(oq)
         assert idx >= 0, "ObjectQualifier not found in payload"
-        seq_offset = idx + len(oq)
-        return payload[seq_offset : seq_offset + 1] == encode_uint32_vlq(1)
+        return payload[idx + len(oq) :] == bytes(4)
 
-    def test_read_payload_has_sequence_number(self) -> None:
+    def test_read_payload_has_no_static_integrity_id(self) -> None:
         payload = _build_read_payload([(1, 0, 4)])
-        assert self._has_sequence_number(payload)
+        assert self._has_only_trailing_fill(payload)
 
-    def test_write_payload_has_sequence_number(self) -> None:
+    def test_write_payload_has_no_static_integrity_id(self) -> None:
         payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]))])
-        assert self._has_sequence_number(payload)
+        assert self._has_only_trailing_fill(payload)
 
-    def test_area_read_payload_has_sequence_number(self) -> None:
+    def test_area_read_payload_has_no_static_integrity_id(self) -> None:
         payload = _build_area_read_payload(82, 0, 4)
-        assert self._has_sequence_number(payload)
+        assert self._has_only_trailing_fill(payload)
 
-    def test_area_write_payload_has_sequence_number(self) -> None:
+    def test_area_write_payload_has_no_static_integrity_id(self) -> None:
         payload = _build_area_write_payload(82, 0, b"\x00\x00\x00\x00")
-        assert self._has_sequence_number(payload)
+        assert self._has_only_trailing_fill(payload)
 
-    def test_symbolic_read_payload_has_sequence_number(self) -> None:
+    def test_symbolic_read_payload_has_no_static_integrity_id(self) -> None:
         payload = _build_symbolic_read_payload(0x8A0E0001, [1, 4])
-        assert self._has_sequence_number(payload)
+        assert self._has_only_trailing_fill(payload)
 
-    def test_symbolic_write_payload_has_sequence_number(self) -> None:
+    def test_symbolic_write_payload_has_no_static_integrity_id(self) -> None:
         payload = _build_symbolic_write_payload(0x8A0E0001, [1, 4], b"\x01")
-        assert self._has_sequence_number(payload)
+        assert self._has_only_trailing_fill(payload)
+
+    def test_write_payload_encodes_explicit_datatype(self) -> None:
+        payload = _build_write_payload([(1, 0, struct.pack(">f", 2.0), DataType.REAL)])
+        assert bytes((0x00, DataType.REAL)) + struct.pack(">f", 2.0) in payload
+
+    @pytest.mark.parametrize(("with_integrity", "integrity_id"), [(False, 0), (True, 7)])
+    def test_connection_conditionally_inserts_integrity_id(self, with_integrity: bool, integrity_id: int) -> None:
+        payload = _build_read_payload([(1, 0, 4)])
+        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        connection = S7CommPlusConnection("127.0.0.1")
+        connection._connected = True
+        connection._protocol_version = ProtocolVersion.V2
+        connection._with_integrity_id = with_integrity
+        connection._integrity_id_read = integrity_id
+        connection._send_s7_data = MagicMock()
+        connection._recv_s7_data = MagicMock(
+            return_value=encode_header(ProtocolVersion.V2, len(response))
+            + response
+            + struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0),
+        )
+
+        connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+
+        frame = connection._send_s7_data.call_args.args[0]
+        sent_payload = frame[4 + 14 : -4]
+        expected = payload[:-4] + (encode_uint32_vlq(integrity_id) if with_integrity else b"") + payload[-4:]
+        assert sent_payload == expected
 
 
 # -- Connection unit tests --
@@ -552,6 +581,42 @@ class TestClientErrorPaths:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
             client.db_read_multi([(1, 0, 4)])
+
+    def test_db_write_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.db_write_multi([(1, 0, b"data")])
+
+    def test_write_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.write_multi([(1, 0, b"data")])
+
+    def test_db_write_multi_uses_one_substreamed_request_per_item(self) -> None:
+        client = S7CommPlusClient()
+        connection = MagicMock()
+        connection.requires_substreamed = True
+        connection.session_id = 0x70000001
+        client._connection = connection
+        items = [(1, 0, b"first"), (2, 10, b"second")]
+
+        client.db_write_multi(items)
+
+        connection.send_request.assert_has_calls(
+            [
+                call(
+                    FunctionCode.SET_VAR_SUBSTREAMED,
+                    _build_substreamed_write_payload(
+                        connection.session_id,
+                        Ids.DB_ACCESS_AREA_BASE + db_number,
+                        Ids.DB_VALUE_ACTUAL,
+                        [start + 1, len(data)],
+                        data,
+                    ),
+                )
+                for db_number, start, data in items
+            ]
+        )
 
     def test_explore_not_connected(self) -> None:
         client = S7CommPlusClient()

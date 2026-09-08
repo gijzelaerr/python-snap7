@@ -6,7 +6,7 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 import logging
 import struct
 from collections.abc import Callable, Sequence
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional, TypeAlias, TypeVar
 
 from snap7.error import S7ConnectionError
 
@@ -27,6 +27,7 @@ from .codec import (
     encode_item_address,
     encode_object_qualifier,
     encode_pvalue_blob,
+    encode_pvalue_typed,
     parse_create_object_session_id,
 )
 from .connection import S7CommPlusConnection
@@ -43,6 +44,15 @@ from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
+DBWriteItem: TypeAlias = tuple[int, int, bytes] | tuple[int, int, bytes, DataType]
+
+
+def _normalize_write_item(item: DBWriteItem) -> tuple[int, int, bytes, DataType]:
+    if len(item) == 3:
+        db_number, start, data = item
+        return db_number, start, data, DataType.BLOB
+    db_number, start, data, datatype = item
+    return db_number, start, data, DataType(datatype)
 
 
 class S7CommPlusClient:
@@ -220,30 +230,46 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
         return _parse_substreamed_read_response(response)
 
-    def db_write(self, db_number: int, start: int, data: bytes) -> None:
+    def db_write(self, db_number: int, start: int, data: bytes, datatype: DataType = DataType.BLOB) -> None:
         """Write raw bytes to a data block.
 
         Args:
             db_number: Data block number
             start: Start byte offset
             data: Bytes to write
+            datatype: S7CommPlus PValue datatype for ``data``. Defaults to BLOB.
+        """
+        self.db_write_multi([(db_number, start, data, datatype)])
+
+    def db_write_multi(self, items: list[DBWriteItem]) -> None:
+        """Write multiple data block regions in a single request.
+
+        Args:
+            items: ``(db_number, start_offset, data)`` tuples for BLOB writes,
+                or four-tuples adding an explicit :class:`DataType`.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
         if self._connection.requires_substreamed:
-            self._db_write_substreamed(db_number, start, data)
+            for item in items:
+                db_number, start, data, datatype = _normalize_write_item(item)
+                self._db_write_substreamed(db_number, start, data, datatype)
             return
 
-        payload = _build_write_payload([(db_number, start, data)], self._connection.protocol_version)
+        payload = _build_write_payload(items, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
-    def _db_write_substreamed(self, db_number: int, start: int, data: bytes) -> None:
+    def write_multi(self, items: list[DBWriteItem]) -> None:
+        """Alias for :meth:`db_write_multi`."""
+        self.db_write_multi(items)
+
+    def _db_write_substreamed(self, db_number: int, start: int, data: bytes, datatype: DataType = DataType.BLOB) -> None:
         assert self._connection is not None
         access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
         payload = _build_substreamed_write_payload(
-            self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, len(data)], data
+            self._connection.session_id, access_area, Ids.DB_VALUE_ACTUAL, [start + 1, len(data)], data, datatype
         )
         self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
 
@@ -356,9 +382,7 @@ class S7CommPlusClient:
             raise RuntimeError("Not connected")
 
         # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(
-            access_area, lids, symbol_crc, False, protocol_version=self._connection.protocol_version
-        )
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
@@ -830,7 +854,6 @@ def _build_read_payload(items: list[tuple[int, int, int]], protocol_version: int
     for addr in addresses:
         payload += addr
     payload += encode_object_qualifier(protocol_version=protocol_version)
-    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
     return bytes(payload)
@@ -891,7 +914,7 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
     return results
 
 
-def _build_write_payload(items: list[tuple[int, int, bytes]], protocol_version: int = ProtocolVersion.V2) -> bytes:
+def _build_write_payload(items: list[DBWriteItem], protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a SetMultiVariables request payload.
 
     Args:
@@ -902,7 +925,8 @@ def _build_write_payload(items: list[tuple[int, int, bytes]], protocol_version: 
     """
     addresses: list[bytes] = []
     total_field_count = 0
-    for db_number, start, data in items:
+    normalized = [_normalize_write_item(item) for item in items]
+    for db_number, start, data, _ in normalized:
         access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
         addr_bytes, field_count = encode_item_address(
             access_area=access_area,
@@ -918,12 +942,11 @@ def _build_write_payload(items: list[tuple[int, int, bytes]], protocol_version: 
     payload += encode_uint32_vlq(total_field_count)
     for addr in addresses:
         payload += addr
-    for i, (_, _, data) in enumerate(items, 1):
+    for i, (_, _, data, datatype) in enumerate(normalized, 1):
         payload += encode_uint32_vlq(i)
-        payload += encode_pvalue_blob(data)
+        payload += encode_pvalue_typed(datatype, data)
     payload += bytes([0x00])
     payload += encode_object_qualifier(protocol_version=protocol_version)
-    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
 
     return bytes(payload)
@@ -981,7 +1004,12 @@ def _build_substreamed_read_payload(session_id: int, access_area: int, access_su
 
 
 def _build_substreamed_write_payload(
-    session_id: int, access_area: int, access_sub_area: int, lids: list[int], data: bytes
+    session_id: int,
+    access_area: int,
+    access_sub_area: int,
+    lids: list[int],
+    data: bytes,
+    datatype: DataType = DataType.BLOB,
 ) -> bytes:
     """Build a SET_VAR_SUBSTREAMED payload for data access on V1-initial PLCs."""
     oq = encode_object_qualifier(protocol_version=ProtocolVersion.V1)
@@ -999,7 +1027,7 @@ def _build_substreamed_write_payload(
     payload += oq
     payload += bytes([0x00])
     payload += encode_uint32_vlq(1)
-    payload += encode_pvalue_blob(data)
+    payload += encode_pvalue_typed(datatype, data)
     payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
@@ -1040,7 +1068,6 @@ def _build_area_read_payload(area_rid: int, start: int, size: int, protocol_vers
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_object_qualifier(protocol_version=protocol_version)
-    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -1062,7 +1089,6 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes, protocol_v
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
     payload += encode_object_qualifier(protocol_version=protocol_version)
-    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -1071,8 +1097,6 @@ def _build_symbolic_read_payload(
     access_area: int,
     lids: list[int],
     symbol_crc: int = 0,
-    with_integrity: bool = True,
-    integrity_id: int = 1,
     protocol_version: int = ProtocolVersion.V2,
 ) -> bytes:
     """Build a GetMultiVariables payload for symbolic (LID-based) access.
@@ -1102,8 +1126,6 @@ def _build_symbolic_read_payload(
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_object_qualifier(protocol_version=protocol_version)
-    if with_integrity:
-        payload += encode_uint32_vlq(integrity_id)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
@@ -1137,7 +1159,6 @@ def _build_symbolic_write_payload(
     payload += encode_pvalue_blob(data)
     payload += bytes([0x00])
     payload += encode_object_qualifier(protocol_version=protocol_version)
-    payload += encode_uint32_vlq(1)
     payload += struct.pack(">I", 0)
     return bytes(payload)
 
