@@ -74,7 +74,7 @@ class Logo(Client):
         Args:
             **kwargs: Ignored. Kept for backwards compatibility.
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self._logo_tsap_snap7: Optional[int] = None
         self._logo_tsap_logo: Optional[int] = None
 
