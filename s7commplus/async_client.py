@@ -512,7 +512,7 @@ class S7CommPlusAsyncClient:
         await self.db_write_multi([(db_number, start, data, datatype)])
 
     async def db_write_multi(self, items: list[DBWriteItem]) -> None:
-        """Write multiple regions, optionally adding a DataType as each tuple's fourth item."""
+        """Write (db_number, start_offset, data, datatype) tuples matching the PLC target types."""
         payload = _build_write_payload(items, self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
@@ -537,9 +537,9 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Area read failed")
         return results[0]
 
-    async def write_area(self, area_rid: int, start: int, data: bytes) -> None:
-        """Write raw bytes to a controller memory area (M, I, Q, counters, timers)."""
-        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version)
+    async def write_area(self, area_rid: int, start: int, data: bytes, *, datatype: DataType = DataType.BLOB) -> None:
+        """Write a controller memory area, specifying the target datatype for scalar writes."""
+        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version, datatype=datatype)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -721,12 +721,17 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Symbolic read failed")
         return results[0]
 
-    async def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+    async def write_symbolic(
+        self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0, *, datatype: DataType = DataType.BLOB
+    ) -> None:
         """Write a variable using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
+
+        Set ``datatype`` to the target PLC datatype reported by browse().
+        The legacy BLOB default is not a generic replacement for scalar types.
         """
-        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version)
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version, datatype=datatype)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 

@@ -211,7 +211,7 @@ class ISOTCPConnection:
 
             # Receive remaining data
             remaining = length - 4
-            if remaining <= 0:
+            if length < 7:
                 raise S7ConnectionError("Invalid TPKT length")
 
             payload = self._recv_exact(remaining)
@@ -286,6 +286,8 @@ class ISOTCPConnection:
         - Length (2 bytes): Total frame length including header
         """
         length = len(payload) + 4
+        if not 7 <= length <= 65535:
+            raise S7ConnectionError("Invalid TPKT length: expected 7..65535 bytes")
         return struct.pack(">BBH", 3, 0, length) + payload
 
     def _build_cotp_cr(self) -> bytes:
@@ -415,6 +417,11 @@ class ISOTCPConnection:
             raise S7ConnectionError("Invalid COTP DT: too short")
 
         pdu_len, pdu_type, eot_num = struct.unpack(">BBB", cotp_pdu[:3])
+
+        if pdu_len != 2:
+            raise S7ConnectionError("Invalid COTP DT header length")
+        if eot_num & 0x7F:
+            raise S7ConnectionError("Invalid Class 0 COTP TPDU number")
 
         if pdu_type != self.COTP_DT:
             raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")

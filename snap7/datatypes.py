@@ -89,7 +89,9 @@ class S7DataTypes:
             raise ValueError(f"Start address must be non-negative, got {start}")
 
         # Convert start address to byte.bit format
-        if word_len == S7WordLen.BIT:
+        if word_len in (S7WordLen.TIMER, S7WordLen.COUNTER):
+            address = start  # Timer/counter element index, not a bit address.
+        elif word_len == S7WordLen.BIT:
             # For bit access: byte address + bit offset
             byte_addr = start // 8
             bit_addr = start % 8

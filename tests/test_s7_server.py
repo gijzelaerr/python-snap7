@@ -218,9 +218,9 @@ class TestClientServerIntegration:
         try:
             client.db_write_multi(
                 [
-                    (1, 0, b"first"),
-                    (1, 10, b"second"),
-                    (2, 20, b"third"),
+                    (1, 0, b"first", DataType.BLOB),
+                    (1, 10, b"second", DataType.BLOB),
+                    (2, 20, b"third", DataType.BLOB),
                 ]
             )
 
@@ -332,9 +332,9 @@ class TestAsyncClientServerIntegration:
             await client.connect("127.0.0.1", port=TEST_PORT)
             await client.write_multi(
                 [
-                    (1, 0, b"alpha"),
-                    (1, 10, b"beta"),
-                    (2, 20, b"gamma"),
+                    (1, 0, b"alpha", DataType.BLOB),
+                    (1, 10, b"beta", DataType.BLOB),
+                    (2, 20, b"gamma", DataType.BLOB),
                 ]
             )
 

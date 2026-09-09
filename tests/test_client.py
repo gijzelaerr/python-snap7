@@ -1192,6 +1192,7 @@ class TestPDUSplitting:
                 "data_length": 1,
                 "parameters": {"function_code": 0x05, "item_count": 1},
                 "data": {"return_code": 0xFF},
+                "raw_data": b"\xff",
                 "error_code": 0,
             }
 

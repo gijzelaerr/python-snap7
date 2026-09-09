@@ -7,10 +7,16 @@ CHANGES
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
 * Correct legacy GetVarSubStreamed qualifiers and reject unusable authentication challenges.
+* Fix classic S7 TPKT bounds and COTP Class 0 header validation in sync/async clients.
+* Reject incomplete reads and mismatched or missing read/write acknowledgements.
+* Size read/write chunks in whole elements and preserve ctypes write datatypes;
+  correct BIT lengths and timer/counter index addressing.
 
 * New `s7commplus` package for S7CommPlus protocol (S7-1200/1500)
 * S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
 * S7CommPlus area read/write (M, I, Q, counters, timers)
+* Require an explicit target datatype in S7CommPlus multi-write tuples; add
+  `datatype=` to sync/async symbolic and area writes for scalar PLC targets.
 * S7CommPlus PLC start/stop via INVOKE
 * S7CommPlus object browsing via EXPLORE
 * S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
