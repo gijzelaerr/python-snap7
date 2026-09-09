@@ -1294,6 +1294,15 @@ class S7CommPlusConnection:
             logger.info(f"SessionKey auth blob generated ({len(blob)} bytes)")
             return blob, session_key
 
+        except ImportError as e:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError(
+                "Cannot load S7CommPlus SessionKey authentication dependencies. "
+                "Install them with python -m pip install 'python-snap7[s7commplus]' "
+                "(or python -m pip install -e '.[s7commplus]' for a source checkout). "
+                f"Original error: {e}"
+            ) from e
         except Exception as e:
             logger.warning(f"SessionKey auth failed: {e}")
             return None
