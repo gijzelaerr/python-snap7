@@ -1326,7 +1326,7 @@ class S7CommPlusConnection:
             payload += encode_uint32_vlq(LegitimationId.SESSION_SETUP_LEGITIMATION)  # 1830
             payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # 306
             payload += encode_uint32_vlq(1)  # ItemNumber for SecurityKey
-            payload += self._encode_security_key_struct(blob)
+            payload += self._encode_security_key_struct(blob, session_key)
         else:
             payload += encode_uint32_vlq(1)  # ItemCount
             payload += encode_uint32_vlq(1)  # AddressCount
@@ -1524,7 +1524,7 @@ class S7CommPlusConnection:
 
         logger.info("Post-auth legitimation completed")
 
-    def _encode_security_key_struct(self, blob: bytes) -> bytes:
+    def _encode_security_key_struct(self, blob: bytes, session_key: bytes) -> bytes:
         """Encode the SecurityKey PObject struct (Struct 1800) wrapping the auth blob.
 
         Matches the wire format from TIA Portal / HarpoS7 PoC:
@@ -1533,9 +1533,13 @@ class S7CommPlusConnection:
         """
         from .session_auth.utils import derive_key_id
 
-        public_key_id = derive_key_id(self._session_auth_public_key or b"\x00" * 24)
-        # The symmetric key ID is derived from the session key
-        symmetric_key_id = derive_key_id(self._session_key or b"\x00" * 24)
+        if not self._session_auth_public_key:
+            raise ValueError("SessionKey authentication requires public key material")
+        if not session_key:
+            raise ValueError("SessionKey authentication requires generated session key material")
+
+        public_key_id = derive_key_id(self._session_auth_public_key)
+        symmetric_key_id = derive_key_id(session_key)
 
         # Determine key flags from family
         from .session_auth.blob_metadata import get_public_key_flags, get_symmetric_key_flags
