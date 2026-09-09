@@ -1414,18 +1414,17 @@ class S7CommPlusConnection:
         return False
 
     def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
-        """Build a GET_VAR_SUBSTREAMED payload (reused by legitimation).
+        """Build the captured GET_VAR_SUBSTREAMED layout for legacy sessions.
 
-        The ObjectQualifier KEY_QUALIFIER carries the next sequence number.
-        ``seq_field`` is the two-byte request sequence field; the IntegrityId
-        is spliced before the final four-byte fill by ``send_request``.
+        TIA's V1-initial requests use the same zero-valued VLQ qualifier and
+        two-byte request field as the reference driver's V2 requests. Using
+        a fixed-width qualifier plus that field adds two bytes (#872).
+        IntegrityId is inserted before the final four-byte fill.
         """
         return _build_get_var_substreamed_payload(
             in_object_id,
             address,
-            key_qualifier=self._sequence_number,
             sequence_field=seq_field,
-            protocol_version=ProtocolVersion.V1,
         )
 
     def _session_activate(self) -> None:
@@ -1474,30 +1473,13 @@ class S7CommPlusConnection:
             integrity_tail=4,
         )
 
-        # Extract the 20-byte challenge from the response.
-        # Response format (per thomas-v2 GetVarSubstreamedResponse):
-        #   UInt64Vlq ReturnValue | byte unknown | PValue(datatype + count_vlq + length_vlq + data) | UInt32Vlq IntegrityId
-        legit_challenge: bytes = self._session_challenge or b""
-        if len(challenge_resp) >= 26:
-            offset = 0
-            retval, c = decode_uint64_vlq(challenge_resp, offset)
-            offset += c
-            if retval != 0:
-                logger.warning(f"Legitimation challenge read returned error: 0x{retval:X}")
-            offset += 1  # unknown byte
-            offset += 1  # datatype tag (0x10 = BLOB/USIntArray)
-            _count, c = decode_uint32_vlq(challenge_resp, offset)
-            offset += c
-            length, c = decode_uint32_vlq(challenge_resp, offset)
-            offset += c
-            if offset + length <= len(challenge_resp) and length == 20:
-                legit_challenge = bytes(challenge_resp[offset : offset + length])
-                logger.info(f"Legitimation challenge: {legit_challenge.hex()}")
-
-        if not legit_challenge:
+        # Never substitute the earlier CreateObject challenge when this read
+        # fails: it belongs to a different authentication exchange.
+        legit_challenge = _parse_get_var_substreamed_response(challenge_resp)
+        if len(legit_challenge) != 20:
             from snap7.error import S7ConnectionError
 
-            raise S7ConnectionError("Post-auth legitimation failed: no challenge available")
+            raise S7ConnectionError("Post-auth legitimation failed: expected a 20-byte challenge")
 
         # Step 2: Solve the challenge
         from .session_auth.legitimate import solve_legitimate_challenge_real_plc
