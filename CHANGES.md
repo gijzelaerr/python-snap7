@@ -6,6 +6,8 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Support LOGO reconnection/heartbeat options and preserve explicit TSAPs.
+
 * New `s7commplus` package for S7CommPlus protocol (S7-1200/1500)
 * S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
 * S7CommPlus area read/write (M, I, Q, counters, timers)

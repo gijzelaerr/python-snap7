@@ -600,15 +600,21 @@ class Client(ClientMixin):
         Returns:
             Self for method chaining
         """
+        # Remote TSAP: connection type, rack and slot encoded per S7.
+        self.remote_tsap = (self.connection_type << 8) | (rack << 5) | slot
+        return self._connect(address, rack, slot, tcp_port)
+
+    def _connect(self, address: str, rack: int, slot: int, tcp_port: int) -> "Client":
+        """Establish a connection using the configured local and remote TSAPs.
+
+        LOGO clients supply explicit TSAPs instead of deriving them from a
+        rack and slot. Both paths share connection and heartbeat setup.
+        """
         self.host = address
         self.port = tcp_port
         self.rack = rack
         self.slot = slot
         self._params[Parameter.RemotePort] = tcp_port
-
-        # Calculate TSAP values from rack/slot
-        # Remote TSAP: rack and slot encoded as per S7 specification
-        self.remote_tsap = (self.connection_type << 8) | (rack << 5) | slot
 
         try:
             start_time = time.time()
