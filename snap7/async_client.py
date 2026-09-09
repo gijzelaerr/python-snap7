@@ -18,7 +18,7 @@ from datetime import datetime
 
 from .connection import TPDUSize
 from .s7protocol import S7Protocol, get_return_code_description
-from .datatypes import S7WordLen
+from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
@@ -161,7 +161,7 @@ class AsyncISOTCPConnection:
                 raise S7ConnectionError(f"Invalid TPKT version: {version}")
 
             remaining = length - 4
-            if remaining <= 0:
+            if length < 7:
                 raise S7ConnectionError("Invalid TPKT length")
 
             payload = await self._recv_exact(remaining)
@@ -170,6 +170,10 @@ class AsyncISOTCPConnection:
             if len(payload) < 3:
                 raise S7ConnectionError("Invalid COTP DT: too short")
             pdu_len, pdu_type, eot_num = struct.unpack(">BBB", payload[:3])
+            if pdu_len != 2:
+                raise S7ConnectionError("Invalid COTP DT header length")
+            if eot_num & 0x7F:
+                raise S7ConnectionError("Invalid Class 0 COTP TPDU number")
             if pdu_type != self.COTP_DT:
                 raise S7ConnectionError(f"Expected COTP DT, got {pdu_type:#02x}")
             return payload[3:]
@@ -219,6 +223,8 @@ class AsyncISOTCPConnection:
     def _build_tpkt(self, payload: bytes) -> bytes:
         """Build TPKT frame."""
         length = len(payload) + 4
+        if not 7 <= length <= 65535:
+            raise S7ConnectionError("Invalid TPKT length: expected 7..65535 bytes")
         return struct.pack(">BBH", 3, 0, length) + payload
 
     def _parse_cotp_cc(self, data: bytes) -> None:
@@ -532,7 +538,7 @@ class AsyncClient(ClientMixin):
         else:
             word_len = S7WordLen.BYTE
 
-        max_chunk = self._max_read_size()
+        max_chunk = self._read_chunk_count(word_len)
         if size <= max_chunk:
             request = self.protocol.build_read_request(
                 area=s7_area, db_number=db_number, start=start, word_len=word_len, count=size
@@ -548,7 +554,11 @@ class AsyncClient(ClientMixin):
         while remaining > 0:
             chunk_size = min(remaining, max_chunk)
             request = self.protocol.build_read_request(
-                area=s7_area, db_number=db_number, start=start + offset, word_len=word_len, count=chunk_size
+                area=s7_area,
+                db_number=db_number,
+                start=start + offset * self._element_address_step(word_len),
+                word_len=word_len,
+                count=chunk_size,
             )
             response = await self._send_receive(request)
             values = self.protocol.extract_read_data(response, word_len, chunk_size)
@@ -574,7 +584,7 @@ class AsyncClient(ClientMixin):
         else:
             word_len = S7WordLen.BYTE
 
-        max_chunk = self._max_write_size()
+        max_chunk = self._write_chunk_bytes(word_len, len(data))
         if len(data) <= max_chunk:
             request = self.protocol.build_write_request(
                 area=s7_area, db_number=db_number, start=start, word_len=word_len, data=bytes(data)
@@ -590,7 +600,11 @@ class AsyncClient(ClientMixin):
             chunk_size = min(remaining, max_chunk)
             chunk_data = data[offset : offset + chunk_size]
             request = self.protocol.build_write_request(
-                area=s7_area, db_number=db_number, start=start + offset, word_len=word_len, data=bytes(chunk_data)
+                area=s7_area,
+                db_number=db_number,
+                start=start + offset // S7DataTypes.get_size_bytes(word_len) * self._element_address_step(word_len),
+                word_len=word_len,
+                data=bytes(chunk_data),
             )
             response = await self._send_receive(request)
             self.protocol.check_write_response(response)
