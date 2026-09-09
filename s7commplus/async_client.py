@@ -7,6 +7,7 @@ import asyncio
 import logging
 import ssl
 import struct
+from collections.abc import Sequence
 from typing import Any, Optional
 
 from . import typeinfo
@@ -712,7 +713,7 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Symbolic read failed")
         return results[0]
 
-    async def read_symbolic_multi(self, items: list[SymbolicReadItem]) -> list[Optional[bytes]]:
+    async def read_symbolic_multi(self, items: Sequence[SymbolicReadItem]) -> list[Optional[bytes]]:
         """Read multiple variables using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
@@ -731,7 +732,7 @@ class S7CommPlusAsyncClient:
             return []
         payload = _build_multi_symbolic_read_payload(items, self._protocol_version)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
-        results = _parse_read_response(response)
+        results = _parse_read_response(response, expected_count=len(items))
         if len(results) != len(items):
             raise RuntimeError(f"Symbolic multi-read failed: PLC returned {len(results)} of {len(items)} items")
         return results

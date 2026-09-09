@@ -398,7 +398,7 @@ class S7CommPlusClient:
             raise RuntimeError("Symbolic read failed")
         return results[0]
 
-    def read_symbolic_multi(self, items: list[SymbolicReadItem]) -> list[Optional[bytes]]:
+    def read_symbolic_multi(self, items: Sequence[SymbolicReadItem]) -> list[Optional[bytes]]:
         """Read multiple variables using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
@@ -420,7 +420,7 @@ class S7CommPlusClient:
 
         payload = _build_multi_symbolic_read_payload(items, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
-        results = _parse_read_response(response)
+        results = _parse_read_response(response, expected_count=len(items))
         if len(results) != len(items):
             raise RuntimeError(f"Symbolic multi-read failed: PLC returned {len(results)} of {len(items)} items")
         return results
@@ -895,7 +895,7 @@ def _build_read_payload(items: list[tuple[int, int, int]], protocol_version: int
     return bytes(payload)
 
 
-def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
+def _parse_read_response(response: bytes, expected_count: Optional[int] = None) -> list[Optional[bytes]]:
     """Parse a GetMultiVariables response payload.
 
     Args:
@@ -927,6 +927,8 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
             break
         raw_bytes, consumed = decode_pvalue_to_bytes(response, offset)
         offset += consumed
+        if expected_count is not None and (item_nr > expected_count or item_nr in values):
+            raise RuntimeError(f"Symbolic multi-read failed: unexpected or duplicate item {item_nr}")
         values[item_nr] = raw_bytes
 
     errors: dict[int, int] = {}
@@ -937,7 +939,12 @@ def _parse_read_response(response: bytes) -> list[Optional[bytes]]:
             break
         err_value, consumed = decode_uint64_vlq(response, offset)
         offset += consumed
+        if expected_count is not None and (err_item_nr > expected_count or err_item_nr in values or err_item_nr in errors):
+            raise RuntimeError(f"Symbolic multi-read failed: unexpected or duplicate item {err_item_nr}")
         errors[err_item_nr] = err_value
+
+    if expected_count is not None and len(values) + len(errors) != expected_count:
+        raise RuntimeError(f"Symbolic multi-read failed: PLC answered {len(values) + len(errors)} of {expected_count} items")
 
     max_item = max(max(values.keys(), default=0), max(errors.keys(), default=0))
     results: list[Optional[bytes]] = []
@@ -1146,7 +1153,7 @@ def _build_symbolic_read_payload(
     return _build_multi_symbolic_read_payload([(access_area, lids, symbol_crc)], protocol_version=protocol_version)
 
 
-def _build_multi_symbolic_read_payload(items: list[SymbolicReadItem], protocol_version: int = ProtocolVersion.V2) -> bytes:
+def _build_multi_symbolic_read_payload(items: Sequence[SymbolicReadItem], protocol_version: int = ProtocolVersion.V2) -> bytes:
     """Build a GetMultiVariables payload for reading multiple symbolic LID addresses at once.
 
     Used for optimized block access on S7-1200/1500 where byte offsets
