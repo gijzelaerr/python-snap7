@@ -26,7 +26,6 @@ from .codec import (
     decode_pvalue_to_bytes,
     encode_item_address,
     encode_object_qualifier,
-    encode_pvalue_blob,
     encode_pvalue_typed,
     parse_create_object_session_id,
 )
@@ -44,14 +43,13 @@ from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
-DBWriteItem: TypeAlias = tuple[int, int, bytes] | tuple[int, int, bytes, DataType]
+DBWriteItem: TypeAlias = tuple[int, int, bytes, DataType]
 SymbolicReadItem: TypeAlias = tuple[int, list[int]] | tuple[int, list[int], int]
 
 
 def _normalize_write_item(item: DBWriteItem) -> tuple[int, int, bytes, DataType]:
-    if len(item) == 3:
-        db_number, start, data = item
-        return db_number, start, data, DataType.BLOB
+    if len(item) != 4:
+        raise ValueError("Write items require (db_number, start_offset, data, datatype); use the target PLC datatype")
     db_number, start, data, datatype = item
     return db_number, start, data, DataType(datatype)
 
@@ -254,15 +252,18 @@ class S7CommPlusClient:
         """Write multiple data block regions in a single request.
 
         Args:
-            items: ``(db_number, start_offset, data)`` tuples for BLOB writes,
-                or four-tuples adding an explicit :class:`DataType`.
+            items: ``(db_number, start_offset, data, datatype)`` tuples.
+                The datatype must match the target PLC variable. BLOB is not
+                a generic replacement for scalar datatypes.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
         if self._connection.requires_substreamed:
-            for item in items:
-                db_number, start, data, datatype = _normalize_write_item(item)
+            normalized = [_normalize_write_item(item) for item in items]
+            for _, _, data, datatype in normalized:
+                encode_pvalue_typed(datatype, data)
+            for db_number, start, data, datatype in normalized:
                 self._db_write_substreamed(db_number, start, data, datatype)
             return
 
@@ -331,25 +332,27 @@ class S7CommPlusClient:
             raise RuntimeError("Area read failed")
         return results[0]
 
-    def write_area(self, area_rid: int, start: int, data: bytes) -> None:
+    def write_area(self, area_rid: int, start: int, data: bytes, *, datatype: DataType = DataType.BLOB) -> None:
         """Write raw bytes to a controller memory area (M, I, Q, counters, timers).
 
         Args:
             area_rid: Native object RID for the area.
             start: Start byte offset.
             data: Bytes to write.
+            datatype: Target PLC datatype. BLOB preserves legacy raw-byte calls;
+                use an explicit scalar datatype when writing a scalar target.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
         if self._connection.requires_substreamed:
             payload = _build_substreamed_write_payload(
-                self._connection.session_id, area_rid, Ids.CONTROLLER_AREA_VALUE_ACTUAL, [start + 1, len(data)], data
+                self._connection.session_id, area_rid, Ids.CONTROLLER_AREA_VALUE_ACTUAL, [start + 1, len(data)], data, datatype
             )
             self._connection.send_request(FunctionCode.SET_VAR_SUBSTREAMED, payload)
             return
 
-        payload = _build_area_write_payload(area_rid, start, data, self._connection.protocol_version)
+        payload = _build_area_write_payload(area_rid, start, data, self._connection.protocol_version, datatype=datatype)
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -425,7 +428,9 @@ class S7CommPlusClient:
             raise RuntimeError(f"Symbolic multi-read failed: PLC returned {len(results)} of {len(items)} items")
         return results
 
-    def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+    def write_symbolic(
+        self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0, *, datatype: DataType = DataType.BLOB
+    ) -> None:
         """Write a variable using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
@@ -443,12 +448,14 @@ class S7CommPlusClient:
             lids: LID path through the symbol tree.
             data: Raw bytes to write.
             symbol_crc: Symbol CRC for layout validation (0 = skip check).
+            datatype: Target PLC datatype, as reported by browse(). BLOB preserves
+                legacy calls but is not a generic replacement for scalar types.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
 
         payload = _build_symbolic_write_payload(
-            access_area, lids, data, symbol_crc, protocol_version=self._connection.protocol_version
+            access_area, lids, data, symbol_crc, protocol_version=self._connection.protocol_version, datatype=datatype
         )
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
@@ -1115,7 +1122,9 @@ def _build_area_read_payload(area_rid: int, start: int, size: int, protocol_vers
     return bytes(payload)
 
 
-def _build_area_write_payload(area_rid: int, start: int, data: bytes, protocol_version: int = ProtocolVersion.V2) -> bytes:
+def _build_area_write_payload(
+    area_rid: int, start: int, data: bytes, protocol_version: int = ProtocolVersion.V2, *, datatype: DataType = DataType.BLOB
+) -> bytes:
     """Build a SetMultiVariables payload for controller memory area access."""
     addr_bytes, field_count = encode_item_address(
         access_area=area_rid,
@@ -1129,7 +1138,7 @@ def _build_area_write_payload(area_rid: int, start: int, data: bytes, protocol_v
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_uint32_vlq(1)  # item number 1
-    payload += encode_pvalue_blob(data)
+    payload += encode_pvalue_typed(datatype, data)
     payload += bytes([0x00])
     payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += struct.pack(">I", 0)
@@ -1199,6 +1208,8 @@ def _build_symbolic_write_payload(
     data: bytes,
     symbol_crc: int = 0,
     protocol_version: int = ProtocolVersion.V2,
+    *,
+    datatype: DataType = DataType.BLOB,
 ) -> bytes:
     """Build a SetMultiVariables payload for symbolic (LID-based) access."""
     if access_area >= 0x8A0E0000:
@@ -1219,7 +1230,7 @@ def _build_symbolic_write_payload(
     payload += encode_uint32_vlq(field_count)
     payload += addr_bytes
     payload += encode_uint32_vlq(1)  # item number 1
-    payload += encode_pvalue_blob(data)
+    payload += encode_pvalue_typed(datatype, data)
     payload += bytes([0x00])
     payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += struct.pack(">I", 0)

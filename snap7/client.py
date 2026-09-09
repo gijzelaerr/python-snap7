@@ -23,7 +23,7 @@ from ctypes import (
 
 from .connection import ISOTCPConnection
 from .s7protocol import S7Protocol, get_return_code_description
-from .datatypes import S7WordLen
+from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
 from .client_base import ClientMixin
 from .log import PLCLoggerAdapter, OperationLogger
@@ -985,7 +985,8 @@ class Client(ClientMixin):
             area: Memory area to read from
             db_number: DB number (for DB area only)
             start: Start address
-            size: Number of items to read (for TM/CT: timers/counters, for others: bytes)
+            size: Number of elements of the selected word length (bytes by default).
+                BIT values are returned as one byte per bit; TM/CT use two-byte elements.
             word_len: Optional word length override. If None, defaults to area-based logic
                 (TIMER for TM, COUNTER for CT, BYTE for others).
 
@@ -1007,7 +1008,7 @@ class Client(ClientMixin):
         else:
             s7_word_len = S7WordLen.BYTE
 
-        max_chunk = self._max_read_size()
+        max_chunk = self._read_chunk_count(s7_word_len)
         if size <= max_chunk:
             # Single request - use reconnect-aware send/receive
             def build_request() -> bytes:
@@ -1026,7 +1027,7 @@ class Client(ClientMixin):
         remaining = size
         while remaining > 0:
             chunk_size = min(remaining, max_chunk)
-            chunk_offset = offset
+            chunk_offset = offset * self._element_address_step(s7_word_len)
 
             def build_chunk_request(o: int = chunk_offset, cs: int = chunk_size) -> bytes:
                 return self.protocol.build_read_request(
@@ -1074,7 +1075,7 @@ class Client(ClientMixin):
         else:
             s7_word_len = S7WordLen.BYTE
 
-        max_chunk = self._max_write_size()
+        max_chunk = self._write_chunk_bytes(s7_word_len, len(data))
         if len(data) <= max_chunk:
             # Single request
             def build_request() -> bytes:
@@ -1093,7 +1094,7 @@ class Client(ClientMixin):
         while remaining > 0:
             chunk_size = min(remaining, max_chunk)
             chunk_data = data[offset : offset + chunk_size]
-            chunk_offset = offset
+            chunk_offset = offset // S7DataTypes.get_size_bytes(s7_word_len) * self._element_address_step(s7_word_len)
 
             def build_chunk_request(o: int = chunk_offset, cd: bytes = bytes(chunk_data)) -> bytes:
                 return self.protocol.build_write_request(
@@ -1390,15 +1391,20 @@ class Client(ClientMixin):
                 area = Area(s7_item.Area)
                 db_number = s7_item.DBNumber
                 start = s7_item.Start
-                size = s7_item.Amount
+                word_len = WordLen(s7_item.WordLen)
+                size = S7DataTypes.get_size_bytes(S7WordLen(word_len), s7_item.Amount)
+                if s7_item.Amount < 0:
+                    raise ValueError("Item amount must be non-negative")
+                if size and not s7_item.pData:
+                    raise ValueError("Write item requires a data pointer")
 
-                # Extract data from pData
+                # Extract all elements from pData, retaining the request datatype.
                 data = bytearray(size)
                 if s7_item.pData:
                     for i in range(size):
                         data[i] = s7_item.pData[i]
 
-                self.write_area(area, db_number, start, data)
+                self.write_area(area, db_number, start, data, word_len)
             return 0
 
         # Handle dict list

@@ -156,13 +156,13 @@ class TestParseWriteResponse:
 
 class TestBuildWritePayload:
     def test_single_item(self) -> None:
-        payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]))])
+        payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]), DataType.BLOB)])
         assert isinstance(payload, bytes)
         assert len(payload) > 0
 
     def test_data_appears_in_payload(self) -> None:
         data = bytes([0xDE, 0xAD, 0xBE, 0xEF])
-        payload = _build_write_payload([(1, 0, data)])
+        payload = _build_write_payload([(1, 0, data, DataType.BLOB)])
         # The raw data should appear in the payload (inside the BLOB PValue)
         assert data in payload
 
@@ -196,7 +196,7 @@ class TestPayloadAgreement:
     def test_write_read_consistency(self) -> None:
         """Build write and read payloads for same address, verify both compile."""
         read_payload = _build_read_payload([(1, 0, 4)])
-        write_payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]))])
+        write_payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]), DataType.BLOB)])
         assert isinstance(read_payload, bytes)
         assert isinstance(write_payload, bytes)
 
@@ -216,7 +216,7 @@ class TestIntegrityPlaceholder:
         assert self._has_only_trailing_fill(payload)
 
     def test_write_payload_has_no_static_integrity_id(self) -> None:
-        payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]))])
+        payload = _build_write_payload([(1, 0, bytes([1, 2, 3, 4]), DataType.BLOB)])
         assert self._has_only_trailing_fill(payload)
 
     def test_area_read_payload_has_no_static_integrity_id(self) -> None:
@@ -585,12 +585,12 @@ class TestClientErrorPaths:
     def test_db_write_multi_not_connected(self) -> None:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
-            client.db_write_multi([(1, 0, b"data")])
+            client.db_write_multi([(1, 0, b"data", DataType.BLOB)])
 
     def test_write_multi_not_connected(self) -> None:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
-            client.write_multi([(1, 0, b"data")])
+            client.write_multi([(1, 0, b"data", DataType.BLOB)])
 
     def test_db_write_multi_uses_one_substreamed_request_per_item(self) -> None:
         client = S7CommPlusClient()
@@ -598,7 +598,7 @@ class TestClientErrorPaths:
         connection.requires_substreamed = True
         connection.session_id = 0x70000001
         client._connection = connection
-        items = [(1, 0, b"first"), (2, 10, b"second")]
+        items = [(1, 0, b"first", DataType.BLOB), (2, 10, b"second", DataType.BLOB)]
 
         client.db_write_multi(items)
 
@@ -614,7 +614,7 @@ class TestClientErrorPaths:
                         data,
                     ),
                 )
-                for db_number, start, data in items
+                for db_number, start, data, _ in items
             ]
         )
 

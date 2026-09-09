@@ -1505,7 +1505,9 @@ class Server:
             address = struct.unpack(">I", b"\x00" + address_bytes)[0]  # Pad to 4 bytes
 
             # Convert bit address to byte address
-            if word_len == S7WordLen.BIT:
+            if word_len in (S7WordLen.TIMER, S7WordLen.COUNTER):
+                start_address = address * 2  # Backing memory stores two bytes per element.
+            elif word_len == S7WordLen.BIT:
                 byte_addr = address // 8
                 start_address = byte_addr
             else:
@@ -1540,7 +1542,7 @@ class Server:
             # Transport size 0x09 (octet string): byte length (USERDATA responses)
             # Transport size 0x00: byte length (USERDATA requests)
             # Transport size 0x04 (byte): bit length (READ_AREA responses)
-            if transport_size in (0x00, 0x09):
+            if transport_size in (0x00, 0x03, 0x06, 0x07, 0x09):
                 # USERDATA uses byte length directly
                 actual_data = data_section[4 : 4 + data_length]
             else:

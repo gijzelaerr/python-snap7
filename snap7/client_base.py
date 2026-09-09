@@ -9,7 +9,7 @@ import logging
 import struct
 from typing import Optional
 
-from .datatypes import S7Area
+from .datatypes import S7Area, S7DataTypes, S7WordLen
 from .error import S7ProtocolError
 
 from .type import (
@@ -217,6 +217,32 @@ class ClientMixin:
         when the server negotiates an implausibly small PDU.
         """
         return max(1, self.pdu_length - 35)
+
+    def _read_chunk_count(self, word_len: S7WordLen) -> int:
+        """Convert the response byte budget to whole requested elements."""
+        width = S7DataTypes.get_size_bytes(word_len)
+        count = min(self.pdu_length - 18, 8191) // width
+        if self.pdu_length < 24 or count < 1:
+            raise S7ProtocolError("Negotiated PDU cannot hold one read element")
+        # Represent each BIT as one byte in the public API, one bit per request.
+        return 1 if word_len == S7WordLen.BIT else count
+
+    def _write_chunk_bytes(self, word_len: S7WordLen, size: int) -> int:
+        """Keep write chunks aligned to elements and within the PDU budget."""
+        width = S7DataTypes.get_size_bytes(word_len)
+        if size % width:
+            raise ValueError("Write data length must be a multiple of the element width")
+        chunk = min(self.pdu_length - 35, 8191) // width * width
+        if chunk < width:
+            raise S7ProtocolError("Negotiated PDU cannot hold one write element")
+        return 1 if word_len == S7WordLen.BIT else chunk
+
+    @staticmethod
+    def _element_address_step(word_len: S7WordLen) -> int:
+        """BIT and timer/counter starts use indices; other starts use bytes."""
+        if word_len in (S7WordLen.BIT, S7WordLen.TIMER, S7WordLen.COUNTER):
+            return 1
+        return S7DataTypes.get_size_bytes(word_len)
 
     def _map_area(self, area: Area) -> S7Area:
         """Map library area enum to native S7 area."""
