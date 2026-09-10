@@ -16,6 +16,10 @@ def test_logo_reconnect_preserves_options_and_tsaps(monkeypatch: pytest.MonkeyPa
         backoff_factor=3,
         max_delay=4,
         heartbeat_interval=9,
+        max_requests_per_second=5,
+        rate_limit_algorithm="token_bucket",
+        rate_limit_behavior="raise",
+        rate_limit_burst=2,
         on_disconnect=disconnected,
         on_reconnect=reconnected,
         legacy_option="ignored",
@@ -33,4 +37,8 @@ def test_logo_reconnect_preserves_options_and_tsaps(monkeypatch: pytest.MonkeyPa
     assert client._auto_reconnect
     assert (client._max_retries, client._retry_delay, client._backoff_factor, client._max_delay) == (2, 0, 3, 4)
     assert client._heartbeat_interval == 9
+    assert client._rate_limiter.rate == 5
+    assert client._rate_limiter.algorithm == "token_bucket"
+    assert client._rate_limiter.behavior == "raise"
+    assert client._rate_limiter.burst_capacity == 2
     client.disconnect()

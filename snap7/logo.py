@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import Optional
 
 from .type import WordLen, Area
+from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior
 from .client import Client
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,10 @@ class Logo(Client):
         backoff_factor: float = 2.0,
         max_delay: float = 30.0,
         heartbeat_interval: float = 0,
+        max_requests_per_second: float = 0,
+        rate_limit_algorithm: RateLimitAlgorithm = "fixed",
+        rate_limit_behavior: RateLimitBehavior = "block",
+        rate_limit_burst: int | None = None,
         on_disconnect: Optional[Callable[[], None]] = None,
         on_reconnect: Optional[Callable[[], None]] = None,
         **kwargs: object,
@@ -91,6 +96,10 @@ class Logo(Client):
             backoff_factor: Multiplier for successive retry delays.
             max_delay: Maximum reconnection delay in seconds.
             heartbeat_interval: Heartbeat interval in seconds (0 disables it).
+            max_requests_per_second: Maximum outbound requests per second (0 disables it).
+            rate_limit_algorithm: ``fixed`` for even spacing or ``token_bucket`` for bursts.
+            rate_limit_behavior: ``block`` to wait or ``raise`` to reject immediately.
+            rate_limit_burst: Token bucket capacity. Defaults to one second of requests.
             on_disconnect: Callback invoked when the connection is lost.
             on_reconnect: Callback invoked after successful reconnection.
             **kwargs: Ignored. Kept for backwards compatibility.
@@ -102,6 +111,10 @@ class Logo(Client):
             backoff_factor=backoff_factor,
             max_delay=max_delay,
             heartbeat_interval=heartbeat_interval,
+            max_requests_per_second=max_requests_per_second,
+            rate_limit_algorithm=rate_limit_algorithm,
+            rate_limit_behavior=rate_limit_behavior,
+            rate_limit_burst=rate_limit_burst,
             on_disconnect=on_disconnect,
             on_reconnect=on_reconnect,
         )
