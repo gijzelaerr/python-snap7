@@ -138,6 +138,11 @@ with the ``s7commplus`` extra:
 
    pip install 'python-snap7[s7commplus]'
 
+For a source checkout, use ``python -m pip install -e '.[s7commplus]'``.
+If the legacy SessionKey authentication path cannot import its dependencies,
+connection setup raises an error with these installation instructions and
+releases the connection; it does not continue with an unauthenticated setup.
+
 .. note::
 
    Older S7-1200 firmware (FW < 4.5) negotiates V1 of the S7CommPlus

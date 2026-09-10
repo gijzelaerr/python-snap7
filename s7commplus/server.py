@@ -670,25 +670,38 @@ class S7CommPlusServer:
         request_data = payload[14:]
 
         if function_code == FunctionCode.INIT_SSL:
-            return self._handle_init_ssl(seq_num), False
+            response = self._handle_init_ssl(seq_num)
+            rst = False
         elif function_code == FunctionCode.CREATE_OBJECT:
-            return self._handle_create_object(seq_num, request_data), False
+            response = self._handle_create_object(seq_num, request_data)
+            rst = False
         elif function_code == FunctionCode.DELETE_OBJECT:
-            return self._handle_delete_object(seq_num, req_session_id), False
+            response = self._handle_delete_object(seq_num, req_session_id)
+            rst = False
         elif function_code == FunctionCode.EXPLORE:
-            return self._handle_explore(seq_num, req_session_id, request_data), False
+            response = self._handle_explore(seq_num, req_session_id, request_data)
+            rst = False
         elif function_code == FunctionCode.GET_MULTI_VARIABLES:
-            resp = self._handle_get_multi_variables(seq_num, req_session_id, request_data)
+            response = self._handle_get_multi_variables(seq_num, req_session_id, request_data)
             rst = self._rst_after_symbolic_read and session_id != 0
-            return resp, rst
         elif function_code == FunctionCode.SET_MULTI_VARIABLES:
-            return self._handle_set_multi_variables(seq_num, req_session_id, request_data), False
+            response = self._handle_set_multi_variables(seq_num, req_session_id, request_data)
+            rst = False
         elif function_code == FunctionCode.GET_VAR_SUBSTREAMED:
-            return self._handle_get_var_substreamed(seq_num, req_session_id, request_data), False
+            response = self._handle_get_var_substreamed(seq_num, req_session_id, request_data)
+            rst = False
         elif function_code == FunctionCode.SET_VAR_SUBSTREAMED:
-            return self._handle_set_var_substreamed(seq_num, req_session_id, request_data), False
+            response = self._handle_set_var_substreamed(seq_num, req_session_id, request_data)
+            rst = False
         else:
-            return self._build_error_response(seq_num, req_session_id, function_code), False
+            response = self._build_error_response(seq_num, req_session_id, function_code)
+            rst = False
+
+        if self._protocol_version >= ProtocolVersion.V2 and req_session_id != 0:
+            integrity_id = integrity_id_read if function_code in READ_FUNCTION_CODES else integrity_id_write
+            response += encode_uint32_vlq(integrity_id)
+
+        return response, rst
 
     def _build_response_header(self, function_code: int, seq_num: int) -> bytes:
         """Build a 10-byte S7CommPlus data-response header.
@@ -696,8 +709,8 @@ class S7CommPlusServer:
         Unlike requests (which carry a 4-byte SessionId, giving a 14-byte
         header), real S7-1500 *responses* omit the SessionId field, so the
         data header is 10 bytes: opcode + reserved + function + reserved +
-        seqnr + transport.  For V2+, the IntegrityId travels at the *end* of
-        the payload (appended by the individual handlers), not in the header.
+        seqnr + transport. For V2+, _process_request appends the IntegrityId
+        at the *end* of the payload, not in the header.
 
         Args:
             function_code: Response function code
@@ -950,8 +963,10 @@ class S7CommPlusServer:
         # Terminate error list
         response += encode_uint32_vlq(0)
 
-        # IntegrityId
-        response += encode_uint32_vlq(0)
+        # V1 responses retain the legacy zero IntegrityId field. V2+ responses
+        # receive the current per-client counter in _process_request().
+        if self._protocol_version < ProtocolVersion.V2:
+            response += encode_uint32_vlq(0)
 
         return bytes(response)
 
@@ -983,7 +998,8 @@ class S7CommPlusServer:
                 logger.debug("SetMultiVariables: accepting session setup write")
             response += encode_uint64_vlq(return_value)
             response += encode_uint32_vlq(0)  # Empty error list
-            response += encode_uint32_vlq(0)  # IntegrityId
+            if self._protocol_version < ProtocolVersion.V2:
+                response += encode_uint32_vlq(0)  # Legacy V1 IntegrityId
             return bytes(response)
 
         # Parse request payload for DB writes
@@ -1009,8 +1025,8 @@ class S7CommPlusServer:
         # Terminate error list
         response += encode_uint32_vlq(0)
 
-        # IntegrityId
-        response += encode_uint32_vlq(0)
+        if self._protocol_version < ProtocolVersion.V2:
+            response += encode_uint32_vlq(0)  # Legacy V1 IntegrityId
 
         return bytes(response)
 
@@ -1163,7 +1179,10 @@ class S7CommPlusServer:
             response += bytes([0x10, DataType.USINT])
             response += encode_uint32_vlq(0)
 
-        response += encode_uint32_vlq(0)  # IntegrityId
+        # V1 responses retain the legacy zero IntegrityId field. V2+ responses
+        # receive the current per-client counter in _process_request().
+        if self._protocol_version < ProtocolVersion.V2:
+            response += encode_uint32_vlq(0)
         return bytes(response)
 
     def _handle_set_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:

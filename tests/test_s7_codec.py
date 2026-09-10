@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from s7commplus.client import _build_symbolic_read_payload, _build_symbolic_write_payload
+from s7commplus.client import _build_multi_symbolic_read_payload, _build_symbolic_read_payload, _build_symbolic_write_payload
 from s7commplus.codec import (
     _pvalue_element_size,
     decode_float32,
@@ -387,6 +387,22 @@ class TestControllerAreaSubArea:
     def test_db_area_still_uses_db_sub_area(self) -> None:
         payload = _build_symbolic_read_payload(0x8A0E012C, lids=[0x4E, 0x69])
         assert encode_uint32_vlq(Ids.DB_VALUE_ACTUAL) in payload
+
+
+class TestMultiSymbolicReadPayload:
+    """A batched symbolic read packs every address into one GetMultiVariables request."""
+
+    DB_AREA = 0x8A0E0001
+
+    def test_single_item_matches_scalar_builder(self) -> None:
+        assert _build_multi_symbolic_read_payload([(self.DB_AREA, [1, 4], 0)]) == _build_symbolic_read_payload(
+            self.DB_AREA, [1, 4]
+        )
+
+    def test_symbol_crc_is_optional(self) -> None:
+        assert _build_multi_symbolic_read_payload([(self.DB_AREA, [1, 4])]) == _build_multi_symbolic_read_payload(
+            [(self.DB_AREA, [1, 4], 0)]
+        )
 
 
 class TestPValueBlob:
