@@ -7,7 +7,8 @@ CHANGES
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
 * Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
-  distinguishes RUN from STOP and returns UNKNOWN for absent or inconsistent state.
+  distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
+  inconsistent state attributes, including S7-1200 responses that omit them.
 * Support LOGO reconnection/heartbeat options and preserve explicit TSAPs.
 * Correct legacy GetVarSubStreamed qualifiers and reject unusable authentication challenges.
 * Validate batched symbolic read item coverage and preserve explicit PLC errors.
