@@ -104,28 +104,50 @@ TIA Portal V13+) do not use fixed byte offsets.  The PLC internally
 relocates variables between downloads, so addresses like ``DB1.DBX0.0``
 are unreliable.
 
-For optimized blocks, use :meth:`~snap7.tags.Tag.from_access_string`
-with LIDs discovered via :meth:`~s7commplus.client.S7CommPlusClient.browse`:
+For optimized blocks, use the low-level ``read_symbolic`` and
+``write_symbolic`` methods with access paths discovered via
+:meth:`~s7commplus.client.S7CommPlusClient.browse`. A typed, name-based
+S7CommPlus tag API is not implemented yet; :class:`~snap7.tags.Tag` and the
+``read_tag`` methods above belong to the classic ``s7.Client`` API.
 
 .. code-block:: python
 
+   import struct
+
    from s7commplus import Client
-   from s7.tags import Tag
+   from s7commplus.protocol import DataType
 
    client = Client()
-   client.connect("192.168.1.10")
+   client.connect("192.168.1.10", use_tls=True)
 
-   # Create a symbolic tag (LIDs come from browse)
-   tag = Tag.from_access_string(
-       "8A0E0001.A",           # DB1, LID 0xA
-       datatype="REAL",
-       name="Motor.Speed",
-       symbol_crc=0x12345678,  # optional layout version check
-   )
+   variables = client.browse()
+   speed_info = next(item for item in variables if item["name"] == "Motor.Speed")
+   path = [int(part, 16) for part in speed_info["access_sequence"].split(".")]
 
-   # Read/write via S7CommPlus symbolic access
-   speed = client.read_tag(tag)
-   client.write_tag(tag, 1500.0)
+   # Symbolic values are currently exposed as raw wire bytes.
+   raw = client.read_symbolic(path[0], path[1:])
+   speed = struct.unpack(">f", raw)[0]
+   client.write_symbolic(path[0], path[1:], struct.pack(">f", 1500.0), datatype=DataType.REAL)
+
+The write datatype must match the PLC variable's ``data_type`` from browsing.
+For example, an INT requires ``struct.pack(">h", value)`` and
+``datatype=DataType.INT``. BLOB is not a generic scalar datatype. The
+``datatype=`` keyword is supported by both sync and async symbolic and area
+writes; omitting it preserves the legacy BLOB encoding.
+
+Multi-write requires four-element tuples with an explicit datatype. The
+three-element form from development versions is rejected before sending:
+
+.. code-block:: python
+
+   client.db_write_multi([
+       (7, 0, struct.pack(">f", 2.0), DataType.REAL),
+       (7, 4, struct.pack(">H", 512), DataType.WORD),
+   ])
+
+These DB/offset addresses must be validated for the target PLC; they are not
+interchangeable with browse-derived symbolic paths. Explicit BLOB remains
+available for targets that accept it, including the raw-byte emulator.
 
 API reference
 -------------

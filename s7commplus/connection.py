@@ -45,21 +45,32 @@ import os
 import ssl
 import struct
 import tempfile
+from collections import deque
 from types import TracebackType
 from typing import Any, Optional, Type
 
 from snap7.connection import ISOTCPConnection
 
 from .codec import decode_header, encode_header, encode_object_qualifier, parse_create_object_attributes
+from .legitimation import (
+    build_legacy_response,
+    build_new_response,
+    decide_legitimation_mode,
+    derive_legitimation_key,
+    extract_session_version_string,
+)
 from .protocol import (
+    FLAGS_34_FUNCTION_CODES,
     READ_FUNCTION_CODES,
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
+    AccessLevel,
     DataType,
     ElementID,
     FunctionCode,
     Ids,
     LegitimationId,
+    LegitimationType,
     ObjectId,
     Opcode,
     ProtocolVersion,
@@ -67,6 +78,25 @@ from .protocol import (
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 logger = logging.getLogger(__name__)
+
+
+def _log_create_object_return_value(return_value: int, tls_active: bool) -> None:
+    """Log a non-zero CreateObject status without guessing at TLS requirements."""
+    if return_value == 0:
+        return
+    if tls_active:
+        # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero value on a
+        # usable TLS session, so keep this informational.
+        logger.debug(
+            "CreateObject returned non-zero 0x%X on an active TLS session; continuing to parse the returned session data",
+            return_value,
+        )
+        return
+    logger.warning(
+        "CreateObject returned non-zero 0x%X; continuing to parse the returned session data",
+        return_value,
+    )
+
 
 # TLS cipher suites for S7 PLC compatibility.
 # ECDHE suites are preferred (forward secrecy); RSA-kx kept as fallback for
@@ -77,9 +107,19 @@ _S7_CIPHERS = (
     "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
 )
 
-# Siemens PLCs only accept a small set of TLS groups.  X25519 is preferred
-# but unavailable on older OpenSSL/CPython; fall back to prime256v1.
-_S7_PREFERRED_GROUPS = ("X25519", "prime256v1")
+# Siemens PLCs only accept a small set of TLS groups. X25519 is the group an
+# S7-1500 negotiates in practice, so it is the only one worth naming here.
+#
+# There is deliberately NO fallback group. `set_ecdh_curve` can only name
+# X25519 on OpenSSL builds that expose it as a curve (it raises on OpenSSL
+# 3.0); where it raises, narrowing to something else is not a graceful
+# degradation but a different, wrong answer — it restricts supported_groups to
+# that group ALONE, and a PLC that wanted X25519 then RSTs during the
+# handshake. Leaving the context untouched is strictly better: OpenSSL's
+# default group list already offers X25519, and an untouched context also lets
+# the documented OPENSSL_CONF `Groups` override actually take effect (a
+# set_ecdh_curve call here would silently overwrite it).
+_S7_PREFERRED_GROUPS = ("X25519",)
 
 
 def _set_s7_groups(ctx: ssl.SSLContext) -> None:
@@ -89,7 +129,28 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
             return
         except (ssl.SSLError, ValueError):
             continue
-    logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+    logger.debug(
+        "Could not restrict TLS groups to X25519 on this OpenSSL build; leaving "
+        "the default group list, which offers X25519. If a PLC still rejects the "
+        "handshake, restrict groups via OPENSSL_CONF (Groups = x25519)."
+    )
+
+
+def _verify_v3_hmac(protected: bytes, session_key: bytes) -> bytes:
+    """Verify and remove the V3 HMAC prefix from application data."""
+    from snap7.error import S7ConnectionError
+
+    if not protected:
+        raise S7ConnectionError("Empty V3 frame")
+    digest_length = protected[0]
+    if digest_length != hashlib.sha256().digest_size or len(protected) < 1 + digest_length:
+        raise S7ConnectionError(f"Invalid V3 HMAC length: {digest_length}")
+    received_digest = protected[1 : 1 + digest_length]
+    application_data = protected[1 + digest_length :]
+    expected_digest = hmac.new(session_key[:24], application_data, hashlib.sha256).digest()
+    if not hmac.compare_digest(received_digest, expected_digest):
+        raise S7ConnectionError("Invalid V3 HMAC")
+    return bytes(application_data)
 
 
 def _build_get_var_substreamed_payload(
@@ -194,7 +255,10 @@ def _build_set_variable_payload(in_object_id: int, address: int, value: bytes) -
 
 
 def _check_set_variable_response(payload: bytes) -> None:
-    """Raise when a SetVariable response reports a non-zero return value."""
+    """Raise when a SetVariable response reports a refused legitimation.
+
+    Reference: thomas-v2/S7CommPlusDriver/Legitimation/Legitimation.cs
+    """
     from snap7.error import S7ConnectionError
 
     if not payload:
@@ -203,7 +267,9 @@ def _check_set_variable_response(payload: bytes) -> None:
         return_value, _ = decode_uint64_vlq(payload, 0)
     except ValueError as exc:
         raise S7ConnectionError(f"Malformed SetVariable response: {exc}") from exc
-    if return_value != 0:
+    # The low 16 bits of the status word are a signed error code; the reference
+    # driver casts them with (Int16) and rejects negatives, i.e. the sign bit.
+    if return_value & 0x8000:
         raise S7ConnectionError(f"Legitimation rejected by PLC: return_value=0x{return_value:X}")
 
 
@@ -293,9 +359,11 @@ class S7CommPlusConnection:
         self._incoming_bio: Optional[ssl.MemoryBIO] = None
         self._outgoing_bio: Optional[ssl.MemoryBIO] = None
         self._session_id: int = 0
+        self._subscription_container_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0  # Detected from PLC response
         self._tls_active: bool = False
+        self._session_ready = False
         self._connected = False
         # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
@@ -328,6 +396,7 @@ class S7CommPlusConnection:
 
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
+        self._notification_frames: deque[bytes] = deque()
 
         # Effective protection level, read once the session is up
         self._protection_level: Optional[int] = None
@@ -345,6 +414,11 @@ class S7CommPlusConnection:
     def session_id(self) -> int:
         """Session ID assigned by the PLC."""
         return self._session_id
+
+    @property
+    def subscription_container_id(self) -> int:
+        """Object ID assigned to the session's subscription container."""
+        return self._subscription_container_id
 
     @property
     def tls_active(self) -> bool:
@@ -433,19 +507,21 @@ class S7CommPlusConnection:
             if self._tls_active:
                 self._protocol_version = ProtocolVersion.V2
 
-            # Step 5: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None:
-                self._session_setup_ok = self._setup_session()
-            else:
-                logger.warning(
-                    "PLC did not provide a scalar ServerSessionVersion attribute. "
-                    "This is the V1-initial S7-1200 firmware band (FW < 4.5 "
-                    "predating TLS) which sends a Struct(314) value and requires "
-                    "the proprietary SessionKey handshake — not yet implemented "
-                    "in python-snap7 (tracked in issue #710). Falling back to "
-                    "legacy PUT/GET: db_read/db_write will work, browse() will not."
+            # Step 5: Session setup - echo ServerSessionVersion back to PLC.
+            # Transport establishment and CreateObject alone do not make the
+            # public client usable.
+            if self._server_session_version is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    "PLC did not provide a usable ServerSessionVersion attribute; S7CommPlus session setup cannot continue"
                 )
-                self._session_setup_ok = False
+            self._session_setup_ok = self._setup_session()
+            if not self._session_setup_ok:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("S7CommPlus session setup was rejected by the PLC")
+            self._session_ready = True
 
             # Step 6: Version-specific post-setup
             if self._protocol_version >= ProtocolVersion.V3:
@@ -464,17 +540,18 @@ class S7CommPlusConnection:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
-            self._connected = True
-
             if self._session_key is not None and self._session_setup_ok:
                 self._session_activate()
                 self._post_auth_legitimation(password=self._connect_password)
 
-            # Only a session that completed setup answers attribute reads
+            # Only a session that completed setup answers attribute reads; the
+            # V1-initial band falls back to legacy PUT/GET and never gets here.
             if self._session_setup_ok:
                 self._protection_level = self._get_effective_protection_level()
                 if self._protection_level is not None:
                     logger.info(f"PLC reports protection level: {self._protection_level}")
+
+            self._connected = True
 
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
@@ -497,48 +574,76 @@ class S7CommPlusConnection:
 
         Args:
             password: PLC password
-            username: Username for new-style auth (optional)
+            username: Username for the new-mode exchange (leave empty for legacy)
 
         Raises:
-            S7ConnectionError: If not connected, TLS not active, or auth fails
+            S7ConnectionError: If not connected, TLS is not active, the firmware
+                does not support legitimation, or the password was refused
         """
-        if not self._connected:
-            from snap7.error import S7ConnectionError
+        from snap7.error import S7ConnectionError
 
+        if not self._connected:
             raise S7ConnectionError("Not connected")
 
-        if not self._tls_active or self._oms_secret is None:
-            from snap7.error import S7ConnectionError
-
+        if not self._tls_active:
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
 
-        # Step 1: Get challenge from PLC via GetVarSubStreamed
+        level_before = self._protection_level
+        if level_before is None:
+            raise S7ConnectionError("PLC does not report a protection level, so legitimation cannot be verified")
+
+        if level_before <= AccessLevel.FULL_ACCESS:
+            logger.info("PLC already grants full access, legitimation is not required")
+            return
+        if not password:
+            logger.warning(f"PLC restricts access (level {level_before}) but no password was provided")
+            return
+
+        # Step 1: Auto-detect legacy vs new from the firmware version
+        mode = self._decide_legitimation_mode()
+        if mode is None:
+            raise S7ConnectionError("PLC firmware version does not support legitimation")
+        logger.info(f"Using {mode.name.lower()} legitimation")
+
+        # Step 2: Get challenge from PLC via GetVarSubStreamed
         challenge = self._get_legitimation_challenge()
         logger.info(f"Received legitimation challenge ({len(challenge)} bytes)")
 
-        # Step 2: Build response (auto-detect legacy vs new)
-        from .legitimation import build_legacy_response, build_new_response
-
-        if username:
-            # New-style auth with username always uses AES-256-CBC
-            response_data = build_new_response(password, challenge, self._oms_secret, username)
-            self._send_legitimation_new(response_data)
+        if mode is LegitimationType.LEGACY:
+            # A legacy challenge is XORed with a SHA-1 password hash, so it is that long.
+            if len(challenge) != 20:
+                raise S7ConnectionError(f"Unexpected legacy challenge length: {len(challenge)}")
+            self._send_legitimation_legacy(build_legacy_response(password, challenge))
         else:
-            # Try new-style first, fall back to legacy SHA-1 XOR
-            try:
-                response_data = build_new_response(password, challenge, self._oms_secret, "")
-                self._send_legitimation_new(response_data)
-            except NotImplementedError:
-                # cryptography package not available, use legacy
-                response_data = build_legacy_response(password, challenge)
-                self._send_legitimation_legacy(response_data)
+            if self._oms_secret is None:
+                raise S7ConnectionError(
+                    "New legitimation requires the TLS OMS exporter secret, which could not be derived from this TLS session."
+                )
+            self._send_legitimation_new(build_new_response(password, challenge, self._oms_secret, username))
+            # The PLC rolls the key after every attempt; mirror it so a second
+            # legitimation on the same session encrypts with the same key.
+            self._oms_secret = derive_legitimation_key(self._oms_secret)
 
-        logger.info("PLC legitimation completed successfully")
-
-        # Renew protection level
+        # Step 3: Renew protection level, which is what verifies the outcome
         self._protection_level = self._get_effective_protection_level()
-        if self._protection_level is not None:
-            logger.info(f"PLC reports protection level: {self._protection_level}")
+        if self._protection_level is None:
+            raise S7ConnectionError("Legitimation outcome is unverifiable: the PLC stopped reporting its protection level")
+        if self._protection_level >= level_before:
+            raise S7ConnectionError(
+                f"Legitimation failed, protection level unchanged at {self._protection_level}: the password was refused"
+            )
+        logger.info(f"PLC legitimation completed, protection level {level_before} -> {self._protection_level}")
+
+    def _decide_legitimation_mode(self) -> Optional[LegitimationType]:
+        """Return the legitimation exchange the PLC firmware expects, None if unsupported."""
+        if self._server_session_version is None:
+            return None
+        version_string = extract_session_version_string(self._server_session_version)
+        if version_string is None:
+            logger.warning("ServerSessionVersion carries no device string, cannot pick a legitimation mode")
+            return None
+        logger.debug(f"PLC device string: {version_string}")
+        return decide_legitimation_mode(version_string)
 
     def _get_effective_protection_level(self) -> Optional[int]:
         """Read the session's effective protection level (see `AccessLevel`), None if request failed."""
@@ -657,13 +762,14 @@ class S7CommPlusConnection:
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
-        if self._connected and self._session_id:
+        if self._session_ready and self._session_id:
             try:
                 self._delete_session()
             except Exception:
                 pass
 
         self._connected = False
+        self._session_ready = False
         self._session_setup_ok = False
         self._tls_active = False
         self._ssl_object = None
@@ -671,13 +777,21 @@ class S7CommPlusConnection:
         self._outgoing_bio = None
         self._oms_secret = None
         self._session_id = 0
+        self._subscription_container_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
         self._server_session_version = None
+        self._public_key_checksum = None
+        self._public_key_fingerprint = None
+        self._session_challenge = None
+        self._session_key = None
+        self._session_auth_public_key = b""
+        self._session_auth_family = 0
         self._with_integrity_id = False
         self._integrity_id_read = 0
         self._integrity_id_write = 0
         self._protection_level = None
+        self._notification_frames.clear()
         self._iso_conn.disconnect()
 
     def send_request(self, function_code: int, payload: bytes = b"", integrity_tail: int = 4, reassemble: bool = False) -> bytes:
@@ -699,7 +813,7 @@ class S7CommPlusConnection:
         Returns:
             Response payload (after the 10-byte response header)
         """
-        if not self._connected:
+        if not (self._connected or self._session_ready):
             from snap7.error import S7ConnectionError
 
             raise S7ConnectionError("Not connected")
@@ -716,10 +830,8 @@ class S7CommPlusConnection:
             seq_num,
             self._session_id,
             # Transport flags: 0x34 after SessionKey auth (matches TIA Portal),
-            # also for GetMultiVariables and Explore; 0x36 for other V1/TLS requests.
-            0x34
-            if self._session_key is not None or function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE)
-            else 0x36,
+            # and for the function codes the reference sends with 0x34.
+            0x34 if self._session_key is not None or function_code in FLAGS_34_FUNCTION_CODES else 0x36,
         )
 
         integrity_id_bytes = b""
@@ -781,10 +893,18 @@ class S7CommPlusConnection:
 
                 raise S7ConnectionError("Response too short")
             logger.debug(f"  Reassembled response ({len(data)} bytes), payload {len(data) - 10} bytes")
-            return bytes(data[10:])
+            resp_payload = bytes(data[10:])
+            if self._session_key is not None:
+                resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
+                logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
+                resp_payload = resp_payload[iid_consumed:]
+            return resp_payload
 
         # Receive response
         response_frame = self._recv_s7_data()
+        while self._is_notification_frame(response_frame):
+            self._notification_frames.append(response_frame)
+            response_frame = self._recv_s7_data()
         logger.debug(f"=== RECV RESPONSE === raw frame ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse frame header, use data_length to exclude trailer
@@ -793,12 +913,14 @@ class S7CommPlusConnection:
 
         response = response_frame[consumed : consumed + data_length]
 
-        # V3 responses have a hash-length byte + HMAC prefix before the payload
-        if version == ProtocolVersion.V3 and len(response) > 33:
-            hash_len = response[0]
-            response_hmac = response[1 : 1 + hash_len]
-            response = response[1 + hash_len :]
-            logger.debug(f"  V3 HMAC ({hash_len} bytes): {response_hmac.hex()}")
+        # V3 responses have a hash-length byte + HMAC prefix before the payload.
+        if version == ProtocolVersion.V3:
+            if self._session_key is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("V3 response received without a session key")
+            response = _verify_v3_hmac(response, self._session_key)
+            logger.debug("  V3 HMAC verified")
 
         # V254 frames have no standard header — return raw data
         if version == ProtocolVersion.SYSTEM_EVENT:
@@ -844,6 +966,39 @@ class S7CommPlusConnection:
 
         return resp_payload
 
+    @staticmethod
+    def _is_notification_frame(frame: bytes) -> bool:
+        """Return whether a complete frame contains an unsolicited notification."""
+        try:
+            version, data_length, consumed = decode_header(frame)
+        except (IndexError, ValueError):
+            return False
+        data = frame[consumed : consumed + data_length]
+        if version == ProtocolVersion.V3 and data:
+            hash_length = data[0]
+            if hash_length and len(data) > 1 + hash_length:
+                data = data[1 + hash_length :]
+        return bool(data) and data[0] == Opcode.NOTIFICATION
+
+    def receive_notification(self) -> bytes:
+        """Receive one unsolicited S7CommPlus notification frame.
+
+        Notifications observed while waiting for a request response are queued,
+        so callers do not lose updates when protocol traffic interleaves. This
+        method must not run concurrently with :meth:`send_request` because both
+        consume the same connection stream.
+        """
+        if not self._connected:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Not connected")
+        frame = self._notification_frames.popleft() if self._notification_frames else self._recv_s7_data()
+        if not self._is_notification_frame(frame):
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Expected an S7CommPlus notification")
+        return frame
+
     # Sanity caps for fragment reassembly — generous vs. any real PLC EXPLORE response,
     # but bounded so a malformed/adversarial stream can't drive unbounded allocation.
     _MAX_REASSEMBLED_BYTES = 16 * 1024 * 1024
@@ -875,13 +1030,19 @@ class S7CommPlusConnection:
             ensure(4)
             if buf[0] != 0x72:
                 raise S7ConnectionError("Expected S7CommPlus fragment header (0x72)")
+            fragment_version = buf[1]
             frag_len = (buf[2] << 8) | buf[3]
             del buf[:4]
             if frag_len == 0:
                 break  # standalone trailer (defensive)
             ensure(frag_len)
-            data.extend(buf[:frag_len])
+            fragment_data = bytes(buf[:frag_len])
             del buf[:frag_len]
+            if fragment_version == ProtocolVersion.V3:
+                if self._session_key is None:
+                    raise S7ConnectionError("V3 response received without a session key")
+                fragment_data = _verify_v3_hmac(fragment_data, self._session_key)
+            data.extend(fragment_data)
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
                 raise S7ConnectionError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
@@ -1082,8 +1243,9 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response has no session ObjectId")
 
-        # First ObjectId is the new session id; second (if any) is for notifications.
+        # First ObjectId is the session; the second is its subscription container.
         self._session_id = object_ids[0]
+        self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         self._protocol_version = version
 
         logger.debug(
@@ -1093,13 +1255,7 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: return_value={return_value} object_ids={[hex(i) for i in object_ids]}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
-        if return_value != 0:
-            if self._tls_active:
-                # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero CreateObject
-                # value on a perfectly usable TLS session, so this is informational only.
-                logger.debug(f"CreateObject returned non-zero 0x{return_value:X} on an active TLS session (session still usable)")
-            else:
-                logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+        _log_create_object_return_value(return_value, self._tls_active)
 
         # Parse remaining payload (the ResponseObject tree) for session attributes
         attrs = parse_create_object_attributes(response[offset:])
@@ -1152,6 +1308,15 @@ class S7CommPlusConnection:
             logger.info(f"SessionKey auth blob generated ({len(blob)} bytes)")
             return blob, session_key
 
+        except ImportError as e:
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError(
+                "Cannot load S7CommPlus SessionKey authentication dependencies. "
+                "Install them with python -m pip install 'python-snap7[s7commplus]' "
+                "(or python -m pip install -e '.[s7commplus]' for a source checkout). "
+                f"Original error: {e}"
+            ) from e
         except Exception as e:
             logger.warning(f"SessionKey auth failed: {e}")
             return None
@@ -1197,7 +1362,7 @@ class S7CommPlusConnection:
             payload += encode_uint32_vlq(LegitimationId.SESSION_SETUP_LEGITIMATION)  # 1830
             payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # 306
             payload += encode_uint32_vlq(1)  # ItemNumber for SecurityKey
-            payload += self._encode_security_key_struct(blob)
+            payload += self._encode_security_key_struct(blob, session_key)
         else:
             payload += encode_uint32_vlq(1)  # ItemCount
             payload += encode_uint32_vlq(1)  # AddressCount
@@ -1220,13 +1385,6 @@ class S7CommPlusConnection:
         payload += struct.pack(">I", 0)  # Trailing padding
 
         request += bytes(payload)
-
-        if include_security_key:
-            self._session_key = session_key
-            self._with_integrity_id = True
-            self._integrity_id_read = 0
-            self._integrity_id_write = 0
-            logger.info("SecurityKey blob included in session setup, IntegrityId tracking enabled")
 
         # Outer S7+ frame is always V2 for the setup write, even if the PLC
         # negotiated V1 on the initial CreateObject.
@@ -1259,23 +1417,28 @@ class S7CommPlusConnection:
                 logger.warning(f"SetupSession: PLC returned error {return_value}")
                 return False
             else:
+                if include_security_key and auth_result is not None:
+                    self._session_key = session_key
+                    self._with_integrity_id = True
+                    self._integrity_id_read = 0
+                    self._integrity_id_write = 0
+                    logger.info("SecurityKey accepted by PLC, IntegrityId tracking enabled")
                 logger.info("Session setup completed successfully")
                 return True
         return False
 
     def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
-        """Build a GET_VAR_SUBSTREAMED payload (reused by legitimation).
+        """Build the captured GET_VAR_SUBSTREAMED layout for legacy sessions.
 
-        The ObjectQualifier KEY_QUALIFIER carries the next sequence number.
-        ``seq_field`` is the two-byte request sequence field; the IntegrityId
-        is spliced before the final four-byte fill by ``send_request``.
+        TIA's V1-initial requests use the same zero-valued VLQ qualifier and
+        two-byte request field as the reference driver's V2 requests. Using
+        a fixed-width qualifier plus that field adds two bytes (#872).
+        IntegrityId is inserted before the final four-byte fill.
         """
         return _build_get_var_substreamed_payload(
             in_object_id,
             address,
-            key_qualifier=self._sequence_number,
             sequence_field=seq_field,
-            protocol_version=ProtocolVersion.V1,
         )
 
     def _session_activate(self) -> None:
@@ -1324,30 +1487,13 @@ class S7CommPlusConnection:
             integrity_tail=4,
         )
 
-        # Extract the 20-byte challenge from the response.
-        # Response format (per thomas-v2 GetVarSubstreamedResponse):
-        #   UInt64Vlq ReturnValue | byte unknown | PValue(datatype + count_vlq + length_vlq + data) | UInt32Vlq IntegrityId
-        legit_challenge: bytes = self._session_challenge or b""
-        if len(challenge_resp) >= 26:
-            offset = 0
-            retval, c = decode_uint64_vlq(challenge_resp, offset)
-            offset += c
-            if retval != 0:
-                logger.warning(f"Legitimation challenge read returned error: 0x{retval:X}")
-            offset += 1  # unknown byte
-            offset += 1  # datatype tag (0x10 = BLOB/USIntArray)
-            _count, c = decode_uint32_vlq(challenge_resp, offset)
-            offset += c
-            length, c = decode_uint32_vlq(challenge_resp, offset)
-            offset += c
-            if offset + length <= len(challenge_resp) and length == 20:
-                legit_challenge = bytes(challenge_resp[offset : offset + length])
-                logger.info(f"Legitimation challenge: {legit_challenge.hex()}")
-
-        if not legit_challenge:
+        # Never substitute the earlier CreateObject challenge when this read
+        # fails: it belongs to a different authentication exchange.
+        legit_challenge = _parse_get_var_substreamed_response(challenge_resp)
+        if len(legit_challenge) != 20:
             from snap7.error import S7ConnectionError
 
-            raise S7ConnectionError("Post-auth legitimation failed: no challenge available")
+            raise S7ConnectionError("Post-auth legitimation failed: expected a 20-byte challenge")
 
         # Step 2: Solve the challenge
         from .session_auth.legitimate import solve_legitimate_challenge_real_plc
@@ -1395,7 +1541,7 @@ class S7CommPlusConnection:
 
         logger.info("Post-auth legitimation completed")
 
-    def _encode_security_key_struct(self, blob: bytes) -> bytes:
+    def _encode_security_key_struct(self, blob: bytes, session_key: bytes) -> bytes:
         """Encode the SecurityKey PObject struct (Struct 1800) wrapping the auth blob.
 
         Matches the wire format from TIA Portal / HarpoS7 PoC:
@@ -1404,9 +1550,13 @@ class S7CommPlusConnection:
         """
         from .session_auth.utils import derive_key_id
 
-        public_key_id = derive_key_id(self._session_auth_public_key or b"\x00" * 24)
-        # The symmetric key ID is derived from the session key
-        symmetric_key_id = derive_key_id(self._session_key or b"\x00" * 24)
+        if not self._session_auth_public_key:
+            raise ValueError("SessionKey authentication requires public key material")
+        if not session_key:
+            raise ValueError("SessionKey authentication requires generated session key material")
+
+        public_key_id = derive_key_id(self._session_auth_public_key)
+        symmetric_key_id = derive_key_id(session_key)
 
         # Determine key flags from family
         from .session_auth.blob_metadata import get_public_key_flags, get_symmetric_key_flags
@@ -1470,7 +1620,7 @@ class S7CommPlusConnection:
             0x0000,
             seq_num,
             self._session_id,
-            0x36,
+            0x34,
         )
         request += struct.pack(">I", 0)
 

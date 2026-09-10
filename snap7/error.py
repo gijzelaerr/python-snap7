@@ -40,6 +40,12 @@ class S7AuthenticationError(S7Error):
     pass
 
 
+class S7RateLimitError(S7Error):
+    """Raised when a non-blocking request rate limit is reached."""
+
+    pass
+
+
 # S7 client error codes
 s7_client_errors = {
     0x00100000: "errNegotiatingPDU",

@@ -83,6 +83,8 @@ class StubTransport:
             values = bytes(range(byte_count))
             data = struct.pack(">BBH", 0xFF, 0x04, byte_count * 8) + values
             return _response_pdu(sequence, function, data=data)
+        if function == S7Function.WRITE_AREA:
+            return _response_pdu(sequence, function, data=b"\xff")
         return _response_pdu(sequence, function)
 
 

@@ -69,6 +69,26 @@ implementation supports a PC master talking to one S7-200 slave using SD1/SD2
 request framing. Multimaster token passing and PPI-over-TCP are not yet
 implemented and require hardware or trace validation.
 
+Protecting PLCs with request rate limits
+----------------------------------------
+
+Request limiting is opt-in and applies to every S7 PDU sent by both ``Client``
+and ``AsyncClient``. A multi-variable request counts once; an operation split
+across several PDUs counts each PDU::
+
+   client = Client(
+       max_requests_per_second=10,
+       rate_limit_algorithm="fixed",       # or "token_bucket"
+       rate_limit_behavior="block",         # or "raise"
+   )
+
+``fixed`` spaces requests evenly. ``token_bucket`` permits a burst (one second
+of requests by default, configurable with ``rate_limit_burst``) and then
+refills at the configured rate. A smaller burst capacity can cap the number of
+requests sent at once without changing the refill rate. The default rate is
+``0``, which disables the limiter. ``raise`` raises ``S7RateLimitError``
+immediately instead of waiting for capacity.
+
 .. note::
 
    The ``s7`` package is the recommended import for the legacy S7 protocol.
@@ -117,6 +137,22 @@ PUT/GET enabled.
 * **S7 routing** -- connect to PLCs on remote subnets via a gateway PLC
 * **Symbolic addressing** -- read/write by tag name instead of raw addresses
 * **Live symbol browsing** -- resolve tag names directly from the PLC
+* **Symbolic data subscriptions** -- monitor values using access sequences
+  returned by ``browse()``::
+
+      from s7commplus import Client
+
+      client = Client()
+      client.connect("192.168.1.10", 0, 1, password="secret")
+      subscription_id = client.create_subscription(["8A0E0007.A"], cycle_ms=100)
+      notification = client.receive_subscription_notification()
+      value = notification.values[1]
+      client.delete_subscription(subscription_id)
+      client.disconnect()
+
+  Reference IDs default to the one-based position of each access sequence.
+  Subscriptions use symbolic LIDs and therefore cannot be created from raw DB
+  byte offsets.
 * **TIA Portal XML import** -- import symbol tables from TIA Portal exports
 
 **Help us test!** If you have access to any Siemens S7 PLC, we would greatly

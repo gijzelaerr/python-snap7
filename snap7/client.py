@@ -23,11 +23,12 @@ from ctypes import (
 
 from .connection import ISOTCPConnection
 from .s7protocol import S7Protocol, get_return_code_description
-from .datatypes import S7WordLen
+from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
 from .client_base import ClientMixin
 from .log import PLCLoggerAdapter, OperationLogger
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
+from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
 from .tags import Tag, _STRING_RE
 from . import util
 
@@ -296,6 +297,10 @@ class Client(ClientMixin):
         backoff_factor: float = 2.0,
         max_delay: float = 30.0,
         heartbeat_interval: float = 0,
+        max_requests_per_second: float = 0,
+        rate_limit_algorithm: RateLimitAlgorithm = "fixed",
+        rate_limit_behavior: RateLimitBehavior = "block",
+        rate_limit_burst: int | None = None,
         on_disconnect: Optional[Callable[[], None]] = None,
         on_reconnect: Optional[Callable[[], None]] = None,
         **kwargs: Any,
@@ -311,6 +316,10 @@ class Client(ClientMixin):
             backoff_factor: Multiplier for exponential backoff between retries.
             max_delay: Maximum delay between reconnection attempts in seconds.
             heartbeat_interval: Interval in seconds for heartbeat probes (0=disabled).
+            max_requests_per_second: Maximum outbound PLC requests per second (0=disabled).
+            rate_limit_algorithm: ``fixed`` for even spacing or ``token_bucket`` for bursts.
+            rate_limit_behavior: ``block`` to wait or ``raise`` to reject immediately.
+            rate_limit_burst: Token bucket capacity. Defaults to one second of requests.
             on_disconnect: Optional callback invoked when connection is lost.
             on_reconnect: Optional callback invoked after successful reconnection.
             **kwargs: Ignored. Kept for backwards compatibility.
@@ -370,6 +379,12 @@ class Client(ClientMixin):
         self._max_delay = max_delay
         self._on_disconnect = on_disconnect
         self._on_reconnect = on_reconnect
+        self._rate_limiter = RequestRateLimiter(
+            max_requests_per_second,
+            algorithm=rate_limit_algorithm,
+            behavior=rate_limit_behavior,
+            burst_capacity=rate_limit_burst,
+        )
 
         # Heartbeat settings
         self._heartbeat_interval = heartbeat_interval
@@ -402,6 +417,11 @@ class Client(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
         return self.connection
 
+    def _send_data(self, conn: ISOTCPConnection, request: bytes) -> None:
+        """Apply the per-client rate limit and send one S7 request PDU."""
+        self._rate_limiter.acquire()
+        conn.send_data(request)
+
     def _send_receive(self, request: bytes, max_stale_retries: int = 3) -> dict[str, Any]:
         """Send a request and receive/parse the response with stale packet retry.
 
@@ -424,7 +444,7 @@ class Client(ClientMixin):
         conn = self._get_connection()
 
         with self._reconnect_lock:
-            conn.send_data(request)
+            self._send_data(conn, request)
 
             for attempt in range(max_stale_retries + 1):
                 response_data = conn.receive_data()
@@ -600,15 +620,21 @@ class Client(ClientMixin):
         Returns:
             Self for method chaining
         """
+        # Remote TSAP: connection type, rack and slot encoded per S7.
+        self.remote_tsap = (self.connection_type << 8) | (rack << 5) | slot
+        return self._connect(address, rack, slot, tcp_port)
+
+    def _connect(self, address: str, rack: int, slot: int, tcp_port: int) -> "Client":
+        """Establish a connection using the configured local and remote TSAPs.
+
+        LOGO clients supply explicit TSAPs instead of deriving them from a
+        rack and slot. Both paths share connection and heartbeat setup.
+        """
         self.host = address
         self.port = tcp_port
         self.rack = rack
         self.slot = slot
         self._params[Parameter.RemotePort] = tcp_port
-
-        # Calculate TSAP values from rack/slot
-        # Remote TSAP: rack and slot encoded as per S7 specification
-        self.remote_tsap = (self.connection_type << 8) | (rack << 5) | slot
 
         try:
             start_time = time.time()
@@ -985,7 +1011,8 @@ class Client(ClientMixin):
             area: Memory area to read from
             db_number: DB number (for DB area only)
             start: Start address
-            size: Number of items to read (for TM/CT: timers/counters, for others: bytes)
+            size: Number of elements of the selected word length (bytes by default).
+                BIT values are returned as one byte per bit; TM/CT use two-byte elements.
             word_len: Optional word length override. If None, defaults to area-based logic
                 (TIMER for TM, COUNTER for CT, BYTE for others).
 
@@ -1007,7 +1034,7 @@ class Client(ClientMixin):
         else:
             s7_word_len = S7WordLen.BYTE
 
-        max_chunk = self._max_read_size()
+        max_chunk = self._read_chunk_count(s7_word_len)
         if size <= max_chunk:
             # Single request - use reconnect-aware send/receive
             def build_request() -> bytes:
@@ -1026,7 +1053,7 @@ class Client(ClientMixin):
         remaining = size
         while remaining > 0:
             chunk_size = min(remaining, max_chunk)
-            chunk_offset = offset
+            chunk_offset = offset * self._element_address_step(s7_word_len)
 
             def build_chunk_request(o: int = chunk_offset, cs: int = chunk_size) -> bytes:
                 return self.protocol.build_read_request(
@@ -1074,7 +1101,7 @@ class Client(ClientMixin):
         else:
             s7_word_len = S7WordLen.BYTE
 
-        max_chunk = self._max_write_size()
+        max_chunk = self._write_chunk_bytes(s7_word_len, len(data))
         if len(data) <= max_chunk:
             # Single request
             def build_request() -> bytes:
@@ -1093,7 +1120,7 @@ class Client(ClientMixin):
         while remaining > 0:
             chunk_size = min(remaining, max_chunk)
             chunk_data = data[offset : offset + chunk_size]
-            chunk_offset = offset
+            chunk_offset = offset // S7DataTypes.get_size_bytes(s7_word_len) * self._element_address_step(s7_word_len)
 
             def build_chunk_request(o: int = chunk_offset, cd: bytes = bytes(chunk_data)) -> bytes:
                 return self.protocol.build_write_request(
@@ -1222,7 +1249,7 @@ class Client(ClientMixin):
 
             # Send all requests back-to-back
             for _, pdu in requests:
-                conn.send_data(pdu)
+                self._send_data(conn, pdu)
 
             # Receive responses, matching by sequence number
             results: dict[int, dict[str, Any]] = {}
@@ -1383,26 +1410,33 @@ class Client(ClientMixin):
             raise ValueError(f"Too many items: {len(items)} exceeds MAX_VARS ({self.MAX_VARS})")
 
         # Handle S7DataItem list (ctypes)
-        if hasattr(items[0], "Area"):
-            s7_items = cast(List[S7DataItem], items)
-            for s7_item in s7_items:
+        if isinstance(items[0], S7DataItem):
+            for s7_item in items:
+                if not isinstance(s7_item, S7DataItem):
+                    raise TypeError("items must contain either only S7DataItem objects or only dictionaries")
                 area = Area(s7_item.Area)
                 db_number = s7_item.DBNumber
                 start = s7_item.Start
-                size = s7_item.Amount
+                word_len = WordLen(s7_item.WordLen)
+                size = S7DataTypes.get_size_bytes(S7WordLen(word_len), s7_item.Amount)
+                if s7_item.Amount < 0:
+                    raise ValueError("Item amount must be non-negative")
+                if size and not s7_item.pData:
+                    raise ValueError("Write item requires a data pointer")
 
-                # Extract data from pData
+                # Extract all elements from pData, retaining the request datatype.
                 data = bytearray(size)
                 if s7_item.pData:
                     for i in range(size):
                         data[i] = s7_item.pData[i]
 
-                self.write_area(area, db_number, start, data)
+                self.write_area(area, db_number, start, data, word_len)
             return 0
 
         # Handle dict list
-        dict_items = cast(List[dict[str, Any]], items)
-        for dict_item in dict_items:
+        for dict_item in items:
+            if not isinstance(dict_item, dict):
+                raise TypeError("items must contain either only S7DataItem objects or only dictionaries")
             area = dict_item["area"]
             db_number = dict_item.get("db_number", 0)
             start = dict_item["start"]
@@ -1495,7 +1529,7 @@ class Client(ClientMixin):
                 break
 
             followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-            conn.send_data(followup)
+            self._send_data(conn, followup)
 
             response_data = conn.receive_data()
             response = self.protocol.parse_response(response_data)
@@ -1673,7 +1707,7 @@ class Client(ClientMixin):
             len(data_section),  # Data length
         )
 
-        conn.send_data(header + param_data + data_section)
+        self._send_data(conn, header + param_data + data_section)
 
         response_data = conn.receive_data()
         self.protocol.parse_response(response_data)
@@ -1691,7 +1725,7 @@ class Client(ClientMixin):
             0x0000,  # Data length
         )
 
-        conn.send_data(header + param_data)
+        self._send_data(conn, header + param_data)
 
         response_data = conn.receive_data()
         self.protocol.parse_response(response_data)
@@ -2149,7 +2183,7 @@ class Client(ClientMixin):
                 break
 
             followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-            conn.send_data(followup)
+            self._send_data(conn, followup)
 
             response_data = conn.receive_data()
             response = self.protocol.parse_response(response_data)
@@ -2269,7 +2303,7 @@ class Client(ClientMixin):
         """
         conn = self._get_connection()
 
-        conn.send_data(bytes(data))
+        self._send_data(conn, bytes(data))
         response = conn.receive_data()
         return bytearray(response)
 

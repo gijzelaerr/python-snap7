@@ -7,16 +7,20 @@ import asyncio
 import logging
 import ssl
 import struct
+from collections.abc import Sequence
 from typing import Any, Optional
 
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
 from .client import (
+    DBWriteItem,
+    SymbolicReadItem,
     _build_area_read_payload,
     _build_area_write_payload,
     _build_explore_payload,
     _build_explore_request,
     _build_invoke_payload,
+    _build_multi_symbolic_read_payload,
     _build_read_payload,
     _build_subscription_request,
     _build_symbolic_read_payload,
@@ -40,18 +44,39 @@ from .connection import (
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
     _check_set_variable_response,
+    _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
     _set_s7_groups,
 )
+from .alarm import (
+    Alarm,
+    AlarmNotification,
+    LanguageId,
+    build_alarm_explore_request,
+    build_alarm_subscription_request,
+    build_delete_alarm_subscription_request,
+    parse_alarm_explore_response,
+    parse_alarm_notification,
+)
+from .legitimation import (
+    build_legacy_response,
+    build_new_response,
+    decide_legitimation_mode,
+    derive_legitimation_key,
+    extract_session_version_string,
+)
 from .protocol import (
+    FLAGS_34_FUNCTION_CODES,
     READ_FUNCTION_CODES,
     S7COMMPLUS_LOCAL_TSAP,
     S7COMMPLUS_REMOTE_TSAP,
+    AccessLevel,
     DataType,
     ElementID,
     FunctionCode,
     Ids,
+    LegitimationType,
     ObjectId,
     Opcode,
     ProtocolVersion,
@@ -76,8 +101,11 @@ class S7CommPlusAsyncClient:
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         self._session_id: int = 0
+        self._subscription_container_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0
+        self._transport_connected = False
+        self._session_ready = False
         self._connected = False
         self._lock = asyncio.Lock()
 
@@ -111,6 +139,11 @@ class S7CommPlusAsyncClient:
     @property
     def session_id(self) -> int:
         return self._session_id
+
+    @property
+    def subscription_container_id(self) -> int:
+        """Object ID assigned to the session's subscription container."""
+        return self._subscription_container_id
 
     @property
     def session_setup_ok(self) -> bool:
@@ -160,6 +193,7 @@ class S7CommPlusAsyncClient:
 
         # TCP connect
         self._reader, self._writer = await asyncio.open_connection(host, port)
+        self._transport_connected = True
 
         try:
             # Step 1: COTP handshake with S7CommPlus TSAP values
@@ -180,7 +214,22 @@ class S7CommPlusAsyncClient:
             if self._tls_active:
                 self._protocol_version = ProtocolVersion.V2
 
-            # Step 5: Version-specific validation
+            # Step 5: Session setup. A transport and CreateObject response do
+            # not make the public client usable until the PLC accepts setup.
+            if self._server_session_version is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    "PLC did not provide a usable ServerSessionVersion attribute; S7CommPlus session setup cannot continue"
+                )
+            self._session_setup_ok = await self._setup_session()
+            if not self._session_setup_ok:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("S7CommPlus session setup was rejected by the PLC")
+            self._session_ready = True
+
+            # Step 6: Version-specific validation
             if self._protocol_version >= ProtocolVersion.V3:
                 if not use_tls:
                     logger.warning(
@@ -196,20 +245,11 @@ class S7CommPlusAsyncClient:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
+            self._protection_level = await self._get_effective_protection_level()
+            if self._protection_level is not None:
+                logger.info(f"PLC reports protection level: {self._protection_level}")
+
             self._connected = True
-
-            # Step 6: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None:
-                self._session_setup_ok = await self._setup_session()
-            else:
-                logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
-                self._session_setup_ok = False
-
-            # Only a session that completed setup answers attribute reads.
-            if self._session_setup_ok:
-                self._protection_level = await self._get_effective_protection_level()
-                if self._protection_level is not None:
-                    logger.info(f"PLC reports protection level: {self._protection_level}")
 
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
@@ -226,43 +266,76 @@ class S7CommPlusAsyncClient:
 
         Args:
             password: PLC password
-            username: Username for new-style auth (optional)
+            username: Username for the new-mode exchange (leave empty for legacy)
 
         Raises:
-            S7ConnectionError: If not connected, TLS not active, or auth fails
+            S7ConnectionError: If not connected, TLS is not active, the firmware
+                does not support legitimation, or the password was refused
         """
-        if not self._connected:
-            from snap7.error import S7ConnectionError
+        from snap7.error import S7ConnectionError
 
+        if not self._connected:
             raise S7ConnectionError("Not connected")
 
-        if not self._tls_active or self._oms_secret is None:
-            from snap7.error import S7ConnectionError
-
+        if not self._tls_active:
             raise S7ConnectionError("Legitimation requires TLS. Connect with use_tls=True.")
 
+        level_before = self._protection_level
+        if level_before is None:
+            raise S7ConnectionError("PLC does not report a protection level, so legitimation cannot be verified")
+
+        if level_before <= AccessLevel.FULL_ACCESS:
+            logger.info("PLC already grants full access, legitimation is not required")
+            return
+        if not password:
+            logger.warning(f"PLC restricts access (level {level_before}) but no password was provided")
+            return
+
+        # Step 1: Auto-detect legacy vs new from the firmware version
+        mode = self._decide_legitimation_mode()
+        if mode is None:
+            raise S7ConnectionError("PLC firmware version does not support legitimation")
+        logger.info(f"Using {mode.name.lower()} legitimation")
+
+        # Step 2: Get challenge from PLC via GetVarSubStreamed
         challenge = await self._get_legitimation_challenge()
         logger.info(f"Received legitimation challenge ({len(challenge)} bytes)")
 
-        from .legitimation import build_legacy_response, build_new_response
-
-        if username:
-            response_data = build_new_response(password, challenge, self._oms_secret, username)
-            await self._send_legitimation_new(response_data)
+        if mode is LegitimationType.LEGACY:
+            # A legacy challenge is XORed with a SHA-1 password hash, so it is that long.
+            if len(challenge) != 20:
+                raise S7ConnectionError(f"Unexpected legacy challenge length: {len(challenge)}")
+            await self._send_legitimation_legacy(build_legacy_response(password, challenge))
         else:
-            try:
-                response_data = build_new_response(password, challenge, self._oms_secret, "")
-                await self._send_legitimation_new(response_data)
-            except NotImplementedError:
-                response_data = build_legacy_response(password, challenge)
-                await self._send_legitimation_legacy(response_data)
+            if self._oms_secret is None:
+                raise S7ConnectionError(
+                    "New legitimation requires the TLS OMS exporter secret, which could not be derived from this TLS session."
+                )
+            await self._send_legitimation_new(build_new_response(password, challenge, self._oms_secret, username))
+            # The PLC rolls the key after every attempt; mirror it so a second
+            # legitimation on the same session encrypts with the same key.
+            self._oms_secret = derive_legitimation_key(self._oms_secret)
 
-        logger.info("PLC legitimation completed successfully")
-
-        # Renew protection level
+        # Step 3: Renew protection level, which is what verifies the outcome
         self._protection_level = await self._get_effective_protection_level()
-        if self._protection_level is not None:
-            logger.info(f"PLC reports protection level: {self._protection_level}")
+        if self._protection_level is None:
+            raise S7ConnectionError("Legitimation outcome is unverifiable: the PLC stopped reporting its protection level")
+        if self._protection_level >= level_before:
+            raise S7ConnectionError(
+                f"Legitimation failed, protection level unchanged at {self._protection_level}: the password was refused"
+            )
+        logger.info(f"PLC legitimation completed, protection level {level_before} -> {self._protection_level}")
+
+    def _decide_legitimation_mode(self) -> Optional[LegitimationType]:
+        """Return the legitimation exchange the PLC firmware expects, None if unsupported."""
+        if self._server_session_version is None:
+            return None
+        version_string = extract_session_version_string(self._server_session_version)
+        if version_string is None:
+            logger.warning("ServerSessionVersion carries no device string, cannot pick a legitimation mode")
+            return None
+        logger.debug(f"PLC device string: {version_string}")
+        return decide_legitimation_mode(version_string)
 
     async def _activate_tls(
         self,
@@ -391,14 +464,17 @@ class S7CommPlusAsyncClient:
 
     async def disconnect(self) -> None:
         """Disconnect from PLC."""
-        if self._connected and self._session_id:
+        if self._session_ready and self._session_id:
             try:
                 await self._delete_session()
             except Exception:
                 pass
 
         self._connected = False
+        self._session_ready = False
+        self._transport_connected = False
         self._session_id = 0
+        self._subscription_container_id = 0
         self._sequence_number = 0
         self._protocol_version = 0
         self._with_integrity_id = False
@@ -434,11 +510,19 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Read failed: PLC returned error for item")
         return results[0]
 
-    async def db_write(self, db_number: int, start: int, data: bytes) -> None:
-        """Write raw bytes to a data block."""
-        payload = _build_write_payload([(db_number, start, data)], self._protocol_version)
+    async def db_write(self, db_number: int, start: int, data: bytes, datatype: DataType = DataType.BLOB) -> None:
+        """Write raw bytes to a data block with an optional explicit PValue datatype."""
+        await self.db_write_multi([(db_number, start, data, datatype)])
+
+    async def db_write_multi(self, items: list[DBWriteItem]) -> None:
+        """Write (db_number, start_offset, data, datatype) tuples matching the PLC target types."""
+        payload = _build_write_payload(items, self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
+
+    async def write_multi(self, items: list[DBWriteItem]) -> None:
+        """Alias for :meth:`db_write_multi`."""
+        await self.db_write_multi(items)
 
     async def db_read_multi(self, items: list[tuple[int, int, int]]) -> list[bytes]:
         """Read multiple data block regions in a single request."""
@@ -456,9 +540,9 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Area read failed")
         return results[0]
 
-    async def write_area(self, area_rid: int, start: int, data: bytes) -> None:
-        """Write raw bytes to a controller memory area (M, I, Q, counters, timers)."""
-        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version)
+    async def write_area(self, area_rid: int, start: int, data: bytes, *, datatype: DataType = DataType.BLOB) -> None:
+        """Write a controller memory area, specifying the target datatype for scalar writes."""
+        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version, datatype=datatype)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -582,27 +666,99 @@ class S7CommPlusAsyncClient:
         await self._send_request(FunctionCode.DELETE_OBJECT, payload)
         logger.info(f"Subscription {subscription_id:#x} deleted")
 
+    async def create_alarm_subscription(
+        self,
+        language_ids: Optional[list[LanguageId | int]] = None,
+        domains: Optional[list[int]] = None,
+        credit_limit: int = 10,
+    ) -> int:
+        """Subscribe to PLC alarm events and return the subscription ID."""
+        if self._subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_alarm_subscription_request(self._subscription_container_id, language_ids, domains, credit_limit)
+        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload, integrity_tail=len(payload) - 11)
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
+        return object_ids[0]
+
+    async def delete_alarm_subscription(self, subscription_id: int) -> None:
+        """Delete an alarm subscription created by this client."""
+        if self._subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_delete_alarm_subscription_request(self._subscription_container_id, self._protocol_version)
+        await self._send_request(FunctionCode.DELETE_OBJECT, payload)
+        logger.info(f"Alarm subscription {subscription_id:#x} deleted")
+
+    async def receive_alarm_notification(
+        self, language_ids: Optional[list[LanguageId | int]] = None, timeout: Optional[float] = None
+    ) -> AlarmNotification:
+        """Wait for one alarm notification, optionally with a timeout in seconds.
+
+        Do not run this alongside a data-subscription receive loop on the same
+        connection: mixed notification dispatch is not supported yet.
+        """
+        async with self._lock:
+            if not self._connected:
+                raise RuntimeError("Not connected")
+            receive = self._recv_cotp_dt()
+            frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
+        return parse_alarm_notification(frame, language_ids)
+
+    async def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
+        """Return a snapshot of the PLC's active alarms without consuming notifications."""
+        response = await self._send_request(
+            FunctionCode.EXPLORE, build_alarm_explore_request(), integrity_tail=5, reassemble=True
+        )
+        return parse_alarm_explore_response(response, language_ids)
+
     async def read_symbolic(self, access_area: int, lids: list[int], symbol_crc: int = 0) -> bytes:
         """Read a variable using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
         """
-        # TODO: Send the correct integrity id once available
-        payload = _build_symbolic_read_payload(
-            access_area, lids, symbol_crc, False, self._integrity_id_read, self._protocol_version
-        )
+        payload = _build_symbolic_read_payload(access_area, lids, symbol_crc, self._protocol_version)
         response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
         if not results or results[0] is None:
             raise RuntimeError("Symbolic read failed")
         return results[0]
 
-    async def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+    async def read_symbolic_multi(self, items: Sequence[SymbolicReadItem]) -> list[Optional[bytes]]:
+        """Read multiple variables using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            items: `(access_area, lids)` tuples, or three-tuples adding a
+                symbol CRC.
+
+        Returns:
+            One entry per requested item, in request order.
+
+        Raises:
+            RuntimeError: If the PLC does not answer every requested item.
+        """
+        if not items:
+            return []
+        payload = _build_multi_symbolic_read_payload(items, self._protocol_version)
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response, expected_count=len(items))
+        if len(results) != len(items):
+            raise RuntimeError(f"Symbolic multi-read failed: PLC returned {len(results)} of {len(items)} items")
+        return results
+
+    async def write_symbolic(
+        self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0, *, datatype: DataType = DataType.BLOB
+    ) -> None:
         """Write a variable using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
+
+        Set ``datatype`` to the target PLC datatype reported by browse().
+        The legacy BLOB default is not a generic replacement for scalar types.
         """
-        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version)
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version, datatype=datatype)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -621,7 +777,8 @@ class S7CommPlusAsyncClient:
         .. warning:: This method is **experimental** and may change.
 
         Returns a flat list of variable dicts with keys ``name``, ``access_sequence``
-        (the dot-separated hex LID path usable with ``read_tag()``), ``data_type``,
+        (the dot-separated hex path whose first component is the access area and
+        remaining components are LIDs for :meth:`read_symbolic`), ``data_type``,
         and the optimized/non-optimized byte+bit offsets. Steps: enumerate DBs, resolve
         each DB's type-info RID via a LID=1 read, explore the OMS type-info container,
         then recombine into the symbol tree.
@@ -724,7 +881,7 @@ class S7CommPlusAsyncClient:
             Response payload (after the 10-byte response header).
         """
         async with self._lock:
-            if not self._connected or self._writer is None or self._reader is None:
+            if not (self._connected or self._transport_connected) or self._writer is None or self._reader is None:
                 raise RuntimeError("Not connected")
 
             seq_num = self._next_sequence_number()
@@ -737,8 +894,8 @@ class S7CommPlusAsyncClient:
                 0x0000,
                 seq_num,
                 self._session_id,
-                # Transport flags: 0x34 for GetMultiVariables and Explore, 0x36 otherwise.
-                0x34 if function_code in (FunctionCode.GET_MULTI_VARIABLES, FunctionCode.EXPLORE) else 0x36,
+                # Transport flags: 0x34 for the function codes the reference sends with 0x34.
+                0x34 if function_code in FLAGS_34_FUNCTION_CODES else 0x36,
             )
 
             integrity_id_bytes = b""
@@ -935,12 +1092,13 @@ class S7CommPlusAsyncClient:
         object_ids, obj_end, return_value = parse_create_object_session_id(body)
         if object_ids:
             self._session_id = object_ids[0]
+            self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         else:
             self._session_id = struct.unpack_from(">I", response, 9)[0]
+            self._subscription_container_id = 0
         self._protocol_version = version
 
-        if return_value != 0:
-            logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+        _log_create_object_return_value(return_value, self._tls_active)
 
         self._server_session_version = parse_server_session_version(response[10 + obj_end :])
         if self._server_session_version is not None:
@@ -965,20 +1123,15 @@ class S7CommPlusAsyncClient:
         payload += encode_object_qualifier(protocol_version=self._protocol_version)
         payload += struct.pack(">I", 0)
 
-        try:
-            resp_payload = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
-            if len(resp_payload) >= 1:
-                return_value, _ = decode_uint64_vlq(resp_payload, 0)
-                if return_value != 0:
-                    logger.warning(f"SetupSession: PLC returned error {return_value}")
-                    return False
-                else:
-                    logger.info("Session setup completed successfully")
-                    return True
-            return False
-        except Exception as e:
-            logger.warning(f"SetupSession failed: {e}")
-            return False
+        resp_payload = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
+        if len(resp_payload) >= 1:
+            return_value, _ = decode_uint64_vlq(resp_payload, 0)
+            if return_value != 0:
+                logger.warning(f"SetupSession: PLC returned error {return_value}")
+                return False
+            logger.info("Session setup completed successfully")
+            return True
+        return False
 
     async def _delete_session(self) -> None:
         """Send DeleteObject to close the session."""
@@ -992,7 +1145,7 @@ class S7CommPlusAsyncClient:
             0x0000,
             seq_num,
             self._session_id,
-            0x36,
+            0x34,
         )
         request += struct.pack(">I", 0)
 

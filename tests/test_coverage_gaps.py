@@ -24,6 +24,7 @@ from s7commplus.legitimation import (
     LegitimationState,
     build_legacy_response,
 )
+from s7commplus.protocol import AccessLevel
 
 
 # ============================================================================
@@ -118,13 +119,14 @@ class TestLegitimationFailurePaths:
         with pytest.raises(S7ConnectionError, match="requires TLS"):
             conn.authenticate("password")
 
-    def test_authenticate_tls_but_no_oms_secret_raises(self) -> None:
+    def test_authenticate_tls_without_oms_secret_is_allowed(self) -> None:
+        """The OMS secret is a new-mode requirement, not a precondition of authenticate()."""
         conn = S7CommPlusConnection("127.0.0.1")
         conn._connected = True
         conn._tls_active = True
         conn._oms_secret = None
-        with pytest.raises(S7ConnectionError, match="requires TLS"):
-            conn.authenticate("password")
+        conn._protection_level = AccessLevel.FULL_ACCESS
+        conn.authenticate("password")
 
     def test_legacy_response_empty_password(self) -> None:
         """Empty password should still produce a valid 20-byte response."""
