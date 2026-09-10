@@ -6,6 +6,7 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Support LOGO reconnection/heartbeat options and preserve explicit TSAPs.
 * Correct legacy GetVarSubStreamed qualifiers and reject unusable authentication challenges.
 * Validate batched symbolic read item coverage and preserve explicit PLC errors.
 * Fix classic S7 TPKT bounds and COTP Class 0 header validation in sync/async clients.
