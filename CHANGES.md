@@ -32,6 +32,8 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus symbolic data subscriptions and notification decoding (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)
+* Correct the SessionKey emulator fingerprint encoding and reject missing or
+  malformed authentication structures during integration tests.
 * Fix the legacy SecurityKey descriptor to identify the newly generated
   session key instead of an all-zero placeholder.
 * Keep SessionKey activation and public connection state pending until the PLC

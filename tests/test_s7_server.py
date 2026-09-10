@@ -12,10 +12,10 @@ import pytest
 from snap7.error import S7ConnectionError
 from s7commplus.async_client import S7CommPlusAsyncClient
 from s7commplus.client import S7CommPlusClient
-from s7commplus.connection import S7CommPlusConnection, _parse_get_var_substreamed_response, _verify_v3_hmac
+from s7commplus.connection import _parse_get_var_substreamed_response, _verify_v3_hmac
 from s7commplus.protocol import DataType, ElementID, Ids, LegitimationId, ObjectId, ProtocolVersion
 from s7commplus.server import CPUState, DataBlock, S7CommPlusServer
-from s7commplus.vlq import encode_uint32_vlq
+from s7commplus.vlq import decode_uint64_vlq, encode_uint32_vlq
 
 # Use a high port to avoid conflicts
 TEST_PORT = 11120
@@ -500,10 +500,10 @@ class TestSessionKeyServer:
         )
         response = srv._handle_create_object(seq_num=1, request_data=b"")
 
-        # Attribute 233 (fingerprint): 0xA3 + VLQ(233) + 0x00 + 0x15(WSTRING) + VLQ(len) + utf-16-be
+        # Attribute 233 uses the ordinary UTF-8 S7CommPlus WString codec.
         attr_233_marker = bytes([ElementID.ATTRIBUTE]) + encode_uint32_vlq(Ids.OBJECT_VARIABLE_TYPE_NAME)
         assert attr_233_marker in response, "Attribute 233 not found"
-        fp_bytes = TEST_FINGERPRINT.encode("utf-16-be")
+        fp_bytes = TEST_FINGERPRINT.encode("utf-8")
         assert fp_bytes in response, "Fingerprint WString content not found"
 
         # Attribute 303 (challenge): 0xA3 + VLQ(303) + 0x10(array flag) + 0x02(USINT)
@@ -556,29 +556,40 @@ class TestSessionKeyServer:
         response = srv._handle_set_var_substreamed(seq_num=1, session_id=1, request_data=b"\x00" * 248)
         assert len(response) > 0
 
+    def test_session_key_server_rejects_malformed_security_key(self) -> None:
+        srv = S7CommPlusServer(
+            public_key_fingerprint=TEST_FINGERPRINT,
+            session_challenge=TEST_CHALLENGE,
+            session_key=TEST_SESSION_KEY,
+        )
+        malformed = struct.pack(">I", 1)
+        malformed += encode_uint32_vlq(2) + encode_uint32_vlq(2)
+        malformed += encode_uint32_vlq(LegitimationId.SESSION_SETUP_LEGITIMATION)
+        malformed += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)
+        malformed += encode_uint32_vlq(1) + bytes([0x00, DataType.STRUCT])
+
+        response = srv._handle_set_multi_variables(seq_num=1, session_id=1, request_data=malformed)
+        return_value, _ = decode_uint64_vlq(response, 10)
+        assert return_value != 0
+        assert srv._accepted_session_key_setups == 0
+
 
 class TestSessionKeyIntegration:
-    """Integration tests: client connecting to a SessionKey-enabled server.
-
-    When the session_auth module is available (PR #761 branch), the full
-    SessionKey handshake is exercised. When it's not available (master),
-    the client falls back gracefully and the server still works for
-    basic read/write after a partial session setup.
-    """
+    """Integration tests: client connecting to a SessionKey-enabled server."""
 
     @pytest.fixture()
     def session_key_server(self, monkeypatch: pytest.MonkeyPatch) -> Generator[S7CommPlusServer, None, None]:
         # The emulator does not own Siemens' private key, so make the client-side
         # key exchange deterministic and configure the matching negotiated key.
-        from s7commplus.session_auth import legitimate
-        from s7commplus.session_auth.keys import KeyFamily
+        from s7commplus.session_auth import legacy_auth, legitimate
 
-        def authenticate(_connection: S7CommPlusConnection) -> tuple[bytes, bytes]:
-            _connection._session_auth_public_key = bytes(40)
-            _connection._session_auth_family = KeyFamily.S7_1200
+        def authenticate(challenge: bytes, public_key: bytes, family: int) -> tuple[bytes, bytes]:
+            assert challenge == TEST_CHALLENGE
+            assert public_key
+            assert int(family) == 1
             return bytes(180), TEST_SESSION_KEY
 
-        monkeypatch.setattr(S7CommPlusConnection, "_try_session_key_auth", authenticate)
+        monkeypatch.setattr(legacy_auth, "authenticate_real_plc", authenticate)
         monkeypatch.setattr(legitimate, "solve_legitimate_challenge_real_plc", lambda *args: bytes(248))
         srv = S7CommPlusServer(
             public_key_fingerprint=TEST_FINGERPRINT,
@@ -603,7 +614,28 @@ class TestSessionKeyIntegration:
         assert client.session_setup_ok
         assert client._connection is not None
         assert client._connection._session_key == TEST_SESSION_KEY
+        assert session_key_server._accepted_session_key_setups == 1
         client.disconnect()
+
+    def test_unknown_fingerprint_cannot_bypass_session_key_setup(self) -> None:
+        srv = S7CommPlusServer(
+            public_key_fingerprint="01:0000000000000000",
+            session_challenge=TEST_CHALLENGE,
+            session_key=TEST_SESSION_KEY,
+        )
+        srv.start(port=SESSION_KEY_PORT)
+        time.sleep(0.1)
+        client = S7CommPlusClient()
+        try:
+            with pytest.raises(S7ConnectionError, match="session setup was rejected"):
+                client.connect("127.0.0.1", port=SESSION_KEY_PORT)
+            assert client._connection is not None
+            assert client._connection._session_key is None
+            assert not client.session_setup_ok
+            assert srv._accepted_session_key_setups == 0
+        finally:
+            client.disconnect()
+            srv.stop()
 
     def test_read_write_after_session_setup(self, session_key_server: S7CommPlusServer) -> None:
         """Read/write works after successful session setup with SessionKey server."""
