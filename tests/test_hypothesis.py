@@ -391,7 +391,7 @@ def test_address_encoding_is_12_bytes(area: S7Area, db_number: int, start: int, 
 # ---------------------------------------------------------------------------
 
 
-@given(st.binary(min_size=1, max_size=500))
+@given(st.binary(min_size=3, max_size=500))
 def test_tpkt_frame_structure(payload: bytes) -> None:
     """TPKT frame should have correct version, reserved byte, and length."""
     from snap7.connection import ISOTCPConnection

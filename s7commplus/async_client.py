@@ -7,6 +7,7 @@ import asyncio
 import logging
 import ssl
 import struct
+from collections.abc import Sequence
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from snap7.error import S7ConnectionError, S7ProtocolError
@@ -15,11 +16,13 @@ from . import typeinfo
 from .blob_decompressor import find_and_decompress
 from .client import (
     DBWriteItem,
+    SymbolicReadItem,
     _build_area_read_payload,
     _build_area_write_payload,
     _build_explore_payload,
     _build_explore_request,
     _build_invoke_payload,
+    _build_multi_symbolic_read_payload,
     _build_read_payload,
     _build_subscription_request,
     _build_symbolic_read_payload,
@@ -107,6 +110,8 @@ class S7CommPlusAsyncClient:
         self._subscription_container_id: int = 0
         self._sequence_number: int = 0
         self._protocol_version: int = 0
+        self._transport_connected = False
+        self._session_ready = False
         self._connected = False
         self._lock = asyncio.Lock()
         self._connect_params: Optional[dict[str, Any]] = None
@@ -205,6 +210,7 @@ class S7CommPlusAsyncClient:
 
         # TCP connect
         self._reader, self._writer = await asyncio.open_connection(host, port)
+        self._transport_connected = True
 
         try:
             # Step 1: COTP handshake with S7CommPlus TSAP values
@@ -225,7 +231,22 @@ class S7CommPlusAsyncClient:
             if self._tls_active:
                 self._protocol_version = ProtocolVersion.V2
 
-            # Step 5: Version-specific validation
+            # Step 5: Session setup. A transport and CreateObject response do
+            # not make the public client usable until the PLC accepts setup.
+            if self._server_session_version is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    "PLC did not provide a usable ServerSessionVersion attribute; S7CommPlus session setup cannot continue"
+                )
+            self._session_setup_ok = await self._setup_session()
+            if not self._session_setup_ok:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("S7CommPlus session setup was rejected by the PLC")
+            self._session_ready = True
+
+            # Step 6: Version-specific validation
             if self._protocol_version >= ProtocolVersion.V3:
                 if not use_tls:
                     logger.warning(
@@ -241,20 +262,11 @@ class S7CommPlusAsyncClient:
                 self._integrity_id_write = 0
                 logger.info("V2 IntegrityId tracking enabled")
 
+            self._protection_level = await self._get_effective_protection_level()
+            if self._protection_level is not None:
+                logger.info(f"PLC reports protection level: {self._protection_level}")
+
             self._connected = True
-
-            # Step 6: Session setup - echo ServerSessionVersion back to PLC
-            if self._server_session_version is not None:
-                self._session_setup_ok = await self._setup_session()
-            else:
-                logger.warning("PLC did not provide ServerSessionVersion - session setup incomplete")
-                self._session_setup_ok = False
-
-            # Only a session that completed setup answers attribute reads.
-            if self._session_setup_ok:
-                self._protection_level = await self._get_effective_protection_level()
-                if self._protection_level is not None:
-                    logger.info(f"PLC reports protection level: {self._protection_level}")
 
             logger.info(
                 f"Async S7CommPlus connected to {host}:{port}, "
@@ -469,13 +481,15 @@ class S7CommPlusAsyncClient:
 
     async def disconnect(self) -> None:
         """Disconnect from PLC."""
-        if self._connected and self._session_id:
+        if self._session_ready and self._session_id:
             try:
                 await self._delete_session()
             except Exception:
                 pass
 
         self._connected = False
+        self._session_ready = False
+        self._transport_connected = False
         self._session_id = 0
         self._subscription_container_id = 0
         self._sequence_number = 0
@@ -536,7 +550,7 @@ class S7CommPlusAsyncClient:
         await self.db_write_multi([(db_number, start, data, datatype)])
 
     async def db_write_multi(self, items: list[DBWriteItem]) -> None:
-        """Write multiple regions, optionally adding a DataType as each tuple's fourth item."""
+        """Write (db_number, start_offset, data, datatype) tuples matching the PLC target types."""
         payload = _build_write_payload(items, self._protocol_version)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
@@ -561,9 +575,9 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Area read failed")
         return results[0]
 
-    async def write_area(self, area_rid: int, start: int, data: bytes) -> None:
-        """Write raw bytes to a controller memory area (M, I, Q, counters, timers)."""
-        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version)
+    async def write_area(self, area_rid: int, start: int, data: bytes, *, datatype: DataType = DataType.BLOB) -> None:
+        """Write a controller memory area, specifying the target datatype for scalar writes."""
+        payload = _build_area_write_payload(area_rid, start, data, self._protocol_version, datatype=datatype)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -745,12 +759,41 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("Symbolic read failed")
         return results[0]
 
-    async def write_symbolic(self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0) -> None:
+    async def read_symbolic_multi(self, items: Sequence[SymbolicReadItem]) -> list[Optional[bytes]]:
+        """Read multiple variables using S7CommPlus symbolic (LID-based) access.
+
+        .. warning:: This method is **experimental** and may change.
+
+        Args:
+            items: `(access_area, lids)` tuples, or three-tuples adding a
+                symbol CRC.
+
+        Returns:
+            One entry per requested item, in request order.
+
+        Raises:
+            RuntimeError: If the PLC does not answer every requested item.
+        """
+        if not items:
+            return []
+        payload = _build_multi_symbolic_read_payload(items, self._protocol_version)
+        response = await self._send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
+        results = _parse_read_response(response, expected_count=len(items))
+        if len(results) != len(items):
+            raise RuntimeError(f"Symbolic multi-read failed: PLC returned {len(results)} of {len(items)} items")
+        return results
+
+    async def write_symbolic(
+        self, access_area: int, lids: list[int], data: bytes, symbol_crc: int = 0, *, datatype: DataType = DataType.BLOB
+    ) -> None:
         """Write a variable using S7CommPlus symbolic (LID-based) access.
 
         .. warning:: This method is **experimental** and may change.
+
+        Set ``datatype`` to the target PLC datatype reported by browse().
+        The legacy BLOB default is not a generic replacement for scalar types.
         """
-        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version)
+        payload = _build_symbolic_write_payload(access_area, lids, data, symbol_crc, self._protocol_version, datatype=datatype)
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
@@ -875,7 +918,7 @@ class S7CommPlusAsyncClient:
             Response payload (after the 10-byte response header).
         """
         async with self._lock:
-            if not self._connected or self._writer is None or self._reader is None:
+            if not (self._connected or self._transport_connected) or self._writer is None or self._reader is None:
                 raise S7ConnectionError("Not connected")
 
             seq_num = self._next_sequence_number()
@@ -1141,20 +1184,15 @@ class S7CommPlusAsyncClient:
         payload += encode_object_qualifier(protocol_version=self._protocol_version)
         payload += struct.pack(">I", 0)
 
-        try:
-            resp_payload = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
-            if len(resp_payload) >= 1:
-                return_value, _ = decode_uint64_vlq(resp_payload, 0)
-                if return_value != 0:
-                    logger.warning(f"SetupSession: PLC returned error {return_value}")
-                    return False
-                else:
-                    logger.info("Session setup completed successfully")
-                    return True
-            return False
-        except Exception as e:
-            logger.warning(f"SetupSession failed: {e}")
-            return False
+        resp_payload = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, bytes(payload))
+        if len(resp_payload) >= 1:
+            return_value, _ = decode_uint64_vlq(resp_payload, 0)
+            if return_value != 0:
+                logger.warning(f"SetupSession: PLC returned error {return_value}")
+                return False
+            logger.info("Session setup completed successfully")
+            return True
+        return False
 
     async def _delete_session(self) -> None:
         """Send DeleteObject to close the session."""

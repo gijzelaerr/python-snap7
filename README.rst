@@ -47,6 +47,26 @@ Connect to any S7 PLC::
 
 No native libraries or platform-specific dependencies are required.
 
+Protecting PLCs with request rate limits
+----------------------------------------
+
+Request limiting is opt-in and applies to every S7 PDU sent by both ``Client``
+and ``AsyncClient``. A multi-variable request counts once; an operation split
+across several PDUs counts each PDU::
+
+   client = Client(
+       max_requests_per_second=10,
+       rate_limit_algorithm="fixed",       # or "token_bucket"
+       rate_limit_behavior="block",         # or "raise"
+   )
+
+``fixed`` spaces requests evenly. ``token_bucket`` permits a burst (one second
+of requests by default, configurable with ``rate_limit_burst``) and then
+refills at the configured rate. A smaller burst capacity can cap the number of
+requests sent at once without changing the refill rate. The default rate is
+``0``, which disables the limiter. ``raise`` raises ``S7RateLimitError``
+immediately instead of waiting for capacity.
+
 .. note::
 
    The ``s7`` package is the recommended import for the legacy S7 protocol.
