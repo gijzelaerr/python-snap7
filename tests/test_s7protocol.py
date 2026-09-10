@@ -492,7 +492,10 @@ class TestExtractReadData:
     def test_success(self) -> None:
         from snap7.datatypes import S7WordLen
 
-        response = {"data": {"return_code": 0xFF, "data": b"\x01\x02\x03"}}
+        response = {
+            "parameters": {"function_code": 4, "item_count": 1},
+            "data": {"return_code": 0xFF, "transport_size": 4, "data_length": 24, "data": b"\x01\x02\x03"},
+        }
         result = self.proto.extract_read_data(response, S7WordLen.BYTE, 3)
         assert result == [1, 2, 3]
 
@@ -507,15 +510,30 @@ class TestCheckWriteResponse:
 
     def test_data_section_error(self) -> None:
         with pytest.raises(S7ProtocolError, match="Write operation failed"):
-            self.proto.check_write_response({"error_code": 0, "data": {"return_code": 0x05}})
+            self.proto.check_write_response(
+                {
+                    "parameters": {"function_code": 5, "item_count": 1},
+                    "raw_data": b"\x05",
+                    "error_code": 0,
+                    "data": {"return_code": 0x05},
+                }
+            )
 
     def test_success_with_data(self) -> None:
         # Should not raise
-        self.proto.check_write_response({"error_code": 0, "data": {"return_code": 0xFF}})
+        self.proto.check_write_response(
+            {
+                "parameters": {"function_code": 5, "item_count": 1},
+                "raw_data": b"\xff",
+                "error_code": 0,
+                "data": {"return_code": 0xFF},
+            }
+        )
 
     def test_success_without_data(self) -> None:
-        # ACK without data section — should not raise
-        self.proto.check_write_response({"error_code": 0})
+        # A bare ACK does not acknowledge a WRITE item.
+        with pytest.raises(S7ProtocolError):
+            self.proto.check_write_response({"error_code": 0})
 
 
 class TestValidatePDUReference:
