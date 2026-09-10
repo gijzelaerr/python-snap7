@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from s7commplus.client import _build_symbolic_read_payload, _build_symbolic_write_payload
+from s7commplus.client import _build_multi_symbolic_read_payload, _build_symbolic_read_payload, _build_symbolic_write_payload
 from s7commplus.codec import (
     _pvalue_element_size,
     decode_float32,
@@ -29,6 +29,7 @@ from s7commplus.codec import (
     encode_item_address,
     encode_object_qualifier,
     encode_pvalue_blob,
+    encode_pvalue_typed,
     encode_request_header,
     encode_typed_value,
     encode_uint8,
@@ -388,6 +389,22 @@ class TestControllerAreaSubArea:
         assert encode_uint32_vlq(Ids.DB_VALUE_ACTUAL) in payload
 
 
+class TestMultiSymbolicReadPayload:
+    """A batched symbolic read packs every address into one GetMultiVariables request."""
+
+    DB_AREA = 0x8A0E0001
+
+    def test_single_item_matches_scalar_builder(self) -> None:
+        assert _build_multi_symbolic_read_payload([(self.DB_AREA, [1, 4], 0)]) == _build_symbolic_read_payload(
+            self.DB_AREA, [1, 4]
+        )
+
+    def test_symbol_crc_is_optional(self) -> None:
+        assert _build_multi_symbolic_read_payload([(self.DB_AREA, [1, 4])]) == _build_multi_symbolic_read_payload(
+            [(self.DB_AREA, [1, 4], 0)]
+        )
+
+
 class TestPValueBlob:
     def test_basic_blob(self) -> None:
         data = bytes([1, 2, 3, 4])
@@ -407,6 +424,32 @@ class TestPValueBlob:
         decoded, consumed = decode_pvalue_to_bytes(encoded, 0)
         assert decoded == data
         assert consumed == len(encoded)
+
+
+class TestPValueTyped:
+    def test_word_uses_raw_big_endian_bytes(self) -> None:
+        assert encode_pvalue_typed(DataType.WORD, b"\x02\x00") == bytes((0x00, DataType.WORD, 0x02, 0x00))
+
+    @pytest.mark.parametrize(
+        ("datatype", "data", "encoded_value"),
+        [
+            (DataType.UDINT, struct.pack(">I", 300), b"\x82\x2c"),
+            (DataType.DINT, struct.pack(">i", -5), b"\x7b"),
+            (DataType.ULINT, struct.pack(">Q", 300), b"\x82\x2c"),
+            (DataType.LINT, struct.pack(">q", -5), b"\x7b"),
+            (DataType.TIMESPAN, struct.pack(">q", -5), b"\x7b"),
+            (DataType.AID, struct.pack(">I", 300), b"\x82\x2c"),
+        ],
+    )
+    def test_variable_length_integer_types_use_vlq(self, datatype: DataType, data: bytes, encoded_value: bytes) -> None:
+        assert encode_pvalue_typed(datatype, data) == bytes((0x00, datatype)) + encoded_value
+
+    def test_rejects_wrong_fixed_width(self) -> None:
+        with pytest.raises(ValueError, match="REAL requires 4 encoded bytes"):
+            encode_pvalue_typed(DataType.REAL, b"\x00\x00")
+
+        with pytest.raises(ValueError, match="UDINT requires 4 encoded bytes"):
+            encode_pvalue_typed(DataType.UDINT, b"\x00\x00")
 
 
 class TestDecodePValue:

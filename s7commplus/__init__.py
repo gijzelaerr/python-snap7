@@ -14,7 +14,9 @@ Usage::
 """
 
 from .async_client import S7CommPlusAsyncClient as AsyncClient
+from .alarm import Alarm, AlarmNotification, AlarmText, LanguageId
 from .blob_decompressor import decompress_blob, find_and_decompress
+from .client import DBWriteItem, SymbolicReadItem
 from .client import S7CommPlusClient as Client
 from .connection import S7CommPlusConnection
 from .server import CPUState, DataBlock
@@ -32,16 +34,22 @@ from .tag_browser import (
 )
 
 __all__ = [
+    "Alarm",
+    "AlarmNotification",
+    "AlarmText",
     "AsyncClient",
     "CPUState",
     "Client",
+    "DBWriteItem",
     "DataBlock",
     "ExploreDataBlock",
+    "LanguageId",
     "Member",
     "S7CommPlusConnection",
     "Server",
     "SubscriptionItem",
     "SubscriptionNotification",
+    "SymbolicReadItem",
     "Tag",
     "block_interface_from_explore",
     "datablocks_from_explore",

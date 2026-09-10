@@ -1,5 +1,7 @@
 """Tests for S7CommPlus async client TLS support."""
 
+import contextlib
+import ssl
 import struct
 import tempfile
 import time
@@ -8,7 +10,9 @@ from collections.abc import Generator
 import pytest
 
 from snap7.error import S7ConnectionError
+from s7commplus import connection
 from s7commplus.async_client import S7CommPlusAsyncClient
+from s7commplus.connection import S7CommPlusConnection
 from s7commplus.server import S7CommPlusServer
 from s7commplus.protocol import ProtocolVersion
 
@@ -343,3 +347,99 @@ class TestSyncTLSBioPlumbing:
         server_ssl.write(payload)
         conn._iso_conn.inbox.append(server_out.read())  # queue ciphertext for the client
         assert conn._recv_s7_data() == payload
+
+
+class TestTLSGroupSelection:
+    """The ClientHello's supported_groups must offer X25519.
+
+    Hardware evidence (CPU 1511F-1 PN, FW V2.9, plaintext port 102): a TIA
+    Portal session against this CPU offers x25519 and is accepted; a
+    ClientHello offering only secp256r1 is answered with a TCP RST during the
+    TLS handshake. `set_ecdh_curve` cannot name X25519 on OpenSSL 3.0, so a
+    fallback group there silently produced the rejected ClientHello.
+    """
+
+    X25519 = 0x001D
+    SECP256R1 = 0x0017
+
+    @staticmethod
+    def _client_hello(ctx: ssl.SSLContext) -> bytes:
+        """Drive a BIO handshake far enough to emit the ClientHello."""
+        incoming, outgoing = ssl.MemoryBIO(), ssl.MemoryBIO()
+        obj = ctx.wrap_bio(incoming, outgoing, server_side=False, server_hostname=None)
+        with contextlib.suppress(ssl.SSLWantReadError):
+            obj.do_handshake()
+        return outgoing.read()
+
+    @staticmethod
+    def _supported_groups(record: bytes) -> list[int]:
+        """Parse supported_groups (extension 10) out of a ClientHello record."""
+        body = record[5:]  # past the TLS record header
+        p = 6 + 32  # handshake header + legacy_version + random
+        p += 1 + body[p]  # legacy_session_id
+        p += 2 + int.from_bytes(body[p : p + 2], "big")  # cipher_suites
+        p += 1 + body[p]  # compression_methods
+        ext_end = p + 2 + int.from_bytes(body[p : p + 2], "big")
+        p += 2
+        while p + 4 <= ext_end:
+            etype = int.from_bytes(body[p : p + 2], "big")
+            elen = int.from_bytes(body[p + 2 : p + 4], "big")
+            p += 4
+            if etype == 10:
+                n = int.from_bytes(body[p : p + 2], "big")
+                return [int.from_bytes(body[p + 2 + i : p + 4 + i], "big") for i in range(0, n, 2)]
+            p += elen
+        return []
+
+    def test_client_hello_offers_x25519(self) -> None:
+        ctx = S7CommPlusConnection("127.0.0.1", 102)._setup_ssl_context()
+        groups = self._supported_groups(self._client_hello(ctx))
+        assert groups, "ClientHello carried no supported_groups extension"
+        assert self.X25519 in groups, (
+            f"ClientHello must offer x25519 - an S7-1500 RSTs without it; offered {[hex(g) for g in groups]}"
+        )
+
+    def test_no_fallback_group_when_x25519_unavailable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """On OpenSSL builds that cannot name X25519, leave the groups alone.
+
+        Narrowing to a different group is not graceful degradation: it
+        restricts supported_groups to that group ALONE, which is exactly the
+        ClientHello the PLC rejects. It also silently overrides the documented
+        OPENSSL_CONF `Groups` workaround.
+        """
+        tried: list[str] = []
+
+        def refuse(self: ssl.SSLContext, name: str) -> None:
+            tried.append(name)
+            raise ssl.SSLError("[EC: UNKNOWN_GROUP] unknown group")
+
+        monkeypatch.setattr(ssl.SSLContext, "set_ecdh_curve", refuse)
+        connection._set_s7_groups(ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT))
+
+        assert tried == ["X25519"], f"must not narrow to a fallback group when X25519 is unavailable; tried {tried}"
+
+    def test_client_hello_offers_x25519_even_when_curve_api_cannot_name_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The regression, end to end: simulate OpenSSL 3.0 and read the wire.
+
+        `test_client_hello_offers_x25519` above cannot catch this on a build
+        where `set_ecdh_curve("X25519")` succeeds - the fallback never runs.
+        Forcing the failure reproduces the hardware case: the ClientHello must
+        still offer x25519, which holds only if the groups are left at the
+        OpenSSL default instead of being narrowed to secp256r1.
+        """
+        real_set = ssl.SSLContext.set_ecdh_curve
+
+        def refuse_x25519(self: ssl.SSLContext, name: str) -> None:
+            if name == "X25519":
+                raise ssl.SSLError("[EC: UNKNOWN_GROUP] unknown group")
+            real_set(self, name)
+
+        monkeypatch.setattr(ssl.SSLContext, "set_ecdh_curve", refuse_x25519)
+
+        ctx = S7CommPlusConnection("127.0.0.1", 102)._setup_ssl_context()
+        groups = self._supported_groups(self._client_hello(ctx))
+
+        assert groups != [self.SECP256R1], (
+            "supported_groups was narrowed to secp256r1 alone - this is the ClientHello an S7-1500 answers with a TCP RST"
+        )
+        assert self.X25519 in groups, f"ClientHello must still offer x25519; offered {[hex(g) for g in groups]}"

@@ -5,6 +5,7 @@ and V2 connection behavior.
 """
 
 import hashlib
+import logging
 import struct
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,6 +18,7 @@ from s7commplus.connection import (
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
     _check_set_variable_response,
+    _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
 )
@@ -802,6 +804,38 @@ class TestSessionKeySelection:
         assert conn._try_session_key_auth() is None
         assert conn._session_key is None
 
+    def test_security_key_descriptor_uses_pending_generated_key(self) -> None:
+        from s7commplus.session_auth.keys import KeyFamily, get_public_key
+        from s7commplus.session_auth.utils import derive_key_id
+        from s7commplus.vlq import encode_uint64_vlq
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._session_auth_public_key = get_public_key("01:BD426B091F08731A")
+        conn._session_auth_family = KeyFamily.S7_1200
+        generated_key = bytes(range(24))
+
+        assert conn._session_key is None
+        encoded = conn._encode_security_key_struct(bytes(180), generated_key)
+        symmetric_id = int.from_bytes(derive_key_id(generated_key), "little")
+        symmetric_descriptor = (
+            encode_uint32_vlq(1804)
+            + bytes([0x00, DataType.STRUCT])
+            + struct.pack(">I", Ids.SECURITY_KEY_ID)
+            + encode_uint32_vlq(1826)
+            + bytes([0x00, DataType.ULINT])
+            + encode_uint64_vlq(symmetric_id)
+        )
+        assert symmetric_descriptor in encoded
+
+    def test_security_key_descriptor_rejects_missing_key_material(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        with pytest.raises(ValueError, match="public key material"):
+            conn._encode_security_key_struct(bytes(180), bytes(24))
+
+        conn._session_auth_public_key = bytes(40)
+        with pytest.raises(ValueError, match="generated session key material"):
+            conn._encode_security_key_struct(bytes(180), b"")
+
 
 class TestProtocolVersionV2:
     """Test V2 protocol version constant."""
@@ -932,3 +966,20 @@ class TestAuthenticate:
         conn._tls_active = False
         with pytest.raises(S7ConnectionError, match="requires TLS"):
             conn.authenticate("password")
+
+
+class TestCreateObjectStatusLogging:
+    """A CreateObject status alone does not identify a TLS requirement."""
+
+    def test_plain_connection_does_not_recommend_tls(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="s7commplus.connection"):
+            _log_create_object_return_value(0x4000800000000011, tls_active=False)
+
+        assert "continuing to parse the returned session data" in caplog.text
+        assert "TLS" not in caplog.text
+
+    def test_success_is_silent(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.DEBUG, logger="s7commplus.connection"):
+            _log_create_object_return_value(0, tls_active=False)
+
+        assert caplog.text == ""

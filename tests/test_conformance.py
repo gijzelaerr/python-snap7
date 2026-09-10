@@ -45,13 +45,10 @@ class TestTPKTConformance:
         assert frame[4:] == payload
 
     def test_tpkt_empty_payload(self) -> None:
-        """Empty payload produces a 4-byte frame."""
+        """RFC 1006 requires at least seven bytes including the header."""
         conn = ISOTCPConnection("127.0.0.1")
-        frame = conn._build_tpkt(b"")
-
-        assert len(frame) == 4
-        length = struct.unpack(">H", frame[2:4])[0]
-        assert length == 4
+        with pytest.raises(S7ConnectionError, match="TPKT length"):
+            conn._build_tpkt(b"")
 
     def test_tpkt_large_payload(self) -> None:
         """Length field correctly handles large payloads."""

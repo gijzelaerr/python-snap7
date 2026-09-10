@@ -79,6 +79,25 @@ from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode
 
 logger = logging.getLogger(__name__)
 
+
+def _log_create_object_return_value(return_value: int, tls_active: bool) -> None:
+    """Log a non-zero CreateObject status without guessing at TLS requirements."""
+    if return_value == 0:
+        return
+    if tls_active:
+        # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero value on a
+        # usable TLS session, so keep this informational.
+        logger.debug(
+            "CreateObject returned non-zero 0x%X on an active TLS session; continuing to parse the returned session data",
+            return_value,
+        )
+        return
+    logger.warning(
+        "CreateObject returned non-zero 0x%X; continuing to parse the returned session data",
+        return_value,
+    )
+
+
 # TLS cipher suites for S7 PLC compatibility.
 # ECDHE suites are preferred (forward secrecy); RSA-kx kept as fallback for
 # older firmware.  The key to Siemens PLC compatibility is restricting the
@@ -88,9 +107,19 @@ _S7_CIPHERS = (
     "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
 )
 
-# Siemens PLCs only accept a small set of TLS groups.  X25519 is preferred
-# but unavailable on older OpenSSL/CPython; fall back to prime256v1.
-_S7_PREFERRED_GROUPS = ("X25519", "prime256v1")
+# Siemens PLCs only accept a small set of TLS groups. X25519 is the group an
+# S7-1500 negotiates in practice, so it is the only one worth naming here.
+#
+# There is deliberately NO fallback group. `set_ecdh_curve` can only name
+# X25519 on OpenSSL builds that expose it as a curve (it raises on OpenSSL
+# 3.0); where it raises, narrowing to something else is not a graceful
+# degradation but a different, wrong answer — it restricts supported_groups to
+# that group ALONE, and a PLC that wanted X25519 then RSTs during the
+# handshake. Leaving the context untouched is strictly better: OpenSSL's
+# default group list already offers X25519, and an untouched context also lets
+# the documented OPENSSL_CONF `Groups` override actually take effect (a
+# set_ecdh_curve call here would silently overwrite it).
+_S7_PREFERRED_GROUPS = ("X25519",)
 
 
 def _set_s7_groups(ctx: ssl.SSLContext) -> None:
@@ -100,7 +129,28 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
             return
         except (ssl.SSLError, ValueError):
             continue
-    logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+    logger.debug(
+        "Could not restrict TLS groups to X25519 on this OpenSSL build; leaving "
+        "the default group list, which offers X25519. If a PLC still rejects the "
+        "handshake, restrict groups via OPENSSL_CONF (Groups = x25519)."
+    )
+
+
+def _verify_v3_hmac(protected: bytes, session_key: bytes) -> bytes:
+    """Verify and remove the V3 HMAC prefix from application data."""
+    from snap7.error import S7ConnectionError
+
+    if not protected:
+        raise S7ConnectionError("Empty V3 frame")
+    digest_length = protected[0]
+    if digest_length != hashlib.sha256().digest_size or len(protected) < 1 + digest_length:
+        raise S7ConnectionError(f"Invalid V3 HMAC length: {digest_length}")
+    received_digest = protected[1 : 1 + digest_length]
+    application_data = protected[1 + digest_length :]
+    expected_digest = hmac.new(session_key[:24], application_data, hashlib.sha256).digest()
+    if not hmac.compare_digest(received_digest, expected_digest):
+        raise S7ConnectionError("Invalid V3 HMAC")
+    return bytes(application_data)
 
 
 def _build_get_var_substreamed_payload(
@@ -461,12 +511,9 @@ class S7CommPlusConnection:
                 self._session_setup_ok = self._setup_session()
             else:
                 logger.warning(
-                    "PLC did not provide a scalar ServerSessionVersion attribute. "
-                    "This is the V1-initial S7-1200 firmware band (FW < 4.5 "
-                    "predating TLS) which sends a Struct(314) value and requires "
-                    "the proprietary SessionKey handshake — not yet implemented "
-                    "in python-snap7 (tracked in issue #710). Falling back to "
-                    "legacy PUT/GET: db_read/db_write will work, browse() will not."
+                    "PLC did not provide a usable ServerSessionVersion attribute; "
+                    "S7CommPlus session setup cannot continue. No automatic fallback "
+                    "to the classic PUT/GET protocol is performed."
                 )
                 self._session_setup_ok = False
 
@@ -833,7 +880,12 @@ class S7CommPlusConnection:
 
                 raise S7ConnectionError("Response too short")
             logger.debug(f"  Reassembled response ({len(data)} bytes), payload {len(data) - 10} bytes")
-            return bytes(data[10:])
+            resp_payload = bytes(data[10:])
+            if self._session_key is not None:
+                resp_iid, iid_consumed = decode_uint32_vlq(resp_payload, 0)
+                logger.debug(f"  Response IntegrityId: {resp_iid} ({iid_consumed} bytes)")
+                resp_payload = resp_payload[iid_consumed:]
+            return resp_payload
 
         # Receive response
         response_frame = self._recv_s7_data()
@@ -848,12 +900,14 @@ class S7CommPlusConnection:
 
         response = response_frame[consumed : consumed + data_length]
 
-        # V3 responses have a hash-length byte + HMAC prefix before the payload
-        if version == ProtocolVersion.V3 and len(response) > 33:
-            hash_len = response[0]
-            response_hmac = response[1 : 1 + hash_len]
-            response = response[1 + hash_len :]
-            logger.debug(f"  V3 HMAC ({hash_len} bytes): {response_hmac.hex()}")
+        # V3 responses have a hash-length byte + HMAC prefix before the payload.
+        if version == ProtocolVersion.V3:
+            if self._session_key is None:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError("V3 response received without a session key")
+            response = _verify_v3_hmac(response, self._session_key)
+            logger.debug("  V3 HMAC verified")
 
         # V254 frames have no standard header — return raw data
         if version == ProtocolVersion.SYSTEM_EVENT:
@@ -963,13 +1017,19 @@ class S7CommPlusConnection:
             ensure(4)
             if buf[0] != 0x72:
                 raise S7ConnectionError("Expected S7CommPlus fragment header (0x72)")
+            fragment_version = buf[1]
             frag_len = (buf[2] << 8) | buf[3]
             del buf[:4]
             if frag_len == 0:
                 break  # standalone trailer (defensive)
             ensure(frag_len)
-            data.extend(buf[:frag_len])
+            fragment_data = bytes(buf[:frag_len])
             del buf[:frag_len]
+            if fragment_version == ProtocolVersion.V3:
+                if self._session_key is None:
+                    raise S7ConnectionError("V3 response received without a session key")
+                fragment_data = _verify_v3_hmac(fragment_data, self._session_key)
+            data.extend(fragment_data)
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
                 raise S7ConnectionError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
@@ -1170,7 +1230,7 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("CreateObject response has no session ObjectId")
 
-        # First ObjectId is the new session id; second (if any) is for notifications.
+        # First ObjectId is the session; the second is its subscription container.
         self._session_id = object_ids[0]
         self._subscription_container_id = object_ids[1] if len(object_ids) > 1 else 0
         self._protocol_version = version
@@ -1182,13 +1242,7 @@ class S7CommPlusConnection:
         logger.debug(f"CreateObject response: return_value={return_value} object_ids={[hex(i) for i in object_ids]}")
         logger.debug(f"Session created: id=0x{self._session_id:08X} ({self._session_id}), version=V{version}")
 
-        if return_value != 0:
-            if self._tls_active:
-                # Some firmware (e.g. S7-1200 FW V4.1) returns a non-zero CreateObject
-                # value on a perfectly usable TLS session, so this is informational only.
-                logger.debug(f"CreateObject returned non-zero 0x{return_value:X} on an active TLS session (session still usable)")
-            else:
-                logger.warning(f"CreateObject returned error 0x{return_value:X} — PLC may require TLS (use_tls=True)")
+        _log_create_object_return_value(return_value, self._tls_active)
 
         # Parse remaining payload (the ResponseObject tree) for session attributes
         attrs = parse_create_object_attributes(response[offset:])
@@ -1286,7 +1340,7 @@ class S7CommPlusConnection:
             payload += encode_uint32_vlq(LegitimationId.SESSION_SETUP_LEGITIMATION)  # 1830
             payload += encode_uint32_vlq(ObjectId.SERVER_SESSION_VERSION)  # 306
             payload += encode_uint32_vlq(1)  # ItemNumber for SecurityKey
-            payload += self._encode_security_key_struct(blob)
+            payload += self._encode_security_key_struct(blob, session_key)
         else:
             payload += encode_uint32_vlq(1)  # ItemCount
             payload += encode_uint32_vlq(1)  # AddressCount
@@ -1484,7 +1538,7 @@ class S7CommPlusConnection:
 
         logger.info("Post-auth legitimation completed")
 
-    def _encode_security_key_struct(self, blob: bytes) -> bytes:
+    def _encode_security_key_struct(self, blob: bytes, session_key: bytes) -> bytes:
         """Encode the SecurityKey PObject struct (Struct 1800) wrapping the auth blob.
 
         Matches the wire format from TIA Portal / HarpoS7 PoC:
@@ -1493,9 +1547,13 @@ class S7CommPlusConnection:
         """
         from .session_auth.utils import derive_key_id
 
-        public_key_id = derive_key_id(self._session_auth_public_key or b"\x00" * 24)
-        # The symmetric key ID is derived from the session key
-        symmetric_key_id = derive_key_id(self._session_key or b"\x00" * 24)
+        if not self._session_auth_public_key:
+            raise ValueError("SessionKey authentication requires public key material")
+        if not session_key:
+            raise ValueError("SessionKey authentication requires generated session key material")
+
+        public_key_id = derive_key_id(self._session_auth_public_key)
+        symmetric_key_id = derive_key_id(session_key)
 
         # Determine key flags from family
         from .session_auth.blob_metadata import get_public_key_flags, get_symmetric_key_flags
