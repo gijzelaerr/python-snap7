@@ -6,6 +6,7 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Correct legacy GetVarSubStreamed qualifiers and reject unusable authentication challenges.
 * Validate batched symbolic read item coverage and preserve explicit PLC errors.
 * Fix classic S7 TPKT bounds and COTP Class 0 header validation in sync/async clients.
 * Reject incomplete reads and mismatched or missing read/write acknowledgements.
@@ -26,6 +27,8 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus CPU state reading and block transfer (upload/download)
 * Fix the legacy SecurityKey descriptor to identify the newly generated
   session key instead of an all-zero placeholder.
+* Keep SessionKey activation and public connection state pending until the PLC
+  accepts session setup, with complete cleanup on rejection or transport error.
 * **Symbolic (LID-based) access for optimized DBs** (experimental):
   `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
   `client.read_tag(tag)` routes to S7CommPlus LID-based access via the

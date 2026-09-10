@@ -837,6 +837,126 @@ class TestSessionKeySelection:
             conn._encode_security_key_struct(bytes(180), b"")
 
 
+class TestAtomicSessionSetup:
+    def test_rejected_setup_does_not_activate_generated_key(self) -> None:
+        from s7commplus.session_auth.keys import KeyFamily, get_public_key
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V1
+        conn._session_id = 7
+        conn._server_session_version = bytes([0x00, DataType.UDINT, 0x01])
+        conn._session_auth_public_key = get_public_key("01:BD426B091F08731A")
+        conn._session_auth_family = KeyFamily.S7_1200
+        generated_key = bytes(range(24))
+        conn._try_session_key_auth = MagicMock(return_value=(bytes(180), generated_key))
+        conn._send_s7_data = MagicMock()
+        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.SET_MULTI_VARIABLES, 0, 0, 0)
+        response += bytes([1])
+        conn._recv_s7_data = MagicMock(
+            return_value=encode_header(ProtocolVersion.V2, len(response))
+            + response
+            + struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        )
+
+        assert not conn._setup_session()
+        assert conn._session_key is None
+        assert not conn._with_integrity_id
+
+    def test_malformed_setup_response_does_not_activate_generated_key(self) -> None:
+        from s7commplus.session_auth.keys import KeyFamily, get_public_key
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._protocol_version = ProtocolVersion.V1
+        conn._session_id = 7
+        conn._server_session_version = bytes([0x00, DataType.UDINT, 0x01])
+        conn._session_auth_public_key = get_public_key("01:BD426B091F08731A")
+        conn._session_auth_family = KeyFamily.S7_1200
+        generated_key = bytes(range(24))
+        conn._try_session_key_auth = MagicMock(return_value=(bytes(180), generated_key))
+        conn._send_s7_data = MagicMock()
+        conn._recv_s7_data = MagicMock(return_value=encode_header(ProtocolVersion.V2, 0))
+
+        with pytest.raises(S7ConnectionError, match="response too short"):
+            conn._setup_session()
+        assert conn._session_key is None
+        assert not conn._with_integrity_id
+
+    def test_sync_rejected_setup_clears_pending_authentication_state(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._iso_conn.connect = MagicMock()
+        conn._iso_conn.disconnect = MagicMock()
+        conn._init_ssl = MagicMock()
+
+        def create_session() -> None:
+            conn._protocol_version = ProtocolVersion.V1
+            conn._session_id = 7
+            conn._server_session_version = bytes([0x00, DataType.UDINT, 0x01])
+
+        def reject_setup() -> bool:
+            conn._session_key = bytes(24)
+            conn._with_integrity_id = True
+            return False
+
+        conn._create_session = MagicMock(side_effect=create_session)
+        conn._setup_session = MagicMock(side_effect=reject_setup)
+
+        with pytest.raises(S7ConnectionError, match="session setup was rejected"):
+            conn.connect()
+
+        assert not conn.connected
+        assert not conn.session_setup_ok
+        assert conn._session_key is None
+        assert not conn._with_integrity_id
+        assert not conn._session_ready
+
+    def test_sync_setup_exception_cleans_intermediate_state(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._iso_conn.connect = MagicMock()
+        conn._iso_conn.disconnect = MagicMock()
+        conn._init_ssl = MagicMock()
+
+        def create_session() -> None:
+            conn._protocol_version = ProtocolVersion.V1
+            conn._session_id = 7
+            conn._server_session_version = bytes([0x00, DataType.UDINT, 0x01])
+
+        conn._create_session = MagicMock(side_effect=create_session)
+        conn._setup_session = MagicMock(side_effect=OSError("socket closed during setup"))
+
+        with pytest.raises(OSError, match="socket closed during setup"):
+            conn.connect()
+        assert not conn.connected
+        assert conn.session_id == 0
+        assert not conn._session_ready
+
+    @pytest.mark.asyncio
+    async def test_async_rejected_setup_never_becomes_connected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = S7CommPlusAsyncClient()
+        reader = MagicMock()
+        writer = MagicMock()
+        writer.wait_closed = AsyncMock()
+        monkeypatch.setattr("s7commplus.async_client.asyncio.open_connection", AsyncMock(return_value=(reader, writer)))
+        client._cotp_connect = AsyncMock()
+        client._init_ssl = AsyncMock()
+
+        async def create_session() -> None:
+            client._protocol_version = ProtocolVersion.V1
+            client._session_id = 7
+            client._server_session_version = bytes([0x00, DataType.UDINT, 0x01])
+
+        client._create_session = AsyncMock(side_effect=create_session)
+        client._setup_session = AsyncMock(return_value=False)
+
+        with pytest.raises(S7ConnectionError, match="session setup was rejected"):
+            await client.connect("127.0.0.1")
+
+        assert not client.connected
+        assert not client.session_setup_ok
+        assert not client._session_ready
+        assert not client._transport_connected
+        writer.close.assert_called_once()
+
+
 class TestProtocolVersionV2:
     """Test V2 protocol version constant."""
 
