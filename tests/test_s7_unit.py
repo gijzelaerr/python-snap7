@@ -14,6 +14,7 @@ from s7commplus.client import (
     _build_write_payload,
     _parse_write_response,
     _build_explore_request,
+    _parse_cpu_state,
     _parse_explore_datablocks,
     _build_area_read_payload,
     _build_area_write_payload,
@@ -49,6 +50,36 @@ class TestBuildReadPayload:
         # Multi-item payload should be larger than single
         single = _build_read_payload([(1, 0, 4)])
         assert len(payload) > len(single)
+
+
+class TestParseCpuState:
+    # Exact attribute sequence isolated by the hardware RUN/STOP capture in #878.
+    RUN_ATTRIBUTES = bytes.fromhex("a3bf0000030001a3bf0100030007a3be5400030000")
+    STOP_ATTRIBUTES = bytes.fromhex("a3bf0000030000a3bf0100030000a3be540003ffff")
+
+    def test_run_capture(self) -> None:
+        assert _parse_cpu_state(b"\x00\x00" + self.RUN_ATTRIBUTES + b"\xa2") == "RUN"
+
+    def test_stop_capture(self) -> None:
+        assert _parse_cpu_state(b"\x00\x00" + self.STOP_ATTRIBUTES + b"\xa2") == "STOP"
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            b"",
+            bytes.fromhex("a3bf0000030000"),  # executing attribute only
+            bytes.fromhex("a3bf0100030000"),  # operating-mode attribute only
+            bytes.fromhex("a3bf0000030001a3bf0100030000"),  # attributes disagree
+            bytes.fromhex("a3bf0000030000a3bf0100030002"),  # unknown mode
+            bytes.fromhex("a3bf00000200a3bf0100030000"),  # wrong executing datatype
+        ],
+    )
+    def test_unknown_without_two_consistent_typed_attributes(self, response: bytes) -> None:
+        assert _parse_cpu_state(response) == "UNKNOWN"
+
+    def test_conflicting_duplicate_is_unknown(self) -> None:
+        response = self.RUN_ATTRIBUTES + bytes.fromhex("a3bf0000030000")
+        assert _parse_cpu_state(response) == "UNKNOWN"
 
 
 class TestParseReadResponse:

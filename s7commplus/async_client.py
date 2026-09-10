@@ -29,6 +29,7 @@ from .client import (
     _build_symbolic_write_payload,
     _build_write_payload,
     _parse_explore_datablocks,
+    _parse_cpu_state,
     _parse_read_response,
     _parse_write_response,
 )
@@ -621,7 +622,7 @@ class S7CommPlusAsyncClient:
         """
         payload = _build_explore_request(Ids.NATIVE_THE_CPU_EXEC_UNIT_RID, [])
         response = await self._send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
-        return "RUN" if response else "UNKNOWN"
+        return _parse_cpu_state(response)
 
     async def upload_block(self, block_type: int, block_number: int) -> bytes:
         """Upload (read) a program block from the PLC.
