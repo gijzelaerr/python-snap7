@@ -618,6 +618,11 @@ class TestClientErrorPaths:
             ]
         )
 
+    def test_read_symbolic_multi_not_connected(self) -> None:
+        client = S7CommPlusClient()
+        with pytest.raises(RuntimeError, match="Not connected"):
+            client.read_symbolic_multi([(0x8A0E0001, [1, 4])])
+
     def test_explore_not_connected(self) -> None:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
