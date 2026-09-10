@@ -8,7 +8,7 @@ import struct
 from collections.abc import Callable, Sequence
 from typing import Any, Optional, TypeAlias, TypeVar
 
-from snap7.error import S7ConnectionError
+from snap7.error import S7ConnectionError, S7ProtocolError
 
 from . import typeinfo
 from .alarm import (
@@ -528,9 +528,7 @@ class S7CommPlusClient:
         # Read the CPU exec unit object to get the running state
         payload = _build_explore_request(Ids.NATIVE_THE_CPU_EXEC_UNIT_RID, [])
         response = self._connection.send_request(FunctionCode.EXPLORE, payload, integrity_tail=5, reassemble=True)
-        # Parse for operating state attribute — return "RUN" as default
-        # since a responding PLC is typically running
-        return "RUN" if response else "UNKNOWN"
+        return _parse_cpu_state(response)
 
     def upload_block(self, block_type: int, block_number: int) -> bytes:
         """Upload (read) a program block from the PLC.
@@ -688,8 +686,9 @@ class S7CommPlusClient:
         """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
         try:
             raw = self.read_symbolic(db_rid, [1], 0)
-        except S7ConnectionError:
-            # Socket was RST by the PLC — let the caller reconnect and retry.
+        except (S7ConnectionError, S7ProtocolError):
+            # Connection failures are eligible for reconnect; protocol failures
+            # must reach the caller instead of looking like an unreadable DB.
             raise
         except Exception:
             return 0
@@ -1279,6 +1278,46 @@ def _build_invoke_payload(state: int) -> bytes:
 # ---------------------------------------------------------------------------
 # EXPLORE helpers (experimental)
 # ---------------------------------------------------------------------------
+
+
+def _parse_cpu_state(response: bytes) -> str:
+    """Parse corroborating execution-state attributes from a CPU EXPLORE reply.
+
+    Real S7-1200/1500 captures show attributes 0x1F80 and 0x1F81 changing
+    together across RUN/STOP transitions. Requiring both protects against
+    confusing an absent or default-initialized attribute with STOP.
+    """
+    values: dict[int, set[int]] = {
+        Ids.CPU_EXEC_UNIT_EXECUTING: set(),
+        Ids.CPU_EXEC_UNIT_OPERATING_MODE: set(),
+    }
+
+    offset = 0
+    while offset < len(response):
+        found = response.find(bytes([ElementID.ATTRIBUTE]), offset)
+        if found < 0:
+            break
+        offset = found + 1
+        try:
+            attribute_id, consumed = decode_uint32_vlq(response, offset)
+        except (ValueError, IndexError):
+            continue
+        value_offset = offset + consumed
+        if attribute_id not in values:
+            continue
+        # Both observed state attributes are scalar UINT values. Checking the
+        # exact PValue header also makes a chance match inside opaque data inert.
+        if value_offset + 4 > len(response) or response[value_offset : value_offset + 2] != bytes([0, DataType.UINT]):
+            continue
+        values[attribute_id].add(struct.unpack_from(">H", response, value_offset + 2)[0])
+
+    executing = values[Ids.CPU_EXEC_UNIT_EXECUTING]
+    operating_mode = values[Ids.CPU_EXEC_UNIT_OPERATING_MODE]
+    if executing == {1} and operating_mode == {7}:
+        return "RUN"
+    if executing == {0} and operating_mode == {0}:
+        return "STOP"
+    return "UNKNOWN"
 
 
 def _build_explore_request(explore_id: int, attribute_ids: list[int]) -> bytes:

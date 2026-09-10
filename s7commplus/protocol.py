@@ -184,6 +184,8 @@ class Ids(IntEnum):
     # Object attributes for EXPLORE responses
     OBJECT_VARIABLE_TYPE_NAME = 233
     BLOCK_BLOCK_NUMBER = 2521
+    CPU_EXEC_UNIT_EXECUTING = 8064  # 0x1F80; observed as 1 in RUN and 0 in STOP
+    CPU_EXEC_UNIT_OPERATING_MODE = 8065  # 0x1F81; observed as 7 in RUN and 0 in STOP
 
     # Type info classes
     CLASS_TYPE_INFO = 511

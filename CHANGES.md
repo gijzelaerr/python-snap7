@@ -6,6 +6,9 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
+  distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
+  inconsistent state attributes, including S7-1200 responses that omit them.
 * Support LOGO reconnection/heartbeat options and preserve explicit TSAPs.
 * Correct legacy GetVarSubStreamed qualifiers and reject unusable authentication challenges.
 * Validate batched symbolic read item coverage and preserve explicit PLC errors.
@@ -22,10 +25,15 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 * S7CommPlus PLC start/stop via INVOKE
 * S7CommPlus object browsing via EXPLORE
 * S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
+* Fix V1 SessionKey challenge requests being rejected by S7-1200 FW 4.2 PLCs,
+  consume non-fatal SystemEvents while waiting for the matching response, and
+  strip per-fragment V3 HMACs from browse responses (#710)
 * S7CommPlus active-alarm browsing and alarm subscriptions (experimental)
 * S7CommPlus symbolic data subscriptions and notification decoding (experimental)
 * TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
 * S7CommPlus CPU state reading and block transfer (upload/download)
+* Correct the SessionKey emulator fingerprint encoding and reject missing or
+  malformed authentication structures during integration tests.
 * Fix the legacy SecurityKey descriptor to identify the newly generated
   session key instead of an all-zero placeholder.
 * Keep SessionKey activation and public connection state pending until the PLC
