@@ -107,9 +107,19 @@ _S7_CIPHERS = (
     "ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256"
 )
 
-# Siemens PLCs only accept a small set of TLS groups.  X25519 is preferred
-# but unavailable on older OpenSSL/CPython; fall back to prime256v1.
-_S7_PREFERRED_GROUPS = ("X25519", "prime256v1")
+# Siemens PLCs only accept a small set of TLS groups. X25519 is the group an
+# S7-1500 negotiates in practice, so it is the only one worth naming here.
+#
+# There is deliberately NO fallback group. `set_ecdh_curve` can only name
+# X25519 on OpenSSL builds that expose it as a curve (it raises on OpenSSL
+# 3.0); where it raises, narrowing to something else is not a graceful
+# degradation but a different, wrong answer — it restricts supported_groups to
+# that group ALONE, and a PLC that wanted X25519 then RSTs during the
+# handshake. Leaving the context untouched is strictly better: OpenSSL's
+# default group list already offers X25519, and an untouched context also lets
+# the documented OPENSSL_CONF `Groups` override actually take effect (a
+# set_ecdh_curve call here would silently overwrite it).
+_S7_PREFERRED_GROUPS = ("X25519",)
 
 
 def _set_s7_groups(ctx: ssl.SSLContext) -> None:
@@ -119,7 +129,11 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
             return
         except (ssl.SSLError, ValueError):
             continue
-    logger.warning("Could not restrict TLS groups — PLC may reject unsupported groups in ClientHello")
+    logger.debug(
+        "Could not restrict TLS groups to X25519 on this OpenSSL build; leaving "
+        "the default group list, which offers X25519. If a PLC still rejects the "
+        "handshake, restrict groups via OPENSSL_CONF (Groups = x25519)."
+    )
 
 
 def _verify_v3_hmac(protected: bytes, session_key: bytes) -> bytes:
