@@ -1017,7 +1017,10 @@ class S7CommPlusServer:
             response += bytes([0x10, DataType.USINT])
             response += encode_uint32_vlq(0)
 
-        response += encode_uint32_vlq(0)  # IntegrityId
+        # V1 responses retain the legacy zero IntegrityId field. V2+ responses
+        # receive the current per-client counter in _process_request().
+        if self._protocol_version < ProtocolVersion.V2:
+            response += encode_uint32_vlq(0)
         return bytes(response)
 
     def _handle_set_var_substreamed(self, seq_num: int, session_id: int, request_data: bytes) -> bytes:

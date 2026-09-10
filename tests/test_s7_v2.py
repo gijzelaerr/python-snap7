@@ -368,6 +368,35 @@ class TestServerResponseIntegrityId:
         assert not initial_rst
         assert not advanced_rst
 
+    def test_v2_substreamed_response_has_one_integrity_id(self) -> None:
+        server = S7CommPlusServer(protocol_version=ProtocolVersion.V2)
+        request = self._request(FunctionCode.GET_VAR_SUBSTREAMED)
+
+        response, rst = server._process_request(request, 0x12345678, integrity_id_read=128)
+
+        assert response == server._handle_get_var_substreamed(1, 0x12345678, b"") + encode_uint32_vlq(128)
+        assert not rst
+
+    def test_init_ssl_response_has_no_integrity_id(self) -> None:
+        server = S7CommPlusServer(protocol_version=ProtocolVersion.V2)
+        request = bytearray(self._request(FunctionCode.INIT_SSL))
+        request[13:17] = bytes(4)  # InitSSL runs before a session id exists.
+
+        response, rst = server._process_request(bytes(request), 0, integrity_id_write=128)
+
+        assert response == server._handle_init_ssl(1)
+        assert not rst
+
+    def test_in_session_error_response_uses_write_integrity_id(self) -> None:
+        server = S7CommPlusServer(protocol_version=ProtocolVersion.V2)
+        unsupported_function = 0xFFFF
+        request = self._request(unsupported_function)
+
+        response, rst = server._process_request(request, 0x12345678, integrity_id_write=128)
+
+        assert response == server._build_error_response(1, 0x12345678, unsupported_function) + encode_uint32_vlq(128)
+        assert not rst
+
 
 class TestIntegrityIdVlqEncoding:
     """Test VLQ encoding used for IntegrityId values."""
