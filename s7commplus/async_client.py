@@ -8,7 +8,9 @@ import logging
 import ssl
 import struct
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, Awaitable, Callable, Optional, TypeVar
+
+from snap7.error import S7ConnectionError, S7ProtocolError
 
 from . import typeinfo
 from .blob_decompressor import find_and_decompress
@@ -40,9 +42,11 @@ from .codec import (
     parse_server_session_version,
 )
 from .connection import (
+    _MAX_SYSTEM_EVENTS_PER_RESPONSE,
     _S7_CIPHERS,
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
+    _check_system_event,
     _check_set_variable_response,
     _log_create_object_return_value,
     _parse_get_var_substreamed_response,
@@ -85,6 +89,8 @@ from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
 
+_T = TypeVar("_T")
+
 # COTP constants
 _COTP_CR = 0xE0
 _COTP_CC = 0xD0
@@ -108,6 +114,7 @@ class S7CommPlusAsyncClient:
         self._session_ready = False
         self._connected = False
         self._lock = asyncio.Lock()
+        self._connect_params: Optional[dict[str, Any]] = None
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -189,6 +196,16 @@ class S7CommPlusAsyncClient:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
+        self._connect_params = {
+            "host": host,
+            "port": port,
+            "rack": rack,
+            "slot": slot,
+            "use_tls": use_tls,
+            "tls_cert": tls_cert,
+            "tls_key": tls_key,
+            "tls_ca": tls_ca,
+        }
         self._host = host
 
         # TCP connect
@@ -497,6 +514,24 @@ class S7CommPlusAsyncClient:
                 pass
             self._writer = None
             self._reader = None
+        self._connect_params = None
+
+    async def _reconnect(self) -> None:
+        """Tear down and re-establish the connection with the same parameters."""
+        if self._connect_params is None:
+            raise S7ConnectionError("Not connected")
+        params = self._connect_params.copy()
+        await self.disconnect()
+        await self.connect(**params)
+
+    async def _with_reconnect(self, op: Callable[[], Awaitable[_T]]) -> _T:
+        """Run ``op``; if the PLC dropped the socket, reconnect once and retry."""
+        try:
+            return await op()
+        except S7ConnectionError as exc:
+            logger.info("Connection dropped by PLC (%s); reconnecting and retrying", exc)
+            await self._reconnect()
+            return await op()
 
     async def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block."""
@@ -793,7 +828,7 @@ class S7CommPlusAsyncClient:
         for db_info in await self.list_datablocks():
             if db_info.get("number", 0) <= 0 or db_info.get("rid", 0) == 0:
                 continue
-            ti_rid = await self._read_typeinfo_rid(db_info["rid"])
+            ti_rid = await self._with_reconnect(lambda: self._read_typeinfo_rid(db_info["rid"]))
             if ti_rid == 0:
                 continue  # load-memory-only DB, skip
             root_nodes.append(
@@ -815,7 +850,7 @@ class S7CommPlusAsyncClient:
             )
 
         # Phase D: explore the OMS type-info container (a large, multi-fragment PDU).
-        type_objects = await self._explore_type_info_container()
+        type_objects = await self._with_reconnect(self._explore_type_info_container)
 
         # Phase E: recombine type-info with the DB/area nodes and flatten.
         typeinfo.build_tree(root_nodes, type_objects)
@@ -842,6 +877,8 @@ class S7CommPlusAsyncClient:
         """Read LID=1 of a DB to get its type-info RID (0 if the DB has no readable value)."""
         try:
             raw = await self.read_symbolic(db_rid, [1], 0)
+        except (S7ConnectionError, S7ProtocolError):
+            raise
         except Exception:
             return 0
         return struct.unpack(">I", raw[:4])[0] if len(raw) >= 4 else 0
@@ -882,7 +919,7 @@ class S7CommPlusAsyncClient:
         """
         async with self._lock:
             if not (self._connected or self._transport_connected) or self._writer is None or self._reader is None:
-                raise RuntimeError("Not connected")
+                raise S7ConnectionError("Not connected")
 
             seq_num = self._next_sequence_number()
 
@@ -921,27 +958,49 @@ class S7CommPlusAsyncClient:
                 else:
                     self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
+            response_data = await self._recv_response_frame()
+
             # Large responses (e.g. Explore) are split across several S7CommPlus PDUs.
             if reassemble:
-                data = await self._recv_reassembled_payload()
+                data = await self._recv_reassembled_payload(response_data)
                 if len(data) < 10:
-                    raise RuntimeError("Response too short")
+                    raise S7ConnectionError("Response too short")
+                resp_func = struct.unpack_from(">H", data, 3)[0]
+                resp_seq = struct.unpack_from(">H", data, 7)[0]
+                if resp_seq != seq_num:
+                    raise S7ProtocolError(
+                        f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
+                    )
                 return bytes(data[10:])
 
-            response_data = await self._recv_cotp_dt()
-
-            version, data_length, consumed = decode_header(response_data)
+            _, data_length, consumed = decode_header(response_data)
             response = response_data[consumed : consumed + data_length]
 
             if len(response) < 10:
-                raise RuntimeError("Response too short")
+                raise S7ConnectionError("Response too short")
 
             # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
             # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
             # IntegrityId travels at the END of the payload and is ignored by the parsers.
+            resp_func = struct.unpack_from(">H", response, 3)[0]
+            resp_seq = struct.unpack_from(">H", response, 7)[0]
+            if resp_seq != seq_num:
+                raise S7ProtocolError(
+                    f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
+                )
             return response[10:]
 
-    async def _recv_reassembled_payload(self) -> bytes:
+    async def _recv_response_frame(self) -> bytes:
+        """Receive the next application response, consuming non-fatal SystemEvents."""
+        for _ in range(_MAX_SYSTEM_EVENTS_PER_RESPONSE + 1):
+            response_data = await self._recv_cotp_dt()
+            version, data_length, consumed = decode_header(response_data)
+            if version != ProtocolVersion.SYSTEM_EVENT:
+                return response_data
+            _check_system_event(bytes(response_data[consumed : consumed + data_length]))
+        raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+
+    async def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
         """Receive a possibly-fragmented S7CommPlus response, returning its data section.
 
         A large response is split into several S7CommPlus PDUs. Each fragment is
@@ -950,13 +1009,13 @@ class S7CommPlusAsyncClient:
         of every fragment until the trailer is seen. Works for single-PDU responses
         too (one fragment immediately followed by the trailer).
         """
-        buf = bytearray()
+        buf = bytearray(initial_data)
 
         async def ensure(n: int) -> None:
             while len(buf) < n:
                 chunk = await self._recv_cotp_dt()
                 if not chunk:
-                    raise RuntimeError("Connection closed during response reassembly")
+                    raise S7ConnectionError("Connection closed during response reassembly")
                 buf.extend(chunk)
 
         data = bytearray()
@@ -964,7 +1023,7 @@ class S7CommPlusAsyncClient:
         while True:
             await ensure(4)
             if buf[0] != 0x72:
-                raise RuntimeError("Expected S7CommPlus fragment header (0x72)")
+                raise S7ConnectionError("Expected S7CommPlus fragment header (0x72)")
             frag_len = (buf[2] << 8) | buf[3]
             del buf[:4]
             if frag_len == 0:
@@ -974,7 +1033,7 @@ class S7CommPlusAsyncClient:
             del buf[:frag_len]
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
-                raise RuntimeError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
+                raise S7ConnectionError(f"Reassembled response exceeds limits ({len(data)} bytes, {fragments} fragments)")
             # The next 4 bytes are either the trailer (0x72 ver 0x0000) or the next
             # fragment's header (0x72 ver len>0).
             await ensure(4)
@@ -986,7 +1045,7 @@ class S7CommPlusAsyncClient:
     async def _cotp_connect(self, local_tsap: int, remote_tsap: bytes) -> None:
         """Perform COTP Connection Request / Confirm handshake."""
         if self._writer is None or self._reader is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
 
         base_pdu = struct.pack(">BBHHB", 6, _COTP_CR, 0x0000, 0x0001, 0x00)
         calling_tsap = struct.pack(">BBH", 0xC1, 2, local_tsap)
@@ -1004,8 +1063,10 @@ class S7CommPlusAsyncClient:
         _, _, length = struct.unpack(">BBH", tpkt_header)
         payload = await self._reader.readexactly(length - 4)
 
-        if len(payload) < 7 or payload[1] != _COTP_CC:
-            raise RuntimeError(f"Expected COTP CC, got {payload[1]:#04x}")
+        if len(payload) < 7:
+            raise S7ConnectionError(f"COTP CC response too short: {len(payload)} bytes")
+        if payload[1] != _COTP_CC:
+            raise S7ConnectionError(f"Expected COTP CC, got {payload[1]:#04x}")
 
     async def _init_ssl(self) -> None:
         """Send InitSSL request (required before CreateObject)."""
@@ -1031,8 +1092,8 @@ class S7CommPlusAsyncClient:
         version, data_length, consumed = decode_header(response_data)
         response = response_data[consumed : consumed + data_length]
 
-        if len(response) < 14:
-            raise RuntimeError("InitSSL response too short")
+        if len(response) < 10:
+            raise S7ConnectionError("InitSSL response too short")
 
         logger.debug(f"InitSSL response received, version=V{version}")
 
@@ -1084,7 +1145,7 @@ class S7CommPlusAsyncClient:
         response = response_data[consumed : consumed + data_length]
 
         if len(response) < 10:
-            raise RuntimeError("CreateObject response too short")
+            raise S7ConnectionError("CreateObject response too short")
 
         # Response header is 10 bytes (opcode+reserved+func+reserved+seq+transport).
         # Responses do NOT carry a SessionId field (unlike requests which are 14 bytes).
@@ -1182,7 +1243,7 @@ class S7CommPlusAsyncClient:
     async def _send_cotp_raw(self, data: bytes) -> None:
         """Send raw bytes wrapped in COTP DT + TPKT (no TLS)."""
         if self._writer is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
 
         cotp_dt = struct.pack(">BBB", 2, _COTP_DT, 0x80) + data
         tpkt = struct.pack(">BBH", 3, 0, 4 + len(cotp_dt)) + cotp_dt
@@ -1192,14 +1253,16 @@ class S7CommPlusAsyncClient:
     async def _recv_cotp_raw(self) -> bytes:
         """Receive one TPKT + COTP DT frame and return the payload (no TLS)."""
         if self._reader is None:
-            raise RuntimeError("Not connected")
+            raise S7ConnectionError("Not connected")
 
         tpkt_header = await self._reader.readexactly(4)
         _, _, length = struct.unpack(">BBH", tpkt_header)
         payload = await self._reader.readexactly(length - 4)
 
-        if len(payload) < 3 or payload[1] != _COTP_DT:
-            raise RuntimeError(f"Expected COTP DT, got {payload[1]:#04x}")
+        if len(payload) < 3:
+            raise S7ConnectionError(f"COTP DT response too short: {len(payload)} bytes")
+        if payload[1] != _COTP_DT:
+            raise S7ConnectionError(f"Expected COTP DT, got {payload[1]:#04x}")
 
         return payload[3:]
 

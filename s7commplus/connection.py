@@ -121,6 +121,87 @@ _S7_CIPHERS = (
 # set_ecdh_curve call here would silently overwrite it).
 _S7_PREFERRED_GROUPS = ("X25519",)
 
+_MAX_SYSTEM_EVENTS_PER_RESPONSE = 16
+_SYSTEM_EVENT_RETURN_VALUE_ID = 40305
+
+
+def _system_event_return_value(payload: bytes) -> Optional[int]:
+    """Return a fixed-width SystemEvent error value, if the event contains one."""
+    from snap7.error import S7ProtocolError
+
+    if len(payload) < 16:
+        raise S7ProtocolError(f"Malformed S7CommPlus SystemEvent: {payload.hex()}")
+    if len(payload) == 16:
+        return None
+
+    # A non-Struct suffix is an informational message (for example LOGOUT).
+    if len(payload) < 20 or int.from_bytes(payload[16:20], "big") != DataType.STRUCT:
+        return None
+    if len(payload) < 24:
+        raise S7ProtocolError(f"Malformed S7CommPlus SystemEvent Struct: {payload.hex()}")
+
+    offset = 24  # fixed-width PValue header + Struct id
+    scalar_sizes = {
+        DataType.BOOL: 1,
+        DataType.USINT: 1,
+        DataType.UINT: 2,
+        DataType.UDINT: 4,
+        DataType.ULINT: 8,
+        DataType.SINT: 1,
+        DataType.INT: 2,
+        DataType.DINT: 4,
+        DataType.LINT: 8,
+        DataType.BYTE: 1,
+        DataType.WORD: 2,
+        DataType.DWORD: 4,
+        DataType.LWORD: 8,
+        DataType.REAL: 4,
+        DataType.LREAL: 8,
+        DataType.TIMESTAMP: 8,
+        DataType.TIMESPAN: 8,
+        DataType.RID: 4,
+        DataType.AID: 4,
+    }
+
+    while offset + 4 <= len(payload):
+        member_id = int.from_bytes(payload[offset : offset + 4], "big")
+        offset += 4
+        if member_id == 0:
+            break
+        if offset + 4 > len(payload):
+            raise S7ProtocolError(f"Malformed S7CommPlus SystemEvent member: {payload.hex()}")
+
+        flags = payload[offset + 1]
+        datatype = payload[offset + 3]
+        offset += 4
+        if flags != 0:
+            raise S7ProtocolError(f"Unsupported S7CommPlus SystemEvent member flags 0x{flags:02X}: {payload.hex()}")
+
+        size = scalar_sizes.get(datatype)
+        if size is None or offset + size > len(payload):
+            raise S7ProtocolError(f"Unsupported or truncated S7CommPlus SystemEvent datatype 0x{datatype:02X}: {payload.hex()}")
+        if member_id == _SYSTEM_EVENT_RETURN_VALUE_ID:
+            if datatype != DataType.LINT:
+                raise S7ProtocolError(f"Malformed S7CommPlus SystemEvent ReturnValue: {payload.hex()}")
+            return int.from_bytes(payload[offset : offset + size], "big", signed=True)
+        offset += size
+
+    # The reference driver treats a data Struct without ReturnValue as fatal.
+    raise S7ProtocolError(f"S7CommPlus SystemEvent Struct has no ReturnValue: {payload.hex()}")
+
+
+def _check_system_event(payload: bytes) -> None:
+    """Raise for fatal/malformed SystemEvents; ignore confirmations/messages."""
+    from snap7.error import S7ProtocolError
+
+    return_value = _system_event_return_value(payload)
+    if return_value is not None and return_value < 0:
+        raise S7ProtocolError(
+            f"Fatal S7CommPlus SystemEvent return_value={return_value}: {payload.hex()}",
+            error_code=return_value,
+        )
+    logger.debug("Ignoring non-fatal S7CommPlus SystemEvent (%d bytes)", len(payload))
+
 
 def _set_s7_groups(ctx: ssl.SSLContext) -> None:
     for group in _S7_PREFERRED_GROUPS:
@@ -885,13 +966,23 @@ class S7CommPlusConnection:
             else:
                 self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
+        response_frame = self._recv_response_frame()
+
         # Large responses (e.g. Explore) are split across several S7CommPlus PDUs.
         if reassemble:
-            data = self._recv_reassembled_payload()
+            data = self._recv_reassembled_payload(response_frame)
             if len(data) < 10:
                 from snap7.error import S7ConnectionError
 
                 raise S7ConnectionError("Response too short")
+            resp_func = struct.unpack_from(">H", data, 3)[0]
+            resp_seq = struct.unpack_from(">H", data, 7)[0]
+            if resp_seq != seq_num:
+                from snap7.error import S7ProtocolError
+
+                raise S7ProtocolError(
+                    f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
+                )
             logger.debug(f"  Reassembled response ({len(data)} bytes), payload {len(data) - 10} bytes")
             resp_payload = bytes(data[10:])
             if self._session_key is not None:
@@ -900,11 +991,6 @@ class S7CommPlusConnection:
                 resp_payload = resp_payload[iid_consumed:]
             return resp_payload
 
-        # Receive response
-        response_frame = self._recv_s7_data()
-        while self._is_notification_frame(response_frame):
-            self._notification_frames.append(response_frame)
-            response_frame = self._recv_s7_data()
         logger.debug(f"=== RECV RESPONSE === raw frame ({len(response_frame)} bytes): {response_frame.hex(' ')}")
 
         # Parse frame header, use data_length to exclude trailer
@@ -922,11 +1008,6 @@ class S7CommPlusConnection:
             response = _verify_v3_hmac(response, self._session_key)
             logger.debug("  V3 HMAC verified")
 
-        # V254 frames have no standard header — return raw data
-        if version == ProtocolVersion.SYSTEM_EVENT:
-            logger.debug(f"  V254 frame: returning raw data ({len(response)} bytes)")
-            return bytes(response)
-
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
         if len(response) < 10:
@@ -943,6 +1024,12 @@ class S7CommPlusConnection:
             f"  Response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
             f"seq={resp_seq} transport=0x{resp_transport:02X}"
         )
+        if resp_seq != seq_num:
+            from snap7.error import S7ProtocolError
+
+            raise S7ProtocolError(
+                f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
+            )
 
         # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses have
         # NO SessionId field (requests do, making their header 14 bytes).
@@ -965,6 +1052,25 @@ class S7CommPlusConnection:
             logger.debug(f"  Trailer ({len(trailer)} bytes): {trailer.hex(' ')}")
 
         return resp_payload
+
+    def _recv_response_frame(self) -> bytes:
+        """Receive the next response, queueing notifications and consuming non-fatal SystemEvents."""
+        from snap7.error import S7ProtocolError
+
+        system_events = 0
+        while True:
+            response_frame = self._recv_s7_data()
+            version, data_length, consumed = decode_header(response_frame)
+            if version == ProtocolVersion.SYSTEM_EVENT:
+                _check_system_event(bytes(response_frame[consumed : consumed + data_length]))
+                system_events += 1
+                if system_events > _MAX_SYSTEM_EVENTS_PER_RESPONSE:
+                    raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+                continue
+            if self._is_notification_frame(response_frame):
+                self._notification_frames.append(response_frame)
+                continue
+            return response_frame
 
     @staticmethod
     def _is_notification_frame(frame: bytes) -> bool:
@@ -1004,7 +1110,7 @@ class S7CommPlusConnection:
     _MAX_REASSEMBLED_BYTES = 16 * 1024 * 1024
     _MAX_REASSEMBLED_FRAGMENTS = 4096
 
-    def _recv_reassembled_payload(self) -> bytes:
+    def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
         """Receive a possibly-fragmented S7CommPlus response, returning its data section.
 
         A large response is split into several S7CommPlus PDUs. Each fragment is
@@ -1015,7 +1121,7 @@ class S7CommPlusConnection:
         """
         from snap7.error import S7ConnectionError
 
-        buf = bytearray()
+        buf = bytearray(initial_data)
 
         def ensure(n: int) -> None:
             while len(buf) < n:
@@ -1428,13 +1534,25 @@ class S7CommPlusConnection:
         return False
 
     def _build_get_var_substreamed(self, in_object_id: int, address: int, seq_field: int = 1) -> bytes:
-        """Build the captured GET_VAR_SUBSTREAMED layout for legacy sessions.
+        """Build the protocol-specific captured GET_VAR_SUBSTREAMED layout.
 
-        TIA's V1-initial requests use the same zero-valued VLQ qualifier and
-        two-byte request field as the reference driver's V2 requests. Using
-        a fixed-width qualifier plus that field adds two bytes (#872).
-        IntegrityId is inserted before the final four-byte fill.
+        S7-1200 SessionKey captures use the frame sequence as a fixed-width
+        ObjectQualifier, a VLQ request field, and a three-byte fill. S7-1500
+        captures use a zero-valued VLQ qualifier, a two-byte request field,
+        and a four-byte fill. The IntegrityId is inserted before that fill.
         """
+        from .session_auth.keys import KeyFamily
+
+        if self._session_auth_family == KeyFamily.S7_1200:
+            oq = encode_object_qualifier(key_qualifier=self._sequence_number, protocol_version=ProtocolVersion.V1)
+            payload = struct.pack(">I", in_object_id)
+            payload += bytes([0x20, DataType.UDINT])
+            payload += encode_uint32_vlq(1)  # field count
+            payload += encode_uint32_vlq(address)
+            payload += oq
+            payload += encode_uint32_vlq(seq_field)
+            payload += bytes(3)  # fill
+            return payload
         return _build_get_var_substreamed_payload(
             in_object_id,
             address,
@@ -1481,10 +1599,12 @@ class S7CommPlusConnection:
         """
         # Step 1: Read legitimation challenge from session, address 303
         logger.debug("Post-auth legitimation: reading challenge from address 303")
+        from .session_auth.keys import KeyFamily
+
         challenge_resp = self.send_request(
             FunctionCode.GET_VAR_SUBSTREAMED,
             self._build_get_var_substreamed(self._session_id, LegitimationId.SERVER_SESSION_REQUEST),
-            integrity_tail=4,
+            integrity_tail=3 if self._session_auth_family == KeyFamily.S7_1200 else 4,
         )
 
         # Never substitute the earlier CreateObject challenge when this read
