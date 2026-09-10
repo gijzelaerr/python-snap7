@@ -1,5 +1,7 @@
 """Unit tests for S7CommPlus client payload builders, connection parsing, and error paths."""
 
+import hashlib
+import hmac
 import struct
 from unittest.mock import MagicMock, call
 
@@ -273,7 +275,7 @@ class TestIntegrityPlaceholder:
     @pytest.mark.parametrize(("with_integrity", "integrity_id"), [(False, 0), (True, 7)])
     def test_connection_conditionally_inserts_integrity_id(self, with_integrity: bool, integrity_id: int) -> None:
         payload = _build_read_payload([(1, 0, 4)])
-        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
         connection = S7CommPlusConnection("127.0.0.1")
         connection._connected = True
         connection._protocol_version = ProtocolVersion.V2
@@ -742,6 +744,18 @@ class TestReassembledPayload:
     def test_multiple_fragments_split_across_reads(self) -> None:
         conn = self._conn_yielding([self._frag(b"abc"), self._frag(b"de"), self._TRAILER])
         assert conn._recv_reassembled_payload() == b"abcde"
+
+    def test_v3_session_key_hmac_is_stripped_from_each_fragment(self) -> None:
+        conn = self._conn_yielding([])
+        conn._session_key = bytes(24)
+
+        def v3_frag(data: bytes) -> bytes:
+            digest = hmac.new(conn._session_key, data, hashlib.sha256).digest()
+            protected = bytes([len(digest)]) + digest + data
+            return bytes([0x72, ProtocolVersion.V3, 0, len(protected)]) + protected
+
+        initial = v3_frag(b"abc") + v3_frag(b"de") + bytes([0x72, ProtocolVersion.V3, 0, 0])
+        assert conn._recv_reassembled_payload(initial) == b"abcde"
 
     def test_bad_fragment_header_raises(self) -> None:
         from snap7.error import S7ConnectionError
