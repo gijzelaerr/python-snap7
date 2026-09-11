@@ -7,7 +7,7 @@ import asyncio
 import logging
 import ssl
 import struct
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from snap7.error import S7ConnectionError, S7ProtocolError
@@ -17,11 +17,13 @@ from .blob_decompressor import find_and_decompress
 from .client import (
     DBWriteItem,
     SymbolicReadItem,
+    SymbolicWriteItem,
     _build_area_read_payload,
     _build_area_write_payload,
     _build_explore_payload,
     _build_explore_request,
     _build_invoke_payload,
+    _build_multi_symbolic_write_payload,
     _build_multi_symbolic_read_payload,
     _build_read_payload,
     _build_subscription_request,
@@ -32,7 +34,9 @@ from .client import (
     _parse_cpu_state,
     _parse_read_response,
     _parse_write_response,
+    _parse_write_response_errors,
 )
+from .catalog import SymbolCatalog, SymbolicTag, TagResult
 from .codec import (
     decode_header,
     encode_header,
@@ -116,6 +120,7 @@ class S7CommPlusAsyncClient:
         self._connected = False
         self._lock = asyncio.Lock()
         self._connect_params: Optional[dict[str, Any]] = None
+        self._symbol_catalog: Optional[SymbolCatalog] = None
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -197,6 +202,7 @@ class S7CommPlusAsyncClient:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
+        self._symbol_catalog = None
         self._connect_params = {
             "host": host,
             "port": port,
@@ -503,6 +509,7 @@ class S7CommPlusAsyncClient:
         self._incoming_bio = None
         self._outgoing_bio = None
         self._oms_secret = None
+        self._symbol_catalog = None
         self._server_session_version = None
         self._session_setup_ok = False
         self._protection_level = None
@@ -798,6 +805,99 @@ class S7CommPlusAsyncClient:
         response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
+    async def refresh_tag_catalog(self) -> SymbolCatalog:
+        """Browse the PLC and replace the cached symbolic tag catalog."""
+        self._symbol_catalog = SymbolCatalog.from_browse(await self.browse())
+        return self._symbol_catalog
+
+    def invalidate_tag_catalog(self) -> None:
+        """Discard cached browse metadata after a PLC layout change."""
+        self._symbol_catalog = None
+
+    async def resolve_tag(self, name: str) -> SymbolicTag:
+        """Resolve a browsed tag name to its typed symbolic descriptor."""
+        catalog = self._symbol_catalog or await self.refresh_tag_catalog()
+        return catalog.resolve(name)
+
+    async def read_tag(self, name: str) -> bytes:
+        """Read one symbolic tag by name, refreshing once if its CRC changed."""
+        result = (await self.read_tags([name]))[0]
+        if result.error is not None:
+            raise result.error
+        assert result.value is not None
+        return result.value
+
+    async def read_tags(self, names: Sequence[str]) -> list[TagResult]:
+        """Read names in one request and return a success/error for every item."""
+        if not names:
+            return []
+        tags = [await self.resolve_tag(name) for name in names]
+        values = await self.read_symbolic_multi([(tag.access_area, list(tag.lids), tag.symbol_crc) for tag in tags])
+        results = [
+            TagResult(tag=tag, value=value)
+            if value is not None
+            else TagResult(tag=tag, error=RuntimeError(f"Symbolic read failed for {tag.name!r}"))
+            for tag, value in zip(tags, values)
+        ]
+        retry_indices = [index for index, result in enumerate(results) if not result.success and result.tag.symbol_crc]
+        if not retry_indices:
+            return results
+
+        refreshed = await self.refresh_tag_catalog()
+        changed: list[tuple[int, SymbolicTag]] = []
+        for index in retry_indices:
+            try:
+                tag = refreshed.resolve(results[index].tag.name)
+            except KeyError:
+                continue
+            if tag.symbol_crc != results[index].tag.symbol_crc:
+                changed.append((index, tag))
+        if not changed:
+            return results
+
+        retry_values = await self.read_symbolic_multi([(tag.access_area, list(tag.lids), tag.symbol_crc) for _, tag in changed])
+        for (index, tag), value in zip(changed, retry_values):
+            results[index] = (
+                TagResult(tag=tag, value=value)
+                if value is not None
+                else TagResult(tag=tag, error=RuntimeError(f"Symbolic read failed for {tag.name!r} after CRC refresh"))
+            )
+        return results
+
+    async def write_tag(self, name: str, data: bytes) -> None:
+        """Write one symbolic tag by name using its resolved PValue datatype."""
+        result = (await self.write_tags({name: data}))[0]
+        if result.error is not None:
+            raise result.error
+
+    async def write_tags(self, values: Mapping[str, bytes]) -> list[TagResult]:
+        """Write names once and return per-item results without automatic retry."""
+        if not self._connected:
+            raise RuntimeError("Not connected")
+        if not values:
+            return []
+        tags = [await self.resolve_tag(name) for name in values]
+        unsupported = [tag.name for tag in tags if tag.datatype is None]
+        if unsupported:
+            raise ValueError(f"No S7CommPlus wire datatype mapping for: {', '.join(unsupported)}")
+        items: list[SymbolicWriteItem] = [
+            (tag.access_area, list(tag.lids), data, tag.symbol_crc, tag.datatype)
+            for tag, data in zip(tags, values.values())
+            if tag.datatype is not None
+        ]
+        payload = _build_multi_symbolic_write_payload(items, self._protocol_version)
+        response = await self._send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        try:
+            errors = _parse_write_response_errors(response, expected_count=len(tags))
+        except RuntimeError as error:
+            return [TagResult(tag=tag, error=error) for tag in tags]
+        return [
+            TagResult(tag=tag, error=RuntimeError(f"Symbolic write failed for {tag.name!r}: PLC error {errors[index]}"))
+            if index in errors
+            else TagResult(tag=tag)
+            for index, tag in enumerate(tags, 1)
+        ]
+
     async def list_datablocks(self) -> list[dict[str, Any]]:
         """List all datablocks on the PLC via EXPLORE.
 
@@ -870,6 +970,9 @@ class S7CommPlusAsyncClient:
                     "opt_bitoffset": v.opt_bitoffset,
                     "nonopt_address": v.nonopt_address,
                     "nonopt_bitoffset": v.nonopt_bitoffset,
+                    "symbol_crc": v.symbol_crc,
+                    "array_dimensions": v.array_dimensions,
+                    "string_length": v.string_length,
                 }
             )
         return variables

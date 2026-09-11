@@ -16,6 +16,7 @@ Usage::
 from .async_client import S7CommPlusAsyncClient as AsyncClient
 from .alarm import Alarm, AlarmNotification, AlarmText, LanguageId
 from .blob_decompressor import decompress_blob, find_and_decompress
+from .catalog import ArrayDimension, SymbolCatalog, SymbolicTag, TagResult
 from .client import DBWriteItem, SymbolicReadItem
 from .client import S7CommPlusClient as Client
 from .connection import S7CommPlusConnection
@@ -37,6 +38,7 @@ __all__ = [
     "Alarm",
     "AlarmNotification",
     "AlarmText",
+    "ArrayDimension",
     "AsyncClient",
     "CPUState",
     "Client",
@@ -49,8 +51,11 @@ __all__ = [
     "Server",
     "SubscriptionItem",
     "SubscriptionNotification",
+    "SymbolCatalog",
     "SymbolicReadItem",
+    "SymbolicTag",
     "Tag",
+    "TagResult",
     "block_interface_from_explore",
     "datablocks_from_explore",
     "decompress_blob",
