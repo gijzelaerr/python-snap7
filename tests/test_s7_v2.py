@@ -905,6 +905,12 @@ class TestLegitimationWireFormat:
 
         assert _parse_get_var_substreamed_response(response) == challenge
 
+    def test_parse_get_var_substreamed_usint_array_without_legacy_marker(self) -> None:
+        """Accept the response captured from the S7-1511C in GH-872."""
+        response = bytes.fromhex("00100214ac214373925d0fc9a8ef730c908fcaa2863f8abe0400000000")
+
+        assert _parse_get_var_substreamed_response(response) == bytes.fromhex("ac214373925d0fc9a8ef730c908fcaa2863f8abe")
+
     def test_parse_get_var_substreamed_blob(self) -> None:
         challenge = bytes(range(16))
         response = bytes([0x00, 0x00, 0x00, DataType.BLOB, 0x00])
@@ -1185,12 +1191,17 @@ class TestProtectionLevel:
     def test_parse_scalar_udint(self) -> None:
         assert _parse_protection_level_response(self.RESPONSE) == AccessLevel.NO_ACCESS
 
+    def test_parse_scalar_udint_without_legacy_marker(self) -> None:
+        response = bytes.fromhex("000004040700000000")
+
+        assert _parse_protection_level_response(response) == AccessLevel.NO_ACCESS
+
     def test_parse_rejects_nonzero_return(self) -> None:
         with pytest.raises(S7ConnectionError, match="return_value=4660"):
             _parse_protection_level_response(encode_uint32_vlq(0x1234))
 
-    def test_parse_rejects_missing_response_marker(self) -> None:
-        with pytest.raises(S7ConnectionError, match="missing response marker"):
+    def test_parse_rejects_missing_pvalue(self) -> None:
+        with pytest.raises(S7ConnectionError, match="missing PValue header"):
             _parse_protection_level_response(bytes([0x00]))
 
     def test_parse_rejects_truncated_pvalue_header(self) -> None:

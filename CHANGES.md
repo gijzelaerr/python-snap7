@@ -6,6 +6,10 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Accept GetVarSubStreamed responses whose PValue immediately follows the
+  return value, as captured from an S7-1511C during SessionKey legitimation.
+* Encode legacy SessionKey absolute DB reads with one address ID so scalar
+  reads are not misinterpreted as nested symbolic paths by S7-1500 PLCs.
 * Correlate S7CommPlus responses by opcode, function, and sequence; discard
   bounded stale replies from earlier requests, preserve interleaved
   notifications, and serialize synchronous wire requests.

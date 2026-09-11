@@ -615,6 +615,36 @@ class TestClientErrorPaths:
         with pytest.raises(RuntimeError, match="Not connected"):
             client.db_read_multi([(1, 0, 4)])
 
+    def test_session_key_db_read_uses_one_absolute_address_id(self) -> None:
+        client = S7CommPlusClient()
+        connection = MagicMock(requires_substreamed=False, session_key_active=True)
+        client._connection = connection
+        client.read_symbolic = MagicMock(return_value=b"\x12\x34")
+
+        assert client.db_read(116, 708, 2) == b"\x12\x34"
+        client.read_symbolic.assert_called_once_with(Ids.DB_ACCESS_AREA_BASE + 116, [709])
+
+    def test_session_key_db_read_rejects_cross_variable_range(self) -> None:
+        client = S7CommPlusClient()
+        connection = MagicMock(requires_substreamed=False, session_key_active=True)
+        client._connection = connection
+        client.read_symbolic = MagicMock(return_value=b"\x12\x34")
+
+        with pytest.raises(RuntimeError, match="crosses variable boundaries"):
+            client.db_read(116, 708, 4)
+
+    def test_session_key_db_read_multi_preserves_item_count(self) -> None:
+        client = S7CommPlusClient()
+        connection = MagicMock(requires_substreamed=False, session_key_active=True)
+        client._connection = connection
+        client.read_symbolic_multi = MagicMock(return_value=[b"\x01\x02", None])
+
+        with pytest.raises(RuntimeError, match="DB2 offset 10 could not be read"):
+            client.db_read_multi([(1, 0, 2), (2, 10, 1)])
+        client.read_symbolic_multi.assert_called_once_with(
+            [(Ids.DB_ACCESS_AREA_BASE + 1, [1]), (Ids.DB_ACCESS_AREA_BASE + 2, [11])]
+        )
+
     def test_db_write_multi_not_connected(self) -> None:
         client = S7CommPlusClient()
         with pytest.raises(RuntimeError, match="Not connected"):
