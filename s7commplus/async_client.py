@@ -39,8 +39,8 @@ from .codec import (
     encode_object_qualifier,
     encode_pvalue_blob,
     encode_typed_value,
+    parse_create_object_attributes,
     parse_create_object_session_id,
-    parse_server_session_version,
 )
 from .connection import (
     _MAX_SYSTEM_EVENTS_PER_RESPONSE,
@@ -132,6 +132,7 @@ class S7CommPlusAsyncClient:
         # ServerSessionVersion is captured as its raw typed value (flags+datatype+data)
         # so it can be echoed back verbatim — real S7-1500 PLCs send it as a Struct.
         self._server_session_version: Optional[bytes] = None
+        self._legacy_session_key_required: bool = False
         self._session_setup_ok: bool = False
         # Effective protection level, read once the session is up
         self._protection_level: Optional[int] = None
@@ -231,6 +232,14 @@ class S7CommPlusAsyncClient:
             # use ProtocolVersion V2 on a real S7-1500 (matches the C# reference driver).
             if self._tls_active:
                 self._protocol_version = ProtocolVersion.V2
+
+            if self._protocol_version == ProtocolVersion.V1 and self._legacy_session_key_required:
+                from snap7.error import S7ConnectionError
+
+                raise S7ConnectionError(
+                    "AsyncClient does not support legacy V1 SessionKey authentication; "
+                    "use the synchronous s7commplus.Client for this PLC"
+                )
 
             # Step 5: Session setup. A transport and CreateObject response do
             # not make the public client usable until the PLC accepts setup.
@@ -504,6 +513,7 @@ class S7CommPlusAsyncClient:
         self._outgoing_bio = None
         self._oms_secret = None
         self._server_session_version = None
+        self._legacy_session_key_required = False
         self._session_setup_ok = False
         self._protection_level = None
 
@@ -1162,11 +1172,15 @@ class S7CommPlusAsyncClient:
 
         _log_create_object_return_value(return_value, self._tls_active)
 
-        self._server_session_version = parse_server_session_version(response[10 + obj_end :])
+        attrs = parse_create_object_attributes(response[10 + obj_end :])
+        self._server_session_version = attrs.server_session_version
+        self._legacy_session_key_required = attrs.public_key_fingerprint is not None or attrs.session_challenge is not None
         if self._server_session_version is not None:
             logger.info(f"ServerSessionVersion captured: {len(self._server_session_version)} bytes")
         else:
             logger.debug("ServerSessionVersion not found in CreateObject response")
+        if self._legacy_session_key_required:
+            logger.info("PLC advertised legacy SessionKey authentication attributes")
 
     async def _setup_session(self) -> bool:
         """Echo ServerSessionVersion back to the PLC via SetMultiVariables."""

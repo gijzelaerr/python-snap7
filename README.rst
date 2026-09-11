@@ -95,6 +95,10 @@ disabled. python-snap7 now supports S7CommPlus V1, V2 (with TLS), and V3::
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
+Legacy V1 SessionKey authentication is supported by the synchronous client.
+The asynchronous client supports the V2/V3 TLS paths and rejects SessionKey
+PLCs during connection setup with an actionable error.
+
 The new ``s7commplus`` package provides S7CommPlus protocol support for
 S7-1200/1500 PLCs. The ``s7`` package (recommended) and its ``snap7`` alias
 continue to work unchanged for legacy S7-300/400 PLCs and S7-1200/1500 with
