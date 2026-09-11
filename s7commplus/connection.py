@@ -50,6 +50,7 @@ from types import TracebackType
 from typing import Any, Optional, Type
 
 from snap7.connection import ISOTCPConnection
+from snap7.error import S7ConnectionError
 
 from .codec import decode_header, encode_header, encode_object_qualifier, parse_create_object_attributes
 from .legitimation import (
@@ -78,6 +79,25 @@ from .protocol import (
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 logger = logging.getLogger(__name__)
+
+
+class FamilyOnlyFingerprintError(S7ConnectionError):
+    """A legacy PLC advertised only a public-key family identifier."""
+
+    def __init__(self, family: int) -> None:
+        self.family = family
+        super().__init__(
+            f"PLC advertised public-key family {family:02X} without a key id; "
+            "connect through Client with allow_legacy_key_fallback enabled to probe known same-family keys"
+        )
+
+
+class SessionKeyCandidateRejectedError(S7ConnectionError):
+    """The PLC rejected setup with one explicitly selected family key."""
+
+
+class SessionKeyAuthenticationDependencyError(S7ConnectionError):
+    """Optional dependencies required for SessionKey authentication are absent."""
 
 
 def _log_create_object_return_value(return_value: int, tls_active: bool) -> None:
@@ -466,6 +486,7 @@ class S7CommPlusConnection:
         self._session_key: Optional[bytes] = None
         self._session_auth_public_key: bytes = b""
         self._session_auth_family: int = 0
+        self._session_key_fingerprint_override: Optional[str] = None
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -550,6 +571,8 @@ class S7CommPlusConnection:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
         password: str = "",
+        *,
+        _session_key_fingerprint: Optional[str] = None,
     ) -> None:
         """Establish S7CommPlus connection.
 
@@ -569,6 +592,7 @@ class S7CommPlusConnection:
             tls_ca: Path to CA certificate for PLC verification (PEM)
         """
         self._connect_password = password
+        self._session_key_fingerprint_override = _session_key_fingerprint
         try:
             # Step 1: COTP connection (same TSAP for all S7CommPlus versions)
             self._iso_conn.connect(timeout)
@@ -584,6 +608,26 @@ class S7CommPlusConnection:
             # CreateObject always uses V1 framing
             self._create_session()
 
+            if self._public_key_fingerprint is not None and ":" not in self._public_key_fingerprint:
+                from .session_auth.keys import parse_family_identifier, parse_fingerprint
+
+                try:
+                    family = parse_family_identifier(self._public_key_fingerprint)
+                except ValueError as exc:
+                    raise S7ConnectionError(str(exc)) from exc
+                if self._session_key_fingerprint_override is None:
+                    raise FamilyOnlyFingerprintError(family)
+                override_family, _ = parse_fingerprint(self._session_key_fingerprint_override)
+                if override_family != family:
+                    raise S7ConnectionError(
+                        f"SessionKey candidate {self._session_key_fingerprint_override} does not belong to "
+                        f"PLC family {family.value:02X}"
+                    )
+            elif self._public_key_fingerprint is not None:
+                # A complete PLC fingerprint always wins over a cached/provided
+                # family-only fallback candidate.
+                self._session_key_fingerprint_override = None
+
             # After CreateObject (V1), data PDUs over TLS use ProtocolVersion V2 (matches C# driver)
             if self._tls_active:
                 self._protocol_version = ProtocolVersion.V2
@@ -592,15 +636,24 @@ class S7CommPlusConnection:
             # Transport establishment and CreateObject alone do not make the
             # public client usable.
             if self._server_session_version is None:
-                from snap7.error import S7ConnectionError
-
                 raise S7ConnectionError(
                     "PLC did not provide a usable ServerSessionVersion attribute; S7CommPlus session setup cannot continue"
                 )
-            self._session_setup_ok = self._setup_session()
+            try:
+                self._session_setup_ok = self._setup_session()
+            except SessionKeyAuthenticationDependencyError:
+                raise
+            except Exception as exc:
+                if self._session_key_fingerprint_override is not None:
+                    raise SessionKeyCandidateRejectedError(
+                        f"Session failed while trying SessionKey candidate {self._session_key_fingerprint_override}"
+                    ) from exc
+                raise
             if not self._session_setup_ok:
-                from snap7.error import S7ConnectionError
-
+                if self._session_key_fingerprint_override is not None:
+                    raise SessionKeyCandidateRejectedError(
+                        f"PLC rejected SessionKey candidate {self._session_key_fingerprint_override}"
+                    )
                 raise S7ConnectionError("S7CommPlus session setup was rejected by the PLC")
             self._session_ready = True
 
@@ -612,8 +665,6 @@ class S7CommPlusConnection:
                     )
             elif self._protocol_version == ProtocolVersion.V2:
                 if not self._tls_active:
-                    from snap7.error import S7ConnectionError
-
                     raise S7ConnectionError("PLC reports V2 protocol but TLS is not active. V2 requires TLS. Use use_tls=True.")
                 # Enable IntegrityId tracking for V2+
                 self._with_integrity_id = True
@@ -1399,11 +1450,12 @@ class S7CommPlusConnection:
         try:
             from .session_auth.keys import get_public_key, parse_fingerprint
 
-            family, _key_id = parse_fingerprint(self._public_key_fingerprint)
+            fingerprint = self._session_key_fingerprint_override or self._public_key_fingerprint
+            family, _key_id = parse_fingerprint(fingerprint)
 
-            public_key = get_public_key(self._public_key_fingerprint)
+            public_key = get_public_key(fingerprint)
             if public_key is None:
-                logger.info(f"SessionKey auth: no matching public key for {self._public_key_fingerprint}")
+                logger.info(f"SessionKey auth: no matching public key for {fingerprint}")
                 return None
 
             from .session_auth.legacy_auth import authenticate_real_plc
@@ -1411,13 +1463,11 @@ class S7CommPlusConnection:
             blob, session_key = authenticate_real_plc(self._session_challenge, public_key, family)
             self._session_auth_public_key = public_key
             self._session_auth_family = family
-            logger.info(f"SessionKey auth blob generated ({len(blob)} bytes)")
+            logger.info(f"SessionKey auth blob generated with key {fingerprint} ({len(blob)} bytes)")
             return blob, session_key
 
         except ImportError as e:
-            from snap7.error import S7ConnectionError
-
-            raise S7ConnectionError(
+            raise SessionKeyAuthenticationDependencyError(
                 "Cannot load S7CommPlus SessionKey authentication dependencies. "
                 "Install them with python -m pip install 'python-snap7[s7commplus]' "
                 "(or python -m pip install -e '.[s7commplus]' for a source checkout). "

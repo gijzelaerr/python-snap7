@@ -9,7 +9,9 @@ from s7commplus.session_auth import (
     PUBLIC_KEY_LENGTH_REAL_PLC,
     KeyFamily,
     UnknownPublicKeyError,
+    fingerprints_for_family,
     get_public_key,
+    parse_family_identifier,
     parse_fingerprint,
 )
 from s7commplus.session_auth.keys import _PUBLIC_KEYS
@@ -52,6 +54,29 @@ class TestParseFingerprint:
         assert len(bad) == 19
         with pytest.raises(ValueError, match="Invalid key id"):
             parse_fingerprint(bad)
+
+
+class TestFamilyOnlyIdentifiers:
+    @pytest.mark.parametrize(
+        ("identifier", "family"),
+        [("00", KeyFamily.S7_1500), ("01", KeyFamily.S7_1200), ("03", KeyFamily.PLCSIM)],
+    )
+    def test_supported_family(self, identifier: str, family: KeyFamily) -> None:
+        assert parse_family_identifier(identifier) is family
+
+    @pytest.mark.parametrize("identifier", ["", "0", "000", "zz", "02"])
+    def test_invalid_or_unknown_family(self, identifier: str) -> None:
+        with pytest.raises(ValueError, match="family"):
+            parse_family_identifier(identifier)
+
+    def test_candidates_are_bounded_to_reported_family(self) -> None:
+        candidates = fingerprints_for_family(KeyFamily.S7_1200)
+        assert candidates == (
+            "01:A95850575DF7B3DE",
+            "01:AC9BE476CB324E65",
+            "01:BD426B091F08731A",
+        )
+        assert all(parse_fingerprint(candidate)[0] is KeyFamily.S7_1200 for candidate in candidates)
 
 
 class TestGetPublicKey:

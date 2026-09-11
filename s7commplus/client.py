@@ -29,7 +29,7 @@ from .codec import (
     encode_pvalue_typed,
     parse_create_object_session_id,
 )
-from .connection import S7CommPlusConnection
+from .connection import FamilyOnlyFingerprintError, S7CommPlusConnection, SessionKeyCandidateRejectedError
 from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
 from .subscription import (
     SubscriptionItem,
@@ -41,6 +41,8 @@ from .subscription import (
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
+
+_LEGACY_KEY_CACHE: dict[tuple[str, int], str] = {}
 
 _T = TypeVar("_T")
 DBWriteItem: TypeAlias = tuple[int, int, bytes, DataType]
@@ -126,6 +128,7 @@ class S7CommPlusClient:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
         password: Optional[str] = None,
+        allow_legacy_key_fallback: bool = True,
     ) -> None:
         """Connect to an S7-1200/1500 PLC using S7CommPlus.
 
@@ -139,6 +142,8 @@ class S7CommPlusClient:
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
             password: PLC password for legitimation (V2+ with TLS)
+            allow_legacy_key_fallback: Try known same-family public keys on
+                fresh sessions when a legacy PLC omits its key id.
         """
         self._connect_params = {
             "host": host,
@@ -148,6 +153,7 @@ class S7CommPlusClient:
             "tls_key": tls_key,
             "tls_ca": tls_ca,
             "password": password,
+            "allow_legacy_key_fallback": allow_legacy_key_fallback,
         }
         self._open_connection()
 
@@ -156,6 +162,34 @@ class S7CommPlusClient:
         if self._connect_params is None:
             raise RuntimeError("Not connected")
         p = self._connect_params
+        cache_key = (p["host"], p["port"])
+        cached = _LEGACY_KEY_CACHE.get(cache_key) if p["allow_legacy_key_fallback"] else None
+        if cached is not None:
+            try:
+                self._open_connection_once(cached)
+                return
+            except SessionKeyCandidateRejectedError:
+                logger.info("Cached SessionKey candidate %s was rejected; trying remaining family keys", cached)
+                _LEGACY_KEY_CACHE.pop(cache_key, None)
+                from .session_auth.keys import parse_fingerprint
+
+                family, _ = parse_fingerprint(cached)
+                self._probe_family_keys(family, excluded={cached})
+                return
+
+        try:
+            self._open_connection_once()
+        except FamilyOnlyFingerprintError as exc:
+            if not p["allow_legacy_key_fallback"]:
+                raise S7ConnectionError(
+                    f"PLC advertised family-only key id {exc.family:02X}, but legacy key fallback is disabled"
+                ) from exc
+            self._probe_family_keys(exc.family)
+
+    def _open_connection_once(self, fingerprint: Optional[str] = None) -> None:
+        """Open exactly one transport/session, optionally with one key candidate."""
+        assert self._connect_params is not None
+        p = self._connect_params
         self._connection = S7CommPlusConnection(host=p["host"], port=p["port"])
         self._connection.connect(
             use_tls=p["use_tls"],
@@ -163,10 +197,34 @@ class S7CommPlusClient:
             tls_key=p["tls_key"],
             tls_ca=p["tls_ca"],
             password=p["password"] or "",
+            _session_key_fingerprint=fingerprint,
         )
         if p["password"] is not None and self._connection.tls_active and not self._connection.requires_substreamed:
             logger.info("Performing PLC legitimation (password authentication)")
             self._connection.authenticate(p["password"])
+
+    def _probe_family_keys(self, family: int, excluded: set[str] | None = None) -> None:
+        """Try each same-family key on a new connection and cache the winner."""
+        assert self._connect_params is not None
+        from .session_auth.keys import fingerprints_for_family
+
+        excluded = excluded or set()
+        candidates = [fingerprint for fingerprint in fingerprints_for_family(family) if fingerprint not in excluded]
+        if not candidates:
+            raise S7ConnectionError(f"No bundled SessionKey candidates for public-key family {family:02X}")
+
+        for attempt, fingerprint in enumerate(candidates, 1):
+            logger.info("Trying SessionKey candidate %s (%d/%d) on a fresh session", fingerprint, attempt, len(candidates))
+            try:
+                self._open_connection_once(fingerprint)
+            except SessionKeyCandidateRejectedError:
+                continue
+            _LEGACY_KEY_CACHE[(self._connect_params["host"], self._connect_params["port"])] = fingerprint
+            logger.info("Confirmed and cached SessionKey candidate %s", fingerprint)
+            return
+        raise S7ConnectionError(
+            f"PLC rejected all {len(candidates)} bundled SessionKey candidates for public-key family {family:02X}"
+        )
 
     def _reconnect(self) -> None:
         """Tear down and re-establish the connection with the same parameters.
