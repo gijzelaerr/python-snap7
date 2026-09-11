@@ -46,6 +46,7 @@ import ssl
 import struct
 import tempfile
 from collections import deque
+from collections.abc import Callable
 from types import TracebackType
 from typing import Any, Optional, Type
 
@@ -255,6 +256,23 @@ def _build_get_var_substreamed_payload(
     return payload
 
 
+def _response_pvalue_offset(payload: bytes, offset: int, supported: Callable[[int, int], bool]) -> int:
+    """Locate a response PValue with or without the legacy leading zero marker.
+
+    Captured PLC responses use both layouts. Prefer a PValue beginning directly
+    after ReturnValue, then accept the older zero-prefixed form emitted by the
+    emulator and present in earlier captures.
+    """
+    if offset + 2 <= len(payload) and supported(payload[offset], payload[offset + 1]):
+        return offset
+
+    if payload[offset : offset + 1] == b"\x00":
+        offset += 1
+    if offset + 2 > len(payload):
+        raise ValueError("missing PValue header")
+    return offset
+
+
 def _parse_get_var_substreamed_response(payload: bytes) -> bytes:
     """Extract the typed value from a GetVarSubStreamed response payload."""
     from snap7.error import S7ConnectionError
@@ -264,13 +282,11 @@ def _parse_get_var_substreamed_response(payload: bytes) -> bytes:
         if return_value != 0:
             raise S7ConnectionError(f"GetVarSubStreamed failed: return_value=0x{return_value:X}")
 
-        offset = consumed
-        if offset >= len(payload):
-            raise ValueError("missing response marker")
-        offset += 1  # protocol-defined unknown byte
-
-        if offset + 2 > len(payload):
-            raise ValueError("missing PValue header")
+        offset = _response_pvalue_offset(
+            payload,
+            consumed,
+            lambda flags, datatype: datatype == DataType.BLOB or (datatype == DataType.USINT and bool(flags & 0x10)),
+        )
         flags = payload[offset]
         datatype = payload[offset + 1]
         offset += 2
@@ -302,12 +318,11 @@ def _parse_protection_level_response(payload: bytes) -> int:
         if return_value != 0:
             raise S7ConnectionError(f"GetVarSubStreamed for the protection level failed: return_value={return_value}")
 
-        if offset >= len(payload):
-            raise ValueError("missing response marker")
-        offset += 1  # protocol-defined unknown byte
-
-        if offset + 2 > len(payload):
-            raise ValueError("missing PValue header")
+        offset = _response_pvalue_offset(
+            payload,
+            offset,
+            lambda flags, datatype: datatype == DataType.UDINT and not flags & 0x10,
+        )
         flags = payload[offset]
         datatype = payload[offset + 1]
         offset += 2
