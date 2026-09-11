@@ -1,2 +1,6 @@
 # Zlib preset dictionaries: exact bytes matter for Adler-32 checksums
 s7commplus/zlib_dicts/*.xml binary
+
+# Generated SessionKey source hashes are recorded byte-for-byte in artifacts.json.
+s7commplus/session_auth/family0/_generated/*.py text eol=lf
+s7commplus/session_auth/family0/_generated/**/*.py text eol=lf

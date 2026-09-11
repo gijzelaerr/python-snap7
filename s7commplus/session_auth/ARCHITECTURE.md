@@ -113,6 +113,42 @@ straight-line uint32 arithmetic function verified byte-for-byte against upstream
 test vectors. They implement a proprietary permutation cipher and cannot be
 meaningfully simplified — the algorithm is designed to resist analysis.
 
+## Artifact provenance and verification
+
+[`artifacts.json`](artifacts.json) is the authoritative inventory for every
+generated Python module and binary runtime table. It pins HarpoS7 v1.1.0 to
+commit `b4ba7fab14bcca4274e69a4d6524a5a61fcd329d` and records each artifact's
+classification, upstream source, generation method, byte size, and SHA-256.
+The original MIT license is in `LICENSE-HarpoS7`.
+
+Run the complete deterministic check from the repository root:
+
+```bash
+python tools/verify_session_auth_artifacts.py
+```
+
+The command fails on a missing, changed, or newly unmanifested artifact and is
+also run by pre-commit CI. The monolith source can be regenerated one file at a
+time with `tools/transpile_harpo_monolith.py`. The constant and binary extraction
+tooling used for the initial port is not yet vendored, so their pinned sizes and
+hashes are the authoritative reproducibility check; do not claim regeneration
+for those files until that tooling is added.
+
+### Review boundary
+
+- Human-maintained flow and extension points live outside `_generated/`.
+- `monolith*.py`, `nine/part*.py`, and `ten/part*.py` are generated source.
+- `_constants.py` and the four `.bin` files are generated data.
+- Package `__init__.py` files and the binary loaders are human-maintained glue.
+
+When generated output intentionally changes, keep that mechanical diff separate
+from handwritten behavior changes where practical. Regenerate from the pinned
+upstream revision, run the upstream-derived vector tests, then update the size
+and SHA-256 in `artifacts.json` in the same generated-output commit. Adding a new
+key family should start with a small authenticator interface parallel to
+`family0/authenticator.py`; callers should never import generated monoliths
+directly.
+
 ## How the blob is built (authenticator.py)
 
 ```
