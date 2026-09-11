@@ -100,6 +100,12 @@ S7-1200/1500 PLCs. The ``s7`` package (recommended) and its ``snap7`` alias
 continue to work unchanged for legacy S7-300/400 PLCs and S7-1200/1500 with
 PUT/GET enabled.
 
+Some older PLCs advertise only their SessionKey family instead of a complete
+public-key fingerprint. The synchronous ``Client`` tries the bounded set of
+bundled keys from that family on fresh sessions and caches the confirmed key
+for the PLC. Set ``allow_legacy_key_fallback=False`` on ``connect()`` when key
+probing must be disabled.
+
 **Other new features in 4.0:**
 
 * **Command-line interface** (``s7 read``, ``s7 write``, ``s7 info``)

@@ -163,6 +163,26 @@ def parse_fingerprint(fingerprint: str) -> tuple[KeyFamily, str]:
     return family, key_id
 
 
+def parse_family_identifier(identifier: str) -> KeyFamily:
+    """Parse a two-hex-digit family-only identifier advertised by older PLCs."""
+    if len(identifier) != 2:
+        raise ValueError(f"Invalid public-key family identifier: {identifier!r}")
+    try:
+        family_value = int(identifier, 16)
+    except ValueError as exc:
+        raise ValueError(f"Invalid public-key family identifier: {identifier!r}") from exc
+    try:
+        return KeyFamily(family_value)
+    except ValueError as exc:
+        raise ValueError(f"Unsupported public-key family 0x{family_value:02X}") from exc
+
+
+def fingerprints_for_family(family: KeyFamily | int) -> tuple[str, ...]:
+    """Return the bounded, deterministic fingerprint candidates for one family."""
+    resolved = KeyFamily(family)
+    return tuple(f"{resolved.value:02X}:{key_id}" for candidate_family, key_id in _PUBLIC_KEYS if candidate_family == resolved)
+
+
 def get_public_key(fingerprint: str) -> bytes:
     """Look up the public-key bytes for a given fingerprint.
 

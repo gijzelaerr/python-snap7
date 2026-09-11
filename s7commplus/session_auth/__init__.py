@@ -43,7 +43,9 @@ from .keys import (
     PUBLIC_KEY_LENGTH_REAL_PLC,
     PUBLIC_KEY_LENGTH_PLCSIM,
     UnknownPublicKeyError,
+    fingerprints_for_family,
     get_public_key,
+    parse_family_identifier,
     parse_fingerprint,
 )
 from .utils import KEY_ID_LENGTH, derive_key_id
@@ -65,12 +67,14 @@ __all__ = [
     "derive_legitimation_challenge_key",
     "derive_seed_encryption_key_and_iv",
     "generate_lookup_table",
+    "fingerprints_for_family",
     "get_blob_length",
     "get_public_key",
     "get_public_key_flags",
     "get_symmetric_key_flags",
     "hash_block",
     "lut1",
+    "parse_family_identifier",
     "parse_fingerprint",
     "write_metadata",
 ]
