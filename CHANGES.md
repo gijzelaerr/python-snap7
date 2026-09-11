@@ -6,6 +6,8 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Echo calling and called TSAP parameters in pure-Python server connection
+  confirmations, and restart the receive deadline after each TPKT header.
 * Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
   distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
   inconsistent state attributes, including S7-1200 responses that omit them.
