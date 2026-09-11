@@ -99,6 +99,30 @@ def _incoming_frame_opcode(frame: bytes) -> int:
     return data[0]
 
 
+def _incoming_response_sequence(frame: bytes) -> int:
+    """Return the sequence number from a complete response frame."""
+    from snap7.error import S7ConnectionError, S7ProtocolError
+
+    if not frame:
+        raise S7ConnectionError("Connection closed while waiting for an S7CommPlus frame")
+    version, data_length, consumed = decode_header(frame)
+    data = bytes(frame[consumed : consumed + data_length])
+    if version == ProtocolVersion.V3 and data:
+        hash_length = data[0]
+        if len(data) <= 1 + hash_length:
+            raise S7ProtocolError("Truncated S7CommPlus V3 integrity envelope")
+        data = data[1 + hash_length :]
+    if len(data) < 10:
+        raise S7ConnectionError("Response too short")
+    return struct.unpack_from(">H", data, 7)[0]
+
+
+def _is_stale_response_sequence(sequence: int, expected_sequence: int) -> bool:
+    """Return whether a 16-bit response sequence precedes the expected one."""
+    distance = (expected_sequence - sequence) & 0xFFFF
+    return 0 < distance < 0x8000
+
+
 def _validate_response_header(response: bytes, expected_function: int, expected_sequence: int) -> None:
     """Validate that application data is the response to one outstanding request."""
     from snap7.error import S7ConnectionError, S7ProtocolError
@@ -164,6 +188,7 @@ _S7_CIPHERS = (
 _S7_PREFERRED_GROUPS = ("X25519",)
 
 _MAX_SYSTEM_EVENTS_PER_RESPONSE = 16
+_MAX_STALE_RESPONSES_PER_REQUEST = 16
 _SYSTEM_EVENT_RETURN_VALUE_ID = 40305
 _DEFAULT_LEGACY_SESSION_KEY_REFRESH_INTERVAL = 25 * 60.0
 
@@ -1170,7 +1195,7 @@ class S7CommPlusConnection:
             else:
                 self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
-        response_frame = self._recv_response_frame()
+        response_frame = self._recv_response_frame(seq_num)
 
         # Large responses (e.g. Explore) are split across several S7CommPlus PDUs.
         if reassemble:
@@ -1236,11 +1261,12 @@ class S7CommPlusConnection:
 
         return resp_payload
 
-    def _recv_response_frame(self) -> bytes:
+    def _recv_response_frame(self, expected_sequence: Optional[int] = None) -> bytes:
         """Receive the next response, queueing notifications and consuming non-fatal SystemEvents."""
         from snap7.error import S7ConnectionError, S7ProtocolError
 
         system_events = 0
+        stale_responses = 0
         while True:
             response_frame = self._recv_s7_data()
             if not response_frame:
@@ -1261,6 +1287,20 @@ class S7CommPlusConnection:
                 continue
             if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
                 raise S7ProtocolError(f"Unexpected S7CommPlus opcode 0x{opcode:02X} while waiting for a response")
+            if expected_sequence is not None:
+                sequence = _incoming_response_sequence(response_frame)
+                if _is_stale_response_sequence(sequence, expected_sequence):
+                    stale_responses += 1
+                    logger.warning(
+                        "Ignoring stale S7CommPlus response sequence %d while waiting for sequence %d",
+                        sequence,
+                        expected_sequence,
+                    )
+                    if stale_responses > _MAX_STALE_RESPONSES_PER_REQUEST:
+                        raise S7ProtocolError(
+                            f"Too many stale S7CommPlus responses while waiting for sequence {expected_sequence}"
+                        )
+                    continue
             return response_frame
 
     @staticmethod

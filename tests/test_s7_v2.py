@@ -616,7 +616,7 @@ class TestIntegrityIdTracking:
         assert await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"") == b""
         assert list(client._notification_frames) == [notification_frame]
 
-    def test_duplicate_sync_response_cannot_satisfy_next_request(self) -> None:
+    def test_stale_sync_response_is_skipped_before_next_response(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
         conn._connected = True
         conn._protocol_version = ProtocolVersion.V2
@@ -624,14 +624,17 @@ class TestIntegrityIdTracking:
         response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
         response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
         conn._send_s7_data = MagicMock()
-        conn._recv_s7_data = MagicMock(return_value=response_frame)
+        next_response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        next_response_frame = encode_header(ProtocolVersion.V2, len(next_response)) + next_response
+        next_response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        conn._recv_s7_data = MagicMock(side_effect=[response_frame, response_frame, next_response_frame])
 
         assert conn.send_request(FunctionCode.GET_MULTI_VARIABLES) == b""
-        with pytest.raises(S7ProtocolError, match="Response sequence mismatch"):
-            conn.send_request(FunctionCode.GET_MULTI_VARIABLES)
+        assert conn.send_request(FunctionCode.GET_MULTI_VARIABLES) == b""
+        assert conn._recv_s7_data.call_count == 3
 
     @pytest.mark.asyncio
-    async def test_duplicate_async_response_cannot_satisfy_next_request(self) -> None:
+    async def test_stale_async_response_is_skipped_before_next_response(self) -> None:
         client = S7CommPlusAsyncClient()
         client._connected = True
         client._reader = MagicMock()
@@ -640,11 +643,14 @@ class TestIntegrityIdTracking:
         response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
         response_frame = encode_header(ProtocolVersion.V2, len(response)) + response
         client._send_cotp_dt = AsyncMock()
-        client._recv_cotp_dt = AsyncMock(return_value=response_frame)
+        next_response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 1, 0x34)
+        next_response_frame = encode_header(ProtocolVersion.V2, len(next_response)) + next_response
+        next_response_frame += struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+        client._recv_cotp_dt = AsyncMock(side_effect=[response_frame, response_frame, next_response_frame])
 
         assert await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"") == b""
-        with pytest.raises(S7ProtocolError, match="Response sequence mismatch"):
-            await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"")
+        assert await client._send_request(FunctionCode.GET_MULTI_VARIABLES, b"") == b""
+        assert client._recv_cotp_dt.await_count == 3
 
     def test_sync_requests_are_serialized(self) -> None:
         conn = S7CommPlusConnection("127.0.0.1")
