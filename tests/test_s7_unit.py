@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 import struct
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -22,7 +22,7 @@ from s7commplus.client import (
     _build_symbolic_write_payload,
     _build_substreamed_write_payload,
 )
-from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_session_version
+from s7commplus.connection import S7CommPlusConnection, _strip_paom_string_in_session_version, _verify_v3_hmac
 from s7commplus.codec import encode_header, encode_object_qualifier, encode_pvalue_blob
 from s7commplus.codec import _pvalue_element_size as _element_size
 from s7commplus.codec import skip_typed_value, parse_server_session_version
@@ -745,17 +745,52 @@ class TestReassembledPayload:
         conn = self._conn_yielding([self._frag(b"abc"), self._frag(b"de"), self._TRAILER])
         assert conn._recv_reassembled_payload() == b"abcde"
 
-    def test_v3_session_key_hmac_is_stripped_from_each_fragment(self) -> None:
+    def test_v3_session_key_hmac_uses_cumulative_fragment_digest(self) -> None:
         conn = self._conn_yielding([])
         conn._session_key = bytes(24)
+        digest_state = hmac.new(conn._session_key, digestmod=hashlib.sha256)
 
         def v3_frag(data: bytes) -> bytes:
-            digest = hmac.new(conn._session_key, data, hashlib.sha256).digest()
+            digest_state.update(data)
+            digest = digest_state.digest()
             protected = bytes([len(digest)]) + digest + data
             return bytes([0x72, ProtocolVersion.V3, 0, len(protected)]) + protected
 
         initial = v3_frag(b"abc") + v3_frag(b"de") + bytes([0x72, ProtocolVersion.V3, 0, 0])
         assert conn._recv_reassembled_payload(initial) == b"abcde"
+
+    def test_v3_cumulative_fragment_rejects_independent_second_digest(self) -> None:
+        from snap7.error import S7IntegrityError
+
+        conn = self._conn_yielding([])
+        conn._connected = True
+        conn._session_key = bytes(24)
+
+        def independent_fragment(data: bytes) -> bytes:
+            digest = hmac.new(conn._session_key, data, hashlib.sha256).digest()
+            protected = bytes([len(digest)]) + digest + data
+            return bytes([0x72, ProtocolVersion.V3, 0, len(protected)]) + protected
+
+        initial = independent_fragment(b"abc") + independent_fragment(b"de")
+        with pytest.raises(S7IntegrityError, match="integrity check failed"):
+            conn._recv_reassembled_payload(initial)
+        assert not conn.connected
+
+    def test_authenticated_reassembly_rejects_fragment_version_downgrade(self) -> None:
+        from snap7.error import S7IntegrityError
+
+        conn = self._conn_yielding([])
+        conn._connected = True
+        conn._session_key = bytes(24)
+        first_data = b"abc"
+        digest = hmac.new(conn._session_key, first_data, hashlib.sha256).digest()
+        first_protected = b"\x20" + digest + first_data
+        first = encode_header(ProtocolVersion.V3, len(first_protected)) + first_protected
+        downgraded = bytes([0x72, ProtocolVersion.V2, 0, 2]) + b"de"
+
+        with pytest.raises(S7IntegrityError, match="changed fragment version"):
+            conn._recv_reassembled_payload(first + downgraded)
+        assert not conn.connected
 
     def test_bad_fragment_header_raises(self) -> None:
         from snap7.error import S7ConnectionError
@@ -779,3 +814,81 @@ class TestReassembledPayload:
         conn._MAX_REASSEMBLED_FRAGMENTS = 2
         with pytest.raises(S7ConnectionError, match="exceeds limits"):
             conn._recv_reassembled_payload()
+
+
+class TestV3ResponseIntegrity:
+    KEY = bytes(range(24))
+
+    @classmethod
+    def _protected(cls, data: bytes, key: bytes | None = None) -> bytes:
+        digest = hmac.new(key or cls.KEY, data, hashlib.sha256).digest()
+        return bytes([len(digest)]) + digest + data
+
+    def test_valid_digest_uses_constant_time_comparison(self) -> None:
+        protected = self._protected(b"authenticated response")
+        with patch("s7commplus.connection.hmac.compare_digest", wraps=hmac.compare_digest) as compare:
+            assert _verify_v3_hmac(protected, self.KEY) == b"authenticated response"
+        compare.assert_called_once()
+
+    @pytest.mark.parametrize("mutation", ["wrong-key", "payload", "digest"])
+    def test_changed_digest_covered_data_is_rejected(self, mutation: str) -> None:
+        from snap7.error import S7IntegrityError
+
+        signing_key = bytes(reversed(self.KEY)) if mutation == "wrong-key" else None
+        protected = self._protected(b"authenticated response", signing_key)
+        if mutation == "payload":
+            protected = protected[:-1] + bytes([protected[-1] ^ 1])
+        elif mutation == "digest":
+            protected = protected[:1] + bytes([protected[1] ^ 1]) + protected[2:]
+        with pytest.raises(S7IntegrityError, match="integrity check failed"):
+            _verify_v3_hmac(protected, self.KEY)
+
+    @pytest.mark.parametrize(
+        "protected, message",
+        [(b"", "Empty authenticated"), (b"\x1f" + bytes(31), "digest length"), (b"\x20" + bytes(12), "Truncated")],
+    )
+    def test_invalid_or_truncated_digest_is_rejected(self, protected: bytes, message: str) -> None:
+        from snap7.error import S7IntegrityError
+
+        with pytest.raises(S7IntegrityError, match=message):
+            _verify_v3_hmac(protected, self.KEY)
+
+    def test_failure_invalidates_connection(self) -> None:
+        from snap7.error import S7IntegrityError
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._session_ready = True
+        conn._session_id = 123
+        conn._session_key = self.KEY
+        conn._iso_conn.disconnect = MagicMock()
+        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
+        protected = bytearray(self._protected(response))
+        protected[1] ^= 1
+        frame = encode_header(ProtocolVersion.V3, len(protected)) + protected
+        conn._recv_s7_data = MagicMock(return_value=bytes(frame))
+        conn._send_s7_data = MagicMock()
+
+        with pytest.raises(S7IntegrityError, match="integrity check failed"):
+            conn.send_request(FunctionCode.GET_MULTI_VARIABLES)
+        assert not conn.connected
+        assert conn._session_key is None
+        conn._iso_conn.disconnect.assert_called_once_with()
+
+    def test_authenticated_response_rejects_frame_version_downgrade(self) -> None:
+        from snap7.error import S7IntegrityError
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._session_ready = True
+        conn._session_id = 123
+        conn._session_key = self.KEY
+        conn._iso_conn.disconnect = MagicMock()
+        response = struct.pack(">BHHHHB", Opcode.RESPONSE, 0, FunctionCode.GET_MULTI_VARIABLES, 0, 0, 0x34)
+        frame = encode_header(ProtocolVersion.V2, len(response)) + response
+        conn._recv_s7_data = MagicMock(return_value=frame)
+        conn._send_s7_data = MagicMock()
+
+        with pytest.raises(S7IntegrityError, match="unauthenticated frame version"):
+            conn.send_request(FunctionCode.GET_MULTI_VARIABLES)
+        assert not conn.connected

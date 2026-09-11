@@ -284,20 +284,37 @@ def _set_s7_groups(ctx: ssl.SSLContext) -> None:
     )
 
 
-def _verify_v3_hmac(protected: bytes, session_key: bytes) -> bytes:
-    """Verify and remove the V3 HMAC prefix from application data."""
-    from snap7.error import S7ConnectionError
+def _verify_v3_hmac(protected: bytes, session_key: bytes, digest_state: hmac.HMAC | None = None) -> bytes:
+    """Verify and remove a V3 HMAC prefix.
+
+    ``digest_state`` implements the legacy fragmented-response behavior: the
+    first digest covers the first fragment and each later digest covers all
+    application bytes accumulated so far. The state advances only after a
+    successful constant-time comparison.
+    """
+    from snap7.error import S7IntegrityError
 
     if not protected:
-        raise S7ConnectionError("Empty V3 frame")
+        raise S7IntegrityError("Empty authenticated S7CommPlus V3 frame; reconnect before retrying")
     digest_length = protected[0]
-    if digest_length != hashlib.sha256().digest_size or len(protected) < 1 + digest_length:
-        raise S7ConnectionError(f"Invalid V3 HMAC length: {digest_length}")
+    expected_length = hashlib.sha256().digest_size
+    if digest_length != expected_length:
+        raise S7IntegrityError(
+            f"Invalid S7CommPlus V3 digest length {digest_length}, expected {expected_length}; reconnect before retrying"
+        )
+    if len(protected) < 1 + digest_length:
+        raise S7IntegrityError(
+            f"Truncated S7CommPlus V3 digest: received {len(protected) - 1} of {digest_length} bytes; reconnect before retrying"
+        )
     received_digest = protected[1 : 1 + digest_length]
     application_data = protected[1 + digest_length :]
-    expected_digest = hmac.new(session_key[:24], application_data, hashlib.sha256).digest()
+    verifier = digest_state.copy() if digest_state is not None else hmac.new(session_key[:24], digestmod=hashlib.sha256)
+    verifier.update(application_data)
+    expected_digest = verifier.digest()
     if not hmac.compare_digest(received_digest, expected_digest):
-        raise S7ConnectionError("Invalid V3 HMAC")
+        raise S7IntegrityError("S7CommPlus V3 response integrity check failed; reconnect before retrying")
+    if digest_state is not None:
+        digest_state.update(application_data)
     return bytes(application_data)
 
 
@@ -845,19 +862,18 @@ class S7CommPlusConnection:
         _check_set_variable_response(resp_payload)
 
     def collect_explore_frames(self, first_payload: bytes) -> bytes:
-        """Collect multi-fragment EXPLORE continuation frames for V3 PLCs.
+        """Collect unauthenticated multi-fragment EXPLORE continuation frames.
 
         On V3 PLCs (FW >= V4.5) a large EXPLORE response (e.g. RID 0x8A11FFFF)
         spans multiple TPKT frames.  The first frame is the normal response
         (already stripped of its 10-byte header by send_request).  Continuation
-        frames carry **no** response header — they are raw BLOB data protected
-        only by a V3 HMAC prefix.  The caller must concatenate them before
-        parsing.
+        frames carry no response header. Authenticated callers must use
+        ``send_request(..., reassemble=True)`` because this legacy helper no
+        longer has the first frame bytes needed to verify cumulative digests.
 
         Termination: a ``frag_len == 0`` frame is the standard S7CommPlus
-        end-of-stream trailer.  As a fallback, a frame whose body (after HMAC
-        strip) is measurably shorter than the first frame body is treated as the
-        last fragment (5-byte tolerance).
+        end-of-stream trailer. As a fallback, a measurably shorter frame body is
+        treated as the last fragment (5-byte tolerance).
 
         Collection is capped by ``_MAX_REASSEMBLED_FRAGMENTS`` and
         ``_MAX_REASSEMBLED_BYTES`` to prevent unbounded allocation on malformed
@@ -870,6 +886,14 @@ class S7CommPlusConnection:
         Returns:
             All fragment payloads concatenated (first_payload + continuations).
         """
+        if self._session_key is not None:
+            from snap7.error import S7ProtocolError
+
+            raise S7ProtocolError(
+                "Authenticated Explore continuations require send_request(..., reassemble=True) so cumulative digests "
+                "can be verified"
+            )
+
         # The first frame body (already header-stripped) was originally
         # len(first_payload) + 10 bytes on the wire (10-byte response header).
         # Continuation frames of the same "full" size will be that long after
@@ -895,10 +919,6 @@ class S7CommPlusConnection:
                 if frag_len == 0:
                     break  # standard S7CommPlus end-of-stream trailer
                 body = raw[4 : 4 + frag_len]
-                # V3 non-TLS: strip the HMAC prefix ([hash_len][hash_bytes])
-                if self._protocol_version >= ProtocolVersion.V3 and len(body) > 33:
-                    hash_len = body[0]
-                    body = body[1 + hash_len :]
                 if not body:
                     break
                 all_data += body
@@ -942,6 +962,46 @@ class S7CommPlusConnection:
         self._protection_level = None
         self._notification_frames.clear()
         self._iso_conn.disconnect()
+
+    def _invalidate_integrity_failure(self) -> None:
+        """Close an untrusted stream without sending protocol data on it."""
+        self._session_ready = False
+        self._session_id = 0
+        self.disconnect()
+
+    def _verify_v3_hmac(self, protected: bytes, digest_state: hmac.HMAC | None = None) -> bytes:
+        """Verify authenticated data and make any failure terminal for this connection."""
+        from snap7.error import S7IntegrityError
+
+        if self._session_key is None:
+            self._invalidate_integrity_failure()
+            raise S7IntegrityError("Authenticated S7CommPlus V3 response arrived without a session key; reconnect")
+        try:
+            return _verify_v3_hmac(protected, self._session_key, digest_state)
+        except S7IntegrityError:
+            self._invalidate_integrity_failure()
+            raise
+
+    def _verify_v3_frame(self, frame: bytes) -> None:
+        """Verify a complete V3 frame before its opcode is inspected or queued."""
+        from snap7.error import S7IntegrityError
+
+        version, data_length, consumed = decode_header(frame)
+        if version != ProtocolVersion.V3:
+            if self._session_key is not None:
+                self._invalidate_integrity_failure()
+                raise S7IntegrityError(
+                    f"Authenticated S7CommPlus response used unauthenticated frame version {version}; reconnect"
+                )
+            return
+        frame_end = consumed + data_length
+        if len(frame) < frame_end:
+            self._invalidate_integrity_failure()
+            raise S7IntegrityError(
+                f"Truncated authenticated S7CommPlus V3 frame: declared {data_length} data bytes, "
+                f"received {max(0, len(frame) - consumed)}; reconnect before retrying"
+            )
+        self._verify_v3_hmac(bytes(frame[consumed:frame_end]))
 
     def send_request(self, function_code: int, payload: bytes = b"", integrity_tail: int = 4, reassemble: bool = False) -> bytes:
         """Serialize one request/response exchange on the connection."""
@@ -1067,11 +1127,7 @@ class S7CommPlusConnection:
 
         # V3 responses have a hash-length byte + HMAC prefix before the payload.
         if version == ProtocolVersion.V3:
-            if self._session_key is None:
-                from snap7.error import S7ConnectionError
-
-                raise S7ConnectionError("V3 response received without a session key")
-            response = _verify_v3_hmac(response, self._session_key)
+            response = self._verify_v3_hmac(response)
             logger.debug("  V3 HMAC verified")
 
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
@@ -1126,6 +1182,7 @@ class S7CommPlusConnection:
                 if system_events > _MAX_SYSTEM_EVENTS_PER_RESPONSE:
                     raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
                 continue
+            self._verify_v3_frame(response_frame)
             if data_length < 10:
                 return response_frame
             opcode = _incoming_frame_opcode(response_frame)
@@ -1173,6 +1230,7 @@ class S7CommPlusConnection:
 
             raise S7ConnectionError("Not connected")
         frame = self._notification_frames.popleft() if self._notification_frames else self._recv_s7_data()
+        self._verify_v3_frame(frame)
         if not self._is_notification_frame(frame):
             from snap7.error import S7ConnectionError
 
@@ -1206,11 +1264,27 @@ class S7CommPlusConnection:
 
         data = bytearray()
         fragments = 0
+        expected_version: int | None = None
+        digest_state = hmac.new(self._session_key[:24], digestmod=hashlib.sha256) if self._session_key is not None else None
         while True:
             ensure(4)
             if buf[0] != 0x72:
                 raise S7ConnectionError("Expected S7CommPlus fragment header (0x72)")
             fragment_version = buf[1]
+            if expected_version is None:
+                expected_version = fragment_version
+            elif fragment_version != expected_version:
+                if self._session_key is not None:
+                    from snap7.error import S7IntegrityError
+
+                    self._invalidate_integrity_failure()
+                    raise S7IntegrityError(
+                        f"Authenticated S7CommPlus response changed fragment version from {expected_version} "
+                        f"to {fragment_version}; reconnect"
+                    )
+                raise S7ConnectionError(
+                    f"S7CommPlus response changed fragment version from {expected_version} to {fragment_version}"
+                )
             frag_len = (buf[2] << 8) | buf[3]
             del buf[:4]
             if frag_len == 0:
@@ -1219,9 +1293,7 @@ class S7CommPlusConnection:
             fragment_data = bytes(buf[:frag_len])
             del buf[:frag_len]
             if fragment_version == ProtocolVersion.V3:
-                if self._session_key is None:
-                    raise S7ConnectionError("V3 response received without a session key")
-                fragment_data = _verify_v3_hmac(fragment_data, self._session_key)
+                fragment_data = self._verify_v3_hmac(fragment_data, digest_state)
             data.extend(fragment_data)
             fragments += 1
             if fragments > self._MAX_REASSEMBLED_FRAGMENTS or len(data) > self._MAX_REASSEMBLED_BYTES:
@@ -1229,7 +1301,7 @@ class S7CommPlusConnection:
             # The next 4 bytes are either the trailer (0x72 ver 0x0000) or the next
             # fragment's header (0x72 ver len>0).
             ensure(4)
-            if buf[0] == 0x72 and buf[2] == 0 and buf[3] == 0:
+            if buf[0] == 0x72 and buf[1] == expected_version and buf[2] == 0 and buf[3] == 0:
                 del buf[:4]  # consume trailer — last fragment
                 break
         return bytes(data)
