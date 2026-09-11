@@ -565,6 +565,9 @@ class VarInfo:
     opt_bitoffset: int = 0
     nonopt_address: int = 0
     nonopt_bitoffset: int = 0
+    symbol_crc: int = 0
+    array_dimensions: tuple[tuple[int, int], ...] = ()
+    string_length: int = 0
 
 
 def _tcom_size(obj: PObject | None) -> int:
@@ -713,11 +716,30 @@ def build_flat_list(root_nodes: list[Node]) -> list[VarInfo]:
     for root in root_nodes:
         if not root.children:
             continue
-        _walk(root, "", "", 0, 0, result)
+        _walk(root, "", "", 0, 0, (), result)
     return result
 
 
-def _walk(node: Node, names: str, access_ids: str, opt_off: int, nonopt_off: int, result: list[VarInfo]) -> None:
+def _array_dimensions(vte: VartypeListElement | None) -> tuple[tuple[int, int], ...]:
+    if vte is None:
+        return ()
+    oi = vte.offset_info
+    if oi.is_mdim:
+        return tuple((lower, count) for lower, count in zip(oi.mdim_lower_bounds, oi.mdim_element_count) if count > 0)
+    if oi.is_1dim:
+        return ((oi.array_lower_bound, oi.array_element_count),)
+    return ()
+
+
+def _walk(
+    node: Node,
+    names: str,
+    access_ids: str,
+    opt_off: int,
+    nonopt_off: int,
+    array_dimensions: tuple[tuple[int, int], ...],
+    result: list[VarInfo],
+) -> None:
     # Accumulate this node's name and access-id contribution.
     if node.node_type == NodeType.ROOT:
         names = names + node.name
@@ -731,6 +753,9 @@ def _walk(node: Node, names: str, access_ids: str, opt_off: int, nonopt_off: int
     else:  # UNDEFINED / VAR member
         names = names + "." + node.name
         access_ids = access_ids + "." + f"{node.access_id:X}"
+
+    if node.node_type in (NodeType.ARRAY, NodeType.STRUCT_ARRAY):
+        array_dimensions += _array_dimensions(node.vte)
 
     if node.children:
         # Descend into a branch — advance the running byte offsets.
@@ -750,14 +775,22 @@ def _walk(node: Node, names: str, access_ids: str, opt_off: int, nonopt_off: int
             if child.node_type == NodeType.ARRAY:
                 child_opt += child.array_adr_offset_opt
                 child_nonopt += child.array_adr_offset_nonopt
-            _walk(child, names, access_ids, child_opt, child_nonopt, result)
+            _walk(child, names, access_ids, child_opt, child_nonopt, array_dimensions, result)
         return
 
     # Leaf node — emit if the datatype is a readable leaf.
     if not is_softdatatype_supported(node.softdatatype):
         return
 
-    info = VarInfo(name=names, access_sequence=access_ids, softdatatype=node.softdatatype)
+    vte = node.vte
+    info = VarInfo(
+        name=names,
+        access_sequence=access_ids,
+        softdatatype=node.softdatatype,
+        symbol_crc=vte.symbol_crc if vte is not None else 0,
+        array_dimensions=array_dimensions,
+        string_length=vte.offset_info.unspecified1 if vte is not None else 0,
+    )
     if node.node_type == NodeType.ARRAY:
         # Basic-array element: offset already includes the element stride.
         info.opt_address = opt_off
@@ -767,7 +800,6 @@ def _walk(node: Node, names: str, access_ids: str, opt_off: int, nonopt_off: int
         info.opt_address = opt_off + node.vte.offset_info.opt_addr
         info.nonopt_address = nonopt_off + node.vte.offset_info.nonopt_addr
 
-    vte = node.vte
     if node.softdatatype == Softdatatype.BOOL and vte is not None:
         info.opt_bitoffset = vte.attribute_bitoffset
         info.nonopt_bitoffset = vte.nonopt_bitoffset if vte.classic else vte.attribute_bitoffset

@@ -333,9 +333,21 @@ class TestParseObject:
         assert off == len(a + b)
 
 
-def _vte(lid: int, sdt, oi: "ti.OffsetInfo", attr_flags: int = 0, bitoff: int = 0) -> "ti.VartypeListElement":
+def _vte(
+    lid: int,
+    sdt,
+    oi: "ti.OffsetInfo",
+    attr_flags: int = 0,
+    bitoff: int = 0,
+    symbol_crc: int = 0,
+) -> "ti.VartypeListElement":
     return ti.VartypeListElement(
-        lid=lid, symbol_crc=0, softdatatype=int(sdt), attribute_flags=attr_flags, bitoffsetinfo_flags=bitoff, offset_info=oi
+        lid=lid,
+        symbol_crc=symbol_crc,
+        softdatatype=int(sdt),
+        attribute_flags=attr_flags,
+        bitoffsetinfo_flags=bitoff,
+        offset_info=oi,
     )
 
 
@@ -396,6 +408,7 @@ class TestTreeBuilder:
                     9,
                     ti.Softdatatype.INT,
                     ti.OffsetInfo(code=10, opt_addr=20, nonopt_addr=40, array_element_count=3, array_lower_bound=0, is_1dim=True),
+                    symbol_crc=0x12345678,
                 )
             ],
             varname_list=["Vals"],
@@ -405,6 +418,8 @@ class TestTreeBuilder:
         assert [v.name for v in infos] == ["DB1.Vals[0]", "DB1.Vals[1]", "DB1.Vals[2]"]
         assert [v.access_sequence for v in infos] == ["8A0E0001.9.0", "8A0E0001.9.1", "8A0E0001.9.2"]
         assert [v.opt_address for v in infos] == [20, 22, 24]  # base + i*2 (INT stride)
+        assert all(v.symbol_crc == 0x12345678 for v in infos)
+        assert all(v.array_dimensions == ((0, 3),) for v in infos)
 
     def test_struct_array_inserts_extra_one(self) -> None:
         root = _root("DB1", 0x8A0E0001, 0x100)
@@ -440,6 +455,7 @@ class TestTreeBuilder:
         # StructArray inserts a ".1" between the array index id and the member LID.
         assert [v.access_sequence for v in infos] == ["8A0E0001.7.0.1.2", "8A0E0001.7.1.1.2"]
         assert [v.opt_address for v in infos] == [0, 8]  # element stride 8
+        assert all(v.array_dimensions == ((0, 2),) for v in infos)
 
 
 class TestMDimArrays:
@@ -486,6 +502,7 @@ class TestMDimArrays:
         ]
         assert [v.opt_address for v in infos] == [20, 22, 24, 26, 28, 30]  # base + (n-1)*2
         assert [v.nonopt_address for v in infos] == [40, 42, 44, 46, 48, 50]
+        assert all(v.array_dimensions == ((1, 3), (10, 2)) for v in infos)
 
     def test_bbool_mdim_access_id_aligns_to_byte(self) -> None:
         # ARRAY[0..2, 0..1] of BOOL stored as BBOOL: each row of 3 bits rounds up to a byte,

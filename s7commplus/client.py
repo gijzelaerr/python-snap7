@@ -5,7 +5,7 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import struct
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Optional, TypeAlias, TypeVar
 
 from snap7.error import S7ConnectionError, S7ProtocolError
@@ -29,6 +29,7 @@ from .codec import (
     encode_pvalue_typed,
     parse_create_object_session_id,
 )
+from .catalog import SymbolCatalog, SymbolicTag, TagResult
 from .connection import S7CommPlusConnection
 from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
 from .subscription import (
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 _T = TypeVar("_T")
 DBWriteItem: TypeAlias = tuple[int, int, bytes, DataType]
 SymbolicReadItem: TypeAlias = tuple[int, list[int]] | tuple[int, list[int], int]
+SymbolicWriteItem: TypeAlias = tuple[int, list[int], bytes, int, DataType]
 
 
 def _normalize_write_item(item: DBWriteItem) -> tuple[int, int, bytes, DataType]:
@@ -75,6 +77,7 @@ class S7CommPlusClient:
         self._connect_params: Optional[dict[str, Any]] = None
         self._subscription_change_counter = 1
         self._subscription_relation_id = 0x7FFFC001
+        self._symbol_catalog: Optional[SymbolCatalog] = None
 
     @property
     def connected(self) -> bool:
@@ -140,6 +143,7 @@ class S7CommPlusClient:
             tls_ca: Path to CA certificate for PLC verification (PEM)
             password: PLC password for legitimation (V2+ with TLS)
         """
+        self._symbol_catalog = None
         self._connect_params = {
             "host": host,
             "port": port,
@@ -201,6 +205,7 @@ class S7CommPlusClient:
             self._connection.disconnect()
             self._connection = None
         self._connect_params = None
+        self._symbol_catalog = None
 
     def db_read(self, db_number: int, start: int, size: int) -> bytes:
         """Read raw bytes from a data block.
@@ -460,6 +465,108 @@ class S7CommPlusClient:
         response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
         _parse_write_response(response)
 
+    def refresh_tag_catalog(self) -> SymbolCatalog:
+        """Browse the PLC and replace the cached symbolic tag catalog."""
+        self._symbol_catalog = SymbolCatalog.from_browse(self.browse())
+        return self._symbol_catalog
+
+    def invalidate_tag_catalog(self) -> None:
+        """Discard cached browse metadata after a PLC layout change."""
+        self._symbol_catalog = None
+
+    def resolve_tag(self, name: str) -> SymbolicTag:
+        """Resolve a browsed tag name to its typed symbolic descriptor."""
+        catalog = self._symbol_catalog or self.refresh_tag_catalog()
+        return catalog.resolve(name)
+
+    def read_tag(self, name: str) -> bytes:
+        """Read one symbolic tag by name, refreshing once if its CRC changed."""
+        result = self.read_tags([name])[0]
+        if result.error is not None:
+            raise result.error
+        assert result.value is not None
+        return result.value
+
+    def read_tags(self, names: Sequence[str]) -> list[TagResult]:
+        """Read names in one request and return a success/error for every item.
+
+        A failed read with a non-zero SymbolCRC causes one catalog refresh. Only
+        tags whose CRC actually changed are re-resolved and safely retried.
+        """
+        if not names:
+            return []
+        tags = [self.resolve_tag(name) for name in names]
+        values = self.read_symbolic_multi([(tag.access_area, list(tag.lids), tag.symbol_crc) for tag in tags])
+        results = [
+            TagResult(tag=tag, value=value)
+            if value is not None
+            else TagResult(tag=tag, error=RuntimeError(f"Symbolic read failed for {tag.name!r}"))
+            for tag, value in zip(tags, values)
+        ]
+
+        retry_indices = [index for index, result in enumerate(results) if not result.success and result.tag.symbol_crc]
+        if not retry_indices:
+            return results
+
+        refreshed = self.refresh_tag_catalog()
+        changed: list[tuple[int, SymbolicTag]] = []
+        for index in retry_indices:
+            try:
+                tag = refreshed.resolve(results[index].tag.name)
+            except KeyError:
+                continue
+            if tag.symbol_crc != results[index].tag.symbol_crc:
+                changed.append((index, tag))
+        if not changed:
+            return results
+
+        retry_values = self.read_symbolic_multi([(tag.access_area, list(tag.lids), tag.symbol_crc) for _, tag in changed])
+        for (index, tag), value in zip(changed, retry_values):
+            results[index] = (
+                TagResult(tag=tag, value=value)
+                if value is not None
+                else TagResult(tag=tag, error=RuntimeError(f"Symbolic read failed for {tag.name!r} after CRC refresh"))
+            )
+        return results
+
+    def write_tag(self, name: str, data: bytes) -> None:
+        """Write one symbolic tag by name using its resolved PValue datatype."""
+        result = self.write_tags({name: data})[0]
+        if result.error is not None:
+            raise result.error
+
+    def write_tags(self, values: Mapping[str, bytes]) -> list[TagResult]:
+        """Write names in one request and return a success/error per item.
+
+        Writes are deliberately never retried: a transport failure can leave
+        the caller unable to know whether the PLC applied the request.
+        """
+        if self._connection is None:
+            raise RuntimeError("Not connected")
+        if not values:
+            return []
+        tags = [self.resolve_tag(name) for name in values]
+        unsupported = [tag.name for tag in tags if tag.datatype is None]
+        if unsupported:
+            raise ValueError(f"No S7CommPlus wire datatype mapping for: {', '.join(unsupported)}")
+        items: list[SymbolicWriteItem] = [
+            (tag.access_area, list(tag.lids), data, tag.symbol_crc, tag.datatype)
+            for tag, data in zip(tags, values.values())
+            if tag.datatype is not None
+        ]
+        payload = _build_multi_symbolic_write_payload(items, self._connection.protocol_version)
+        response = self._connection.send_request(FunctionCode.SET_MULTI_VARIABLES, payload)
+        try:
+            errors = _parse_write_response_errors(response, expected_count=len(tags))
+        except RuntimeError as error:
+            return [TagResult(tag=tag, error=error) for tag in tags]
+        return [
+            TagResult(tag=tag, error=RuntimeError(f"Symbolic write failed for {tag.name!r}: PLC error {errors[index]}"))
+            if index in errors
+            else TagResult(tag=tag)
+            for index, tag in enumerate(tags, 1)
+        ]
+
     def explore(self, explore_id: int = 0) -> bytes:
         """Browse the PLC object tree.
 
@@ -678,6 +785,9 @@ class S7CommPlusClient:
                     "opt_bitoffset": v.opt_bitoffset,
                     "nonopt_address": v.nonopt_address,
                     "nonopt_bitoffset": v.nonopt_bitoffset,
+                    "symbol_crc": v.symbol_crc,
+                    "array_dimensions": v.array_dimensions,
+                    "string_length": v.string_length,
                 }
             )
         return variables
@@ -1007,15 +1117,20 @@ def _parse_write_response(response: bytes) -> None:
     Raises:
         RuntimeError: If the write failed
     """
-    offset = 0
+    errors = _parse_write_response_errors(response)
+    if errors:
+        err_str = ", ".join(f"item {nr}: error {val}" for nr, val in errors.items())
+        raise RuntimeError(f"Write failed: {err_str}")
 
-    return_value, consumed = decode_uint64_vlq(response, offset)
-    offset += consumed
 
+def _parse_write_response_errors(response: bytes, expected_count: Optional[int] = None) -> dict[int, int]:
+    """Return the per-item PLC errors in a SetMultiVariables response."""
+    return_value, consumed = decode_uint64_vlq(response, 0)
+    offset = consumed
     if return_value != 0:
         raise RuntimeError(f"Write failed with return value {return_value}")
 
-    errors: list[tuple[int, int]] = []
+    errors: dict[int, int] = {}
     while offset < len(response):
         err_item_nr, consumed = decode_uint32_vlq(response, offset)
         offset += consumed
@@ -1023,11 +1138,10 @@ def _parse_write_response(response: bytes) -> None:
             break
         err_value, consumed = decode_uint64_vlq(response, offset)
         offset += consumed
-        errors.append((err_item_nr, err_value))
-
-    if errors:
-        err_str = ", ".join(f"item {nr}: error {val}" for nr, val in errors)
-        raise RuntimeError(f"Write failed: {err_str}")
+        if expected_count is not None and (err_item_nr > expected_count or err_item_nr in errors):
+            raise RuntimeError(f"Symbolic multi-write failed: unexpected or duplicate item {err_item_nr}")
+        errors[err_item_nr] = err_value
+    return errors
 
 
 def _build_substreamed_read_payload(session_id: int, access_area: int, access_sub_area: int, lids: list[int]) -> bytes:
@@ -1211,25 +1325,35 @@ def _build_symbolic_write_payload(
     datatype: DataType = DataType.BLOB,
 ) -> bytes:
     """Build a SetMultiVariables payload for symbolic (LID-based) access."""
-    if access_area >= 0x8A0E0000:
-        access_sub_area = Ids.DB_VALUE_ACTUAL
-    else:
-        access_sub_area = Ids.CONTROLLER_AREA_VALUE_ACTUAL
-
-    addr_bytes, field_count = encode_item_address(
-        access_area=access_area,
-        access_sub_area=access_sub_area,
-        lids=lids,
-        symbol_crc=symbol_crc,
+    return _build_multi_symbolic_write_payload(
+        [(access_area, lids, data, symbol_crc, datatype)], protocol_version=protocol_version
     )
+
+
+def _build_multi_symbolic_write_payload(items: Sequence[SymbolicWriteItem], protocol_version: int = ProtocolVersion.V2) -> bytes:
+    """Build one typed SetMultiVariables payload for symbolic addresses."""
+    addresses: list[bytes] = []
+    total_field_count = 0
+    for access_area, lids, _data, symbol_crc, _datatype in items:
+        access_sub_area = Ids.DB_VALUE_ACTUAL if access_area >= 0x8A0E0000 else Ids.CONTROLLER_AREA_VALUE_ACTUAL
+        address, field_count = encode_item_address(
+            access_area=access_area,
+            access_sub_area=access_sub_area,
+            lids=lids,
+            symbol_crc=symbol_crc,
+        )
+        addresses.append(address)
+        total_field_count += field_count
 
     payload = bytearray()
     payload += struct.pack(">I", 0)
-    payload += encode_uint32_vlq(1)
-    payload += encode_uint32_vlq(field_count)
-    payload += addr_bytes
-    payload += encode_uint32_vlq(1)  # item number 1
-    payload += encode_pvalue_typed(datatype, data)
+    payload += encode_uint32_vlq(len(items))
+    payload += encode_uint32_vlq(total_field_count)
+    for address in addresses:
+        payload += address
+    for index, (_access_area, _lids, data, _symbol_crc, datatype) in enumerate(items, 1):
+        payload += encode_uint32_vlq(index)
+        payload += encode_pvalue_typed(datatype, data)
     payload += bytes([0x00])
     payload += encode_object_qualifier(protocol_version=protocol_version)
     payload += struct.pack(">I", 0)

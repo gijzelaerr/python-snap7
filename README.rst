@@ -113,8 +113,21 @@ PUT/GET enabled.
 * **Multi-variable read optimizer** -- merges scattered reads into minimal PDU
   exchanges with parallel dispatch
 * **S7 routing** -- connect to PLCs on remote subnets via a gateway PLC
-* **Symbolic addressing** -- read/write by tag name instead of raw addresses
-* **Live symbol browsing** -- resolve tag names directly from the PLC
+* **Symbolic addressing and live browsing** -- cache typed tag descriptors from
+  the PLC and read or write by name. Writes use the datatype and SymbolCRC from
+  the browse result; safe reads refresh once if a changed CRC reveals a layout
+  update::
+
+      tag = client.resolve_tag("DB1.Motor.Speed")
+      value = client.read_tag(tag.name)
+      client.write_tag(tag.name, b"\x41\x20\x00\x00")
+
+      results = client.read_tags(["DB1.Motor.Speed", "DB1.Motor.Running"])
+      for result in results:
+          if result.success:
+              print(result.tag.name, result.value)
+          else:
+              print(result.tag.name, result.error)
 * **Symbolic data subscriptions** -- monitor values using access sequences
   returned by ``browse()``::
 
