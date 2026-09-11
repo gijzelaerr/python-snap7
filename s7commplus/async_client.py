@@ -44,13 +44,16 @@ from .codec import (
     parse_server_session_version,
 )
 from .connection import (
+    _MAX_STALE_RESPONSES_PER_REQUEST,
     _MAX_SYSTEM_EVENTS_PER_RESPONSE,
     _S7_CIPHERS,
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
-    _check_system_event,
     _check_set_variable_response,
+    _check_system_event,
     _incoming_frame_opcode,
+    _incoming_response_sequence,
+    _is_stale_response_sequence,
     _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
@@ -967,7 +970,7 @@ class S7CommPlusAsyncClient:
                 else:
                     self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
-            response_data = await self._recv_response_frame()
+            response_data = await self._recv_response_frame(seq_num)
 
             # Large responses (e.g. Explore) are split across several S7CommPlus PDUs.
             if reassemble:
@@ -987,9 +990,10 @@ class S7CommPlusAsyncClient:
             # IntegrityId travels at the END of the payload and is ignored by the parsers.
             return response[10:]
 
-    async def _recv_response_frame(self) -> bytes:
+    async def _recv_response_frame(self, expected_sequence: Optional[int] = None) -> bytes:
         """Receive the next response, queueing unsolicited application frames."""
         system_events = 0
+        stale_responses = 0
         while True:
             response_data = await self._recv_cotp_dt()
             if not response_data:
@@ -1009,6 +1013,20 @@ class S7CommPlusAsyncClient:
                 continue
             if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
                 raise S7ProtocolError(f"Unexpected S7CommPlus opcode 0x{opcode:02X} while waiting for a response")
+            if expected_sequence is not None:
+                sequence = _incoming_response_sequence(response_data)
+                if _is_stale_response_sequence(sequence, expected_sequence):
+                    stale_responses += 1
+                    logger.warning(
+                        "Ignoring stale S7CommPlus response sequence %d while waiting for sequence %d",
+                        sequence,
+                        expected_sequence,
+                    )
+                    if stale_responses > _MAX_STALE_RESPONSES_PER_REQUEST:
+                        raise S7ProtocolError(
+                            f"Too many stale S7CommPlus responses while waiting for sequence {expected_sequence}"
+                        )
+                    continue
             return response_data
 
     async def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
