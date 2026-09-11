@@ -36,4 +36,13 @@ repos:
     hooks:
       - id: ruff
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: verify-session-auth-artifacts
+        name: verify SessionKey generated artifacts
+        entry: python tools/verify_session_auth_artifacts.py
+        language: python
+        pass_filenames: false
+        files: ^(s7commplus/session_auth/artifacts\.json|s7commplus/session_auth/family0/_generated/|tools/verify_session_auth_artifacts\.py)$
 exclude: "snap7/protocol.py"

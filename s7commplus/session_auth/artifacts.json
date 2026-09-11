@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "project": "bonk-dev/HarpoS7",
+    "url": "https://github.com/bonk-dev/HarpoS7",
+    "version": "v1.1.0",
+    "revision": "b4ba7fab14bcca4274e69a4d6524a5a61fcd329d",
+    "license": "MIT",
+    "license_file": "s7commplus/session_auth/LICENSE-HarpoS7"
+  },
+  "python_snap7_import_revision": "1996e82861c211f0ce03aa7440cba3dfdec725c1",
+  "artifacts": [
+    {
+      "path": "s7commplus/session_auth/family0/_generated/data/_constants.py",
+      "category": "generated-source-data",
+      "upstream_source": "HarpoS7 Family-0 constant collections",
+      "generation": "Mechanically converted from HarpoS7 Family-0 constant collections; regeneration tooling is not yet vendored, so checksum verification is authoritative.",
+      "size": 25016,
+      "sha256": "97f356b6e9fd3ea65885a2273bfe79d58b7b766bb938bf0146bf79bde10e4ded"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/data/fp_data1.bin",
+      "category": "generated-binary-data",
+      "upstream_source": "HarpoS7.Family0/Fingerprints/Data1Collection",
+      "generation": "Extracted deterministically from HarpoS7 Family-0 constant collections; regeneration tooling is not yet vendored, so checksum verification is authoritative.",
+      "size": 3056,
+      "sha256": "f9856ddf5a5390b2428e04c6f99c490a2f469fbe33da56355151a68b1597c04f"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/data/fp_data2.bin",
+      "category": "generated-binary-data",
+      "upstream_source": "HarpoS7.Family0/Fingerprints/Data2Collection",
+      "generation": "Extracted deterministically from HarpoS7 Family-0 constant collections; regeneration tooling is not yet vendored, so checksum verification is authoritative.",
+      "size": 63568,
+      "sha256": "752e936b07f962ff6a4cdee7d341514eabee2126a2bfcf704f6693788cb48d56"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/data/transform12_big_int_data.bin",
+      "category": "generated-binary-data",
+      "upstream_source": "HarpoS7.Family0/Transforms/Transform12 big-integer constants",
+      "generation": "Extracted deterministically from HarpoS7 Family-0 constant collections; regeneration tooling is not yet vendored, so checksum verification is authoritative.",
+      "size": 18432,
+      "sha256": "86cc998ecacd0a38336d91a2cab4a51e9bfcb15b48013e96f6dc588d5ba0c74b"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/data/transform12_metadata.bin",
+      "category": "generated-binary-data",
+      "upstream_source": "HarpoS7.Family0/Transforms/Transform12 operation metadata",
+      "generation": "Extracted deterministically from HarpoS7 Family-0 constant collections; regeneration tooling is not yet vendored, so checksum verification is authoritative.",
+      "size": 243625,
+      "sha256": "7ea948feba35610247a876f8251855f0c87dbbafcdc1bffebb1c3b44d66e29dd"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith1.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith1.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 164522,
+      "sha256": "24c60b2156d0a99b0b95abd20628eab0429887f7045f37ace763dbb3f1065c00"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith10.py",
+      "category": "generated-wrapper",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith10.cs",
+      "generation": "Deterministic Python wrapper around transpiled split parts; checksum verification is authoritative.",
+      "size": 592,
+      "sha256": "5f999bc21cf0693c1bd20b0549a02aed5d8593c7a98681104dd43b8a0c84743a"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith11.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith11.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 51078,
+      "sha256": "080f04cf3b71ded45eb201e4fd4468bc039dee71e056911a9b78bbe85f8508fb"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith2.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith2.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 155044,
+      "sha256": "8090ba2a5ddcd8e17551f740cc788c3071a324dba9792f7a5a8e96ac388edccf"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith3.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith3.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 124296,
+      "sha256": "abce73deb408a12e2a3b86f6a83a37ebd9be1cb31cd8fe8b20366fffe0e6c3ad"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith4.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith4.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 245971,
+      "sha256": "fbf5ff95a92e887cf4d73b129826a7405bbc779fa1bef0f4eafd5e44bfec267a"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith5.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith5.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 154417,
+      "sha256": "a302ea9a3fa83684d6bace727af36471fe58ec3ca33f4ae41ae52398bc0fd2da"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith6.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith6.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 171328,
+      "sha256": "f68e729e3d4e51b23243b741a9db1203072c8598f35b794866eeac5bfc81f154"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith7.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith7.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 101505,
+      "sha256": "6983f0dc9a47b1989ac60a04a89edb7c7e3af1cd27662749e4c2b62417b84f99"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith8.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith8.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 162624,
+      "sha256": "6498e677662563bf413016b465ec390fd0dcb9c57c2b44f8a97ed2e579ab1bdc"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/monolith9.py",
+      "category": "generated-wrapper",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Monolith9.cs",
+      "generation": "Deterministic Python wrapper around transpiled split parts; checksum verification is authoritative.",
+      "size": 942,
+      "sha256": "2e71af79a2d605c640679f6a8199dddafff89583ff1ebe8b6de8fcda5c0754a7"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part1.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part1.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 146221,
+      "sha256": "d1ea03f0da8a0daf526ea79450ec62a2d2cb722f124555678cb85090d22970da"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part10.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part10.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 223508,
+      "sha256": "de580db4c503ba57e003b9d80d8038a096ae65650c675910735241ff9580f166"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part11.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part11.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 246467,
+      "sha256": "ce312e83ff65c982bdd9fb5fa52c7d82951a03baf30ecc74514fdefea47bd5b8"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part2.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part2.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 214468,
+      "sha256": "dcdf62db0a3f3ea92cf973f15bb36856a0afe4be5201deb9d81603dd846bce82"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part3.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part3.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 233256,
+      "sha256": "007a82b9d7fe4fa993db6a303f2e5c1e3c1c175af2b0425011697e147e8f14c5"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part4.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part4.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 221692,
+      "sha256": "167b9e08806c2af4f71507cede45e4bd6cdb2ae17c1a74d0aa339a736ab256b7"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part5.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part5.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 226061,
+      "sha256": "557ad0db29fcc3a250e1c2e7f1000b3a51408e0925559cc517cdf475544cec08"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part6.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part6.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 224489,
+      "sha256": "c8470536d1b65bdf57bf2a76e26932567d1ae1aa0e1812f5cddb350cfd3186e0"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part7.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part7.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 226727,
+      "sha256": "d71c9903300c4ec0275b256c7682ae89eb9c3d64a2acc142480382fe053beccc"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part8.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part8.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 223457,
+      "sha256": "ded1f8de50befddf876e070fd2b5f828145541c80a0511ae088b332ae1fb9060"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/nine/part9.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Nine/Part9.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 225859,
+      "sha256": "ee99d46920456badad30de31be7d2163334b1cbc4402966bc2e2170a5c3a3c39"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/ten/part1.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Ten/Part1.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 201153,
+      "sha256": "e2f5e2de163517cd465148dc53a14f2e909f14cada85aa99aead7d24c7400e5c"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/ten/part2.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Ten/Part2.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 238580,
+      "sha256": "10ef37f9dfbaa681183ae40946239d29116e31d706e2d22850228b6174a1ee1c"
+    },
+    {
+      "path": "s7commplus/session_auth/family0/_generated/ten/part3.py",
+      "category": "generated-source",
+      "upstream_source": "HarpoS7.Family0/Monoliths/Ten/Part3.cs",
+      "generation": "Generated with tools/transpile_harpo_monolith.py from the corresponding HarpoS7 C# Execute method.",
+      "size": 249062,
+      "sha256": "9ddfc61dc18ca516a135f287de37ff5aeabba0600a13d03df0c987d79ec38692"
+    }
+  ]
+}
