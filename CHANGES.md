@@ -8,6 +8,8 @@ Major release: new `s7commplus` package with S7CommPlus protocol support.
 
 * Accept GetVarSubStreamed responses whose PValue immediately follows the
   return value, as captured from an S7-1511C during SessionKey legitimation.
+* Encode legacy SessionKey absolute DB reads with one address ID so scalar
+  reads are not misinterpreted as nested symbolic paths by S7-1500 PLCs.
 * Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
   distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
   inconsistent state attributes, including S7-1200 responses that omit them.

@@ -537,6 +537,11 @@ class S7CommPlusConnection:
         return self._session_setup_ok
 
     @property
+    def session_key_active(self) -> bool:
+        """Whether legacy SessionKey authentication protects application traffic."""
+        return self._session_key is not None
+
+    @property
     def requires_substreamed(self) -> bool:
         """Whether data operations must use substreamed function codes.
 

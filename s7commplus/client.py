@@ -219,6 +219,16 @@ class S7CommPlusClient:
         if self._connection.requires_substreamed:
             return self._db_read_substreamed(db_number, start, size)
 
+        # Legacy SessionKey PLCs interpret every value after AccessSubArea as
+        # another nested address ID.  A raw range encoded as [offset, size]
+        # therefore addresses ``size`` below the scalar at ``offset`` and old
+        # S7-1500 firmware terminates the connection.  Compatible clients send
+        # one absolute ID and let the returned PValue carry the value's size.
+        if self._connection.session_key_active:
+            access_area = Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF)
+            data = self.read_symbolic(access_area, [start + 1])
+            return _fit_absolute_read(data, size, db_number, start)
+
         payload = _build_read_payload([(db_number, start, size)], self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
         results = _parse_read_response(response)
@@ -297,6 +307,11 @@ class S7CommPlusClient:
 
         if self._connection.requires_substreamed:
             return [self._db_read_substreamed(db, start, size) for db, start, size in items]
+
+        if self._connection.session_key_active:
+            addresses = [(Ids.DB_ACCESS_AREA_BASE + (db_number & 0xFFFF), [start + 1]) for db_number, start, _size in items]
+            values = self.read_symbolic_multi(addresses)
+            return [_fit_absolute_read(value, size, db_number, start) for value, (db_number, start, size) in zip(values, items)]
 
         payload = _build_read_payload(items, self._connection.protocol_version)
         response = self._connection.send_request(FunctionCode.GET_MULTI_VARIABLES, payload)
@@ -866,6 +881,18 @@ class S7CommPlusClient:
 # S7-1200 wraps a single BOOL/USINT in [value 0x00 | 00 04 00 00 00 00].
 # The leading byte is misread by VLQ as a non-zero return code.
 _SCALAR_RESPONSE_SUFFIX = bytes.fromhex("000400000000")
+
+
+def _fit_absolute_read(data: bytes | None, size: int, db_number: int, start: int) -> bytes:
+    """Fit one typed absolute-address value to the ``db_read`` byte contract."""
+    if data is None:
+        raise RuntimeError(f"DB{db_number} offset {start} could not be read")
+    if len(data) < size:
+        raise RuntimeError(
+            f"DB{db_number} offset {start} returned {len(data)} bytes, fewer than the requested {size}; "
+            "use browse() and read_symbolic() when the range crosses variable boundaries"
+        )
+    return data[:size]
 
 
 def _build_read_payload(items: list[tuple[int, int, int]], protocol_version: int = ProtocolVersion.V2) -> bytes:

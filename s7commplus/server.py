@@ -945,6 +945,9 @@ class S7CommPlusServer:
         for i, (db_num, byte_offset, byte_size) in enumerate(items, 1):
             db = self._data_blocks.get(db_num)
             if db is not None:
+                if byte_size == 0:
+                    variable = next((var for var in db.variables.values() if var.byte_offset == byte_offset), None)
+                    byte_size = variable.byte_size if variable is not None else 1
                 data = db.read(byte_offset, byte_size)
                 response += encode_uint32_vlq(i)  # ItemNumber
                 response += encode_pvalue_blob(data)  # Value as BLOB
@@ -1288,9 +1291,11 @@ def _server_parse_read_request(request_data: bytes) -> list[tuple[int, int, int]
         # Extract db_number from AccessArea
         db_num = access_area & 0xFFFF
 
-        # Extract byte offset and size from LIDs (LID offsets are 1-based)
+        # A second ID is the historical emulator's raw-range extension. Real
+        # PLC absolute addresses contain one 1-based ID; the returned PValue
+        # determines the scalar's size.
         byte_offset = (lids[0] - 1) if len(lids) > 0 else 0
-        byte_size = lids[1] if len(lids) > 1 else 1
+        byte_size = lids[1] if len(lids) > 1 else 0
 
         items.append((db_num, byte_offset, byte_size))
 
