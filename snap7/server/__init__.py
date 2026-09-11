@@ -2676,8 +2676,10 @@ class ServerISOConnection:
     COTP_DC = 0xC0  # Disconnect Confirm
     COTP_DT = 0xF0  # Data Transfer
 
-    # COTP parameter code for TPDU size (ISO 8073)
+    # COTP parameter codes (ISO 8073)
     COTP_PARAM_PDU_SIZE = 0xC0
+    COTP_PARAM_CALLING_TSAP = 0xC1
+    COTP_PARAM_CALLED_TSAP = 0xC2
 
     def __init__(self, client_socket: socket.socket):
         """Initialize server ISO connection."""
@@ -2687,6 +2689,8 @@ class ServerISOConnection:
         self.src_ref = 0x0001  # Server reference
         self.dst_ref = 0x0000  # Client reference (assigned during handshake)
         self.tpdu_size = 0x0A  # Default: 1024 bytes (2^10)
+        self.calling_tsap: bytes | None = None
+        self.called_tsap: bytes | None = None
 
     def accept_connection(self) -> bool:
         """Accept ISO connection from client."""
@@ -2735,9 +2739,9 @@ class ServerISOConnection:
         """
         fragments: list[bytes] = []
         total_size = 0
-        deadline = time.monotonic() + self.RECEIVE_DEADLINE
         while True:
-            tpkt_header = self._recv_exact(4, deadline)
+            header_deadline = time.monotonic() + self.RECEIVE_DEADLINE
+            tpkt_header = self._recv_exact(4, header_deadline)
             version, reserved, length = struct.unpack(">BBH", tpkt_header)
 
             if version != 3:
@@ -2747,7 +2751,11 @@ class ServerISOConnection:
             if remaining <= 0:
                 raise S7ConnectionError("Invalid TPKT length")
 
-            payload = self._recv_exact(remaining, deadline)
+            frame_deadline = time.monotonic() + self.RECEIVE_DEADLINE
+            try:
+                payload = self._recv_exact(remaining, frame_deadline)
+            except TimeoutError as e:
+                raise S7ConnectionError("Receive deadline exceeded after TPKT header") from e
 
             if len(payload) < 3:
                 raise S7ConnectionError("Invalid COTP DT: too short")
@@ -2802,18 +2810,25 @@ class ServerISOConnection:
         # Store client reference
         self.dst_ref = src_ref
 
-        # Parse variable parameters for TPDU size
+        # Parse variable parameters used in the connection confirmation.
+        self.calling_tsap = None
+        self.called_tsap = None
         offset = 7
         while offset + 2 <= len(data):
             param_code = data[offset]
             param_len = data[offset + 1]
             if offset + 2 + param_len > len(data):
                 break
+            param_data = data[offset + 2 : offset + 2 + param_len]
             if param_code == self.COTP_PARAM_PDU_SIZE and param_len == 1:
                 exponent = data[offset + 2]
                 if 7 <= exponent <= 13:
                     self.tpdu_size = exponent
                     logger.debug(f"Client requested TPDU size 2^{exponent} = {1 << exponent}")
+            elif param_code == self.COTP_PARAM_CALLING_TSAP:
+                self.calling_tsap = param_data
+            elif param_code == self.COTP_PARAM_CALLED_TSAP:
+                self.called_tsap = param_data
             offset += 2 + param_len
 
         logger.debug(f"Received COTP CR from client ref {src_ref}")
@@ -2826,8 +2841,15 @@ class ServerISOConnection:
         negotiated maximum segment size and don't fall back to the
         ISO 8073 class-0 default of 128 bytes.
         """
-        pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
-        pdu_length = 6 + len(pdu_size_param)
+        parameters = bytearray(struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size))
+        if self.calling_tsap is not None:
+            parameters.extend(struct.pack(">BB", self.COTP_PARAM_CALLING_TSAP, len(self.calling_tsap)))
+            parameters.extend(self.calling_tsap)
+        if self.called_tsap is not None:
+            parameters.extend(struct.pack(">BB", self.COTP_PARAM_CALLED_TSAP, len(self.called_tsap)))
+            parameters.extend(self.called_tsap)
+
+        pdu_length = 6 + len(parameters)
         base_pdu = struct.pack(
             ">BBHHB",
             pdu_length,  # PDU length
@@ -2837,7 +2859,7 @@ class ServerISOConnection:
             0x00,  # Class/option
         )
 
-        return base_pdu + pdu_size_param
+        return base_pdu + parameters
 
     def _build_cotp_dc(self) -> bytes:
         """Build COTP Disconnect Confirm."""
