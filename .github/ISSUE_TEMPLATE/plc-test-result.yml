@@ -1,0 +1,78 @@
+name: Real PLC test result
+description: Record one reproducible python-snap7 acceptance run against a real PLC
+title: "[hardware test]: "
+labels: ["hardware-test"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Attach the generated JSON and JUnit XML. Review all attachments before uploading. Never include PLC addresses, credentials, private keys, plant names, or unreviewed packet captures.
+  - type: input
+    id: source
+    attributes:
+      label: Source revision
+      description: Immutable 40-character commit SHA and, if applicable, release version.
+      placeholder: abcdef0123456789abcdef0123456789abcdef01
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Overall result
+      options: [pass, fail, partial]
+    validations:
+      required: true
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: Protocol path
+      options: [legacy-s7, s7commplus]
+    validations:
+      required: true
+  - type: input
+    id: plc
+    attributes:
+      label: PLC family, model, and order code
+      placeholder: S7-1500, CPU 1511-1 PN, 6ES7 ...
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware and security mode
+      placeholder: V2.9, PUT/GET enabled, non-optimized fixture DBs
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host environment
+      placeholder: Python 3.13, Linux x86_64
+    validations:
+      required: true
+  - type: input
+    id: started
+    attributes:
+      label: Run time (UTC)
+      placeholder: 2026-09-11T12:34:56Z
+    validations:
+      required: true
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Sanitized report artifacts
+      description: Drag the generated JSON and JUnit XML here. State any manually reviewed capture separately.
+    validations:
+      required: true
+  - type: textarea
+    id: skips
+    attributes:
+      label: Skips, failures, and notes
+      description: Include machine-readable skip reasons and whether this result supersedes an earlier issue.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I reviewed the attachments and they contain no PLC address, credentials, private keys, plant/site identifiers, or proprietary PLC program.
+          required: true

@@ -34,6 +34,7 @@ Welcome to python-snap7's documentation!
    :caption: Development
 
    development
+   real-plc-testing
 
 .. toctree::
    :maxdepth: 2

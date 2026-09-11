@@ -36,30 +36,71 @@ DB2 "Data_block_2" - Read/write data block with same structure.
 """
 
 import os
-import pytest
 import unittest
-from ctypes import c_int32, POINTER, pointer, create_string_buffer, cast, c_uint8
+from ctypes import POINTER, c_int32, c_uint8, cast, create_string_buffer, pointer
 from datetime import datetime
 
+import pytest
+
 from snap7.client import Client
-from snap7.type import Area, Block, S7DataItem, WordLen, Parameter
+from snap7.type import Area, Block, Parameter, S7DataItem, WordLen
 from snap7.util import (
+    get_bool,
+    get_byte,
+    get_char,
+    get_dint,
+    get_dword,
     get_int,
     get_real,
-    get_byte,
     get_word,
-    get_dword,
-    get_dint,
-    get_char,
-    get_bool,
+    set_bool,
+    set_byte,
+    set_char,
+    set_dint,
+    set_dword,
     set_int,
     set_real,
-    set_byte,
     set_word,
-    set_dword,
-    set_dint,
-    set_char,
-    set_bool,
+)
+from tests.real_plc.support import (
+    DB_SIZE,
+    EXPECTED_BOOL0,
+    EXPECTED_BOOL1,
+    EXPECTED_BOOL2,
+    EXPECTED_BOOL3,
+    EXPECTED_BOOL4,
+    EXPECTED_BOOL5,
+    EXPECTED_BOOL6,
+    EXPECTED_BOOL7,
+    EXPECTED_BYTE1,
+    EXPECTED_BYTE2,
+    EXPECTED_CHAR1,
+    EXPECTED_CHAR2,
+    EXPECTED_DINT1,
+    EXPECTED_DINT2,
+    EXPECTED_DWORD1,
+    EXPECTED_DWORD2,
+    EXPECTED_FLOAT1,
+    EXPECTED_FLOAT2,
+    EXPECTED_INT1,
+    EXPECTED_INT2,
+    EXPECTED_WORD1,
+    EXPECTED_WORD2,
+    OFFSET_BOOLS,
+    OFFSET_BYTE1,
+    OFFSET_BYTE2,
+    OFFSET_CHAR1,
+    OFFSET_CHAR2,
+    OFFSET_DINT1,
+    OFFSET_DINT2,
+    OFFSET_DWORD1,
+    OFFSET_DWORD2,
+    OFFSET_FLOAT1,
+    OFFSET_FLOAT2,
+    OFFSET_INT1,
+    OFFSET_INT2,
+    OFFSET_WORD1,
+    OFFSET_WORD2,
 )
 
 # =============================================================================
@@ -74,55 +115,6 @@ PLC_PORT = int(os.environ.get("PLC_PORT", "102"))
 # Data block numbers
 DB_READ_ONLY = int(os.environ.get("PLC_DB_READ", "1"))
 DB_READ_WRITE = int(os.environ.get("PLC_DB_WRITE", "2"))
-
-
-# =============================================================================
-# DB Structure - Byte offsets for each variable
-# =============================================================================
-OFFSET_INT1 = 0  # Int (2 bytes)
-OFFSET_INT2 = 2  # Int (2 bytes)
-OFFSET_FLOAT1 = 4  # Real (4 bytes)
-OFFSET_FLOAT2 = 8  # Real (4 bytes)
-OFFSET_BYTE1 = 12  # Byte (1 byte)
-OFFSET_BYTE2 = 13  # Byte (1 byte)
-OFFSET_WORD1 = 14  # Word (2 bytes)
-OFFSET_WORD2 = 16  # Word (2 bytes)
-OFFSET_DWORD1 = 18  # DWord (4 bytes)
-OFFSET_DWORD2 = 22  # DWord (4 bytes)
-OFFSET_DINT1 = 26  # DInt (4 bytes)
-OFFSET_DINT2 = 30  # DInt (4 bytes)
-OFFSET_CHAR1 = 34  # Char (1 byte)
-OFFSET_CHAR2 = 35  # Char (1 byte)
-OFFSET_BOOLS = 36  # 8 Bools packed in 1 byte
-
-# Total size of DB
-DB_SIZE = 37
-
-# =============================================================================
-# Expected values from DB1 "Read_only"
-# =============================================================================
-EXPECTED_INT1 = 10
-EXPECTED_INT2 = 255
-EXPECTED_FLOAT1 = 123.45
-EXPECTED_FLOAT2 = 543.21
-EXPECTED_BYTE1 = 0x0F
-EXPECTED_BYTE2 = 0xF0
-EXPECTED_WORD1 = 0xABCD
-EXPECTED_WORD2 = 0x1234
-EXPECTED_DWORD1 = 0x12345678
-EXPECTED_DWORD2 = 0x89ABCDEF
-EXPECTED_DINT1 = 2147483647
-EXPECTED_DINT2 = 42
-EXPECTED_CHAR1 = "F"
-EXPECTED_CHAR2 = "-"
-EXPECTED_BOOL0 = True
-EXPECTED_BOOL1 = False
-EXPECTED_BOOL2 = False
-EXPECTED_BOOL3 = False
-EXPECTED_BOOL4 = False
-EXPECTED_BOOL5 = False
-EXPECTED_BOOL6 = False
-EXPECTED_BOOL7 = False
 
 
 # =============================================================================
@@ -262,6 +254,7 @@ class TestClientDBRead(unittest.TestCase):
 
 
 @pytest.mark.e2e
+@pytest.mark.plc_write
 class TestClientDBWrite(unittest.TestCase):
     """Tests for db_write() method - writing to DB2 (read/write)."""
 
@@ -391,6 +384,7 @@ class TestClientReadArea(unittest.TestCase):
 
 
 @pytest.mark.e2e
+@pytest.mark.plc_write
 class TestClientWriteArea(unittest.TestCase):
     """Tests for write_area() method."""
 
@@ -715,11 +709,13 @@ class TestClientParameters(unittest.TestCase):
         self.client.set_connection_type(2)  # OP
         self.client.set_connection_type(3)  # S7Basic
 
+    @pytest.mark.administrative
     def test_set_session_password(self) -> None:
         """Test set_session_password() method."""
         result = self.client.set_session_password("testpass")
         self.assertEqual(0, result)
 
+    @pytest.mark.administrative
     def test_clear_session_password(self) -> None:
         """Test clear_session_password() method."""
         result = self.client.clear_session_password()
@@ -750,6 +746,7 @@ class TestClientMisc(unittest.TestCase):
         text = self.client.error_text(0x01E00000)
         self.assertEqual("CPU : Invalid password", text)
 
+    @pytest.mark.plc_write
     def test_iso_exchange_buffer(self) -> None:
         """Test iso_exchange_buffer() method."""
         # Write a value first

@@ -27,6 +27,8 @@ As of version 3.0, the C library is no longer used, but the name is kept for
 backwards compatibility.
 
 The full documentation is available on `Read The Docs <https://python-snap7.readthedocs.io/en/latest/>`_.
+The safe volunteer hardware-test procedure is in
+`Real-PLC acceptance testing <doc/real-plc-testing.rst>`_.
 
 
 Quick Start
