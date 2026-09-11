@@ -108,9 +108,7 @@ class TestNamedTagIO:
             encode_uint64_vlq(0) + encode_uint32_vlq(2) + encode_uint64_vlq(0xDEAD) + encode_uint32_vlq(0)
         )
 
-        with patch(
-            "s7commplus.client._build_multi_symbolic_write_payload", wraps=_build_multi_symbolic_write_payload
-        ) as build:
+        with patch("s7commplus.client._build_multi_symbolic_write_payload", wraps=_build_multi_symbolic_write_payload) as build:
             results = client.write_tags({"DB1.Real": b"\x3f\x80\x00\x00", "DB1.Count": b"\x00\x00\x00\x01"})
 
         items = build.call_args.args[0]
