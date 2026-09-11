@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from collections.abc import Iterator
+import struct
 from typing import Any, Optional
 
 from .protocol import DataType
@@ -95,6 +96,44 @@ class SymbolicTag:
             nonopt_address=int(item.get("nonopt_address", 0)),
             nonopt_bitoffset=int(item.get("nonopt_bitoffset", 0)),
         )
+
+    def decode_value(self, raw: bytes) -> Any:
+        """Decode a raw symbolic value when its scalar type is known.
+
+        Unknown, structured, truncated, and array values remain bytes so
+        callers never lose firmware-specific data.
+        """
+        if self.array_dimensions:
+            return raw
+        formats: dict[Softdatatype, str] = {
+            Softdatatype.BOOL: ">?",
+            Softdatatype.BBOOL: ">?",
+            Softdatatype.BYTE: ">B",
+            Softdatatype.WORD: ">H",
+            Softdatatype.INT: ">h",
+            Softdatatype.DWORD: ">I",
+            Softdatatype.DINT: ">i",
+            Softdatatype.REAL: ">f",
+            Softdatatype.LREAL: ">d",
+            Softdatatype.ULINT: ">Q",
+            Softdatatype.LINT: ">q",
+            Softdatatype.LWORD: ">Q",
+            Softdatatype.USINT: ">B",
+            Softdatatype.UINT: ">H",
+            Softdatatype.UDINT: ">I",
+            Softdatatype.SINT: ">b",
+        }
+        if self.softdatatype is Softdatatype.CHAR and len(raw) == 1:
+            return raw.decode("latin-1")
+        if self.softdatatype in (Softdatatype.STRING, Softdatatype.WSTRING):
+            try:
+                return raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return raw
+        fmt = formats.get(self.softdatatype)
+        if fmt is None or len(raw) != struct.calcsize(fmt):
+            return raw
+        return struct.unpack(fmt, raw)[0]
 
 
 @dataclass(frozen=True)

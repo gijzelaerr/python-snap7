@@ -5,7 +5,8 @@ Reference: thomas-v2/S7CommPlusDriver (C#, LGPL-3.0)
 
 import logging
 import struct
-from collections.abc import Callable, Mapping, Sequence
+from collections import deque
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, Optional, TypeAlias, TypeVar
 
 from snap7.error import S7ConnectionError, S7ProtocolError
@@ -33,10 +34,13 @@ from .catalog import SymbolCatalog, SymbolicTag, TagResult
 from .connection import S7CommPlusConnection
 from .protocol import DataType, ElementID, FunctionCode, Ids, ObjectId, ProtocolVersion
 from .subscription import (
+    SubscriptionDiagnostics,
     SubscriptionItem,
     SubscriptionNotification,
+    SubscriptionRegistry,
     build_delete_subscription_request,
     build_subscription_request,
+    notification_subscription_id,
     parse_subscription_notification,
 )
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
@@ -77,6 +81,9 @@ class S7CommPlusClient:
         self._connect_params: Optional[dict[str, Any]] = None
         self._subscription_change_counter = 1
         self._subscription_relation_id = 0x7FFFC001
+        self._subscriptions = SubscriptionRegistry()
+        self._alarm_subscription_ids: set[int] = set()
+        self._alarm_notification_frames: deque[bytes] = deque(maxlen=100)
         self._symbol_catalog: Optional[SymbolCatalog] = None
 
     @property
@@ -179,6 +186,9 @@ class S7CommPlusClient:
         symbolic ``GetMultiVariables`` read per connection, so multi-step flows
         such as :meth:`browse` need a fresh session to continue.
         """
+        self._subscriptions.clear()
+        self._alarm_subscription_ids.clear()
+        self._alarm_notification_frames.clear()
         if self._connection is not None:
             try:
                 self._connection.disconnect()
@@ -201,6 +211,9 @@ class S7CommPlusClient:
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
+        self._subscriptions.clear()
+        self._alarm_subscription_ids.clear()
+        self._alarm_notification_frames.clear()
         if self._connection:
             self._connection.disconnect()
             self._connection = None
@@ -814,9 +827,11 @@ class S7CommPlusClient:
 
     def create_subscription(
         self,
-        items: Sequence[SubscriptionItem | str],
+        items: Sequence[SubscriptionItem | SymbolicTag | str],
         cycle_ms: int = 100,
         credit_limit: int = 10,
+        credit_step: int = 5,
+        queue_size: int = 100,
     ) -> int:
         """Create a data change subscription.
 
@@ -832,6 +847,8 @@ class S7CommPlusClient:
             cycle_ms: Sampling cycle in milliseconds.
             credit_limit: Number of notification credits. The default of 10
                 matches the value accepted by real S7-1500 PLCs.
+            credit_step: Credits added one tick before a finite limit expires.
+            queue_size: Maximum buffered notifications for this subscription.
 
         Returns:
             Subscription object ID assigned by the PLC.
@@ -841,13 +858,23 @@ class S7CommPlusClient:
         if self._connection.subscription_container_id == 0:
             raise RuntimeError("PLC did not provide a subscription container object")
 
-        normalized = [SubscriptionItem.from_access_sequence(item) if isinstance(item, str) else item for item in items]
+        if not 0 <= credit_step <= 255:
+            raise ValueError("credit_step must be between 0 and 255")
+        normalized = [
+            SubscriptionItem.from_access_sequence(item)
+            if isinstance(item, str)
+            else SubscriptionItem.from_tag(item)
+            if isinstance(item, SymbolicTag)
+            else item
+            for item in items
+        ]
+        change_counter = self._subscription_change_counter
         payload, integrity_tail = build_subscription_request(
             self._connection.subscription_container_id,
             normalized,
             cycle_ms=cycle_ms,
             credit_limit=credit_limit,
-            change_counter=self._subscription_change_counter,
+            change_counter=change_counter,
             relation_id=self._subscription_relation_id,
         )
         response = self._connection.send_request(
@@ -862,14 +889,68 @@ class S7CommPlusClient:
         self._subscription_change_counter = self._subscription_change_counter % 0xFF + 1
         self._subscription_relation_id = (self._subscription_relation_id + 1) & 0xFFFFFFFF
         subscription_id = object_ids[0]
+        self._subscriptions.register(
+            subscription_id,
+            normalized,
+            change_counter=change_counter,
+            credit_limit=credit_limit,
+            credit_step=credit_step,
+            queue_size=queue_size,
+        )
         logger.info(f"Subscription created, id={subscription_id:#x}")
         return subscription_id
 
-    def receive_subscription_notification(self) -> SubscriptionNotification:
-        """Block until the PLC sends one data-subscription notification."""
+    def receive_subscription_notification(self, subscription_id: int | None = None) -> SubscriptionNotification:
+        """Block until one routed data notification is available."""
         if self._connection is None:
             raise RuntimeError("Not connected")
-        return parse_subscription_notification(self._connection.receive_notification())
+        if subscription_id is not None:
+            queued = self._subscriptions.pop(subscription_id)
+            if queued is not None:
+                return queued
+        while True:
+            frame = self._connection.receive_notification()
+            frame_subscription_id = notification_subscription_id(frame)
+            if frame_subscription_id in self._alarm_subscription_ids:
+                self._alarm_notification_frames.append(frame)
+                continue
+            notification = parse_subscription_notification(frame)
+            matched, credit_update = self._subscriptions.route(notification)
+            if not matched:
+                continue
+            if matched and credit_update is not None:
+                self._connection.send_subscription_credit(notification.subscription_id, credit_update)
+            target_id = notification.subscription_id if subscription_id is None else subscription_id
+            queued = self._subscriptions.pop(target_id)
+            if queued is not None:
+                return queued
+
+    def iter_subscription_notifications(
+        self, subscription_id: int, limit: int | None = None
+    ) -> Iterator[SubscriptionNotification]:
+        """Yield routed notifications, optionally stopping after ``limit``."""
+        delivered = 0
+        while limit is None or delivered < limit:
+            yield self.receive_subscription_notification(subscription_id)
+            delivered += 1
+
+    def add_subscription_callback(self, subscription_id: int, callback: Callable[[SubscriptionNotification], None]) -> None:
+        """Invoke ``callback`` whenever this client dispatches an update."""
+        self._subscriptions.add_callback(subscription_id, callback)
+
+    def remove_subscription_callback(self, subscription_id: int, callback: Callable[[SubscriptionNotification], None]) -> None:
+        self._subscriptions.remove_callback(subscription_id, callback)
+
+    def subscription_diagnostics(self, subscription_id: int) -> SubscriptionDiagnostics:
+        """Return bounded-queue overflow and sequence-gap counters."""
+        diagnostics = self._subscriptions.diagnostics(subscription_id)
+        return SubscriptionDiagnostics(
+            diagnostics.subscription_id,
+            diagnostics.queued_notifications,
+            diagnostics.dropped_notifications,
+            diagnostics.missed_sequence_updates,
+            getattr(self._connection, "_notification_frame_overflows", 0),
+        )
 
     def delete_subscription(self, subscription_id: int) -> None:
         """Delete a data change subscription.
@@ -888,6 +969,7 @@ class S7CommPlusClient:
         # result. The reference driver deletes that container, not the child ID.
         payload = build_delete_subscription_request(self._connection.subscription_container_id, self._connection.protocol_version)
         self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
+        self._subscriptions.unregister(subscription_id)
         logger.info(f"Subscription {subscription_id:#x} deleted")
 
     def create_alarm_subscription(
@@ -923,7 +1005,9 @@ class S7CommPlusClient:
         object_ids, _, return_value = parse_create_object_session_id(response)
         if return_value != 0 or not object_ids:
             raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
-        return object_ids[0]
+        subscription_id = object_ids[0]
+        self._alarm_subscription_ids.add(subscription_id)
+        return subscription_id
 
     def delete_alarm_subscription(self, subscription_id: int) -> None:
         """Delete an alarm subscription created by this client."""
@@ -935,17 +1019,34 @@ class S7CommPlusClient:
             self._connection.subscription_container_id, self._connection.protocol_version
         )
         self._connection.send_request(FunctionCode.DELETE_OBJECT, payload)
+        self._alarm_subscription_ids.discard(subscription_id)
+        self._alarm_notification_frames = deque(
+            (frame for frame in self._alarm_notification_frames if notification_subscription_id(frame) != subscription_id),
+            maxlen=self._alarm_notification_frames.maxlen,
+        )
         logger.info(f"Alarm subscription {subscription_id:#x} deleted")
 
     def receive_alarm_notification(self, language_ids: Optional[list[LanguageId | int]] = None) -> AlarmNotification:
         """Block until the PLC sends one alarm notification.
 
-        Do not run this alongside a data-subscription receive loop on the same
-        connection: mixed notification dispatch is not supported yet.
+        Data notifications encountered first are routed to their bounded queues.
         """
         if self._connection is None:
             raise RuntimeError("Not connected")
-        return parse_alarm_notification(self._connection.receive_notification(), language_ids)
+        while True:
+            frame = (
+                self._alarm_notification_frames.popleft()
+                if self._alarm_notification_frames
+                else self._connection.receive_notification()
+            )
+            frame_subscription_id = notification_subscription_id(frame)
+            if self._subscriptions.contains(frame_subscription_id):
+                notification = parse_subscription_notification(frame)
+                matched, credit_update = self._subscriptions.route(notification)
+                if matched and credit_update is not None:
+                    self._connection.send_subscription_credit(frame_subscription_id, credit_update)
+                continue
+            return parse_alarm_notification(frame, language_ids)
 
     def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
         """Return the PLC's current active alarm state.

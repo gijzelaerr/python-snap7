@@ -128,22 +128,32 @@ PUT/GET enabled.
               print(result.tag.name, result.value)
           else:
               print(result.tag.name, result.error)
-* **Symbolic data subscriptions** -- monitor values using access sequences
-  returned by ``browse()``::
+* **Symbolic data subscriptions** -- monitor catalog tags or access sequences
+  through bounded sync/async notification streams::
 
       from s7commplus import Client
 
       client = Client()
-      client.connect("192.168.1.10", 0, 1, password="secret")
-      subscription_id = client.create_subscription(["8A0E0007.A"], cycle_ms=100)
-      notification = client.receive_subscription_notification()
-      value = notification.values[1]
+      client.connect("192.168.1.10", password="secret")
+      tag = client.resolve_tag("DB1.Motor.Speed")
+      subscription_id = client.create_subscription([tag], cycle_ms=100)
+      notification = client.receive_subscription_notification(subscription_id)
+      value = notification.decoded_values[1]
+      raw_value = notification.values[1]
       client.delete_subscription(subscription_id)
       client.disconnect()
 
-  Reference IDs default to the one-based position of each access sequence.
-  Subscriptions use symbolic LIDs and therefore cannot be created from raw DB
-  byte offsets.
+  ``iter_subscription_notifications()`` provides a bounded synchronous
+  iterator; the async client provides an async iterator and
+  ``subscription_queue()``. Finite notification credits are replenished
+  automatically. ``subscription_diagnostics()`` reports queue overflow and
+  sequence gaps. Reference IDs default to the one-based item position. Raw
+  values remain available when a datatype is unknown or structured.
+
+  Deleting or disconnecting invalidates the local subscription state. Automatic
+  reconnect does not silently recreate subscriptions: create them again so the
+  caller can decide how to handle any update gap. Subscriptions use symbolic
+  LIDs and cannot be created from raw DB byte offsets.
 * **TIA Portal XML import** -- import symbol tables from TIA Portal exports
 
 **Help us test!** If you have access to any Siemens S7 PLC, we would greatly

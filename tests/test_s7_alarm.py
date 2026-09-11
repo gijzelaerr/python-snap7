@@ -16,6 +16,7 @@ from s7commplus.alarm import (
 from s7commplus.async_client import S7CommPlusAsyncClient
 from s7commplus.client import S7CommPlusClient
 from s7commplus.protocol import DataType, ElementID, FunctionCode, Ids, Opcode, ProtocolVersion
+from s7commplus.subscription import SubscriptionItem
 from s7commplus.vlq import encode_uint32_vlq, encode_uint64_vlq
 
 
@@ -81,6 +82,13 @@ def _notification_frame() -> bytes:
     body += b"\x05" + encode_uint32_vlq(12) + b"\x01"
     body += b"\x00"  # end of data-change values
     body += struct.pack(">IH", 0x11223344, 0) + b"\x81" + _alarm_object()
+    return struct.pack(">BBH", 0x72, ProtocolVersion.V2, len(body)) + body + struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
+
+
+def _data_notification_frame() -> bytes:
+    body = bytearray([Opcode.NOTIFICATION])
+    body += struct.pack(">IHHH", 0x70400025, 0, 0, 0)
+    body += b"\x03" + encode_uint32_vlq(9) + b"\x01\x00"
     return struct.pack(">BBH", 0x72, ProtocolVersion.V2, len(body)) + body + struct.pack(">BBH", 0x72, ProtocolVersion.V2, 0)
 
 
@@ -207,6 +215,45 @@ async def test_async_alarm_client_apis() -> None:
     assert (await client.receive_alarm_notification(timeout=1)).sequence_number == 12
     client._recv_cotp_dt.assert_awaited_once()
     await client.delete_alarm_subscription(0x55667788)
+
+
+def test_sync_alarm_receive_routes_interleaved_data_notification() -> None:
+    client = S7CommPlusClient()
+    connection = MagicMock()
+    connection.receive_notification.side_effect = [_data_notification_frame(), _notification_frame()]
+    client._connection = connection
+    client._alarm_subscription_ids.add(0x11223344)
+    client._subscriptions.register(
+        0x70400025,
+        [SubscriptionItem.from_access_sequence("8A0E0007.A")],
+        change_counter=1,
+        credit_limit=-1,
+        credit_step=0,
+        queue_size=2,
+    )
+
+    assert client.receive_alarm_notification().subscription_id == 0x11223344
+    assert client.receive_subscription_notification(0x70400025).sequence_number == 9
+    assert connection.receive_notification.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_async_alarm_receive_routes_interleaved_data_notification() -> None:
+    client = S7CommPlusAsyncClient()
+    client._connected = True
+    client._recv_cotp_dt = AsyncMock(side_effect=[_data_notification_frame(), _notification_frame()])
+    client._alarm_subscription_ids.add(0x11223344)
+    client._subscriptions.register(
+        0x70400025,
+        [SubscriptionItem.from_access_sequence("8A0E0007.A")],
+        change_counter=1,
+        credit_limit=-1,
+        credit_step=0,
+        queue_size=2,
+    )
+
+    assert (await client.receive_alarm_notification()).subscription_id == 0x11223344
+    assert client.subscription_queue(0x70400025).get_nowait().sequence_number == 9
 
 
 @pytest.mark.parametrize(

@@ -165,6 +165,7 @@ _S7_PREFERRED_GROUPS = ("X25519",)
 
 _MAX_SYSTEM_EVENTS_PER_RESPONSE = 16
 _SYSTEM_EVENT_RETURN_VALUE_ID = 40305
+_MAX_QUEUED_NOTIFICATION_FRAMES = 1000
 
 
 def _system_event_return_value(payload: bytes) -> Optional[int]:
@@ -536,7 +537,8 @@ class S7CommPlusConnection:
 
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
-        self._notification_frames: deque[bytes] = deque()
+        self._notification_frames: deque[bytes] = deque(maxlen=_MAX_QUEUED_NOTIFICATION_FRAMES)
+        self._notification_frame_overflows = 0
         self._request_lock = threading.Lock()
 
         # Effective protection level, read once the session is up
@@ -936,6 +938,7 @@ class S7CommPlusConnection:
         self._integrity_id_write = 0
         self._protection_level = None
         self._notification_frames.clear()
+        self._notification_frame_overflows = 0
         self._iso_conn.disconnect()
 
     def _invalidate_integrity_failure(self) -> None:
@@ -982,6 +985,53 @@ class S7CommPlusConnection:
         """Serialize one request/response exchange on the connection."""
         with self._request_lock:
             return self._send_request(function_code, payload, integrity_tail, reassemble)
+
+    def send_subscription_credit(self, subscription_id: int, credit_limit: int) -> None:
+        """Replenish finite notification credits without waiting for a response."""
+        if not 1 <= credit_limit <= 255:
+            raise ValueError("credit_limit must be between 1 and 255")
+        value = bytes([0x00, DataType.INT]) + struct.pack(">h", credit_limit)
+        payload = _build_set_variable_payload(subscription_id, Ids.SUBSCRIPTION_CREDIT_LIMIT, value)
+        with self._request_lock:
+            self._send_fire_and_forget(FunctionCode.SET_VARIABLE, payload, integrity_tail=4)
+
+    def _send_fire_and_forget(self, function_code: int, payload: bytes, integrity_tail: int) -> None:
+        """Send a request with transport flags 0x74 and consume no response."""
+        if not (self._connected or self._session_ready):
+            from snap7.error import S7ConnectionError
+
+            raise S7ConnectionError("Not connected")
+
+        seq_num = self._next_sequence_number()
+        request_header = struct.pack(
+            ">BHHHHIB",
+            Opcode.REQUEST,
+            0,
+            function_code,
+            0,
+            seq_num,
+            self._session_id,
+            0x74,
+        )
+        integrity_id_bytes = b""
+        if self._with_integrity_id:
+            integrity_id_bytes = encode_uint32_vlq(self._integrity_id_write)
+        if integrity_id_bytes and len(payload) >= integrity_tail:
+            request = request_header + payload[:-integrity_tail] + integrity_id_bytes + payload[-integrity_tail:]
+        else:
+            request = request_header + integrity_id_bytes + payload
+
+        if self._session_key is not None:
+            digest = hmac.new(self._session_key[:24], request, hashlib.sha256).digest()
+            frame_data = bytes([0x20]) + digest + request
+            frame = encode_header(ProtocolVersion.V3, len(frame_data)) + frame_data
+            frame += struct.pack(">BBH", 0x72, ProtocolVersion.V3, 0)
+        else:
+            frame = encode_header(self._protocol_version, len(request)) + request
+            frame += struct.pack(">BBH", 0x72, self._protocol_version, 0)
+        self._send_s7_data(frame)
+        if self._with_integrity_id:
+            self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
 
     def _send_request(self, function_code: int, payload: bytes, integrity_tail: int, reassemble: bool) -> bytes:
         """Send an S7CommPlus request and receive the response.
@@ -1161,6 +1211,8 @@ class S7CommPlusConnection:
                 return response_frame
             opcode = _incoming_frame_opcode(response_frame)
             if opcode == Opcode.NOTIFICATION:
+                if len(self._notification_frames) == self._notification_frames.maxlen:
+                    self._notification_frame_overflows += 1
                 self._notification_frames.append(response_frame)
                 continue
             if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
@@ -1182,20 +1234,21 @@ class S7CommPlusConnection:
 
         Notifications observed while waiting for a request response are queued,
         so callers do not lose updates when protocol traffic interleaves. This
-        method must not run concurrently with :meth:`send_request` because both
-        consume the same connection stream.
+        It is serialized with :meth:`send_request` because both consume the
+        same connection stream.
         """
-        if not self._connected:
-            from snap7.error import S7ConnectionError
+        with self._request_lock:
+            if not self._connected:
+                from snap7.error import S7ConnectionError
 
-            raise S7ConnectionError("Not connected")
-        frame = self._notification_frames.popleft() if self._notification_frames else self._recv_s7_data()
-        self._verify_v3_frame(frame)
-        if not self._is_notification_frame(frame):
-            from snap7.error import S7ConnectionError
+                raise S7ConnectionError("Not connected")
+            frame = self._notification_frames.popleft() if self._notification_frames else self._recv_s7_data()
+            self._verify_v3_frame(frame)
+            if not self._is_notification_frame(frame):
+                from snap7.error import S7ConnectionError
 
-            raise S7ConnectionError("Expected an S7CommPlus notification")
-        return frame
+                raise S7ConnectionError("Expected an S7CommPlus notification")
+            return frame
 
     # Sanity caps for fragment reassembly — generous vs. any real PLC EXPLORE response,
     # but bounded so a malformed/adversarial stream can't drive unbounded allocation.
