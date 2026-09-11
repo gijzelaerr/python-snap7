@@ -6,6 +6,7 @@ from snap7.error import (
     S7Error,
     S7ConnectionError,
     S7ProtocolError,
+    S7IntegrityError,
     S7TimeoutError,
     S7AuthenticationError,
     S7StalePacketError,
@@ -33,6 +34,7 @@ class TestExceptionClasses:
     def test_subclass_hierarchy(self) -> None:
         assert issubclass(S7ConnectionError, S7Error)
         assert issubclass(S7ProtocolError, S7Error)
+        assert issubclass(S7IntegrityError, S7ProtocolError)
         assert issubclass(S7TimeoutError, S7Error)
         assert issubclass(S7AuthenticationError, S7Error)
         assert issubclass(S7StalePacketError, S7ProtocolError)
@@ -42,6 +44,7 @@ class TestExceptionClasses:
         for cls in (
             S7ConnectionError,
             S7ProtocolError,
+            S7IntegrityError,
             S7TimeoutError,
             S7AuthenticationError,
             S7StalePacketError,

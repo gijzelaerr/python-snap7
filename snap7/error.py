@@ -28,6 +28,12 @@ class S7ProtocolError(S7Error):
     pass
 
 
+class S7IntegrityError(S7ProtocolError):
+    """Raised when authenticated S7CommPlus traffic fails integrity checks."""
+
+    pass
+
+
 class S7TimeoutError(S7Error):
     """Raised when S7 operation times out."""
 

@@ -9,7 +9,7 @@ from collections.abc import Generator
 
 import pytest
 
-from snap7.error import S7ConnectionError
+from snap7.error import S7ConnectionError, S7IntegrityError
 from s7commplus.async_client import S7CommPlusAsyncClient
 from s7commplus.client import S7CommPlusClient
 from s7commplus.connection import _parse_get_var_substreamed_response, _verify_v3_hmac
@@ -489,7 +489,7 @@ class TestSessionKeyServer:
         tampered = protected[:-1] + bytes([protected[-1] ^ 0x01])
         with pytest.raises(ConnectionError, match="Invalid V3 HMAC"):
             S7CommPlusServer._verify_v3_data(tampered, TEST_SESSION_KEY)
-        with pytest.raises(S7ConnectionError, match="Invalid V3 HMAC"):
+        with pytest.raises(S7IntegrityError, match="integrity check failed"):
             _verify_v3_hmac(tampered, TEST_SESSION_KEY)
 
     def test_create_object_response_contains_fingerprint_and_challenge(self) -> None:

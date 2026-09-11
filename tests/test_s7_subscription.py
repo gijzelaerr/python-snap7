@@ -1,12 +1,14 @@
 """Tests for S7CommPlus symbolic data subscriptions."""
 
+import hashlib
+import hmac
 import struct
 from unittest.mock import MagicMock
 
 import pytest
 
 from s7commplus.client import S7CommPlusClient
-from s7commplus.codec import encode_header, encode_pvalue_blob
+from s7commplus.codec import decode_header, encode_header, encode_pvalue_blob
 from s7commplus.connection import S7CommPlusConnection
 from s7commplus.protocol import DataType, FunctionCode, Ids, Opcode, ProtocolVersion
 from s7commplus.subscription import (
@@ -16,6 +18,7 @@ from s7commplus.subscription import (
     parse_subscription_notification,
 )
 from s7commplus.vlq import encode_uint32_vlq, encode_uint64_vlq
+from snap7.error import S7IntegrityError
 
 
 def _response_frame(function_code: int, sequence: int, payload: bytes) -> bytes:
@@ -192,3 +195,26 @@ class TestNotificationQueue:
         assert connection.send_request(FunctionCode.GET_VARIABLE, b"\x00\x00\x00\x00") == b"\x00"
         assert connection.receive_notification() == notification
         assert connection._recv_s7_data.call_count == 2
+
+    def test_authenticated_notification_is_verified_before_queueing(self) -> None:
+        connection = S7CommPlusConnection("127.0.0.1")
+        connection._connected = True
+        connection._protocol_version = ProtocolVersion.V3
+        connection._session_id = 1
+        connection._session_key = bytes(range(24))
+        connection._iso_conn.disconnect = MagicMock()
+
+        notification = _notification_frame(version=ProtocolVersion.V3)
+        _, data_length, consumed = decode_header(notification)
+        data = notification[consumed : consumed + data_length]
+        digest = hmac.new(connection._session_key, data, hashlib.sha256).digest()
+        protected = bytearray(bytes([len(digest)]) + digest + data)
+        protected[1] ^= 1
+        notification = encode_header(ProtocolVersion.V3, len(protected)) + protected
+        connection._send_s7_data = MagicMock()
+        connection._recv_s7_data = MagicMock(return_value=bytes(notification))
+
+        with pytest.raises(S7IntegrityError, match="integrity check failed"):
+            connection.send_request(FunctionCode.GET_VARIABLE, bytes(4))
+        assert not connection.connected
+        assert not connection._notification_frames
