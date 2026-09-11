@@ -33,7 +33,9 @@ def test_v1_substreamed_request_matches_accepted_tia_packet() -> None:
     conn._integrity_id_read = 1
     conn._send_s7_data = MagicMock()
     body = struct.pack(">BHHHHB", 0x32, 0, FunctionCode.GET_VAR_SUBSTREAMED, 0, 3, 0x34) + bytes(4)
-    conn._recv_s7_data = MagicMock(return_value=encode_header(ProtocolVersion.V2, len(body)) + body)
+    response_digest = hmac.new(conn._session_key, body, hashlib.sha256).digest()
+    protected_body = bytes([len(response_digest)]) + response_digest + body
+    conn._recv_s7_data = MagicMock(return_value=encode_header(ProtocolVersion.V3, len(protected_body)) + protected_body)
     conn.send_request(FunctionCode.GET_VAR_SUBSTREAMED, payload)
     frame = conn._send_s7_data.call_args.args[0]
     assert frame[37:-4] == expected
