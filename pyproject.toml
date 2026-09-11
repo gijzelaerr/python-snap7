@@ -32,7 +32,7 @@ Homepage = "https://github.com/gijzelaerr/python-snap7"
 Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
-test = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-html", "hypothesis", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
+test = ["pytest", "pytest-asyncio", "pytest-bdd>=8.1,<9", "pytest-cov", "pytest-html", "hypothesis", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
 s7commplus = ["cryptography"]
 cli = ["rich", "click" ]
 demo = ["psutil", "rich", "click"]
@@ -56,6 +56,13 @@ markers =[
     "client",
     "common",
     "e2e: end-to-end tests requiring a real PLC connection",
+    "real_plc: versioned real-PLC acceptance scenario",
+    "smoke: read-only real-PLC acceptance scenario",
+    "write: real-PLC scenario that changes and restores scratch data",
+    "plc_write: legacy alias for real-PLC tests that modify scratch data",
+    "administrative: disruptive real-PLC scenario requiring separate opt-in",
+    "legacy_s7: scenario using the legacy S7 protocol path",
+    "s7commplus: scenario using the S7CommPlus protocol path",
     "hypothesis: property-based tests using Hypothesis",
     "logo",
     "mainloop",

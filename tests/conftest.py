@@ -2,8 +2,14 @@
 
 import socket
 import sys
+from pathlib import Path
+from typing import Any
 
 import pytest
+
+from tests.real_plc.reporting import RealPLCReport, report_metadata
+
+_REAL_PLC_REPORT = RealPLCReport()
 
 
 def get_free_tcp_port() -> int:
@@ -76,6 +82,27 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=2,
         help="Read-write DB number for e2e tests (default: 2)",
     )
+    parser.addoption(
+        "--allow-plc-write",
+        action="store_true",
+        default=False,
+        help="Allow tests that modify and restore the dedicated scratch DB",
+    )
+    parser.addoption(
+        "--allow-plc-admin",
+        action="store_true",
+        default=False,
+        help="Allow disruptive administrative tests on a dedicated non-production PLC",
+    )
+    parser.addoption("--plc-protocol", choices=("legacy_s7", "s7commplus"), default="legacy_s7")
+    parser.addoption("--plc-report-json", default="", help="Write a sanitized real-PLC JSON report")
+    parser.addoption("--tester", default="", help="GitHub handle of the volunteer running the test")
+    parser.addoption("--plc-family", default="", help="Reportable PLC family, such as S7-1500")
+    parser.addoption("--plc-model", default="", help="Reportable PLC model")
+    parser.addoption("--plc-order-code", default="", help="Reportable PLC order code")
+    parser.addoption("--plc-firmware", default="", help="Reportable PLC firmware version")
+    parser.addoption("--plc-security-mode", default="", help="Reportable access/TLS mode; never enter credentials")
+    parser.addoption("--plc-tia-configuration", default="", help="Reportable TIA settings, without site details")
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -84,6 +111,9 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "e2e: mark test as end-to-end test requiring real PLC connection",
     )
+    global _REAL_PLC_REPORT
+    _REAL_PLC_REPORT = RealPLCReport()
+    config._real_plc_report = _REAL_PLC_REPORT
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -104,14 +134,26 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             e2e.DB_READ_ONLY = int(config.getoption("--plc-db-read"))
             e2e.DB_READ_WRITE = int(config.getoption("--plc-db-write"))
 
-    # Skip e2e tests if flag not provided
-    if config.getoption("--e2e"):
-        return
-
-    skip_e2e = pytest.mark.skip(reason="Need --e2e option to run end-to-end tests")
     for item in items:
-        if "e2e" in item.keywords:
-            item.add_marker(skip_e2e)
+        if "e2e" in item.keywords and not config.getoption("--e2e"):
+            item.add_marker(pytest.mark.skip(reason="Need --e2e option to run end-to-end tests"))
+        if ("write" in item.keywords or "plc_write" in item.keywords) and not config.getoption("--allow-plc-write"):
+            item.add_marker(pytest.mark.skip(reason="WRITE_OPT_IN_REQUIRED: pass --allow-plc-write"))
+        if "administrative" in item.keywords and not config.getoption("--allow-plc-admin"):
+            item.add_marker(pytest.mark.skip(reason="ADMIN_OPT_IN_REQUIRED: pass --allow-plc-admin"))
+
+
+def pytest_runtest_logreport(report: Any) -> None:
+    """Capture final BDD outcomes without recording connection secrets."""
+    _REAL_PLC_REPORT.record(report)
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Write the optional structured report after all scenario outcomes are known."""
+    del exitstatus
+    report_path = session.config.getoption("--plc-report-json")
+    if report_path:
+        session.config._real_plc_report.write(Path(report_path), report_metadata(session.config))
 
 
 @pytest.fixture(scope="session")

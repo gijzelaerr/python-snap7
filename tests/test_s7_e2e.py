@@ -48,6 +48,40 @@ import unittest
 import pytest
 
 from s7commplus.client import S7CommPlusClient
+from tests.real_plc.support import (
+    DB_SIZE,
+    EXPECTED_BOOL0,
+    EXPECTED_BOOL1,
+    EXPECTED_BYTE1,
+    EXPECTED_BYTE2,
+    EXPECTED_CHAR1,
+    EXPECTED_CHAR2,
+    EXPECTED_DINT1,
+    EXPECTED_DINT2,
+    EXPECTED_DWORD1,
+    EXPECTED_DWORD2,
+    EXPECTED_FLOAT1,
+    EXPECTED_FLOAT2,
+    EXPECTED_INT1,
+    EXPECTED_INT2,
+    EXPECTED_WORD1,
+    EXPECTED_WORD2,
+    OFFSET_BOOLS,
+    OFFSET_BYTE1,
+    OFFSET_BYTE2,
+    OFFSET_CHAR1,
+    OFFSET_CHAR2,
+    OFFSET_DINT1,
+    OFFSET_DINT2,
+    OFFSET_DWORD1,
+    OFFSET_DWORD2,
+    OFFSET_FLOAT1,
+    OFFSET_FLOAT2,
+    OFFSET_INT1,
+    OFFSET_INT2,
+    OFFSET_WORD1,
+    OFFSET_WORD2,
+)
 
 # Enable DEBUG logging for all s7 modules so we get full hex dumps
 logging.basicConfig(
@@ -69,49 +103,6 @@ PLC_PORT = int(os.environ.get("PLC_PORT", "102"))
 # Data block numbers
 DB_READ_ONLY = int(os.environ.get("PLC_DB_READ", "1"))
 DB_READ_WRITE = int(os.environ.get("PLC_DB_WRITE", "2"))
-
-
-# =============================================================================
-# DB Structure - Byte offsets for each variable (same as regular S7 e2e tests)
-# =============================================================================
-OFFSET_INT1 = 0  # Int (2 bytes)
-OFFSET_INT2 = 2  # Int (2 bytes)
-OFFSET_FLOAT1 = 4  # Real (4 bytes)
-OFFSET_FLOAT2 = 8  # Real (4 bytes)
-OFFSET_BYTE1 = 12  # Byte (1 byte)
-OFFSET_BYTE2 = 13  # Byte (1 byte)
-OFFSET_WORD1 = 14  # Word (2 bytes)
-OFFSET_WORD2 = 16  # Word (2 bytes)
-OFFSET_DWORD1 = 18  # DWord (4 bytes)
-OFFSET_DWORD2 = 22  # DWord (4 bytes)
-OFFSET_DINT1 = 26  # DInt (4 bytes)
-OFFSET_DINT2 = 30  # DInt (4 bytes)
-OFFSET_CHAR1 = 34  # Char (1 byte)
-OFFSET_CHAR2 = 35  # Char (1 byte)
-OFFSET_BOOLS = 36  # 8 Bools packed in 1 byte
-
-# Total size of DB
-DB_SIZE = 37
-
-# =============================================================================
-# Expected values from DB1 "Read_only"
-# =============================================================================
-EXPECTED_INT1 = 10
-EXPECTED_INT2 = 255
-EXPECTED_FLOAT1 = 123.45
-EXPECTED_FLOAT2 = 543.21
-EXPECTED_BYTE1 = 0x0F
-EXPECTED_BYTE2 = 0xF0
-EXPECTED_WORD1 = 0xABCD
-EXPECTED_WORD2 = 0x1234
-EXPECTED_DWORD1 = 0x12345678
-EXPECTED_DWORD2 = 0x89ABCDEF
-EXPECTED_DINT1 = 2147483647
-EXPECTED_DINT2 = 42
-EXPECTED_CHAR1 = "F"
-EXPECTED_CHAR2 = "-"
-EXPECTED_BOOL0 = True
-EXPECTED_BOOL1 = False
 
 
 # =============================================================================
@@ -253,6 +244,7 @@ class TestS7CommPlusDBRead(unittest.TestCase):
 
 
 @pytest.mark.e2e
+@pytest.mark.plc_write
 class TestS7CommPlusDBWrite(unittest.TestCase):
     """Tests for db_write() - writing to DB2 (read/write)."""
 
@@ -535,6 +527,7 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
         print(f"\n{'=' * 60}")
 
+    @pytest.mark.administrative
     def test_diag_raw_set_variable(self) -> None:
         """Try SetVariable (0x04F2) instead of SetMultiVariables to see if PLC responds differently."""
         from s7commplus.protocol import FunctionCode
@@ -563,8 +556,8 @@ class TestS7CommPlusDiagnostics(unittest.TestCase):
 
     def test_diag_explore_then_read(self) -> None:
         """Explore first to discover object IDs, then try reading using those IDs."""
-        from s7commplus.protocol import FunctionCode, ElementID
-        from s7commplus.vlq import encode_uint32_vlq, decode_uint32_vlq
+        from s7commplus.protocol import ElementID, FunctionCode
+        from s7commplus.vlq import decode_uint32_vlq, encode_uint32_vlq
 
         print(f"\n{'=' * 60}")
         print("DIAGNOSTIC: Explore -> extract object IDs -> try reading")

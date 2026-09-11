@@ -6,6 +6,9 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Add a safe, Gherkin-based real-PLC acceptance program with restored scratch
+  writes and sanitized JSON/JUnit reports (#840).
+
 * Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
   distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
   inconsistent state attributes, including S7-1200 responses that omit them.

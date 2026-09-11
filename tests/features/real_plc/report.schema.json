@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/gijzelaerr/python-snap7/blob/master/tests/features/real_plc/report.schema.json",
+  "title": "python-snap7 real-PLC acceptance result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "started_at", "ended_at", "overall_result", "source", "environment", "tester", "plc", "scenarios"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "ended_at": {"type": "string", "format": "date-time"},
+    "overall_result": {"enum": ["pass", "fail", "partial"]},
+    "source": {"type": "object"},
+    "environment": {"type": "object"},
+    "tester": {"type": "string"},
+    "plc": {"type": "object"},
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_id", "status", "tags", "duration_seconds", "diagnostic"],
+        "properties": {
+          "scenario_id": {"type": "string"},
+          "status": {"enum": ["passed", "failed", "skipped"]},
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "duration_seconds": {"type": "number", "minimum": 0},
+          "diagnostic": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}
