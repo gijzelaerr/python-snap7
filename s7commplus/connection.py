@@ -45,6 +45,7 @@ import os
 import ssl
 import struct
 import tempfile
+import threading
 from collections import deque
 from types import TracebackType
 from typing import Any, Optional, Type
@@ -78,6 +79,47 @@ from .protocol import (
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq, encode_uint64_vlq
 
 logger = logging.getLogger(__name__)
+
+
+def _incoming_frame_opcode(frame: bytes) -> int:
+    """Return the application opcode from a complete non-SystemEvent frame."""
+    from snap7.error import S7ConnectionError, S7ProtocolError
+
+    if not frame:
+        raise S7ConnectionError("Connection closed while waiting for an S7CommPlus frame")
+    version, data_length, consumed = decode_header(frame)
+    data = bytes(frame[consumed : consumed + data_length])
+    if version == ProtocolVersion.V3 and data:
+        hash_length = data[0]
+        if len(data) <= 1 + hash_length:
+            raise S7ProtocolError("Truncated S7CommPlus V3 integrity envelope")
+        data = data[1 + hash_length :]
+    if not data:
+        raise S7ProtocolError("S7CommPlus frame has no application opcode")
+    return data[0]
+
+
+def _validate_response_header(response: bytes, expected_function: int, expected_sequence: int) -> None:
+    """Validate that application data is the response to one outstanding request."""
+    from snap7.error import S7ConnectionError, S7ProtocolError
+
+    if len(response) < 10:
+        raise S7ConnectionError("Response too short")
+    opcode = response[0]
+    function = struct.unpack_from(">H", response, 3)[0]
+    sequence = struct.unpack_from(">H", response, 7)[0]
+    if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
+        raise S7ProtocolError(f"Unexpected response opcode 0x{opcode:02X}")
+    # A PLC may answer any failed request with the protocol's generic ERROR
+    # function while retaining the request sequence number.
+    if function not in (expected_function, FunctionCode.ERROR):
+        raise S7ProtocolError(
+            f"Response function mismatch: expected function=0x{expected_function:04X}, got function=0x{function:04X}"
+        )
+    if sequence != expected_sequence:
+        raise S7ProtocolError(
+            f"Response sequence mismatch: expected seq={expected_sequence}, got seq={sequence} for function=0x{function:04X}"
+        )
 
 
 def _log_create_object_return_value(return_value: int, tls_active: bool) -> None:
@@ -478,6 +520,7 @@ class S7CommPlusConnection:
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
         self._notification_frames: deque[bytes] = deque()
+        self._request_lock = threading.Lock()
 
         # Effective protection level, read once the session is up
         self._protection_level: Optional[int] = None
@@ -876,6 +919,11 @@ class S7CommPlusConnection:
         self._iso_conn.disconnect()
 
     def send_request(self, function_code: int, payload: bytes = b"", integrity_tail: int = 4, reassemble: bool = False) -> bytes:
+        """Serialize one request/response exchange on the connection."""
+        with self._request_lock:
+            return self._send_request(function_code, payload, integrity_tail, reassemble)
+
+    def _send_request(self, function_code: int, payload: bytes, integrity_tail: int, reassemble: bool) -> bytes:
         """Send an S7CommPlus request and receive the response.
 
         For V2+ with IntegrityId tracking enabled, the IntegrityId is spliced into
@@ -975,14 +1023,7 @@ class S7CommPlusConnection:
                 from snap7.error import S7ConnectionError
 
                 raise S7ConnectionError("Response too short")
-            resp_func = struct.unpack_from(">H", data, 3)[0]
-            resp_seq = struct.unpack_from(">H", data, 7)[0]
-            if resp_seq != seq_num:
-                from snap7.error import S7ProtocolError
-
-                raise S7ProtocolError(
-                    f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
-                )
+            _validate_response_header(data, function_code, seq_num)
             logger.debug(f"  Reassembled response ({len(data)} bytes), payload {len(data) - 10} bytes")
             resp_payload = bytes(data[10:])
             if self._session_key is not None:
@@ -1010,10 +1051,7 @@ class S7CommPlusConnection:
 
         logger.debug(f"  Response data ({len(response)} bytes): {response.hex(' ')}")
 
-        if len(response) < 10:
-            from snap7.error import S7ConnectionError
-
-            raise S7ConnectionError("Response too short")
+        _validate_response_header(response, function_code, seq_num)
 
         # Parse the 10-byte response header for debug (responses carry no SessionId)
         resp_opcode = response[0]
@@ -1024,13 +1062,6 @@ class S7CommPlusConnection:
             f"  Response header: opcode=0x{resp_opcode:02X} function=0x{resp_func:04X} "
             f"seq={resp_seq} transport=0x{resp_transport:02X}"
         )
-        if resp_seq != seq_num:
-            from snap7.error import S7ProtocolError
-
-            raise S7ProtocolError(
-                f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
-            )
-
         # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses have
         # NO SessionId field (requests do, making their header 14 bytes).
         resp_offset = 10
@@ -1055,11 +1086,13 @@ class S7CommPlusConnection:
 
     def _recv_response_frame(self) -> bytes:
         """Receive the next response, queueing notifications and consuming non-fatal SystemEvents."""
-        from snap7.error import S7ProtocolError
+        from snap7.error import S7ConnectionError, S7ProtocolError
 
         system_events = 0
         while True:
             response_frame = self._recv_s7_data()
+            if not response_frame:
+                raise S7ConnectionError("Connection closed while waiting for an S7CommPlus response")
             version, data_length, consumed = decode_header(response_frame)
             if version == ProtocolVersion.SYSTEM_EVENT:
                 _check_system_event(bytes(response_frame[consumed : consumed + data_length]))
@@ -1067,24 +1100,25 @@ class S7CommPlusConnection:
                 if system_events > _MAX_SYSTEM_EVENTS_PER_RESPONSE:
                     raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
                 continue
-            if self._is_notification_frame(response_frame):
+            if data_length < 10:
+                return response_frame
+            opcode = _incoming_frame_opcode(response_frame)
+            if opcode == Opcode.NOTIFICATION:
                 self._notification_frames.append(response_frame)
                 continue
+            if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
+                raise S7ProtocolError(f"Unexpected S7CommPlus opcode 0x{opcode:02X} while waiting for a response")
             return response_frame
 
     @staticmethod
     def _is_notification_frame(frame: bytes) -> bool:
         """Return whether a complete frame contains an unsolicited notification."""
+        from snap7.error import S7ConnectionError, S7ProtocolError
+
         try:
-            version, data_length, consumed = decode_header(frame)
-        except (IndexError, ValueError):
+            return _incoming_frame_opcode(frame) == Opcode.NOTIFICATION
+        except (IndexError, ValueError, S7ConnectionError, S7ProtocolError):
             return False
-        data = frame[consumed : consumed + data_length]
-        if version == ProtocolVersion.V3 and data:
-            hash_length = data[0]
-            if hash_length and len(data) > 1 + hash_length:
-                data = data[1 + hash_length :]
-        return bool(data) and data[0] == Opcode.NOTIFICATION
 
     def receive_notification(self) -> bytes:
         """Receive one unsolicited S7CommPlus notification frame.

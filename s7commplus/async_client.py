@@ -7,6 +7,7 @@ import asyncio
 import logging
 import ssl
 import struct
+from collections import deque
 from collections.abc import Mapping, Sequence
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
@@ -53,10 +54,12 @@ from .connection import (
     _build_set_variable_payload,
     _check_system_event,
     _check_set_variable_response,
+    _incoming_frame_opcode,
     _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
     _set_s7_groups,
+    _validate_response_header,
 )
 from .alarm import (
     Alarm,
@@ -119,6 +122,7 @@ class S7CommPlusAsyncClient:
         self._session_ready = False
         self._connected = False
         self._lock = asyncio.Lock()
+        self._notification_frames: deque[bytes] = deque()
         self._connect_params: Optional[dict[str, Any]] = None
         self._symbol_catalog: Optional[SymbolCatalog] = None
 
@@ -513,6 +517,7 @@ class S7CommPlusAsyncClient:
         self._server_session_version = None
         self._session_setup_ok = False
         self._protection_level = None
+        self._notification_frames.clear()
 
         if self._writer:
             try:
@@ -744,8 +749,11 @@ class S7CommPlusAsyncClient:
         async with self._lock:
             if not self._connected:
                 raise RuntimeError("Not connected")
-            receive = self._recv_cotp_dt()
-            frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
+            if self._notification_frames:
+                frame = self._notification_frames.popleft()
+            else:
+                receive = self._recv_cotp_dt()
+                frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
         return parse_alarm_notification(frame, language_ids)
 
     async def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
@@ -1069,40 +1077,42 @@ class S7CommPlusAsyncClient:
                 data = await self._recv_reassembled_payload(response_data)
                 if len(data) < 10:
                     raise S7ConnectionError("Response too short")
-                resp_func = struct.unpack_from(">H", data, 3)[0]
-                resp_seq = struct.unpack_from(">H", data, 7)[0]
-                if resp_seq != seq_num:
-                    raise S7ProtocolError(
-                        f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
-                    )
+                _validate_response_header(data, function_code, seq_num)
                 return bytes(data[10:])
 
             _, data_length, consumed = decode_header(response_data)
             response = response_data[consumed : consumed + data_length]
 
-            if len(response) < 10:
-                raise S7ConnectionError("Response too short")
+            _validate_response_header(response, function_code, seq_num)
 
             # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
             # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
             # IntegrityId travels at the END of the payload and is ignored by the parsers.
-            resp_func = struct.unpack_from(">H", response, 3)[0]
-            resp_seq = struct.unpack_from(">H", response, 7)[0]
-            if resp_seq != seq_num:
-                raise S7ProtocolError(
-                    f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
-                )
             return response[10:]
 
     async def _recv_response_frame(self) -> bytes:
-        """Receive the next application response, consuming non-fatal SystemEvents."""
-        for _ in range(_MAX_SYSTEM_EVENTS_PER_RESPONSE + 1):
+        """Receive the next response, queueing unsolicited application frames."""
+        system_events = 0
+        while True:
             response_data = await self._recv_cotp_dt()
+            if not response_data:
+                raise S7ConnectionError("Connection closed while waiting for an S7CommPlus response")
             version, data_length, consumed = decode_header(response_data)
-            if version != ProtocolVersion.SYSTEM_EVENT:
+            if version == ProtocolVersion.SYSTEM_EVENT:
+                _check_system_event(bytes(response_data[consumed : consumed + data_length]))
+                system_events += 1
+                if system_events > _MAX_SYSTEM_EVENTS_PER_RESPONSE:
+                    raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+                continue
+            if data_length < 10:
                 return response_data
-            _check_system_event(bytes(response_data[consumed : consumed + data_length]))
-        raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+            opcode = _incoming_frame_opcode(response_data)
+            if opcode == Opcode.NOTIFICATION:
+                self._notification_frames.append(response_data)
+                continue
+            if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
+                raise S7ProtocolError(f"Unexpected S7CommPlus opcode 0x{opcode:02X} while waiting for a response")
+            return response_data
 
     async def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
         """Receive a possibly-fragmented S7CommPlus response, returning its data section.
