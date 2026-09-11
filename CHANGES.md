@@ -6,8 +6,9 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
-* Correlate S7CommPlus responses by opcode, function, and sequence; preserve
-  interleaved notifications and serialize synchronous wire requests.
+* Correlate S7CommPlus responses by opcode, function, and sequence; discard
+  bounded stale replies from earlier requests, preserve interleaved
+  notifications, and serialize synchronous wire requests.
 * Verify authenticated V3 responses and cumulative fragment digests before
   parsing, invalidating the connection with a dedicated integrity error on any
   mismatch or truncated envelope.
