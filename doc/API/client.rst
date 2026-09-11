@@ -23,7 +23,25 @@ s7commplus.AsyncClient
 
 The asynchronous client currently supports the TLS connection and
 legitimation path. Legacy V1 SessionKey authentication is available only on
-the synchronous client.
+the synchronous client. ``AsyncClient.connect()`` detects the SessionKey
+attributes returned by older PLCs and fails before sending an unsupported
+session setup; use ``s7commplus.Client`` for those devices.
+
+.. list-table:: S7CommPlus authentication compatibility
+   :header-rows: 1
+
+   * - Protocol path
+     - ``Client``
+     - ``AsyncClient``
+   * - V1 legacy SessionKey (no TLS)
+     - Supported
+     - Not supported; ``connect()`` raises
+   * - V2 over TLS
+     - Supported
+     - Supported
+   * - V3 over TLS
+     - Supported
+     - Supported
 
 .. code-block:: python
 
@@ -32,7 +50,7 @@ the synchronous client.
 
    async def main():
        client = AsyncClient()
-       await client.connect("192.168.1.10")
+       await client.connect("192.168.1.10", use_tls=True)
        data = await client.db_read(1, 0, 4)
        await client.disconnect()
 
