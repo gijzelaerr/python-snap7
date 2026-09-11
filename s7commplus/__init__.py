@@ -13,6 +13,7 @@ Usage::
     data = client.db_read(1, 0, 4)
 """
 
+from .async_client import AsyncSubscriptionQueue
 from .async_client import S7CommPlusAsyncClient as AsyncClient
 from .alarm import Alarm, AlarmNotification, AlarmText, LanguageId
 from .blob_decompressor import decompress_blob, find_and_decompress
@@ -22,7 +23,7 @@ from .client import S7CommPlusClient as Client
 from .connection import S7CommPlusConnection
 from .server import CPUState, DataBlock
 from .server import S7CommPlusServer as Server
-from .subscription import SubscriptionItem, SubscriptionNotification
+from .subscription import SubscriptionDiagnostics, SubscriptionItem, SubscriptionNotification
 from .tag_browser import (
     DataBlock as ExploreDataBlock,
 )
@@ -40,6 +41,7 @@ __all__ = [
     "AlarmText",
     "ArrayDimension",
     "AsyncClient",
+    "AsyncSubscriptionQueue",
     "CPUState",
     "Client",
     "DBWriteItem",
@@ -51,6 +53,7 @@ __all__ = [
     "Server",
     "SubscriptionItem",
     "SubscriptionNotification",
+    "SubscriptionDiagnostics",
     "SymbolCatalog",
     "SymbolicReadItem",
     "SymbolicTag",

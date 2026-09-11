@@ -7,8 +7,13 @@ not identify variables in optimized data blocks.
 """
 
 import struct
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections import deque
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .catalog import SymbolicTag
 
 from .codec import decode_header, decode_pvalue_to_bytes, encode_object_qualifier
 from .protocol import DataType, ElementID, Ids, Opcode, ProtocolVersion
@@ -24,6 +29,7 @@ class SubscriptionItem:
     access_sub_area: int | None = None
     symbol_crc: int = 0
     reference_id: int = 0
+    tag: "SymbolicTag | None" = None
 
     def __post_init__(self) -> None:
         if not 0 <= self.access_area <= 0xFFFFFFFF:
@@ -72,6 +78,11 @@ class SubscriptionItem:
             raise ValueError("access_sequence components must be hexadecimal") from exc
         return cls(access_area, lids, access_sub_area, symbol_crc, reference_id)
 
+    @classmethod
+    def from_tag(cls, tag: "SymbolicTag", *, reference_id: int = 0) -> "SubscriptionItem":
+        """Build an item that retains a catalog tag for typed notifications."""
+        return cls(tag.access_area, tag.lids, symbol_crc=tag.symbol_crc, reference_id=reference_id, tag=tag)
+
 
 @dataclass(frozen=True)
 class SubscriptionNotification:
@@ -85,6 +96,164 @@ class SubscriptionNotification:
     errors: dict[int, int]
     timestamp_microseconds: int | None = None
     trailing_data: bytes = b""
+    decoded_values: dict[int, Any] = field(default_factory=dict)
+    tags: dict[int, "SymbolicTag"] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SubscriptionDiagnostics:
+    """Queue and sequence-loss diagnostics for one active subscription."""
+
+    subscription_id: int
+    queued_notifications: int
+    dropped_notifications: int
+    missed_sequence_updates: int
+    transport_frame_overflows: int = 0
+
+
+@dataclass
+class _SubscriptionState:
+    items: dict[int, SubscriptionItem]
+    change_counter: int
+    credit_limit: int
+    credit_step: int
+    queue_size: int
+    notifications: deque[SubscriptionNotification] = field(default_factory=deque)
+    callbacks: list[Callable[[SubscriptionNotification], None]] = field(default_factory=list)
+    dropped_notifications: int = 0
+    missed_sequence_updates: int = 0
+    last_sequence: int | None = None
+    next_credit_limit: int = 0
+
+    def __post_init__(self) -> None:
+        self.next_credit_limit = self.credit_limit
+
+
+class SubscriptionRegistry:
+    """Bounded notification routing shared by the sync and async clients."""
+
+    def __init__(self, orphan_queue_size: int = 100) -> None:
+        self._states: dict[int, _SubscriptionState] = {}
+        self._orphans: deque[SubscriptionNotification] = deque(maxlen=orphan_queue_size)
+        self.unmatched_notifications = 0
+
+    def register(
+        self,
+        subscription_id: int,
+        items: Sequence[SubscriptionItem],
+        *,
+        change_counter: int,
+        credit_limit: int,
+        credit_step: int,
+        queue_size: int,
+    ) -> None:
+        if queue_size <= 0:
+            raise ValueError("queue_size must be positive")
+        references = {item.reference_id or index: item for index, item in enumerate(items, 1)}
+        state = _SubscriptionState(references, change_counter, credit_limit, credit_step, queue_size)
+        self._states[subscription_id] = state
+        retained: deque[SubscriptionNotification] = deque(maxlen=self._orphans.maxlen)
+        while self._orphans:
+            notification = self._orphans.popleft()
+            if notification.subscription_id == subscription_id and notification.change_counter == change_counter:
+                self._enqueue(state, self._decorate(notification, state))
+            else:
+                retained.append(notification)
+        self._orphans = retained
+
+    def unregister(self, subscription_id: int) -> None:
+        self._states.pop(subscription_id, None)
+        self._orphans = deque(
+            (notification for notification in self._orphans if notification.subscription_id != subscription_id),
+            maxlen=self._orphans.maxlen,
+        )
+
+    def clear(self) -> None:
+        self._states.clear()
+        self._orphans.clear()
+
+    @property
+    def subscription_ids(self) -> tuple[int, ...]:
+        return tuple(self._states)
+
+    def contains(self, subscription_id: int) -> bool:
+        return subscription_id in self._states
+
+    def add_callback(self, subscription_id: int, callback: Callable[[SubscriptionNotification], None]) -> None:
+        self._state(subscription_id).callbacks.append(callback)
+
+    def remove_callback(self, subscription_id: int, callback: Callable[[SubscriptionNotification], None]) -> None:
+        state = self._state(subscription_id)
+        if callback in state.callbacks:
+            state.callbacks.remove(callback)
+
+    def route(self, notification: SubscriptionNotification) -> tuple[bool, int | None]:
+        state = self._states.get(notification.subscription_id)
+        if state is None:
+            if len(self._orphans) == self._orphans.maxlen:
+                self.unmatched_notifications += 1
+            self._orphans.append(notification)
+            return False, None
+        if notification.change_counter != state.change_counter:
+            state.dropped_notifications += 1
+            return False, None
+
+        decorated = self._decorate(notification, state)
+        if state.last_sequence is not None and decorated.sequence_number > state.last_sequence + 1:
+            state.missed_sequence_updates += decorated.sequence_number - state.last_sequence - 1
+        state.last_sequence = decorated.sequence_number
+        self._enqueue(state, decorated)
+        for callback in tuple(state.callbacks):
+            callback(decorated)
+
+        credit_update = None
+        if state.credit_limit > 0 and state.credit_step > 0 and decorated.credit_tick >= state.next_credit_limit - 1:
+            state.next_credit_limit = (state.next_credit_limit + state.credit_step) % 255 or state.credit_step
+            credit_update = state.next_credit_limit
+        return True, credit_update
+
+    def pop(self, subscription_id: int) -> SubscriptionNotification | None:
+        state = self._state(subscription_id)
+        return state.notifications.popleft() if state.notifications else None
+
+    def diagnostics(self, subscription_id: int) -> SubscriptionDiagnostics:
+        state = self._state(subscription_id)
+        return SubscriptionDiagnostics(
+            subscription_id,
+            len(state.notifications),
+            state.dropped_notifications,
+            state.missed_sequence_updates,
+        )
+
+    def _state(self, subscription_id: int) -> _SubscriptionState:
+        try:
+            return self._states[subscription_id]
+        except KeyError as exc:
+            raise KeyError(f"Unknown subscription: {subscription_id:#x}") from exc
+
+    @staticmethod
+    def _decorate(notification: SubscriptionNotification, state: _SubscriptionState) -> SubscriptionNotification:
+        tags: dict[int, SymbolicTag] = {}
+        decoded: dict[int, Any] = {}
+        for reference_id, raw in notification.values.items():
+            item = state.items.get(reference_id)
+            if item is None or item.tag is None:
+                decoded[reference_id] = raw
+                continue
+            tags[reference_id] = item.tag
+            decoded[reference_id] = item.tag.decode_value(raw)
+        for reference_id in notification.errors:
+            item = state.items.get(reference_id)
+            if item is not None and item.tag is not None:
+                tags[reference_id] = item.tag
+        return replace(notification, tags=tags, decoded_values=decoded)
+
+    @staticmethod
+    def _enqueue(state: _SubscriptionState, notification: SubscriptionNotification) -> None:
+        if len(state.notifications) >= state.queue_size:
+            state.notifications.popleft()
+            state.dropped_notifications += 1
+        state.notifications.append(notification)
 
 
 def _attribute(attribute_id: int, value: bytes) -> bytes:
@@ -203,6 +372,18 @@ def _decode_notification_value(data: bytes, offset: int) -> tuple[bytes, int]:
             raise ValueError("subscription BLOB value is truncated")
         return data[value_offset:value_end], value_end - offset
     return decode_pvalue_to_bytes(data, offset)
+
+
+def notification_subscription_id(frame: bytes) -> int:
+    """Return the subscription object ID from any notification frame."""
+    version, data_length, consumed = decode_header(frame)
+    data = frame[consumed : consumed + data_length]
+    if version == ProtocolVersion.V3 and data:
+        hash_length = data[0]
+        data = data[1 + hash_length :]
+    if len(data) < 5 or data[0] != Opcode.NOTIFICATION:
+        raise ValueError("expected an S7CommPlus notification with a subscription ID")
+    return struct.unpack_from(">I", data, 1)[0]
 
 
 def parse_subscription_notification(frame: bytes) -> SubscriptionNotification:

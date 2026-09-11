@@ -7,7 +7,8 @@ import asyncio
 import logging
 import ssl
 import struct
-from collections.abc import Mapping, Sequence
+from collections import deque
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 from snap7.error import S7ConnectionError, S7ProtocolError
@@ -26,7 +27,6 @@ from .client import (
     _build_multi_symbolic_write_payload,
     _build_multi_symbolic_read_payload,
     _build_read_payload,
-    _build_subscription_request,
     _build_symbolic_read_payload,
     _build_symbolic_write_payload,
     _build_write_payload,
@@ -47,16 +47,19 @@ from .codec import (
     parse_server_session_version,
 )
 from .connection import (
+    _MAX_QUEUED_NOTIFICATION_FRAMES,
     _MAX_SYSTEM_EVENTS_PER_RESPONSE,
     _S7_CIPHERS,
     _build_get_var_substreamed_payload,
     _build_set_variable_payload,
     _check_system_event,
     _check_set_variable_response,
+    _incoming_frame_opcode,
     _log_create_object_return_value,
     _parse_get_var_substreamed_response,
     _parse_protection_level_response,
     _set_s7_groups,
+    _validate_response_header,
 )
 from .alarm import (
     Alarm,
@@ -90,6 +93,16 @@ from .protocol import (
     Opcode,
     ProtocolVersion,
 )
+from .subscription import (
+    SubscriptionDiagnostics,
+    SubscriptionItem,
+    SubscriptionNotification,
+    SubscriptionRegistry,
+    build_delete_subscription_request,
+    build_subscription_request,
+    notification_subscription_id,
+    parse_subscription_notification,
+)
 from .vlq import decode_uint32_vlq, decode_uint64_vlq, encode_uint32_vlq
 
 logger = logging.getLogger(__name__)
@@ -100,6 +113,26 @@ _T = TypeVar("_T")
 _COTP_CR = 0xE0
 _COTP_CC = 0xD0
 _COTP_DT = 0xF0
+
+
+class AsyncSubscriptionQueue:
+    """Bounded queue-like view over one async client's routed notifications."""
+
+    def __init__(self, client: "S7CommPlusAsyncClient", subscription_id: int) -> None:
+        self._client = client
+        self._subscription_id = subscription_id
+
+    async def get(self, timeout: Optional[float] = None) -> SubscriptionNotification:
+        return await self._client.receive_subscription_notification(self._subscription_id, timeout=timeout)
+
+    def get_nowait(self) -> SubscriptionNotification:
+        notification = self._client._subscriptions.pop(self._subscription_id)
+        if notification is None:
+            raise asyncio.QueueEmpty
+        return notification
+
+    def qsize(self) -> int:
+        return self._client.subscription_diagnostics(self._subscription_id).queued_notifications
 
 
 class S7CommPlusAsyncClient:
@@ -119,8 +152,15 @@ class S7CommPlusAsyncClient:
         self._session_ready = False
         self._connected = False
         self._lock = asyncio.Lock()
+        self._notification_frames: deque[bytes] = deque(maxlen=_MAX_QUEUED_NOTIFICATION_FRAMES)
+        self._notification_frame_overflows = 0
         self._connect_params: Optional[dict[str, Any]] = None
         self._symbol_catalog: Optional[SymbolCatalog] = None
+        self._subscription_change_counter = 1
+        self._subscription_relation_id = 0x7FFFC001
+        self._subscriptions = SubscriptionRegistry()
+        self._alarm_subscription_ids: set[int] = set()
+        self._alarm_notification_frames: deque[bytes] = deque(maxlen=100)
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -488,6 +528,9 @@ class S7CommPlusAsyncClient:
 
     async def disconnect(self) -> None:
         """Disconnect from PLC."""
+        self._subscriptions.clear()
+        self._alarm_subscription_ids.clear()
+        self._alarm_notification_frames.clear()
         if self._session_ready and self._session_id:
             try:
                 await self._delete_session()
@@ -513,6 +556,8 @@ class S7CommPlusAsyncClient:
         self._server_session_version = None
         self._session_setup_ok = False
         self._protection_level = None
+        self._notification_frames.clear()
+        self._notification_frame_overflows = 0
 
         if self._writer:
             try:
@@ -678,24 +723,122 @@ class S7CommPlusAsyncClient:
 
         await self._send_request(FunctionCode.SET_VAR_SUBSTREAMED, bytes(payload))
 
-    async def create_subscription(self, items: list[tuple[int, int, int]], cycle_ms: int = 0) -> int:
+    async def create_subscription(
+        self,
+        items: Sequence[SubscriptionItem | SymbolicTag | str],
+        cycle_ms: int = 100,
+        credit_limit: int = 10,
+        credit_step: int = 5,
+        queue_size: int = 100,
+    ) -> int:
         """Create a data change subscription.
 
         .. warning:: This method is **experimental** and may change.
 
         Args:
-            items: List of (db_number, start_offset, size) tuples to monitor.
-            cycle_ms: Cycle time in milliseconds (0 = on change).
+            items: Symbolic access sequences, catalog tags, or explicit items.
+            cycle_ms: Sampling cycle in milliseconds.
+            credit_limit: Initial notification credit limit, or -1 for unlimited.
+            credit_step: Credits added before a finite limit expires.
+            queue_size: Maximum buffered notifications for this subscription.
 
         Returns:
             Subscription object ID assigned by the PLC.
         """
-        payload = _build_subscription_request(items, cycle_ms, self._session_id)
-        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload)
+        if self._subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        if not 0 <= credit_step <= 255:
+            raise ValueError("credit_step must be between 0 and 255")
+        normalized = [
+            SubscriptionItem.from_access_sequence(item)
+            if isinstance(item, str)
+            else SubscriptionItem.from_tag(item)
+            if isinstance(item, SymbolicTag)
+            else item
+            for item in items
+        ]
+        change_counter = self._subscription_change_counter
+        payload, integrity_tail = build_subscription_request(
+            self._subscription_container_id,
+            normalized,
+            cycle_ms=cycle_ms,
+            credit_limit=credit_limit,
+            change_counter=change_counter,
+            relation_id=self._subscription_relation_id,
+        )
+        response = await self._send_request(FunctionCode.CREATE_OBJECT, payload, integrity_tail=integrity_tail)
+        object_ids, _, return_value = parse_create_object_session_id(response)
+        if return_value != 0 or not object_ids:
+            raise RuntimeError(f"Subscription creation failed: PLC returned 0x{return_value:X}")
+        subscription_id = object_ids[0]
+        self._subscriptions.register(
+            subscription_id,
+            normalized,
+            change_counter=change_counter,
+            credit_limit=credit_limit,
+            credit_step=credit_step,
+            queue_size=queue_size,
+        )
+        self._subscription_change_counter = self._subscription_change_counter % 0xFF + 1
+        self._subscription_relation_id = (self._subscription_relation_id + 1) & 0xFFFFFFFF
+        logger.info(f"Subscription created, id={subscription_id:#x}")
+        return subscription_id
 
-        sub_id, consumed = decode_uint32_vlq(response, 0)
-        logger.info(f"Subscription created, id={sub_id:#x}")
-        return sub_id
+    async def receive_subscription_notification(
+        self, subscription_id: int | None = None, timeout: Optional[float] = None
+    ) -> SubscriptionNotification:
+        """Wait for one routed data notification."""
+        if subscription_id is not None:
+            queued = self._subscriptions.pop(subscription_id)
+            if queued is not None:
+                return queued
+        while True:
+            async with self._lock:
+                if not self._connected:
+                    raise RuntimeError("Not connected")
+                if self._notification_frames:
+                    frame = self._notification_frames.popleft()
+                else:
+                    receive = self._recv_cotp_dt()
+                    frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
+            frame_subscription_id = notification_subscription_id(frame)
+            if frame_subscription_id in self._alarm_subscription_ids:
+                self._alarm_notification_frames.append(frame)
+                continue
+            notification = parse_subscription_notification(frame)
+            matched, credit_update = self._subscriptions.route(notification)
+            if not matched:
+                continue
+            if matched and credit_update is not None:
+                await self._send_subscription_credit(notification.subscription_id, credit_update)
+            target_id = notification.subscription_id if subscription_id is None else subscription_id
+            queued = self._subscriptions.pop(target_id)
+            if queued is not None:
+                return queued
+
+    async def iter_subscription_notifications(
+        self, subscription_id: int, limit: int | None = None
+    ) -> AsyncIterator[SubscriptionNotification]:
+        """Yield routed notifications, optionally stopping after ``limit``."""
+        delivered = 0
+        while limit is None or delivered < limit:
+            yield await self.receive_subscription_notification(subscription_id)
+            delivered += 1
+
+    def subscription_queue(self, subscription_id: int) -> AsyncSubscriptionQueue:
+        """Return a queue-like async view for one active subscription."""
+        self._subscriptions.diagnostics(subscription_id)
+        return AsyncSubscriptionQueue(self, subscription_id)
+
+    def subscription_diagnostics(self, subscription_id: int) -> SubscriptionDiagnostics:
+        diagnostics = self._subscriptions.diagnostics(subscription_id)
+        return SubscriptionDiagnostics(
+            diagnostics.subscription_id,
+            diagnostics.queued_notifications,
+            diagnostics.dropped_notifications,
+            diagnostics.missed_sequence_updates,
+            self._notification_frame_overflows,
+        )
 
     async def delete_subscription(self, subscription_id: int) -> None:
         """Delete a data change subscription.
@@ -705,8 +848,11 @@ class S7CommPlusAsyncClient:
         Args:
             subscription_id: ID returned by :meth:`create_subscription`.
         """
-        payload = struct.pack(">I", subscription_id) + struct.pack(">I", 0)
+        if self._subscription_container_id == 0:
+            raise RuntimeError("PLC did not provide a subscription container object")
+        payload = build_delete_subscription_request(self._subscription_container_id, self._protocol_version)
         await self._send_request(FunctionCode.DELETE_OBJECT, payload)
+        self._subscriptions.unregister(subscription_id)
         logger.info(f"Subscription {subscription_id:#x} deleted")
 
     async def create_alarm_subscription(
@@ -723,7 +869,9 @@ class S7CommPlusAsyncClient:
         object_ids, _, return_value = parse_create_object_session_id(response)
         if return_value != 0 or not object_ids:
             raise RuntimeError(f"Alarm subscription failed: PLC returned {return_value:#x}")
-        return object_ids[0]
+        subscription_id = object_ids[0]
+        self._alarm_subscription_ids.add(subscription_id)
+        return subscription_id
 
     async def delete_alarm_subscription(self, subscription_id: int) -> None:
         """Delete an alarm subscription created by this client."""
@@ -731,6 +879,11 @@ class S7CommPlusAsyncClient:
             raise RuntimeError("PLC did not provide a subscription container object")
         payload = build_delete_alarm_subscription_request(self._subscription_container_id, self._protocol_version)
         await self._send_request(FunctionCode.DELETE_OBJECT, payload)
+        self._alarm_subscription_ids.discard(subscription_id)
+        self._alarm_notification_frames = deque(
+            (frame for frame in self._alarm_notification_frames if notification_subscription_id(frame) != subscription_id),
+            maxlen=self._alarm_notification_frames.maxlen,
+        )
         logger.info(f"Alarm subscription {subscription_id:#x} deleted")
 
     async def receive_alarm_notification(
@@ -738,15 +891,28 @@ class S7CommPlusAsyncClient:
     ) -> AlarmNotification:
         """Wait for one alarm notification, optionally with a timeout in seconds.
 
-        Do not run this alongside a data-subscription receive loop on the same
-        connection: mixed notification dispatch is not supported yet.
+        Data notifications encountered first are routed to their bounded queues.
         """
-        async with self._lock:
-            if not self._connected:
-                raise RuntimeError("Not connected")
-            receive = self._recv_cotp_dt()
-            frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
-        return parse_alarm_notification(frame, language_ids)
+        while True:
+            if self._alarm_notification_frames:
+                frame = self._alarm_notification_frames.popleft()
+            else:
+                async with self._lock:
+                    if not self._connected:
+                        raise RuntimeError("Not connected")
+                    if self._notification_frames:
+                        frame = self._notification_frames.popleft()
+                    else:
+                        receive = self._recv_cotp_dt()
+                        frame = await asyncio.wait_for(receive, timeout) if timeout is not None else await receive
+            frame_subscription_id = notification_subscription_id(frame)
+            if self._subscriptions.contains(frame_subscription_id):
+                notification = parse_subscription_notification(frame)
+                matched, credit_update = self._subscriptions.route(notification)
+                if matched and credit_update is not None:
+                    await self._send_subscription_credit(frame_subscription_id, credit_update)
+                continue
+            return parse_alarm_notification(frame, language_ids)
 
     async def read_alarms(self, language_ids: Optional[list[LanguageId | int]] = None) -> list[Alarm]:
         """Return a snapshot of the PLC's active alarms without consuming notifications."""
@@ -1000,6 +1166,36 @@ class S7CommPlusAsyncClient:
     _MAX_REASSEMBLED_BYTES = 16 * 1024 * 1024
     _MAX_REASSEMBLED_FRAGMENTS = 4096
 
+    async def _send_subscription_credit(self, subscription_id: int, credit_limit: int) -> None:
+        """Send the reference driver's fire-and-forget credit update."""
+        if not 1 <= credit_limit <= 255:
+            raise ValueError("credit_limit must be between 1 and 255")
+        value = bytes([0x00, DataType.INT]) + struct.pack(">h", credit_limit)
+        payload = _build_set_variable_payload(subscription_id, Ids.SUBSCRIPTION_CREDIT_LIMIT, value)
+        async with self._lock:
+            if not self._connected or self._writer is None or self._reader is None:
+                raise S7ConnectionError("Not connected")
+            sequence = self._next_sequence_number()
+            header = struct.pack(
+                ">BHHHHIB",
+                Opcode.REQUEST,
+                0,
+                FunctionCode.SET_VARIABLE,
+                0,
+                sequence,
+                self._session_id,
+                0x74,
+            )
+            integrity = b""
+            if self._with_integrity_id and self._protocol_version >= ProtocolVersion.V2:
+                integrity = encode_uint32_vlq(self._integrity_id_write)
+            request = header + payload[:-4] + integrity + payload[-4:]
+            frame = encode_header(self._protocol_version, len(request)) + request
+            frame += struct.pack(">BBH", 0x72, self._protocol_version, 0)
+            await self._send_cotp_dt(frame)
+            if integrity:
+                self._integrity_id_write = (self._integrity_id_write + 1) & 0xFFFFFFFF
+
     async def _send_request(
         self,
         function_code: int,
@@ -1069,40 +1265,44 @@ class S7CommPlusAsyncClient:
                 data = await self._recv_reassembled_payload(response_data)
                 if len(data) < 10:
                     raise S7ConnectionError("Response too short")
-                resp_func = struct.unpack_from(">H", data, 3)[0]
-                resp_seq = struct.unpack_from(">H", data, 7)[0]
-                if resp_seq != seq_num:
-                    raise S7ProtocolError(
-                        f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
-                    )
+                _validate_response_header(data, function_code, seq_num)
                 return bytes(data[10:])
 
             _, data_length, consumed = decode_header(response_data)
             response = response_data[consumed : consumed + data_length]
 
-            if len(response) < 10:
-                raise S7ConnectionError("Response too short")
+            _validate_response_header(response, function_code, seq_num)
 
             # RESPONSE header is 10 bytes (opcode+res+func+res+seqnr+transport) — responses
             # carry no SessionId field (requests do, hence their 14-byte header). For V2+ the
             # IntegrityId travels at the END of the payload and is ignored by the parsers.
-            resp_func = struct.unpack_from(">H", response, 3)[0]
-            resp_seq = struct.unpack_from(">H", response, 7)[0]
-            if resp_seq != seq_num:
-                raise S7ProtocolError(
-                    f"Response sequence mismatch: expected seq={seq_num}, got seq={resp_seq} for function=0x{resp_func:04X}"
-                )
             return response[10:]
 
     async def _recv_response_frame(self) -> bytes:
-        """Receive the next application response, consuming non-fatal SystemEvents."""
-        for _ in range(_MAX_SYSTEM_EVENTS_PER_RESPONSE + 1):
+        """Receive the next response, queueing unsolicited application frames."""
+        system_events = 0
+        while True:
             response_data = await self._recv_cotp_dt()
+            if not response_data:
+                raise S7ConnectionError("Connection closed while waiting for an S7CommPlus response")
             version, data_length, consumed = decode_header(response_data)
-            if version != ProtocolVersion.SYSTEM_EVENT:
+            if version == ProtocolVersion.SYSTEM_EVENT:
+                _check_system_event(bytes(response_data[consumed : consumed + data_length]))
+                system_events += 1
+                if system_events > _MAX_SYSTEM_EVENTS_PER_RESPONSE:
+                    raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+                continue
+            if data_length < 10:
                 return response_data
-            _check_system_event(bytes(response_data[consumed : consumed + data_length]))
-        raise S7ProtocolError("Too many S7CommPlus SystemEvents while waiting for a response")
+            opcode = _incoming_frame_opcode(response_data)
+            if opcode == Opcode.NOTIFICATION:
+                if len(self._notification_frames) == self._notification_frames.maxlen:
+                    self._notification_frame_overflows += 1
+                self._notification_frames.append(response_data)
+                continue
+            if opcode not in (Opcode.RESPONSE, Opcode.RESPONSE2):
+                raise S7ProtocolError(f"Unexpected S7CommPlus opcode 0x{opcode:02X} while waiting for a response")
+            return response_data
 
     async def _recv_reassembled_payload(self, initial_data: bytes = b"") -> bytes:
         """Receive a possibly-fragmented S7CommPlus response, returning its data section.

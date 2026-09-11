@@ -6,6 +6,14 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Correlate S7CommPlus responses by opcode, function, and sequence; preserve
+  interleaved notifications and serialize synchronous wire requests.
+* Verify authenticated V3 responses and cumulative fragment digests before
+  parsing, invalidating the connection with a dedicated integrity error on any
+  mismatch or truncated envelope.
+* Complete symbolic subscription lifecycle handling with catalog-tag decoding,
+  bounded sync/async delivery, overflow and sequence-gap diagnostics, finite
+  credit replenishment, and stale-generation filtering.
 * Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
   distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
   inconsistent state attributes, including S7-1200 responses that omit them.
