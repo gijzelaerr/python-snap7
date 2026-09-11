@@ -52,6 +52,19 @@ After SetupSession, all data frames use **V3 framing** with HMAC-SHA256
 (keyed by the first 24 bytes of the session key). No intermediate
 activation sequence is needed — data reads work immediately.
 
+Legacy SessionKeys are renewed every 25 minutes by default, before the PLC's
+key expiry window. Renewal reads a fresh challenge from address 303 and writes
+a new SecurityKey to address 1830 while holding the same lock as application
+requests. The PLC's response is authenticated with the old key; the new key is
+installed only after that response is verified and accepted. A renewal failure
+closes the connection instead of continuing with an expired or ambiguous key.
+
+The interval is configurable in seconds through
+`S7CommPlusClient.connect(legacy_session_key_refresh_interval=...)` (or the
+low-level connection method). Pass `None` to disable automatic renewal. This
+timer applies only to legacy V1-initial SessionKey sessions; TLS sessions do not
+start it.
+
 Note: TIA Portal sends SET_VARIABLE attr 323 + finalize reads before
 data operations, but this is TIA-specific behavior. The HarpoS7
 reference implementation skips it, and V1-initial PLCs reject the

@@ -1282,6 +1282,95 @@ class TestSessionKeySelection:
         assert conn._try_session_key_auth() is None
         assert conn._session_key is None
 
+
+class TestLegacySessionKeyRefresh:
+    @staticmethod
+    def _authenticated_connection() -> S7CommPlusConnection:
+        from s7commplus.session_auth.keys import KeyFamily
+
+        conn = S7CommPlusConnection("127.0.0.1")
+        conn._connected = True
+        conn._session_ready = True
+        conn._session_id = 0x70000FDC
+        conn._session_key = b"o" * 24
+        conn._session_auth_public_key = b"p" * 40
+        conn._session_auth_family = KeyFamily.S7_1500
+        return conn
+
+    def test_renewal_installs_key_only_after_accepted_old_key_response(self) -> None:
+        conn = self._authenticated_connection()
+        challenge = bytes(range(20))
+        challenge_response = bytes([0x00, 0x00, 0x10, DataType.USINT, len(challenge)]) + challenge
+        old_key = conn._session_key
+        new_key = b"n" * 24
+        keys_during_exchange: list[bytes | None] = []
+
+        def exchange(*_args: object) -> bytes:
+            keys_during_exchange.append(conn._session_key)
+            return challenge_response if len(keys_during_exchange) == 1 else b"\x00"
+
+        conn._send_request = MagicMock(side_effect=exchange)
+        with patch("s7commplus.session_auth.legacy_auth.authenticate_real_plc", return_value=(b"b" * 180, new_key)):
+            conn._renew_session_key_locked()
+
+        assert keys_during_exchange == [old_key, old_key]
+        assert conn._session_key == new_key
+        renewal_call = conn._send_request.call_args_list[1]
+        assert renewal_call.args[0] == FunctionCode.SET_VARIABLE
+        assert encode_uint32_vlq(LegitimationId.SESSION_SETUP_LEGITIMATION) in renewal_call.args[1]
+
+    def test_rejected_renewal_never_installs_generated_key(self) -> None:
+        conn = self._authenticated_connection()
+        challenge = bytes(range(20))
+        challenge_response = bytes([0x00, 0x00, 0x10, DataType.USINT, len(challenge)]) + challenge
+        old_key = conn._session_key
+        conn._send_request = MagicMock(side_effect=[challenge_response, encode_uint32_vlq(0x8104)])
+
+        with (
+            patch("s7commplus.session_auth.legacy_auth.authenticate_real_plc", return_value=(b"b" * 180, b"n" * 24)),
+            pytest.raises(S7ConnectionError, match="return_value=0x8104"),
+        ):
+            conn._renew_session_key_locked()
+
+        assert conn._session_key == old_key
+
+    def test_short_interval_renews_while_requests_remain_usable(self) -> None:
+        conn = self._authenticated_connection()
+        conn._session_key_refresh_interval = 0.01
+        renewed = threading.Event()
+        conn._renew_session_key_locked = MagicMock(side_effect=renewed.set)
+        conn._schedule_session_key_refresh()
+
+        assert renewed.wait(1)
+        conn._send_request = MagicMock(return_value=b"read result")
+        assert conn.send_request(FunctionCode.GET_VARIABLE) == b"read result"
+
+        next_timer = conn._session_key_refresh_timer
+        conn.disconnect()
+        if next_timer is not None:
+            next_timer.join(1)
+            assert not next_timer.is_alive()
+        assert conn._session_key_refresh_timer is None
+
+    def test_refresh_failure_is_terminal_and_surfaces_on_next_request(self) -> None:
+        conn = self._authenticated_connection()
+        conn._iso_conn.disconnect = MagicMock()
+        conn._renew_session_key_locked = MagicMock(side_effect=S7ConnectionError("PLC rejected key"))
+
+        conn._session_key_refresh_callback(conn._session_key_refresh_generation)
+
+        assert not conn.connected
+        assert conn._session_key is None
+        with pytest.raises(S7ConnectionError, match="Legacy SessionKey renewal failed: PLC rejected key"):
+            conn.send_request(FunctionCode.GET_VARIABLE)
+
+    def test_refresh_interval_must_be_positive(self) -> None:
+        conn = S7CommPlusConnection("127.0.0.1")
+        with pytest.raises(ValueError, match="must be positive"):
+            conn.connect(legacy_session_key_refresh_interval=0)
+
+
+class TestSessionKeyDescriptors:
     def test_security_key_descriptor_uses_pending_generated_key(self) -> None:
         from s7commplus.session_auth.keys import KeyFamily, get_public_key
         from s7commplus.session_auth.utils import derive_key_id

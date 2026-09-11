@@ -190,6 +190,7 @@ _S7_PREFERRED_GROUPS = ("X25519",)
 _MAX_SYSTEM_EVENTS_PER_RESPONSE = 16
 _MAX_STALE_RESPONSES_PER_REQUEST = 16
 _SYSTEM_EVENT_RETURN_VALUE_ID = 40305
+_DEFAULT_LEGACY_SESSION_KEY_REFRESH_INTERVAL = 25 * 60.0
 
 
 def _system_event_return_value(payload: bytes) -> Optional[int]:
@@ -550,6 +551,10 @@ class S7CommPlusConnection:
         self._session_key: Optional[bytes] = None
         self._session_auth_public_key: bytes = b""
         self._session_auth_family: int = 0
+        self._session_key_refresh_interval: Optional[float] = _DEFAULT_LEGACY_SESSION_KEY_REFRESH_INTERVAL
+        self._session_key_refresh_timer: Optional[threading.Timer] = None
+        self._session_key_refresh_generation = 0
+        self._session_key_refresh_error: Optional[Exception] = None
 
         # V2+ IntegrityId tracking
         self._integrity_id_read: int = 0
@@ -562,7 +567,10 @@ class S7CommPlusConnection:
         # Password for post-auth legitimation (V1-initial PLCs)
         self._connect_password: str = ""
         self._notification_frames: deque[bytes] = deque()
-        self._request_lock = threading.Lock()
+        # Reentrant because integrity failures disconnect from inside a
+        # serialized request. Disconnect itself also takes this lock so a
+        # renewal cannot race transport teardown.
+        self._request_lock = threading.RLock()
 
         # Effective protection level, read once the session is up
         self._protection_level: Optional[int] = None
@@ -635,6 +643,7 @@ class S7CommPlusConnection:
         tls_key: Optional[str] = None,
         tls_ca: Optional[str] = None,
         password: str = "",
+        legacy_session_key_refresh_interval: Optional[float] = _DEFAULT_LEGACY_SESSION_KEY_REFRESH_INTERVAL,
     ) -> None:
         """Establish S7CommPlus connection.
 
@@ -652,7 +661,14 @@ class S7CommPlusConnection:
             tls_cert: Path to client TLS certificate (PEM)
             tls_key: Path to client private key (PEM)
             tls_ca: Path to CA certificate for PLC verification (PEM)
+            legacy_session_key_refresh_interval: Seconds between legacy
+                SessionKey renewals. Defaults to 25 minutes; pass ``None`` to
+                disable automatic renewal.
         """
+        if legacy_session_key_refresh_interval is not None and legacy_session_key_refresh_interval <= 0:
+            raise ValueError("legacy_session_key_refresh_interval must be positive or None")
+        self._session_key_refresh_interval = legacy_session_key_refresh_interval
+        self._session_key_refresh_error = None
         self._connect_password = password
         try:
             # Step 1: COTP connection (same TSAP for all S7CommPlus versions)
@@ -718,6 +734,7 @@ class S7CommPlusConnection:
                     logger.info(f"PLC reports protection level: {self._protection_level}")
 
             self._connected = True
+            self._schedule_session_key_refresh()
 
             logger.info(
                 f"S7CommPlus connected to {self.host}:{self.port}, "
@@ -931,6 +948,13 @@ class S7CommPlusConnection:
 
     def disconnect(self) -> None:
         """Disconnect from PLC."""
+        self._stop_session_key_refresh()
+        with self._request_lock:
+            self._session_key_refresh_error = None
+            self._disconnect()
+
+    def _disconnect(self) -> None:
+        """Clear connection state without changing a stored refresh failure."""
         if self._session_ready and self._session_id:
             try:
                 self._delete_session()
@@ -962,6 +986,76 @@ class S7CommPlusConnection:
         self._protection_level = None
         self._notification_frames.clear()
         self._iso_conn.disconnect()
+
+    def _stop_session_key_refresh(self) -> None:
+        """Cancel pending legacy SessionKey renewal activity."""
+        self._session_key_refresh_generation += 1
+        timer = self._session_key_refresh_timer
+        self._session_key_refresh_timer = None
+        if timer is not None:
+            timer.cancel()
+
+    def _schedule_session_key_refresh(self) -> None:
+        """Schedule one renewal for an authenticated legacy session."""
+        interval = self._session_key_refresh_interval
+        if interval is None or self._session_key is None or not self._connected:
+            return
+        generation = self._session_key_refresh_generation
+        timer = threading.Timer(interval, self._session_key_refresh_callback, args=(generation,))
+        timer.daemon = True
+        self._session_key_refresh_timer = timer
+        timer.start()
+
+    def _session_key_refresh_callback(self, generation: int) -> None:
+        """Renew under the request lock, or make a failed renewal terminal."""
+        try:
+            with self._request_lock:
+                if generation != self._session_key_refresh_generation or not self._connected:
+                    return
+                self._session_key_refresh_timer = None
+                self._renew_session_key_locked()
+                if generation == self._session_key_refresh_generation:
+                    self._schedule_session_key_refresh()
+        except Exception as exc:
+            from snap7.error import S7ConnectionError
+
+            failure = S7ConnectionError(f"Legacy SessionKey renewal failed: {exc}")
+            logger.error("%s", failure)
+            self._session_key_refresh_error = failure
+            self._stop_session_key_refresh()
+            # Do not send DeleteObject on a stream whose key may have expired.
+            self._session_ready = False
+            self._session_id = 0
+            self._disconnect()
+
+    def _renew_session_key_locked(self) -> None:
+        """Perform the challenge/SecurityKey exchange while the old key is active."""
+        from snap7.error import S7ConnectionError
+
+        if self._session_key is None or not self._session_auth_public_key:
+            raise S7ConnectionError("Legacy SessionKey renewal prerequisites are unavailable")
+
+        from .session_auth.keys import KeyFamily
+
+        integrity_tail = 3 if self._session_auth_family == KeyFamily.S7_1200 else 4
+        challenge_payload = self._build_get_var_substreamed(self._session_id, LegitimationId.SERVER_SESSION_REQUEST)
+        challenge_response = self._send_request(FunctionCode.GET_VAR_SUBSTREAMED, challenge_payload, integrity_tail, False)
+        challenge = _parse_get_var_substreamed_response(challenge_response)
+        if len(challenge) != 20:
+            raise S7ConnectionError(f"SessionKey renewal returned an unexpected {len(challenge)}-byte challenge")
+
+        from .session_auth.legacy_auth import authenticate_real_plc
+
+        blob, new_session_key = authenticate_real_plc(challenge, self._session_auth_public_key, self._session_auth_family)
+        security_key = self._encode_security_key_struct(blob, new_session_key)
+        renewal_payload = _build_set_variable_payload(self._session_id, LegitimationId.SESSION_SETUP_LEGITIMATION, security_key)
+        # _send_request signs and verifies with self._session_key. Keep the old
+        # key installed until the PLC has accepted this write and its response
+        # has passed HMAC verification.
+        renewal_response = self._send_request(FunctionCode.SET_VARIABLE, renewal_payload, 4, False)
+        _check_set_variable_response(renewal_response)
+        self._session_key = new_session_key
+        logger.info("Legacy SessionKey renewed successfully")
 
     def _invalidate_integrity_failure(self) -> None:
         """Close an untrusted stream without sending protocol data on it."""
@@ -1027,6 +1121,8 @@ class S7CommPlusConnection:
         Returns:
             Response payload (after the 10-byte response header)
         """
+        if self._session_key_refresh_error is not None:
+            raise self._session_key_refresh_error
         if not (self._connected or self._session_ready):
             from snap7.error import S7ConnectionError
 
