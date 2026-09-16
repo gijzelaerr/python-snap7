@@ -2741,7 +2741,12 @@ class ServerISOConnection:
         total_size = 0
         while True:
             header_deadline = time.monotonic() + self.RECEIVE_DEADLINE
-            tpkt_header = self._recv_exact(4, header_deadline)
+            try:
+                tpkt_header = self._recv_exact(4, header_deadline)
+            except TimeoutError as e:
+                if fragments:
+                    raise S7ConnectionError("Receive deadline exceeded between COTP fragments") from e
+                raise
             version, reserved, length = struct.unpack(">BBH", tpkt_header)
 
             if version != 3:

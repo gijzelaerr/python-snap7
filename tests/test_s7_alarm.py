@@ -203,6 +203,9 @@ async def test_async_alarm_client_apis() -> None:
     assert await client.create_alarm_subscription([1031]) == 0x55667788
     assert (await client.read_alarms([1031]))[0].texts[1031].alarm_text == "Alarm 4 =F6+S2-G1"
     assert (await client.receive_alarm_notification(timeout=1)).credit_tick == 5
+    client._notification_frames.append(_notification_frame())
+    assert (await client.receive_alarm_notification(timeout=1)).sequence_number == 12
+    client._recv_cotp_dt.assert_awaited_once()
     await client.delete_alarm_subscription(0x55667788)
 
 

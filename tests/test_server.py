@@ -476,6 +476,20 @@ class TestServerISOConnectionLimits:
         with pytest.raises(S7ConnectionError, match="after TPKT header"):
             connection.receive_data()
 
+    def test_timeout_between_fragments_closes_connection(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection._recv_exact = MagicMock(
+            side_effect=[
+                b"\x03\x00\x00\x08",
+                b"\x02\xf0\x00x",
+                TimeoutError("timed out"),
+            ]
+        )
+
+        with pytest.raises(S7ConnectionError, match="between COTP fragments"):
+            connection.receive_data()
+
     def test_reassembled_request_size_is_bounded(self) -> None:
         client_socket = MagicMock()
         connection = ServerISOConnection(client_socket)
