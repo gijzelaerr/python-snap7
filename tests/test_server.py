@@ -11,7 +11,7 @@ import pytest
 
 from snap7.client import Client
 from snap7.datatypes import S7Area, S7WordLen
-from snap7.error import S7ConnectionError, error_text, server_errors
+from snap7.error import S7ConnectionError, S7ProtocolError, error_text, server_errors
 from snap7.server import EVC_DATA_READ, EVC_DATA_WRITE, EVC_SERVER_STARTED, EVC_SERVER_STOPPED, Server, ServerISOConnection
 from snap7.type import Block, Parameter, SrvArea, SrvEvent, mkEvent, mkLog
 
@@ -991,10 +991,19 @@ class TestServerErrorScenarios(unittest.TestCase):
         self.client.destroy()
 
     def test_read_unregistered_db(self) -> None:
-        """Reading from an unregistered DB should still return data (server returns dummy data)."""
-        # The server returns dummy data for unregistered areas rather than an error
-        data = self.client.db_read(99, 0, 4)
-        self.assertEqual(len(data), 4)
+        """Reading from an unregistered DB returns item-not-available."""
+        with self.assertRaisesRegex(S7ProtocolError, "0x0a"):
+            self.client.db_read(99, 0, 4)
+
+    def test_read_start_beyond_area_bounds(self) -> None:
+        """Reading beyond a registered DB returns address-out-of-range."""
+        with self.assertRaisesRegex(S7ProtocolError, "0x05"):
+            self.client.db_read(1, 100, 4)
+
+    def test_read_crossing_area_bounds(self) -> None:
+        """A read crossing the end of a DB returns address-out-of-range."""
+        with self.assertRaisesRegex(S7ProtocolError, "0x05"):
+            self.client.db_read(1, 8, 4)
 
     def test_write_beyond_area_bounds(self) -> None:
         """Writing beyond area bounds should raise an error."""
