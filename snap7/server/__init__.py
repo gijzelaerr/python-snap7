@@ -875,9 +875,7 @@ class Server:
 
             area, db_number, start, count = addr_info
 
-            read_data = self._read_from_memory_area(area, db_number, start, count)
-            if read_data is None:
-                return self._build_error_response(request, 0x8404)
+            return_code, read_data = self._read_from_memory_area(area, db_number, start, count)
 
             data_len = 4 + len(read_data)
 
@@ -895,17 +893,19 @@ class Server:
 
             parameters = struct.pack(">BB", S7Function.READ_AREA, 0x01)
 
-            data_section = struct.pack(">BBH", 0xFF, 0x04, len(read_data) * 8) + read_data
+            transport_size = 0x04 if return_code == 0xFF else 0x00
+            data_section = struct.pack(">BBH", return_code, transport_size, len(read_data) * 8) + read_data
 
-            self._emit_event(
-                EVC_DATA_READ,
-                param1=self._event_area(area),
-                param2=db_number,
-                param3=start,
-                param4=len(read_data),
-                sender=self._event_sender(client_address),
-                notify_read_callback=True,
-            )
+            if return_code == 0xFF:
+                self._emit_event(
+                    EVC_DATA_READ,
+                    param1=self._event_area(area),
+                    param2=db_number,
+                    param3=start,
+                    param4=len(read_data),
+                    sender=self._event_sender(client_address),
+                    notify_read_callback=True,
+                )
 
             return header + parameters + data_section
 
@@ -942,26 +942,24 @@ class Server:
             else:
                 byte_count = count
 
-            read_data = self._read_from_memory_area(area, db_number, start, byte_count)
-            if read_data is None:
-                # Item error: not found
-                data_parts.extend(struct.pack(">BBH", 0x0A, 0x00, 0x0000))
-            else:
+            return_code, read_data = self._read_from_memory_area(area, db_number, start, byte_count)
+            if return_code == 0xFF:
                 data_parts.extend(struct.pack(">BBH", 0xFF, 0x04, len(read_data) * 8))
                 data_parts.extend(read_data)
                 # Fill byte for even alignment (not after last item)
                 if i < item_count - 1 and len(read_data) % 2 != 0:
                     data_parts.append(0x00)
-
-            self._emit_event(
-                EVC_DATA_READ,
-                param1=self._event_area(area),
-                param2=db_number,
-                param3=start,
-                param4=byte_count,
-                sender=self._event_sender(client_address),
-                notify_read_callback=True,
-            )
+                self._emit_event(
+                    EVC_DATA_READ,
+                    param1=self._event_area(area),
+                    param2=db_number,
+                    param3=start,
+                    param4=byte_count,
+                    sender=self._event_sender(client_address),
+                    notify_read_callback=True,
+                )
+            else:
+                data_parts.extend(struct.pack(">BBH", return_code, 0x00, 0x0000))
 
         data_len = len(data_parts)
 
@@ -1025,7 +1023,7 @@ class Server:
             logger.error(f"Error parsing read address: {e}")
             return None
 
-    def _read_from_memory_area(self, area: S7Area, db_number: int, start: int, count: int) -> Optional[bytearray]:
+    def _read_from_memory_area(self, area: S7Area, db_number: int, start: int, count: int) -> Tuple[int, bytearray]:
         """
         Read data from registered memory area.
 
@@ -1036,39 +1034,34 @@ class Server:
             count: Number of bytes to read
 
         Returns:
-            Data read from memory area or None if area not found
+            Item return code and data. The return code is ``0xFF`` on success,
+            ``0x0A`` when the area is not registered, and ``0x05`` when the
+            requested range is outside the registered area.
         """
         try:
             area_key = (area, db_number)
 
             if area_key not in self.memory_areas:
                 logger.warning(f"Memory area {area}#{db_number} not registered")
-                # Return dummy data if area not found (for compatibility)
-                return bytearray([0x42, 0xFF, 0x12, 0x34])[:count]
+                return (0x0A, bytearray())
 
             # Get area data with thread safety
             with self.area_locks[area_key]:
                 area_data = self.memory_areas[area_key]
 
                 # Check bounds
-                if start >= len(area_data):
-                    logger.warning(f"Start address {start} beyond area size {len(area_data)}")
-                    return bytearray([0x00] * count)
+                if start < 0 or count < 0 or start + count > len(area_data):
+                    logger.warning(f"Read range [{start}, {start + count}) exceeds area size {len(area_data)}")
+                    return (0x05, bytearray())
 
-                # Read requested data, padding with zeros if needed
-                end = min(start + count, len(area_data))
-                read_data = bytearray(area_data[start:end])
-
-                # Pad with zeros if we didn't read enough
-                if len(read_data) < count:
-                    read_data.extend([0x00] * (count - len(read_data)))
+                read_data = bytearray(area_data[start : start + count])
 
                 logger.debug(f"Read {len(read_data)} bytes from {area}#{db_number} at offset {start}")
-                return read_data
+                return (0xFF, read_data)
 
         except Exception as e:
             logger.error(f"Error reading from memory area: {e}")
-            return bytearray([0x00] * count)
+            return (0x01, bytearray())
 
     def _handle_write_area(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
         """Handle write area request."""
