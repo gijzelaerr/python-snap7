@@ -370,10 +370,11 @@ def encode_item_address(
 def encode_pvalue_blob(data: bytes) -> bytes:
     """Encode raw bytes as a BLOB PValue.
 
-    PValue format: [flags:1][datatype:1][length:VLQ][data]
+    PValue format: [flags:1][datatype:1][blob_root_id:VLQ][length:VLQ][data]
     """
     result = bytearray()
     result += bytes([0x00, DataType.BLOB])
+    result += encode_uint32_vlq(0)  # BlobRootId (unused for plain byte blobs)
     result += encode_uint32_vlq(len(data))
     result += data
     return bytes(result)
@@ -415,7 +416,10 @@ def encode_pvalue_typed(datatype: DataType, data: bytes) -> bytes:
         raise ValueError("NULL requires an empty value")
 
     result = bytearray((0x00, datatype))
-    if datatype in (DataType.BLOB, DataType.WSTRING, DataType.S7STRING):
+    if datatype == DataType.BLOB:
+        result += encode_uint32_vlq(0)  # BlobRootId
+        result += encode_uint32_vlq(len(data))
+    elif datatype in (DataType.WSTRING, DataType.S7STRING):
         result += encode_uint32_vlq(len(data))
     if datatype in (DataType.UDINT, DataType.AID):
         result += encode_uint32_vlq(int.from_bytes(data, "big"))
@@ -525,6 +529,8 @@ def decode_pvalue_to_bytes(data: bytes, offset: int) -> tuple[bytes, int]:
         consumed += c
         return struct.pack(">I", val), consumed
     elif datatype == DataType.BLOB:
+        _blob_root_id, c = decode_uint32_vlq(data, offset + consumed)
+        consumed += c
         length, c = decode_uint32_vlq(data, offset + consumed)
         consumed += c
         raw = data[offset + consumed : offset + consumed + length]
@@ -648,7 +654,12 @@ def skip_typed_value(data: bytes, offset: int, datatype: int, flags: int) -> int
         return offset + consumed
     elif datatype == DataType.RID:
         return offset + 4
-    elif datatype in (DataType.BLOB, DataType.WSTRING):
+    elif datatype == DataType.BLOB:
+        _blob_root_id, consumed = decode_uint32_vlq(data, offset)
+        offset += consumed
+        length, consumed = decode_uint32_vlq(data, offset)
+        return offset + consumed + length
+    elif datatype == DataType.WSTRING:
         length, consumed = decode_uint32_vlq(data, offset)
         return offset + consumed + length
     elif datatype == DataType.STRUCT:

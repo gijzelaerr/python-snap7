@@ -368,7 +368,7 @@ class TestAsyncClientServerIntegration:
             await client.connect("127.0.0.1", port=TEST_PORT)
             # Write 4 bytes to DB1 via symbolic access (access_area for DB1)
             access_area = 0x8A0E0001
-            await client.write_symbolic(access_area, [1, 4], struct.pack(">f", 55.5))
+            await client.write_symbolic(access_area, [Ids.LID_OMS_STB_CLASSIC_BLOB, 0, 4], struct.pack(">f", 55.5))
             # Read back via db_read to verify
             data = await client.db_read(1, 0, 4)
             value = struct.unpack(">f", data)[0]

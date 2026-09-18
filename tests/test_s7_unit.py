@@ -49,6 +49,66 @@ class TestBuildReadPayload:
         assert len(payload) > len(single)
 
 
+def _decode_first_item_lids(payload: bytes) -> tuple[int, int, list[int]]:
+    """Decode (access_area, access_sub_area, lids) for the first ItemAddress in a payload.
+
+    Mirrors the field layout the server-side parsers use (see
+    ``s7commplus.server._server_parse_read_request``): 4-byte InObjectId, then
+    VLQ ItemCount, VLQ FieldCount, VLQ SymbolCrc, VLQ AccessArea, VLQ NumLIDs,
+    then NumLIDs VLQs where the first is AccessSubArea and the rest are LIDs.
+    """
+    offset = 4
+    _item_count, consumed = decode_uint32_vlq(payload, offset)
+    offset += consumed
+    _field_count, consumed = decode_uint32_vlq(payload, offset)
+    offset += consumed
+    _symbol_crc, consumed = decode_uint32_vlq(payload, offset)
+    offset += consumed
+    access_area, consumed = decode_uint32_vlq(payload, offset)
+    offset += consumed
+    num_lids, consumed = decode_uint32_vlq(payload, offset)
+    offset += consumed
+    access_sub_area, consumed = decode_uint32_vlq(payload, offset)
+    offset += consumed
+    lids: list[int] = []
+    for _ in range(num_lids - 1):
+        lid, consumed = decode_uint32_vlq(payload, offset)
+        offset += consumed
+        lids.append(lid)
+    return access_area, access_sub_area, lids
+
+
+class TestByteOffsetLidConvention:
+    """Raw byte-offset access (db_read/db_write/read_area/write_area) must send the
+    LID_OMS_STB_CLASSIC_BLOB marker followed by a 0-based offset, or the PLC rejects
+    the address as an invalid symbol path (real-hardware repro: db_read/db_write
+    against a non-optimized DB failed until this marker was added)."""
+
+    def test_read_payload_uses_classic_blob_marker(self) -> None:
+        payload = _build_read_payload([(1, 5, 4)])
+        _access_area, access_sub_area, lids = _decode_first_item_lids(payload)
+        assert access_sub_area == Ids.DB_VALUE_ACTUAL
+        assert lids == [Ids.LID_OMS_STB_CLASSIC_BLOB, 5, 4]
+
+    def test_write_payload_uses_classic_blob_marker(self) -> None:
+        payload = _build_write_payload([(1, 5, bytes([1, 2, 3, 4]), DataType.BLOB)])
+        _access_area, access_sub_area, lids = _decode_first_item_lids(payload)
+        assert access_sub_area == Ids.DB_VALUE_ACTUAL
+        assert lids == [Ids.LID_OMS_STB_CLASSIC_BLOB, 5, 4]
+
+    def test_area_read_payload_uses_classic_blob_marker(self) -> None:
+        payload = _build_area_read_payload(Ids.NATIVE_THE_M_AREA_RID, 5, 4)
+        _access_area, access_sub_area, lids = _decode_first_item_lids(payload)
+        assert access_sub_area == Ids.CONTROLLER_AREA_VALUE_ACTUAL
+        assert lids == [Ids.LID_OMS_STB_CLASSIC_BLOB, 5, 4]
+
+    def test_area_write_payload_uses_classic_blob_marker(self) -> None:
+        payload = _build_area_write_payload(Ids.NATIVE_THE_M_AREA_RID, 5, bytes([1, 2, 3, 4]))
+        _access_area, access_sub_area, lids = _decode_first_item_lids(payload)
+        assert access_sub_area == Ids.CONTROLLER_AREA_VALUE_ACTUAL
+        assert lids == [Ids.LID_OMS_STB_CLASSIC_BLOB, 5, 4]
+
+
 class TestParseReadResponse:
     @staticmethod
     def _build_response(
@@ -191,7 +251,7 @@ class TestPayloadAgreement:
         # Total field count (VLQ)
         total_fields, consumed = decode_uint32_vlq(payload, offset)
         offset += consumed
-        assert total_fields == 6  # 4 base + 2 LIDs
+        assert total_fields == 7  # 4 base + 3 LIDs (ClassicBlob marker, offset, size)
 
     def test_write_read_consistency(self) -> None:
         """Build write and read payloads for same address, verify both compile."""
@@ -235,9 +295,14 @@ class TestIntegrityPlaceholder:
         payload = _build_symbolic_write_payload(0x8A0E0001, [1, 4], b"\x01")
         assert self._has_only_trailing_fill(payload)
 
-    def test_write_payload_encodes_explicit_datatype(self) -> None:
-        payload = _build_write_payload([(1, 0, struct.pack(">f", 2.0), DataType.REAL)])
-        assert bytes((0x00, DataType.REAL)) + struct.pack(">f", 2.0) in payload
+    def test_write_payload_encodes_as_blob_regardless_of_datatype(self) -> None:
+        """Raw byte-offset (classic-blob) writes are wire-untyped: real S7-1500
+        hardware only accepts a BLOB-tagged PValue for this addressing mode --
+        `datatype` is validated (size/type) but not written to the wire. See
+        _build_write_payload's comment."""
+        data = struct.pack(">f", 2.0)
+        payload = _build_write_payload([(1, 0, data, DataType.REAL)])
+        assert bytes((0x00, DataType.BLOB, 0x00, len(data))) + data in payload
 
     @pytest.mark.parametrize(("with_integrity", "integrity_id"), [(False, 0), (True, 7)])
     def test_connection_conditionally_inserts_integrity_id(self, with_integrity: bool, integrity_id: int) -> None:
@@ -385,8 +450,9 @@ class TestSkipTypedValue:
 
     def test_blob(self) -> None:
         blob_data = bytes([1, 2, 3, 4])
+        blob_root_id = encode_uint32_vlq(0)
         vlq_len = encode_uint32_vlq(len(blob_data))
-        data = vlq_len + blob_data
+        data = blob_root_id + vlq_len + blob_data
         new_offset = skip_typed_value(data, 0, DataType.BLOB, 0x00)
         assert new_offset == len(data)
 
@@ -610,7 +676,7 @@ class TestClientErrorPaths:
                         connection.session_id,
                         Ids.DB_ACCESS_AREA_BASE + db_number,
                         Ids.DB_VALUE_ACTUAL,
-                        [start + 1, len(data)],
+                        [Ids.LID_OMS_STB_CLASSIC_BLOB, start, len(data)],
                         data,
                     ),
                 )

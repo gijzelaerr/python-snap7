@@ -64,7 +64,18 @@ async def test_scalar_write_wire_type(
     index, consumed = decode_uint32_vlq(payload, offset)
     assert index == 1
     offset += consumed
-    assert payload[offset : offset + 2 + len(wire_value)] == bytes((0, datatype)) + wire_value
+    if operation == "symbolic":
+        # write_symbolic targets optimized/type-checked DBs -- the PLC validates
+        # the declared scalar type, so the wire tag must match `datatype`.
+        assert payload[offset : offset + 2 + len(wire_value)] == bytes((0, datatype)) + wire_value
+    else:
+        # write_area/db_write_multi use raw byte-offset ("classic blob") access,
+        # which real S7-1500 hardware only accepts as a BLOB-tagged PValue --
+        # confirmed: an explicit scalar-typed write was hard-rejected by the PLC
+        # while the identical write encoded as BLOB succeeded and read back
+        # correctly. `datatype` is still validated for size/type but not sent.
+        expected = bytes((0, DataType.BLOB, 0x00, len(data))) + data
+        assert payload[offset : offset + len(expected)] == expected
 
 
 @pytest.mark.parametrize("substreamed", [False, True])
@@ -98,13 +109,17 @@ def test_invalid_scalar_width_rejected_before_any_send(substreamed: bool) -> Non
     connection.send_request.assert_not_called()
 
 
-def test_substreamed_area_write_keeps_explicit_type() -> None:
+def test_substreamed_area_write_encodes_as_blob() -> None:
+    """Substreamed raw area writes are also wire-untyped -- the classic-blob
+    addressing mode only accepts BLOB PValues (see
+    _build_substreamed_write_payload)."""
     client = S7CommPlusClient()
     connection = MagicMock()
     connection.requires_substreamed = True
     connection.session_id = 0x70000001
     client._connection = connection
-    client.write_area(82, 0, struct.pack(">I", 300), datatype=DataType.UDINT)
+    data = struct.pack(">I", 300)
+    client.write_area(82, 0, data, datatype=DataType.UDINT)
     function, payload = connection.send_request.call_args.args
     assert function == FunctionCode.SET_VAR_SUBSTREAMED
-    assert payload.endswith(bytes((0, DataType.UDINT, 0x82, 0x2C, 1, 0, 0, 0, 0)))
+    assert payload.endswith(bytes((0, DataType.BLOB, 0x00, len(data))) + data + bytes((1, 0, 0, 0, 0)))

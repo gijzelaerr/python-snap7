@@ -247,6 +247,11 @@ class Ids(IntEnum):
     # DB AccessArea base (add DB number to get area ID)
     DB_ACCESS_AREA_BASE = 0x8A0E0000
 
+    # Marker LID for raw/absolute (non-optimized) blob access — the first LID in
+    # the address must be this constant, followed by (byte_offset, byte_size) LIDs.
+    # Ref: thomas-v2/S7CommPlusDriver DriverTest/Program.cs ("nicht optimierte Datenbausteine")
+    LID_OMS_STB_CLASSIC_BLOB = 3
+
 
 # Function codes that use the READ IntegrityId counter (V2+)
 READ_FUNCTION_CODES: frozenset[int] = frozenset(

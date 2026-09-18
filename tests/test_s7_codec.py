@@ -4,7 +4,7 @@ import struct
 
 import pytest
 
-from s7commplus.client import _build_symbolic_read_payload, _build_symbolic_write_payload
+from s7commplus.client import _build_symbolic_read_payload, _build_symbolic_write_payload, _parse_read_response
 from s7commplus.codec import (
     _pvalue_element_size,
     decode_float32,
@@ -409,6 +409,36 @@ class TestPValueBlob:
         assert decoded == data
         assert consumed == len(encoded)
 
+    def test_includes_blob_root_id_field(self) -> None:
+        """Real S7-1500 wire captures show the layout is
+        [flags][datatype][blob_root_id:VLQ][length:VLQ][data] — a BlobRootId
+        field sits between the type tag and the length. Losing it desyncs
+        every byte that follows (this broke db_read/db_write against real
+        hardware: a 1-byte VLQ(0) BlobRootId was missing, so the decoder read
+        the *length* VLQ where BlobRootId should have been, always getting 0).
+        `connection.py`'s own `_blob_val`/legitimation-payload helpers already
+        encode this correctly as a literal ``0x00`` byte; this locks the
+        generic codec path to the same layout.
+        """
+        encoded = encode_pvalue_blob(bytes([1, 2, 3, 4]))
+        assert encoded == bytes([0x00, DataType.BLOB, 0x00, 0x04, 1, 2, 3, 4])
+
+    def test_real_plc_response_bytes(self) -> None:
+        """Exact GetMultiVariables response bytes captured from a real S7-1500
+        (firmware V4.1.2) reading a non-optimized DB via classic-blob (raw
+        byte-offset) access. Before the BlobRootId fix these all decoded to
+        an empty value because the length VLQ was misread from the
+        BlobRootId byte."""
+        # db_read(60, 0, 1): item 1 = single byte 0x63 ('c')
+        response = bytes.fromhex("0001001400016300000d00000000")
+        results = _parse_read_response(response)
+        assert results == [b"\x63"]
+
+        # db_read(60, 0, 20): item 1 = 20 raw bytes
+        response = bytes.fromhex("0001001400146301cfc7c35088ca6c0040490fd0beefdeadbeef00001100000000")
+        results = _parse_read_response(response)
+        assert results == [bytes.fromhex("6301cfc7c35088ca6c0040490fd0beefdeadbeef")]
+
 
 class TestPValueTyped:
     def test_word_uses_raw_big_endian_bytes(self) -> None:
@@ -586,8 +616,9 @@ class TestDecodePValue:
 
     def test_blob(self) -> None:
         blob_data = bytes([0xDE, 0xAD, 0xBE, 0xEF])
+        blob_root_id = encode_uint32_vlq(0)
         vlq_len = encode_uint32_vlq(len(blob_data))
-        data = bytes([0x00, DataType.BLOB]) + vlq_len + blob_data
+        data = bytes([0x00, DataType.BLOB]) + blob_root_id + vlq_len + blob_data
         result, consumed = decode_pvalue_to_bytes(data, 0)
         assert result == blob_data
 
