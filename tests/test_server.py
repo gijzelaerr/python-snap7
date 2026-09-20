@@ -5,13 +5,13 @@ import unittest
 from ctypes import c_char
 from datetime import datetime
 from threading import Thread
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from snap7.client import Client
 from snap7.datatypes import S7Area, S7WordLen
-from snap7.error import S7ConnectionError, error_text, server_errors
+from snap7.error import S7ConnectionError, S7ProtocolError, error_text, server_errors
 from snap7.server import EVC_DATA_READ, EVC_DATA_WRITE, EVC_SERVER_STARTED, EVC_SERVER_STOPPED, Server, ServerISOConnection
 from snap7.type import Block, Parameter, SrvArea, SrvEvent, mkEvent, mkLog
 
@@ -397,6 +397,17 @@ class TestServerISOConnectionLimits:
         assert connection_confirm == bytes.fromhex("09d0000f000100c00109")
         assert connection_confirm[0] == len(connection_confirm) - 1
 
+    def test_connection_confirm_echoes_request_tsaps(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection_request = bytes.fromhex("11e00000000f00c1020100c2020102c0010a")
+
+        assert connection._parse_cotp_cr(connection_request)
+
+        connection_confirm = connection._build_cotp_cc()
+        assert connection_confirm == bytes.fromhex("11d0000f000100c0010ac1020100c2020102")
+        assert connection_confirm[0] == len(connection_confirm) - 1
+
     def test_disconnect_confirm_has_valid_length(self) -> None:
         client_socket = MagicMock()
         connection = ServerISOConnection(client_socket)
@@ -445,6 +456,39 @@ class TestServerISOConnectionLimits:
 
         with pytest.raises(S7ConnectionError, match="partial frame"):
             connection._recv_exact(4, time.monotonic() + 1)
+
+    def test_payload_gets_fresh_deadline_after_header(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection._recv_exact = MagicMock(side_effect=[b"\x03\x00\x00\x08", b"\x02\xf0\x80x"])
+
+        with patch("snap7.server.time.monotonic", side_effect=[100.0, 104.0]):
+            assert connection.receive_data() == b"x"
+
+        assert connection._recv_exact.call_args_list[0].args == (4, 105.0)
+        assert connection._recv_exact.call_args_list[1].args == (4, 109.0)
+
+    def test_timeout_after_header_closes_connection(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection._recv_exact = MagicMock(side_effect=[b"\x03\x00\x00\x08", TimeoutError("timed out")])
+
+        with pytest.raises(S7ConnectionError, match="after TPKT header"):
+            connection.receive_data()
+
+    def test_timeout_between_fragments_closes_connection(self) -> None:
+        client_socket = MagicMock()
+        connection = ServerISOConnection(client_socket)
+        connection._recv_exact = MagicMock(
+            side_effect=[
+                b"\x03\x00\x00\x08",
+                b"\x02\xf0\x00x",
+                TimeoutError("timed out"),
+            ]
+        )
+
+        with pytest.raises(S7ConnectionError, match="between COTP fragments"):
+            connection.receive_data()
 
     def test_reassembled_request_size_is_bounded(self) -> None:
         client_socket = MagicMock()
@@ -991,10 +1035,29 @@ class TestServerErrorScenarios(unittest.TestCase):
         self.client.destroy()
 
     def test_read_unregistered_db(self) -> None:
-        """Reading from an unregistered DB should still return data (server returns dummy data)."""
-        # The server returns dummy data for unregistered areas rather than an error
-        data = self.client.db_read(99, 0, 4)
-        self.assertEqual(len(data), 4)
+        """Reading from an unregistered DB returns item-not-available."""
+        with self.assertRaisesRegex(S7ProtocolError, "0x0a"):
+            self.client.db_read(99, 0, 4)
+
+    def test_read_start_beyond_area_bounds(self) -> None:
+        """Reading beyond a registered DB returns address-out-of-range."""
+        with self.assertRaisesRegex(S7ProtocolError, "0x05"):
+            self.client.db_read(1, 100, 4)
+
+    def test_read_crossing_area_bounds(self) -> None:
+        """A read crossing the end of a DB returns address-out-of-range."""
+        with self.assertRaisesRegex(S7ProtocolError, "0x05"):
+            self.client.db_read(1, 8, 4)
+
+    def test_multi_read_preserves_item_error(self) -> None:
+        """A multi-read reports the failing item's return code."""
+        items = [
+            {"area": S7Area.DB, "db_number": 1, "start": 0, "size": 1},
+            {"area": S7Area.DB, "db_number": 99, "start": 0, "size": 1},
+        ]
+
+        with self.assertRaisesRegex(S7ProtocolError, r"item 1 failed.*0x0a"):
+            self.client.read_multi_vars(items)
 
     def test_write_beyond_area_bounds(self) -> None:
         """Writing beyond area bounds should raise an error."""

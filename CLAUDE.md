@@ -20,17 +20,6 @@ Python-snap7 is a pure Python S7 communication library for interfacing with Siem
 - **snap7/type.py**: Type definitions and enums (Area, Block, WordLen, etc.)
 - **snap7/error.py**: Error handling and exceptions
 
-### s7commplus/ — S7CommPlus protocol (S7-1200/1500)
-- **s7commplus/client.py**: S7CommPlus sync client
-- **s7commplus/async_client.py**: S7CommPlus async client
-- **s7commplus/server.py**: S7CommPlus server emulator
-- **s7commplus/connection.py**: S7CommPlus low-level connection
-- **s7commplus/protocol.py**: S7CommPlus protocol constants/enums
-- **s7commplus/codec.py**: S7CommPlus encoding/decoding
-- **s7commplus/vlq.py**: Variable-Length Quantity encoding
-- **s7commplus/legitimation.py**: Authentication helpers
-- **s7commplus/typeinfo.py**: S7CommPlus type information
-
 ## Implementation Details
 
 ### Protocol Stack
@@ -52,17 +41,6 @@ The library implements the complete S7 protocol stack:
 - CPU information retrieval
 - Block operations (list, info, upload, download)
 - Date/time operations
-
-### Usage (s7commplus package — S7-1200/1500)
-
-```python
-from s7commplus import Client
-
-client = Client()
-client.connect("192.168.1.10", 0, 1)
-data = client.db_read(1, 0, 4)
-client.disconnect()
-```
 
 ### Usage (s7 package — S7-300/400)
 
@@ -117,15 +95,15 @@ pytest tests/test_client.py
 ### Code Quality
 ```bash
 # Type checking
-mypy snap7 s7commplus tests example
+mypy snap7 s7 tests example
 
 # Linting and formatting check
-ruff check snap7 s7commplus tests example
-ruff format --diff snap7 s7commplus tests example
+ruff check snap7 s7 tests example
+ruff format --diff snap7 s7 tests example
 
 # Auto-format code
-ruff format snap7 s7commplus tests example
-ruff check --fix snap7 s7commplus tests example
+ruff format snap7 s7 tests example
+ruff check --fix snap7 s7 tests example
 ```
 
 ### Development with tox

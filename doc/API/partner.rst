@@ -1,5 +1,5 @@
 Partner
-=======
+========
 
 The ``Partner`` class implements S7 peer-to-peer communication for
 bidirectional data exchange using BSend/BRecv. Both partners have equal

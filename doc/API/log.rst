@@ -1,5 +1,5 @@
 Logging
-=======
+========
 
 Structured logging with PLC connection context for multi-PLC environments.
 
