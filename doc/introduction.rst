@@ -36,8 +36,8 @@ S7-300, S7-400, S7-1200 and S7-1500 PLCs via the PUT/GET interface:
    client.disconnect()
 
 Use ``s7.Client`` for S7-300/400 PLCs or when PUT/GET access is enabled
-on S7-1200/1500. For native S7CommPlus communication, install the standalone
-``s7commplus`` package.
+on S7-1200/1500. For native communication with those controllers, see the
+standalone project linked above.
 
 .. note::
 

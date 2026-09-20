@@ -5,8 +5,7 @@
     from s7 import Client          # same as: from snap7 import Client
     from s7.type import Area       # same as: from snap7.type import Area
 
-This alias exists as a transitional step toward retiring the ``snap7``
-name. For S7CommPlus (S7-1200/1500), use ``s7commplus`` instead.
+This alias exists as a transitional step toward retiring the ``snap7`` name.
 """
 
 import importlib

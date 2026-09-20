@@ -3,8 +3,7 @@ The snap7 package (legacy).
 
 Pure Python implementation of the classic S7 protocol for communicating with
 Siemens S7 PLCs. This package is kept for backwards compatibility. For new
-projects, use the ``s7`` package instead, which supports all PLC models and
-automatically selects the best protocol (S7CommPlus or legacy S7)::
+projects, use the ``s7`` package instead::
 
     from s7 import Client
 

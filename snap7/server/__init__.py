@@ -1,9 +1,8 @@
 """
 Legacy S7 server implementation.
 
-Provides a complete S7 server emulator for the classic S7 protocol. For new
-projects, use ``s7.Server`` instead, which supports both legacy S7 and
-S7CommPlus clients.
+Provides a complete server emulator for the classic S7 protocol. For new
+projects, use ``s7.Server`` instead.
 """
 
 import logging

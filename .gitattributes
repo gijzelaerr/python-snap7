@@ -1,2 +1,0 @@
-# Zlib preset dictionaries: exact bytes matter for Adler-32 checksums
-s7commplus/zlib_dicts/*.xml binary
