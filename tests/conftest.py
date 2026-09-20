@@ -94,7 +94,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=False,
         help="Allow disruptive administrative tests on a dedicated non-production PLC",
     )
-    parser.addoption("--plc-protocol", choices=("legacy_s7", "s7commplus"), default="legacy_s7")
     parser.addoption("--plc-report-json", default="", help="Write a sanitized real-PLC JSON report")
     parser.addoption("--tester", default="", help="GitHub handle of the volunteer running the test")
     parser.addoption("--plc-family", default="", help="Reportable PLC family, such as S7-1500")
@@ -122,8 +121,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for mod_name in [
         "tests.test_client_e2e",
         "test_client_e2e",
-        "tests.test_s7_e2e",
-        "test_s7_e2e",
     ]:
         e2e = sys.modules.get(mod_name)
         if e2e is not None:

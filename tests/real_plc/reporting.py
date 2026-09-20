@@ -60,9 +60,7 @@ class RealPLCReport:
             status = "skipped"
         else:
             return
-        tags = sorted(
-            tag for tag in ("smoke", "write", "administrative", "legacy_s7", "s7commplus", "real_plc") if tag in report.keywords
-        )
+        tags = sorted(tag for tag in ("smoke", "write", "administrative", "classic_s7", "real_plc") if tag in report.keywords)
         diagnostic = None if report.passed else sanitize_diagnostic(report.longrepr)
         self.scenarios[nodeid] = ScenarioResult(nodeid, status, tags, report.duration, diagnostic)
 
@@ -109,7 +107,7 @@ def report_metadata(config: Any) -> dict[str, str | int]:
         "firmware": config.getoption("--plc-firmware"),
         "rack": config.getoption("--plc-rack"),
         "slot": config.getoption("--plc-slot"),
-        "protocol_path": config.getoption("--plc-protocol"),
+        "protocol_path": "classic_s7",
         "security_mode": config.getoption("--plc-security-mode"),
         "tia_configuration": config.getoption("--plc-tia-configuration"),
     }

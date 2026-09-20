@@ -8,7 +8,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from s7commplus.client import S7CommPlusClient
 from snap7.client import Client
 from snap7.type import Area, S7DataItem, WordLen
 from snap7.util import get_bool, get_byte, get_char, get_dint, get_dword, get_int, get_real, get_word
@@ -89,8 +88,8 @@ class PLCAdapter(Protocol):
     def runtime_metadata(self) -> dict[str, str | int]: ...
 
 
-class LegacyS7Adapter:
-    protocol_name = "legacy_s7"
+class ClassicS7Adapter:
+    protocol_name = "classic_s7"
 
     def __init__(self, config: PLCConfig) -> None:
         self.config = config
@@ -146,46 +145,9 @@ class LegacyS7Adapter:
         return metadata
 
 
-class S7CommPlusAdapter:
-    protocol_name = "s7commplus"
-
-    def __init__(self, config: PLCConfig) -> None:
-        self.config = config
-        self.client = S7CommPlusClient()
-
-    def connect(self) -> None:
-        self.client.connect(self.config.host, self.config.port, self.config.rack, self.config.slot)
-
-    def disconnect(self) -> None:
-        self.client.disconnect()
-
-    def is_connected(self) -> bool:
-        return self.client.connected
-
-    def read(self, db_number: int, offset: int, size: int) -> bytes:
-        return self.client.db_read(db_number, offset, size)
-
-    def write(self, db_number: int, offset: int, data: bytes) -> None:
-        self.client.db_write(db_number, offset, data)
-
-    def read_multi(self, db_number: int, regions: Sequence[tuple[int, int]]) -> list[bytes]:
-        return self.client.db_read_multi([(db_number, offset, size) for offset, size in regions])
-
-    def runtime_metadata(self) -> dict[str, str | int]:
-        return {
-            "protocol_path": self.protocol_name,
-            "protocol_version": self.client.protocol_version,
-            "security_mode": "tls" if getattr(self.client._connection, "_tls_active", False) else "plain",
-        }
-
-
-def make_adapter(protocol_name: str, config: PLCConfig) -> PLCAdapter:
-    """Create the selected client behind the shared acceptance-test surface."""
-    if protocol_name == "legacy_s7":
-        return LegacyS7Adapter(config)
-    if protocol_name == "s7commplus":
-        return S7CommPlusAdapter(config)
-    raise ValueError(f"Unsupported PLC protocol path: {protocol_name}")
+def make_adapter(config: PLCConfig) -> PLCAdapter:
+    """Create a classic S7 client behind the acceptance-test surface."""
+    return ClassicS7Adapter(config)
 
 
 def canonical_fixture_bytes() -> bytes:

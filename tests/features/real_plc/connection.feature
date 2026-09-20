@@ -6,21 +6,12 @@ Feature: Connect to and identify a real PLC
     And the test configuration contains no secrets in reportable fields
 
   @smoke
-  Scenario Outline: Establish and close a session
-    Given the client uses the "<protocol>" protocol path
+  @classic_s7
+  Scenario: Establish and close a session
+    Given the client uses the classic S7 protocol
     When I connect to the configured PLC
     Then the client reports that it is connected
     And the negotiated protocol and security mode are recorded
     And the PLC identity and CPU state are recorded when available
     When I disconnect
     Then the client reports that it is disconnected
-
-    @legacy_s7
-    Examples: legacy S7
-      | protocol   |
-      | legacy_s7  |
-
-    @s7commplus
-    Examples: S7CommPlus
-      | protocol   |
-      | s7commplus |

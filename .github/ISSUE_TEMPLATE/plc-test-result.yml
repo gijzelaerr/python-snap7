@@ -22,13 +22,6 @@ body:
       options: [pass, fail, partial]
     validations:
       required: true
-  - type: dropdown
-    id: protocol
-    attributes:
-      label: Protocol path
-      options: [legacy-s7, s7commplus]
-    validations:
-      required: true
   - type: input
     id: plc
     attributes:

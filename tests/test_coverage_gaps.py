@@ -1,30 +1,17 @@
 """Tests to close identified coverage gaps.
 
-Covers:
-- CLI discover command integration
-- Legitimation failure paths (wrong password, malformed challenge, missing TLS)
-- S7CommPlus async client (connect, read, write, legacy fallback)
-- Heartbeat with concurrent operations
+Covers CLI discover command integration and heartbeat with concurrent operations.
 """
 
-import struct
 import time
 import unittest
-from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from snap7.client import Client
-from snap7.error import S7ConnectionError
 from snap7.server import Server
 from snap7.type import SrvArea
-from s7commplus.connection import S7CommPlusConnection
-from s7commplus.legitimation import (
-    LegitimationState,
-    build_legacy_response,
-)
-from s7commplus.protocol import AccessLevel
 
 
 # ============================================================================
@@ -96,147 +83,6 @@ class TestCLIDiscoverCommand:
             result = runner.invoke(main, ["discover", "192.168.1.1"])
 
         assert result.exit_code != 0
-
-
-# ============================================================================
-# Legitimation failure paths
-# ============================================================================
-
-
-class TestLegitimationFailurePaths:
-    """Test legitimation edge cases and failures."""
-
-    def test_authenticate_not_connected_raises(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
-        with pytest.raises(S7ConnectionError, match="Not connected"):
-            conn.authenticate("password")
-
-    def test_authenticate_no_tls_raises(self) -> None:
-        conn = S7CommPlusConnection("127.0.0.1")
-        conn._connected = True
-        conn._tls_active = False
-        conn._oms_secret = None
-        with pytest.raises(S7ConnectionError, match="requires TLS"):
-            conn.authenticate("password")
-
-    def test_authenticate_tls_without_oms_secret_is_allowed(self) -> None:
-        """The OMS secret is a new-mode requirement, not a precondition of authenticate()."""
-        conn = S7CommPlusConnection("127.0.0.1")
-        conn._connected = True
-        conn._tls_active = True
-        conn._oms_secret = None
-        conn._protection_level = AccessLevel.FULL_ACCESS
-        conn.authenticate("password")
-
-    def test_legacy_response_empty_password(self) -> None:
-        """Empty password should still produce a valid 20-byte response."""
-        challenge = b"\xab" * 20
-        response = build_legacy_response("", challenge)
-        assert len(response) == 20
-
-    def test_legacy_response_short_challenge(self) -> None:
-        """Challenge shorter than 20 bytes — XOR should still work via zip."""
-        challenge = b"\xff" * 10
-        response = build_legacy_response("test", challenge)
-        assert len(response) == 10  # zip truncates to shorter
-
-    def test_legitimation_state_double_authenticate(self) -> None:
-        """Calling mark_authenticated twice should not break state."""
-        state = LegitimationState()
-        state.mark_authenticated()
-        state.mark_authenticated()
-        assert state.authenticated
-
-    def test_legitimation_state_rotate_changes_key(self) -> None:
-        """Key rotation should produce a different key each time."""
-        state = LegitimationState(oms_secret=b"\xaa" * 32)
-        key_before = state._oms_key
-        state.rotate_key()
-        key_after = state._oms_key
-        assert key_before != key_after
-
-
-# ============================================================================
-# S7CommPlus async client
-# ============================================================================
-
-from s7commplus.server import S7CommPlusServer  # noqa: E402
-from s7commplus.async_client import S7CommPlusAsyncClient  # noqa: E402
-
-ASYNC_TEST_PORT = 11125
-
-
-@pytest.fixture()
-def async_server() -> Generator[S7CommPlusServer, None, None]:
-    """Create and start an S7CommPlus server for async tests."""
-    srv = S7CommPlusServer()
-    srv.register_raw_db(1, bytearray(256))
-    srv.register_raw_db(2, bytearray(256))
-
-    # Pre-populate DB1
-    db1 = srv.get_db(1)
-    assert db1 is not None
-    struct.pack_into(">f", db1.data, 0, 42.0)
-
-    srv.start(port=ASYNC_TEST_PORT)
-    time.sleep(0.1)
-    yield srv
-    srv.stop()
-
-
-@pytest.mark.asyncio
-class TestAsyncClientCoverage:
-    """Additional async client tests."""
-
-    async def test_connect_and_disconnect(self, async_server: S7CommPlusServer) -> None:
-        client = S7CommPlusAsyncClient()
-        await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
-        assert client.connected
-        await client.disconnect()
-        assert not client.connected
-
-    async def test_db_read(self, async_server: S7CommPlusServer) -> None:
-        client = S7CommPlusAsyncClient()
-        await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
-        try:
-            data = await client.db_read(1, 0, 4)
-            assert len(data) == 4
-        finally:
-            await client.disconnect()
-
-    async def test_db_write_and_read_back(self, async_server: S7CommPlusServer) -> None:
-        client = S7CommPlusAsyncClient()
-        await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
-        try:
-            await client.db_write(1, 10, bytes([0xDE, 0xAD, 0xBE, 0xEF]))
-            data = await client.db_read(1, 10, 4)
-            assert data == bytearray([0xDE, 0xAD, 0xBE, 0xEF])
-        finally:
-            await client.disconnect()
-
-    async def test_context_manager(self, async_server: S7CommPlusServer) -> None:
-        async with S7CommPlusAsyncClient() as client:
-            await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
-            assert client.connected
-        assert not client.connected
-
-    async def test_properties(self, async_server: S7CommPlusServer) -> None:
-        client = S7CommPlusAsyncClient()
-        await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
-        try:
-            assert client.session_id != 0
-            assert client.protocol_version >= 0
-        finally:
-            await client.disconnect()
-
-    async def test_session_setup_ok_property(self, async_server: S7CommPlusServer) -> None:
-        client = S7CommPlusAsyncClient()
-        await client.connect("127.0.0.1", port=ASYNC_TEST_PORT)
-        try:
-            # Server supports S7CommPlus data ops, so session setup should succeed
-            assert isinstance(client.session_setup_ok, bool)
-        finally:
-            await client.disconnect()
 
 
 # ============================================================================

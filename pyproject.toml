@@ -33,7 +33,6 @@ Documentation = "https://python-snap7.readthedocs.io/en/latest/"
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio", "pytest-bdd>=8.1,<9", "pytest-cov", "pytest-html", "hypothesis", "mypy", "types-setuptools", "ruff", "tox", "tox-uv", "types-click", "uv"]
-s7commplus = ["cryptography"]
 cli = ["rich", "click" ]
 demo = ["psutil", "rich", "click"]
 doc = ["sphinx", "sphinx_rtd_theme"]
@@ -41,10 +40,9 @@ discovery = ["pnio-dcp"]
 
 [tool.setuptools.package-data]
 snap7 = ["py.typed"]
-s7commplus = ["py.typed", "session_auth/**/*.bin", "zlib_dicts/*.xml"]
 
 [tool.setuptools.packages.find]
-include = ["snap7*", "s7*", "s7commplus*"]
+include = ["snap7*", "s7*"]
 
 [project.scripts]
 snap7-server = "snap7.server:mainloop"
@@ -61,8 +59,7 @@ markers =[
     "write: real-PLC scenario that changes and restores scratch data",
     "plc_write: legacy alias for real-PLC tests that modify scratch data",
     "administrative: disruptive real-PLC scenario requiring separate opt-in",
-    "legacy_s7: scenario using the legacy S7 protocol path",
-    "s7commplus: scenario using the S7CommPlus protocol path",
+    "classic_s7: scenario using the classic S7 protocol path",
     "hypothesis: property-based tests using Hypothesis",
     "logo",
     "mainloop",

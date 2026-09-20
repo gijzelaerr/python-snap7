@@ -13,7 +13,6 @@ import pytest
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plc-ip", required=True, help="PLC address (used for connection only; never written to reports)")
-    parser.add_argument("--protocol", required=True, choices=("legacy_s7", "s7commplus"))
     parser.add_argument("--tester", required=True, help="GitHub handle")
     parser.add_argument("--plc-family", required=True)
     parser.add_argument("--plc-model", required=True)
@@ -36,7 +35,7 @@ def main() -> int:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    stem = f"real-plc-{args.protocol}-{stamp}"
+    stem = f"real-plc-classic-s7-{stamp}"
     junit = args.output_dir / f"{stem}.junit.xml"
     report = args.output_dir / f"{stem}.json"
     marker = "smoke"
@@ -54,7 +53,6 @@ def main() -> int:
         f"--junitxml={junit}",
         f"--plc-report-json={report}",
         f"--plc-ip={args.plc_ip}",
-        f"--plc-protocol={args.protocol}",
         f"--tester={args.tester}",
         f"--plc-family={args.plc_family}",
         f"--plc-model={args.plc_model}",

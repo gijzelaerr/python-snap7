@@ -58,12 +58,9 @@ def reportable_fields_are_safe(request: pytest.FixtureRequest) -> None:
     assert not any(fragment in value.lower() for value in values for fragment in sensitive_fragments)
 
 
-@given(parsers.parse('the client uses the "{protocol}" protocol path'), target_fixture="plc_adapter")
-def selected_adapter(protocol: str, plc_config: PLCConfig, request: pytest.FixtureRequest) -> PLCAdapter:
-    selected = request.config.getoption("--plc-protocol")
-    if protocol != selected:
-        pytest.skip(f"CAPABILITY_PROTOCOL_NOT_SELECTED: selected {selected}")
-    adapter = make_adapter(protocol, plc_config)
+@given("the client uses the classic S7 protocol", target_fixture="plc_adapter")
+def selected_adapter(plc_config: PLCConfig, request: pytest.FixtureRequest) -> PLCAdapter:
+    adapter = make_adapter(plc_config)
 
     def disconnect() -> None:
         if adapter.is_connected():

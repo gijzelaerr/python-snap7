@@ -4,7 +4,7 @@ Introduction
 python-snap7 is a pure Python S7 communication library for interfacing
 natively with Siemens S7 PLCs. The library implements the complete S7
 protocol stack including TPKT (RFC 1006), COTP (ISO 8073), and S7
-protocol layers, as well as the S7CommPlus protocol for newer PLCs.
+protocol layers.
 
 The name "python-snap7" is historical: the library originally started as a
 Python wrapper around the `Snap7 <http://snap7.sourceforge.net/>`_ C library.
@@ -14,20 +14,11 @@ backwards compatibility.
 python-snap7 requires Python 3.10+ and runs on Windows, macOS and Linux
 without any native dependencies.
 
-The ``s7commplus`` package
---------------------------
+S7CommPlus support
+------------------
 
-For S7-1200 and S7-1500 PLCs, the ``s7commplus`` package provides a native
-S7CommPlus protocol client. It supports V1, V2 (TLS), and V3 connections:
-
-.. code-block:: python
-
-   from s7commplus import Client
-
-   client = Client()
-   client.connect("192.168.1.10")
-   data = client.db_read(1, 0, 4)
-   client.disconnect()
+Native S7CommPlus support for S7-1200 and S7-1500 PLCs is provided by the
+standalone `s7commplus <https://github.com/gijzelaerr/s7commplus>`_ package.
 
 The ``s7`` package (legacy S7)
 ------------------------------
@@ -45,8 +36,8 @@ S7-300, S7-400, S7-1200 and S7-1500 PLCs via the PUT/GET interface:
    client.disconnect()
 
 Use ``s7.Client`` for S7-300/400 PLCs or when PUT/GET access is enabled
-on S7-1200/1500. Use ``s7commplus.Client`` for native S7CommPlus communication
-with S7-1200/1500 PLCs.
+on S7-1200/1500. For native S7CommPlus communication, install the standalone
+``s7commplus`` package.
 
 .. note::
 
