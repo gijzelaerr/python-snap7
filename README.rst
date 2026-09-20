@@ -50,5 +50,8 @@ Documentation
 Read the full documentation at
 `python-snap7.readthedocs.io <https://python-snap7.readthedocs.io/en/latest/>`_.
 
+The safe volunteer hardware-test procedure is in
+`Real-PLC acceptance testing <doc/real-plc-testing.rst>`_.
+
 For native communication with S7-1200 and S7-1500 controllers without PUT/GET,
 see the standalone `s7commplus <https://github.com/gijzelaerr/s7commplus>`_ package.

@@ -6,6 +6,8 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Add a safe, Gherkin-based real-PLC acceptance program with restored scratch
+  writes and sanitized JSON/JUnit reports (#840).
 * Return S7 item errors when pure-Python server reads target unregistered areas
   or ranges outside registered memory instead of fabricating successful data.
 * Echo calling and called TSAP parameters in pure-Python server connection
