@@ -6,6 +6,8 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Return S7 item errors when pure-Python server reads target unregistered areas
+  or ranges outside registered memory instead of fabricating successful data.
 * Echo calling and called TSAP parameters in pure-Python server connection
   confirmations, and restart the receive deadline after each TPKT header.
 * Correlate S7CommPlus responses by opcode, function, and sequence; discard
