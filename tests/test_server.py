@@ -1049,6 +1049,16 @@ class TestServerErrorScenarios(unittest.TestCase):
         with self.assertRaisesRegex(S7ProtocolError, "0x05"):
             self.client.db_read(1, 8, 4)
 
+    def test_multi_read_preserves_item_error(self) -> None:
+        """A multi-read reports the failing item's return code."""
+        items = [
+            {"area": S7Area.DB, "db_number": 1, "start": 0, "size": 1},
+            {"area": S7Area.DB, "db_number": 99, "start": 0, "size": 1},
+        ]
+
+        with self.assertRaisesRegex(S7ProtocolError, r"item 1 failed.*0x0a"):
+            self.client.read_multi_vars(items)
+
     def test_write_beyond_area_bounds(self) -> None:
         """Writing beyond area bounds should raise an error."""
         # DB1 is only 10 bytes, writing 20 bytes at offset 0 should fail

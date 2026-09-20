@@ -1,121 +1,17 @@
 Client
 ======
 
-python-snap7 provides two client packages:
+The ``s7`` package implements the classic S7 protocol for S7-300/400 PLCs and
+PUT/GET access on S7-1200/1500.
 
-- ``s7commplus``: S7CommPlus protocol for S7-1200/1500 PLCs
-- ``s7``: Classic S7 protocol for S7-300/400 and PUT/GET access on S7-1200/1500
-
-s7commplus.Client
------------------
-
-.. code-block:: python
-
-   from s7commplus import Client
-
-   client = Client()
-   client.connect("192.168.1.10")
-   data = client.db_read(1, 0, 4)
-   client.disconnect()
-
-s7commplus.AsyncClient
-----------------------
-
-The asynchronous client currently supports the TLS connection and
-legitimation path. Legacy V1 SessionKey authentication is available only on
-the synchronous client.
-
-.. code-block:: python
-
-   import asyncio
-   from s7commplus import AsyncClient
-
-   async def main():
-       client = AsyncClient()
-       await client.connect("192.168.1.10")
-       data = await client.db_read(1, 0, 4)
-       await client.disconnect()
-
-   asyncio.run(main())
-
-V2 connection with TLS
-----------------------
-
-S7-1500 PLCs with firmware 2.x use S7CommPlus V2, which requires TLS. Pass
-``use_tls=True`` to the ``connect()`` method:
-
-.. code-block:: python
-
-   from s7commplus import Client
-
-   client = Client()
-   client.connect("192.168.1.10", use_tls=True)
-   data = client.db_read(1, 0, 4)
-   client.disconnect()
-
-For PLCs with custom certificates, provide the certificate paths:
-
-.. code-block:: python
-
-   client.connect(
-       "192.168.1.10",
-       use_tls=True,
-       tls_cert="/path/to/client.pem",
-       tls_key="/path/to/client.key",
-       tls_ca="/path/to/ca.pem",
-   )
-
-Password authentication
------------------------
-
-The synchronous client accepts the ``password`` keyword for both TLS
-legitimation and the post-SessionKey exchange used by older V1 PLCs:
-
-.. code-block:: python
-
-   from s7commplus import Client
-
-   client = Client()
-   client.connect("192.168.1.10", use_tls=True, password="my_plc_password")
-   data = client.db_read(1, 0, 4)
-   client.disconnect()
-
-For a V1 PLC, omit ``use_tls=True``. The asynchronous client has no
-``password`` argument on ``connect``; on a TLS connection, authenticate
-explicitly with ``await client.authenticate(password)``.
-
-Concurrent async reads
-----------------------
-
-An internal ``asyncio.Lock`` serialises each send/receive cycle so that
-multiple coroutines can safely share a single connection:
-
-.. code-block:: python
-
-   results = await asyncio.gather(
-       client.db_read(1, 0, 4),
-       client.db_read(1, 10, 4),
-   )
-
-----
-
-.. automodule:: s7commplus.client
-   :members:
-
-.. automodule:: s7commplus.async_client
-   :members:
-
-s7.Client (legacy)
----------------------
-
-The ``s7.Client`` implements the classic S7 protocol for S7-300/400 PLCs
-and PUT/GET access on S7-1200/1500.
+s7.Client
+---------
 
 .. automodule:: snap7.client
    :members:
 
-s7.AsyncClient (legacy)
---------------------------
+s7.AsyncClient
+--------------
 
 .. automodule:: snap7.async_client
    :members:
