@@ -6,6 +6,8 @@ CHANGES
 
 Major release: new `s7commplus` package with S7CommPlus protocol support.
 
+* Echo calling and called TSAP parameters in pure-Python server connection
+  confirmations, and restart the receive deadline after each TPKT header.
 * Correlate S7CommPlus responses by opcode, function, and sequence; discard
   bounded stale replies from earlier requests, preserve interleaved
   notifications, and serialize synchronous wire requests.
