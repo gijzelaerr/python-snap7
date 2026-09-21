@@ -85,9 +85,7 @@ class MetricsRegistry:
             "# TYPE snap7_operation_duration_seconds_sum counter",
         ]
         for operation in sorted(duration_sum):
-            lines.append(
-                f'snap7_operation_duration_seconds_sum{{operation="{_label(operation)}"}} {duration_sum[operation]}'
-            )
+            lines.append(f'snap7_operation_duration_seconds_sum{{operation="{_label(operation)}"}} {duration_sum[operation]}')
         return "\n".join(lines) + "\n"
 
 

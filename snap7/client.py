@@ -1144,9 +1144,7 @@ class Client(ClientMixin):
             while remaining > 0:
                 chunk_size = min(remaining, max_chunk)
                 chunk_data = data[offset : offset + chunk_size]
-                chunk_offset = (
-                    offset // S7DataTypes.get_size_bytes(s7_word_len) * self._element_address_step(s7_word_len)
-                )
+                chunk_offset = offset // S7DataTypes.get_size_bytes(s7_word_len) * self._element_address_step(s7_word_len)
 
                 def build_chunk_request(o: int = chunk_offset, cd: bytes = bytes(chunk_data)) -> bytes:
                     return self.protocol.build_write_request(
