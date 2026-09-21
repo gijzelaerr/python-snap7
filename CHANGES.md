@@ -1,5 +1,5 @@
 CHANGES
-=======
+========
 
 3.2.0
 -----
@@ -22,6 +22,8 @@ Feature and robustness release for the classic S7 protocol implementation.
   password-protected PLCs (#792, #799).
 * Support LOGO reconnection, heartbeat, rate-limiting, and connection callback
   options while preserving explicit TSAPs (#875).
+* Add an experimental serial PPI client for S7-200 PLCs, including V-memory,
+  system-memory, I/O, counter, and timer access (#824).
 
 ### Bug fixes
 
@@ -37,6 +39,10 @@ Feature and robustness release for the classic S7 protocol implementation.
   datatypes; correct BIT lengths and timer/counter index addressing (#874).
 * Validate `write_multi_vars()` inputs consistently and preserve each item's
   declared datatype (#855, #874).
+* Echo the calling and called TSAP values in server connection confirmations,
+  and restart the receive deadline after each complete TPKT header (#893).
+* Return S7 item errors for reads from unregistered server areas or addresses
+  outside registered memory instead of returning fabricated data (#896).
 
 3.1.2
 -----

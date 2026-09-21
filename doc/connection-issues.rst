@@ -28,8 +28,7 @@ long-running applications:
    client = Client()
    client.connect("192.168.1.10", 0, 1)
 
-For finer control over reconnection parameters, use the legacy ``s7.Client``
-directly:
+Configure reconnection when constructing ``s7.Client``:
 
 .. code-block:: python
 
@@ -62,6 +61,27 @@ The parameters:
   Set to ``0`` to disable (default).
 - **on_disconnect**: Callback invoked when the connection is lost.
 - **on_reconnect**: Callback invoked after a successful reconnection.
+
+
+Request Rate Limiting
+---------------------
+
+Both client implementations can limit outbound requests. Fixed mode spaces
+requests evenly; token-bucket mode permits a bounded burst. The default rate of
+zero disables limiting::
+
+   from s7 import Client
+
+   client = Client(
+       max_requests_per_second=10,
+       rate_limit_algorithm="token_bucket",
+       rate_limit_burst=5,
+       rate_limit_behavior="block",
+   )
+
+Set ``rate_limit_behavior="raise"`` to raise
+:class:`~snap7.error.S7RateLimitError` instead of waiting. Rate limiting does
+not make a synchronous client thread-safe; see :doc:`thread-safety`.
 
 
 Manual Reconnection

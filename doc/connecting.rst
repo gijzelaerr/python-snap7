@@ -36,10 +36,14 @@ Rack/Slot Reference
      - 0
      - 1
      - PUT/GET access must be enabled in TIA Portal
-   * - S7-200 / Logo
+   * - S7-200 (serial PPI)
      - --
      - --
-     - Use ``set_connection_params`` with TSAP addressing (``s7`` package)
+     - Use ``PPIClient`` and a serial interface; see :doc:`ppi`.
+   * - LOGO! / S7-200 (Ethernet)
+     - --
+     - --
+     - Use ``Logo`` or the controller's documented TSAP values.
 
 .. warning::
 
@@ -81,10 +85,26 @@ protocol:
    client = Client()
    client.connect("192.168.1.10", 0, 1)
 
-S7-200 / Logo (TSAP Connection)
---------------------------------
+S7-200 Serial PPI
+-----------------
 
-S7-200 and Logo PLCs require TSAP addressing via TSAP addressing:
+Serial S7-200 connections use :class:`~snap7.ppi.PPIClient`, not rack/slot or
+TSAP addressing::
+
+   from s7 import PPIClient
+
+   with PPIClient("/dev/ttyUSB0", station=2, baudrate=9600) as client:
+       data = client.v_read(0, 4)
+
+Install ``python-snap7[ppi]`` and see :doc:`ppi` for supported areas and
+limitations.
+
+LOGO! and Ethernet TSAP Connections
+-----------------------------------
+
+For LOGO!, prefer the dedicated :class:`~snap7.logo.Logo` class. Controllers
+that expose classic S7 over Ethernet with explicit TSAPs can use
+``set_connection_params()`` before connecting:
 
 .. code-block:: python
 
@@ -93,6 +113,9 @@ S7-200 and Logo PLCs require TSAP addressing via TSAP addressing:
    client = Client()
    client.set_connection_params("192.168.1.10", 0x1000, 0x2000)
    client.connect("192.168.1.10", 0, 0)
+
+The TSAP values are controller and project specific; the example values are
+not universal defaults.
 
 Using a Non-Standard Port
 --------------------------
@@ -142,3 +165,19 @@ unchanged — ``snap7`` is an alias for ``s7``:
 
    client = snap7.Client()
    client.connect("192.168.1.10", 0, 1)
+
+Asynchronous Connections
+------------------------
+
+``AsyncClient`` provides native ``asyncio`` I/O and serializes request/response
+cycles on its connection::
+
+   import asyncio
+   from s7 import AsyncClient
+
+   async def main():
+       async with AsyncClient() as client:
+           await client.connect("192.168.1.10", 0, 1)
+           data = await client.db_read(1, 0, 4)
+
+   asyncio.run(main())

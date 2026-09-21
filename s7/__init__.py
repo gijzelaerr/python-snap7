@@ -5,7 +5,7 @@
     from s7 import Client          # same as: from snap7 import Client
     from s7.type import Area       # same as: from snap7.type import Area
 
-This alias exists as a transitional step toward retiring the ``snap7`` name.
+Both import names are supported; ``s7`` is recommended for new code.
 """
 
 import importlib
@@ -20,6 +20,7 @@ _SUBMODULES = [
     "async_client",
     "cli",
     "client",
+    "client_base",
     "connection",
     "datatypes",
     "demo",
@@ -29,9 +30,11 @@ _SUBMODULES = [
     "logo",
     "optimizer",
     "partner",
+    "ppi",
     "rate_limiter",
     "s7protocol",
     "server",
+    "szl",
     "tags",
     "type",
     "util",

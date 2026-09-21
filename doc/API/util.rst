@@ -13,3 +13,12 @@ REAL, STRING, etc.):
 
 .. automodule:: snap7.util
    :members:
+
+DB layout helpers
+-----------------
+
+``DB`` and ``Row`` map a textual DB layout specification onto a byte buffer.
+They are also exported directly from ``s7`` and ``snap7``.
+
+.. automodule:: snap7.util.db
+   :members:

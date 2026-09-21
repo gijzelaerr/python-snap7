@@ -1,5 +1,5 @@
 """
-The snap7 package (legacy).
+The snap7 compatibility package.
 
 Pure Python implementation of the classic S7 protocol for communicating with
 Siemens S7 PLCs. This package is kept for backwards compatibility. For new
@@ -18,6 +18,7 @@ from .client import Client
 from .async_client import AsyncClient
 from .server import Server
 from .partner import Partner
+from .ppi import PPIArea, PPIClient
 from .logo import Logo
 from .util.db import Row, DB
 from .tags import NodeS7Tag, PLC4XTag, Tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
@@ -28,6 +29,8 @@ __all__ = [
     "AsyncClient",
     "Server",
     "Partner",
+    "PPIClient",
+    "PPIArea",
     "Logo",
     "Row",
     "DB",

@@ -42,7 +42,11 @@ Supported PLCs
    * - S7-200 SMART
      - ~2012
      - Partial
-     - Basic read/write works; some advanced functions may be unavailable.
+     - Basic Ethernet read/write works; advanced functions may be unavailable.
+   * - S7-200 (serial PPI)
+     - ~1994
+     - Experimental
+     - Use :class:`~snap7.ppi.PPIClient`; see :doc:`ppi` for current limits.
    * - LOGO! 8
      - ~2014
      - Full
@@ -59,6 +63,15 @@ step-by-step instructions.
 
    PUT/GET access provides unauthenticated read/write access to PLC memory.
    Only enable this on networks that are properly segmented and secured.
+
+Feature Availability
+--------------------
+
+The matrix describes transport-level access, not a guarantee that every client
+method is implemented by every CPU. Block transfer, CPU control, forcing,
+passwords, diagnostic SZLs, and clock operations vary by model, firmware, and
+protection level. See :doc:`advanced` and handle
+:class:`~snap7.error.S7ProtocolError` when probing optional PLC capabilities.
 
 Alternatives for Unsupported PLCs
 ---------------------------------

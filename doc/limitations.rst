@@ -23,3 +23,7 @@ limitations apply to ``s7.Client``:
    * - Create PLC backups
      - Full project backup requires TIA Portal. python-snap7 can upload
        individual blocks, but this is not a complete backup.
+
+Serial PPI has additional constraints: the current implementation supports one
+PC master and one S7-200 slave, not multimaster token passing or PPI over TCP.
+See :doc:`ppi`.
