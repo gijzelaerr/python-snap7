@@ -107,7 +107,7 @@ class Tag:
        ``byte_offset`` and ``bit``. Supported on S7-300/400 and on
        S7-1200/1500 DBs with "Optimized block access" disabled.
 
-    2. **Symbolic (LID-based) access** (S7CommPlus, for optimized DBs) —
+    2. **Symbolic (LID-based) access** (for optimized DBs) —
        uses ``access_sequence`` (a list of LID values navigating the
        PLC's symbol tree) and optionally ``symbol_crc``. Required for
        S7-1200/1500 DBs with "Optimized block access" enabled.
@@ -122,7 +122,7 @@ class Tag:
         bit: Bit index (0-7) for BOOL tags; 0 for others.
         count: Array count (1 = scalar, >1 = array).
         name: Optional tag name for debugging/logging.
-        access_sequence: LID path for S7CommPlus symbolic access (optimized DBs).
+        access_sequence: LID path for symbolic access to optimized DBs.
         symbol_crc: Symbol CRC for the PLC to validate layout version (0 = no check).
     """
 
@@ -138,7 +138,7 @@ class Tag:
 
     @property
     def is_symbolic(self) -> bool:
-        """Whether this Tag uses S7CommPlus symbolic (LID-based) access."""
+        """Whether this Tag uses symbolic (LID-based) access."""
         return bool(self.access_sequence)
 
     @property
@@ -184,7 +184,7 @@ class Tag:
         symbol_crc: int = 0,
         count: int = 1,
     ) -> "Tag":
-        """Create a Tag from an S7CommPlus access string for optimized blocks.
+        """Create a Tag from an LID access string for optimized blocks.
 
         The access string is a dot-separated sequence of hex IDs representing
         the path through the PLC's symbol tree, e.g. ``"8A0E0001.A"`` (DB1,

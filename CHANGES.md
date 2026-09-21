@@ -1,55 +1,48 @@
 CHANGES
 ========
 
-4.0.0 (unreleased)
--------------------
+3.2.0
+-----
 
-Major release: new `s7commplus` package with S7CommPlus protocol support.
+Feature and robustness release for the classic S7 protocol implementation.
 
-* Return S7 item errors when pure-Python server reads target unregistered areas
-  or ranges outside registered memory instead of fabricating successful data.
-* Echo calling and called TSAP parameters in pure-Python server connection
-  confirmations, and restart the receive deadline after each TPKT header.
-* Correlate S7CommPlus responses by opcode, function, and sequence; discard
-  bounded stale replies from earlier requests, preserve interleaved
-  notifications, and serialize synchronous wire requests.
-* Decode corroborating CPU execution attributes so S7CommPlus `get_cpu_state()`
-  distinguishes RUN from STOP on S7-1500 and returns UNKNOWN for absent or
-  inconsistent state attributes, including S7-1200 responses that omit them.
-* Support LOGO reconnection/heartbeat options and preserve explicit TSAPs.
-* Correct legacy GetVarSubStreamed qualifiers and reject unusable authentication challenges.
-* Validate batched symbolic read item coverage and preserve explicit PLC errors.
-* Fix classic S7 TPKT bounds and COTP Class 0 header validation in sync/async clients.
-* Reject incomplete reads and mismatched or missing read/write acknowledgements.
-* Size read/write chunks in whole elements and preserve ctypes write datatypes;
-  correct BIT lengths and timer/counter index addressing.
+### Packaging
 
-* New `s7commplus` package for S7CommPlus protocol (S7-1200/1500)
-* S7CommPlus V1, V2 (TLS), and V3 support for S7-1200/1500
-* S7CommPlus area read/write (M, I, Q, counters, timers)
-* Require an explicit target datatype in S7CommPlus multi-write tuples; add
-  `datatype=` to sync/async symbolic and area writes for scalar PLC targets.
-* S7CommPlus PLC start/stop via INVOKE
-* S7CommPlus object browsing via EXPLORE
-* S7CommPlus live symbol browsing (`client.browse()`) and datablock listing (experimental)
-* Fix V1 SessionKey challenge requests being rejected by S7-1200 FW 4.2 PLCs,
-  consume non-fatal SystemEvents while waiting for the matching response, and
-  strip per-fragment V3 HMACs from browse responses (#710)
-* S7CommPlus active-alarm browsing and alarm subscriptions (experimental)
-* S7CommPlus symbolic data subscriptions and notification decoding (experimental)
-* TIA Portal XML import for SymbolTable (`SymbolTable.from_tia_xml()`) (experimental)
-* S7CommPlus CPU state reading and block transfer (upload/download)
-* Correct the SessionKey emulator fingerprint encoding and reject missing or
-  malformed authentication structures during integration tests.
-* Fix the legacy SecurityKey descriptor to identify the newly generated
-  session key instead of an all-zero placeholder.
-* Keep SessionKey activation and public connection state pending until the PLC
-  accepts session setup, with complete cleanup on rejection or transport error.
-* **Symbolic (LID-based) access for optimized DBs** (experimental):
-  `Tag.from_access_string("8A0E0001.A", "REAL")` creates a symbolic Tag;
-  `client.read_tag(tag)` routes to S7CommPlus LID-based access via the
-  PLC's symbol tree. Required for S7-1200/1500 DBs with
-  "Optimized block access" enabled (the TIA Portal V13+ default).
+* Move S7CommPlus support to the standalone
+  [`s7commplus`](https://github.com/gijzelaerr/s7commplus) package. The `s7`
+  import remains available as an alias for the classic `snap7` package.
+
+### New features
+
+* Add configurable request rate limiting to synchronous and asynchronous
+  clients, including fixed-interval and token-bucket modes (#823).
+* Add synchronous and asynchronous APIs for forcing I/O bits, cancelling
+  forces, and reading the PLC force table (#796, #800).
+* Add synchronous and asynchronous session password set/clear APIs for
+  password-protected PLCs (#792, #799).
+* Support LOGO reconnection, heartbeat, rate-limiting, and connection callback
+  options while preserving explicit TSAPs (#875).
+* Add an experimental serial PPI client for S7-200 PLCs, including V-memory,
+  system-memory, I/O, counter, and timer access (#824).
+
+### Bug fixes
+
+* Parse structured and flat SZL 0x0011 records correctly when reading order
+  codes and firmware versions from S7-1500 and classic PLCs (#783, #789).
+* Dispatch server callbacks and queue protocol events for client requests
+  instead of reporting only the server start event (#853, #856).
+* Validate classic S7 TPKT bounds and COTP Class 0 headers in synchronous and
+  asynchronous clients (#874).
+* Reject incomplete reads and mismatched or missing read/write
+  acknowledgements (#874).
+* Size read/write chunks in whole elements and preserve ctypes write
+  datatypes; correct BIT lengths and timer/counter index addressing (#874).
+* Validate `write_multi_vars()` inputs consistently and preserve each item's
+  declared datatype (#855, #874).
+* Echo the calling and called TSAP values in server connection confirmations,
+  and restart the receive deadline after each complete TPKT header (#893).
+* Return S7 item errors for reads from unregistered server areas or addresses
+  outside registered memory instead of returning fabricated data (#896).
 
 3.1.2
 -----
@@ -166,7 +159,6 @@ Feature and bug fix release for the pure Python S7 communication library.
 
 ### Thanks
 
-* [@bonk-dev](https://github.com/bonk-dev) — [HarpoS7](https://github.com/bonk-dev/HarpoS7): the session authentication implementation in `s7commplus/session_auth/` is a Python port of HarpoS7 (MIT license, see `s7commplus/session_auth/LICENSE-HarpoS7`)
 * [@hs2bws-hash](https://github.com/hs2bws-hash) — extensive real PLC testing of Partner BSend/BRecv (#668)
 * [@QuakeString](https://github.com/QuakeString) — read optimizer inspiration via python-snap7-optimized fork
 

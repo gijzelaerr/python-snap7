@@ -34,9 +34,9 @@ class TestPLCLoggerAdapter:
     def test_update_context_partial(self) -> None:
         base = logging.getLogger("test.partial")
         adapter = PLCLoggerAdapter(base, plc_host="1.2.3.4", rack=0, slot=1)
-        adapter.update_context(protocol="s7commplus")
+        adapter.update_context(protocol="classic-s7")
         assert adapter.extra is not None
-        assert adapter.extra.get("plc_protocol") == "s7commplus"
+        assert adapter.extra.get("plc_protocol") == "classic-s7"
         # Host/rack/slot unchanged
         assert adapter._prefix == "[1.2.3.4 R0/S1]"
 

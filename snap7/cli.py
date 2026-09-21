@@ -15,9 +15,8 @@ from typing import Optional
 
 try:
     import click
-except ImportError:
-    print("CLI dependencies not installed. Try: pip install python-snap7[cli]")
-    raise
+except ImportError as exc:
+    raise ImportError("CLI dependencies not installed. Install them with: pip install python-snap7[cli]") from exc
 
 from snap7 import __version__
 from snap7.client import Client

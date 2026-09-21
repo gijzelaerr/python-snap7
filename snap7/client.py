@@ -1,9 +1,7 @@
-"""
-Legacy S7 client implementation.
+"""Synchronous client for the classic S7 protocol.
 
-Pure Python implementation of the classic S7 protocol. For new projects,
-use ``s7.Client`` instead, which supports all PLC models and
-automatically selects the best protocol.
+``s7.Client`` and ``snap7.Client`` expose this same implementation. The
+``s7`` import name is recommended for new projects.
 """
 
 import copy
@@ -13,6 +11,7 @@ import struct
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from typing import List, Any, Optional, Tuple, Union, Callable, cast
 from datetime import datetime
 from ctypes import (
@@ -270,12 +269,10 @@ class _OptimizationPlan:
 
 
 class Client(ClientMixin):
-    """
-    Legacy S7 client for classic PUT/GET communication.
+    """Synchronous client for classic S7 communication.
 
     Supports S7-300, S7-400, S7-1200 and S7-1500 PLCs via the classic S7
-    protocol. For new projects, use ``s7.Client`` instead, which
-    automatically selects the best protocol for any supported PLC.
+    protocol. S7-1200 and S7-1500 access requires PUT/GET to be enabled.
 
     Examples:
         >>> from s7 import Client
@@ -859,9 +856,7 @@ class Client(ClientMixin):
         """
         resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
         if resolved.is_symbolic:
-            raise NotImplementedError(
-                "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
-            )
+            raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
         data = self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, resolved.size)
         return _decode_tag(resolved, bytearray(data), encoding=encoding)
 
@@ -878,9 +873,7 @@ class Client(ClientMixin):
         """
         resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
         if resolved.is_symbolic:
-            raise NotImplementedError(
-                "Symbolic (LID-based) tag access requires S7CommPlus. Use s7.Client instead of snap7.Client."
-            )
+            raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
         size = resolved.size
         buf = bytearray(size)
         # For BOOL writes, we need the current byte to preserve other bits
@@ -890,14 +883,14 @@ class Client(ClientMixin):
         _encode_tag(resolved, buf, value, encoding=encoding)
         return self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
 
-    def read_tags(self, tags: "list[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
+    def read_tags(self, tags: "Sequence[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
         """Read multiple tags in a single optimized request.
 
         Uses the multi-variable read optimizer when available to batch
         reads into minimal PDU exchanges.
 
         Args:
-            tags: List of :class:`~snap7.tags.Tag` instances or address strings.
+            tags: Sequence of :class:`~snap7.tags.Tag` instances or address strings.
             encoding: Character encoding for STRING/FSTRING values (default ``"latin-1"``).
 
         Returns:

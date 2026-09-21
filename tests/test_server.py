@@ -5,6 +5,7 @@ import unittest
 from ctypes import c_char
 from datetime import datetime
 from threading import Thread
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -142,6 +143,7 @@ class TestServer(unittest.TestCase):
 
         events = [first_event]
         while event := self.server.pick_event():
+            assert isinstance(event, SrvEvent)
             events.append(event)
         self.assertEqual(len(events), 1024)
 
@@ -962,7 +964,7 @@ class TestHandshakeLogging(unittest.TestCase):
             cls.server.stop()
             cls.server.destroy()
 
-    def _wait_for_record(self, logs, fragment: str, timeout: float = 10.0) -> None:
+    def _wait_for_record(self, logs: Any, fragment: str, timeout: float = 10.0) -> None:
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             if any(fragment in record.getMessage() for record in logs.records):
@@ -970,7 +972,7 @@ class TestHandshakeLogging(unittest.TestCase):
             time.sleep(0.02)
         self.fail(f"log containing {fragment!r} did not appear, got: {[r.getMessage() for r in logs.records]}")
 
-    def _assert_no_warnings(self, logs) -> None:
+    def _assert_no_warnings(self, logs: Any) -> None:
         warnings = [r.getMessage() for r in logs.records if r.levelno >= logging.WARNING]
         self.assertEqual(warnings, [])
 

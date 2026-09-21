@@ -1,101 +1,56 @@
 PLC Support Matrix
 ==================
 
-This page documents which Siemens PLC families are supported by python-snap7,
-the communication protocols they use, and any configuration requirements.
+python-snap7 supports PLCs that expose the classic S7 protocol. Newer
+controllers require PUT/GET access to be enabled in TIA Portal.
 
 Supported PLCs
 --------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 10 10 10 10 15 25
+   :widths: 25 15 20 40
 
    * - PLC Family
      - Introduced
-     - S7 (classic)
-     - S7CommPlus V1
-     - S7CommPlus V2/V3
-     - python-snap7 support
+     - S7 support
      - Notes
    * - S7-300
      - ~1994
-     - Yes
-     - No
-     - No
-     - **Full**
+     - Full
      - Works out of the box with ``s7.Client``.
    * - S7-400
      - ~1996
-     - Yes
-     - No
-     - No
-     - **Full**
+     - Full
      - Works out of the box with ``s7.Client``.
-   * - S7-1200 (FW ≤3)
+   * - S7-1200
      - 2009
-     - Yes
-     - No
-     - No
-     - **Full**
-     - Use ``s7.Client`` with PUT/GET enabled in TIA Portal.
-   * - S7-1200 (FW 4+)
-     - ~2014
-     - Yes
-     - Yes
-     - No
-     - **Full**
-     - Use ``s7commplus.Client`` (S7CommPlus V1) or ``s7.Client`` (PUT/GET).
-   * - S7-1500 (FW 1.x)
+     - PUT/GET
+     - Enable PUT/GET in TIA Portal.
+   * - S7-1500
      - 2012
-     - PUT/GET only
-     - Yes
-     - No
-     - **Full**
-     - Use ``s7commplus.Client`` (S7CommPlus V1) or ``s7.Client`` (PUT/GET).
-   * - S7-1500 (FW 2.x)
-     - ~2016
-     - PUT/GET only
-     - No
-     - V2
-     - **Full**
-     - Use ``s7commplus.Client`` with TLS, or ``s7.Client`` (PUT/GET).
-   * - S7-1500 (FW 3.x+)
-     - ~2022
-     - PUT/GET only
-     - No
-     - V3
-     - **Full**
-     - Use ``s7commplus.Client`` with TLS, or ``s7.Client`` (PUT/GET).
+     - PUT/GET
+     - Enable PUT/GET in TIA Portal.
    * - S7-1500R/H
      - ~2019
-     - No
-     - No
-     - V2/V3
-     - **Not supported**
-     - Redundant CPUs; no classic S7 fallback available.
+     - Not supported
+     - Redundant CPUs have no classic S7 fallback.
    * - ET 200SP CPU
      - ~2014
-     - PUT/GET only
-     - Yes
-     - Yes
-     - **PUT/GET only**
-     - Same behavior as S7-1500 with matching firmware.
+     - PUT/GET
+     - Same behavior as an S7-1500 with matching firmware.
    * - S7-200 SMART
      - ~2012
-     - Subset
-     - No
-     - No
-     - **Partial**
-     - Basic read/write works. Some advanced functions may not be available.
+     - Partial
+     - Basic Ethernet read/write works; advanced functions may be unavailable.
+   * - S7-200 (serial PPI)
+     - ~1994
+     - Experimental
+     - Use :class:`~snap7.ppi.PPIClient`; see :doc:`ppi` for current limits.
    * - LOGO! 8
      - ~2014
-     - Subset
-     - No
-     - No
-     - **Full**
+     - Full
      - Use the :class:`~snap7.logo.Logo` class.
-
 
 Enabling PUT/GET Access
 -----------------------
@@ -104,52 +59,19 @@ For S7-1200 and S7-1500 PLCs, classic S7 protocol access requires the
 **PUT/GET** option to be enabled. See :doc:`tia-portal-config` for
 step-by-step instructions.
 
-When using ``s7commplus.Client``, the S7CommPlus protocol does **not** require
-PUT/GET to be enabled. PUT/GET is only needed when using ``s7.Client``
-(legacy protocol).
-
 .. warning::
 
    PUT/GET access provides unauthenticated read/write access to PLC memory.
    Only enable this on networks that are properly segmented and secured.
 
+Feature Availability
+--------------------
 
-Protocol Overview
------------------
-
-Siemens has evolved their PLC communication protocols over time:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 15 15 50
-
-   * - Protocol
-     - Encryption
-     - Authentication
-     - Used by
-   * - S7 (classic)
-     - None
-     - None
-     - S7-300, S7-400, S7-1200, S7-1500 (PUT/GET mode)
-   * - S7CommPlus V1
-     - None
-     - Challenge-response
-     - S7-1200 FW 4+, S7-1500 FW 1.x
-   * - S7CommPlus V2
-     - TLS 1.3
-     - Challenge-response + TLS
-     - S7-1500 FW 2.x
-   * - S7CommPlus V3
-     - TLS
-     - Certificate-based
-     - S7-1500 FW 3.x+
-
-python-snap7 implements the **classic S7 protocol** (via ``s7``) and
-**S7CommPlus V1, V2, and V3** (via ``s7commplus``). The classic protocol
-remains available on most PLC families via the PUT/GET mechanism. S7CommPlus V4
-is not yet supported; for PLCs that require it, consider using OPC UA as an
-alternative.
-
+The matrix describes transport-level access, not a guarantee that every client
+method is implemented by every CPU. Block transfer, CPU control, forcing,
+passwords, diagnostic SZLs, and clock operations vary by model, firmware, and
+protection level. See :doc:`advanced` and handle
+:class:`~snap7.error.S7ProtocolError` when probing optional PLC capabilities.
 
 Alternatives for Unsupported PLCs
 ---------------------------------

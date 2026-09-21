@@ -201,9 +201,9 @@ LINT (8 bytes, signed -9223372036854775808 to 9223372036854775807)
    value = util.get_lint(data, 0)
    print(f"LINT = {value}")
 
-   # Write (no set_lint helper -- use struct directly)
-   import struct
-   data = bytearray(struct.pack(">q", 123456789012345))
+   # Write
+   data = bytearray(8)
+   util.set_lint(data, 0, 123456789012345)
    client.db_write(1, 60, data)
 
 ULINT (8 bytes, unsigned 0--18446744073709551615)
@@ -218,9 +218,9 @@ ULINT (8 bytes, unsigned 0--18446744073709551615)
    value = util.get_ulint(data, 0)
    print(f"ULINT = {value}")
 
-   # Write (no set_ulint helper -- use struct directly)
-   import struct
-   data = bytearray(struct.pack(">Q", 9876543210))
+   # Write
+   data = bytearray(8)
+   util.set_ulint(data, 0, 9876543210)
    client.db_write(1, 68, data)
 
 REAL (4 bytes, IEEE 754 float)

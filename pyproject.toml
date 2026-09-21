@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-snap7"
-version = "3.0.0"
+version = "3.2.0"
 description = "Pure Python S7 communication library for Siemens PLCs"
 readme = "README.rst"
 authors = [
@@ -65,6 +65,10 @@ markers =[
     "conformance: protocol conformance tests"
     ]
 asyncio_mode = "auto"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
 
 [tool.mypy]
 ignore_missing_imports = true

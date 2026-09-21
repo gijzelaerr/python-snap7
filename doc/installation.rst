@@ -1,18 +1,46 @@
 Installation
 ============
 
-python-snap7 is a pure Python package with no native dependencies. Install it
-using pip::
+The core python-snap7 package is pure Python and has no runtime dependencies.
+Install it with pip::
 
   $ pip install python-snap7
 
-If you want to use the CLI interface for running an emulator, install it with::
+Optional features
+-----------------
 
-  $ pip install "python-snap7[cli]"
+Install only the extras needed by your application:
 
-That's it! No native libraries or platform-specific setup is required. This works
-on any platform that supports Python 3.10+, including ARM, Alpine Linux, and other
-environments where the old C library was hard to install.
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 50
+
+   * - Extra
+     - Install command
+     - Purpose
+   * - ``cli``
+     - ``pip install "python-snap7[cli]"``
+     - The ``s7`` command for reading, writing, inspecting, and serving.
+   * - ``demo``
+     - ``pip install "python-snap7[demo]"``
+     - Live demo server with host metrics and terminal display.
+   * - ``discovery``
+     - ``pip install "python-snap7[discovery]"``
+     - PROFINET DCP device discovery.
+   * - ``ppi``
+     - ``pip install "python-snap7[ppi]"``
+     - Experimental S7-200 serial PPI support via pySerial.
+   * - ``doc``
+     - ``pip install "python-snap7[doc]"``
+     - Sphinx and the theme used to build this documentation.
+
+Extras can be combined::
+
+  $ pip install "python-snap7[cli,discovery,ppi]"
+
+No Snap7 shared library or platform-specific binary is required. Optional
+dependencies may have their own platform requirements; for example, PPI needs a
+serial interface and discovery needs access to a supported network interface.
 
 Upgrading from 2.x
 -------------------
@@ -29,4 +57,4 @@ If you experience issues after upgrading:
 
      $ pip install "python-snap7<3"
 
-   The latest stable pre-3.0 release is version 2.1.0.
+   The latest stable pre-3.0 release is version 2.1.1.

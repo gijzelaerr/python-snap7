@@ -32,6 +32,19 @@ Start an emulated S7 PLC server with default values::
 
    Port the server will listen on (default: 1102).
 
+demo
+----
+
+Start a live test server that exposes host CPU, memory, disk, and network
+metrics in DB1 and writable controls in DB2. Install the ``demo`` extra first::
+
+    pip install "python-snap7[demo]"
+    s7 demo --port 10102
+    s7 demo --plain
+
+Use ``--refresh`` to set the sampling interval in seconds. This command is a
+demonstration and test tool, not a production monitoring service.
+
 read
 ----
 

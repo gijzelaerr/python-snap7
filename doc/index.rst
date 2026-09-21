@@ -16,6 +16,8 @@ Welcome to python-snap7's documentation!
    connecting
    reading-writing
    multi-variable
+   advanced
+   ppi
    server
    cli
    tia-portal-config
@@ -43,10 +45,15 @@ Welcome to python-snap7's documentation!
    API/server
    API/partner
    API/logo
+   API/ppi
    API/util
    API/tags
    API/optimizer
+   API/rate-limiter
    API/log
+   API/szl
+   API/discovery
+   API/demo
    API/type
    API/error
 
@@ -55,9 +62,9 @@ Welcome to python-snap7's documentation!
    :caption: Internals
 
    API/connection
+   API/client-base
    API/s7protocol
    API/datatypes
-   API/discovery
 
 
 Indices and tables

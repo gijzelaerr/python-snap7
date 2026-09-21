@@ -1,9 +1,7 @@
-"""
-Legacy S7 server implementation.
+"""Server implementation for the classic S7 protocol.
 
-Provides a complete S7 server emulator for the classic S7 protocol. For new
-projects, use ``s7.Server`` instead, which supports both legacy S7 and
-S7CommPlus clients.
+Provides a complete server emulator for the classic S7 protocol. For new
+projects, use ``s7.Server`` instead.
 """
 
 import logging
@@ -57,8 +55,7 @@ class CPUState(IntEnum):
 
 
 class Server:
-    """
-    Legacy S7 server implementation.
+    """Classic S7 server implementation.
 
     Emulates a Siemens S7 PLC for testing and development purposes.
     For new projects, use ``s7.Server`` instead.
