@@ -1,5 +1,6 @@
 import logging
 import socket
+import struct
 import time
 import unittest
 from ctypes import c_char
@@ -522,6 +523,8 @@ class TestServerBlockOperations(unittest.TestCase):
         cls.server.register_area(SrvArea.DB, 1, bytearray(100))
         cls.server.register_area(SrvArea.DB, 2, bytearray(200))
         cls.server.register_area(SrvArea.DB, 3, bytearray(50))
+        cls.server.register_area(SrvArea.DB, 4, bytearray(600))
+        cls.server.register_area(SrvArea.DB, 5, bytearray(2))
         # Also register other area types
         cls.server.register_area(SrvArea.MK, 0, bytearray(64))
         cls.server.register_area(SrvArea.PA, 0, bytearray(64))
@@ -597,15 +600,41 @@ class TestServerBlockOperations(unittest.TestCase):
 
         # Upload the block
         block_data = self.client.upload(1)
-        self.assertGreater(len(block_data), 0)
-        # Verify the first bytes match what we wrote
+        self.assertEqual(len(block_data), 100)
         self.assertEqual(block_data[:10], test_data)
 
+    def test_upload_uses_requested_block_number(self) -> None:
+        """Uploading DB2 must not silently return the DB1 contents."""
+        db1_data = bytearray([0x11] * 100)
+        db2_data = bytearray([0x22] * 200)
+        self.client.db_write(1, 0, db1_data)
+        self.client.db_write(2, 0, db2_data)
+        self.assertEqual(self.client.upload(2), db2_data)
+
+    def test_upload_collects_all_fragments(self) -> None:
+        """Blocks larger than one response PDU must be returned in full."""
+        expected = bytearray(i % 251 for i in range(600))
+        self.client.db_write(4, 0, expected)
+        self.assertEqual(self.client.upload(4), expected)
+
+    def test_upload_short_block(self) -> None:
+        """The compact upload header must not consume a short DB payload."""
+        expected = bytearray((0xDE, 0xAD))
+        self.client.db_write(5, 0, expected)
+        self.assertEqual(self.client.upload(5), expected)
+
     def test_full_upload(self) -> None:
-        """full_upload should return block data and its size."""
+        """full_upload should preserve the PLC's compact block header."""
+        expected = bytearray(range(10))
+        self.client.db_write(1, 0, expected)
         data, size = self.client.full_upload(Block.DB, 1)
-        self.assertGreater(size, 0)
+        self.assertEqual(size, 136)
         self.assertEqual(len(data), size)
+        self.assertEqual(data[2], 0x01)
+        self.assertEqual(data[4:8], bytes((0x05, 0x0A, 0x00, 0x01)))
+        self.assertEqual(struct.unpack(">I", data[8:12])[0], size)
+        self.assertEqual(struct.unpack(">H", data[34:36])[0], 100)
+        self.assertEqual(data[36:46], expected)
 
     # ------------------------------------------------------------------
     # download (block transfer: REQUEST_DOWNLOAD -> DOWNLOAD_BLOCK -> DOWNLOAD_ENDED)
@@ -1073,12 +1102,9 @@ class TestServerErrorScenarios(unittest.TestCase):
             self.client.get_block_info(Block.DB, 999)
 
     def test_upload_nonexistent_block(self) -> None:
-        """Uploading a non-existent block returns empty data (server has no data for that block)."""
-        # The server defaults to block_num=1 for unknown blocks due to parsing fallback,
-        # so the upload still completes but returns the default block's data.
-        # We just verify the operation doesn't crash.
-        data = self.client.upload(999)
-        self.assertIsInstance(data, bytearray)
+        """Uploading a non-existent block must return a PLC error."""
+        with self.assertRaises(S7ProtocolError):
+            self.client.upload(999)
 
 
 if __name__ == "__main__":
