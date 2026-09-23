@@ -94,6 +94,8 @@ class Server:
         # Memory areas
         self.memory_areas: Dict[Tuple[S7Area, int], bytearray] = {}
         self.area_locks: Dict[Tuple[S7Area, int], threading.Lock] = {}
+        self._upload_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
+        self._download_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
 
         # Protocol handler
         self.protocol = S7Protocol()
@@ -733,6 +735,10 @@ class Server:
                     # Send response
                     if response_data:
                         connection.send_data(response_data)
+                    context = self._download_contexts.get(address)
+                    if context is not None and context["phase"] == "start_ack":
+                        context["phase"] = "awaiting_fragment"
+                        connection.send_data(self._build_download_service_request(context, S7Function.DOWNLOAD_BLOCK))
 
                 except socket.timeout:
                     continue
@@ -758,10 +764,8 @@ class Server:
                     self.clients.remove(current_thread)
                 self.client_count = max(0, self.client_count - 1)
 
-            if hasattr(self, "_download_contexts"):
-                self._download_contexts.pop(address, None)
-            if hasattr(self, "_upload_contexts"):
-                self._upload_contexts.pop(address, None)
+            self._download_contexts.pop(address, None)
+            self._upload_contexts.pop(address, None)
 
             self._emit_event(EVC_CLIENT_DISCONNECTED, sender=self._event_sender(address))
             logger.info(f"Client {address} handler finished")
@@ -778,8 +782,13 @@ class Server:
             Response PDU data or None
         """
         try:
+            if len(request_data) >= 2 and request_data[1] == S7PDUType.ACK_DATA:
+                return self._handle_download_response(request_data, client_address)
             # Parse S7 request
             request = self._parse_request(request_data)
+
+            if client_address in self._download_contexts:
+                return self._build_error_response(request, 0x8104)
 
             # Check PDU type first
             pdu_type = request.get("pdu_type", S7PDUType.REQUEST)
@@ -815,9 +824,9 @@ class Server:
             elif function_code == S7Function.REQUEST_DOWNLOAD:
                 return self._handle_request_download(request, client_address)
             elif function_code == S7Function.DOWNLOAD_BLOCK:
-                return self._handle_download_block(request, client_address)
+                return self._build_error_response(request, 0x8104)
             elif function_code == S7Function.DOWNLOAD_ENDED:
-                return self._handle_download_ended(request, client_address)
+                return self._build_error_response(request, 0x8104)
             else:
                 logger.warning(f"Unsupported function code: {function_code}")
                 return self._build_error_response(request, 0x8001)  # Function not supported
@@ -1902,23 +1911,34 @@ class Server:
         data_section = request.get("data", {})
         raw_data = data_section.get("data", b"")
 
-        if len(raw_data) >= 8:
+        if len(raw_data) != 10 or raw_data[:2] != b"\x00\x19":
+            return self._build_userdata_error_response(request, 0x8104)
 
-            def from_bcd(value: int) -> int:
-                return ((value >> 4) * 10) + (value & 0x0F)
+        def from_bcd(value: int) -> int:
+            if value >> 4 > 9 or value & 0x0F > 9:
+                raise ValueError("Invalid BCD digit")
+            return ((value >> 4) * 10) + (value & 0x0F)
 
-            year = from_bcd(raw_data[1])
-            month = from_bcd(raw_data[2])
-            day = from_bcd(raw_data[3])
-            hour = from_bcd(raw_data[4])
-            minute = from_bcd(raw_data[5])
-            second = from_bcd(raw_data[6])
+        try:
+            from datetime import datetime
 
-            logger.info(
-                f"Set clock from {client_address}: 20{year:02d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
+            millisecond = from_bcd(raw_data[8]) * 10 + (raw_data[9] >> 4)
+            if millisecond > 999 or not 1 <= (raw_data[9] & 0x0F) <= 7:
+                raise ValueError("Invalid clock millisecond or weekday")
+            year = from_bcd(raw_data[2])
+            timestamp = datetime(
+                2000 + year if year < 90 else 1900 + year,
+                from_bcd(raw_data[3]),
+                from_bcd(raw_data[4]),
+                from_bcd(raw_data[5]),
+                from_bcd(raw_data[6]),
+                from_bcd(raw_data[7]),
+                millisecond * 1000,
             )
-        else:
-            logger.debug(f"Set clock from {client_address}: no time data provided")
+        except ValueError:
+            return self._build_userdata_error_response(request, 0x8104)
+
+        logger.info(f"Set clock from {client_address}: {timestamp}")
 
         # Return success (empty response data)
         return self._build_userdata_success_response(request, userdata_params, b"")
@@ -2273,8 +2293,6 @@ class Server:
             block_length = len(self.memory_areas[area_key]) + 36
 
             # Store upload context for this client
-            if not hasattr(self, "_upload_contexts"):
-                self._upload_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
             self._upload_contexts[client_address] = {
                 "upload_id": upload_id,
                 "block_type": block_type,
@@ -2318,7 +2336,7 @@ class Server:
         """
         try:
             # Get upload context for this client
-            if not hasattr(self, "_upload_contexts") or client_address not in self._upload_contexts:
+            if client_address not in self._upload_contexts:
                 logger.warning(f"Upload request without start_upload from {client_address}")
                 return self._build_error_response(request, 0x8104)
 
@@ -2395,7 +2413,7 @@ class Server:
             Response PDU acknowledging end of upload
         """
         try:
-            if not hasattr(self, "_upload_contexts") or client_address not in self._upload_contexts:
+            if client_address not in self._upload_contexts:
                 return self._build_error_response(request, 0x8104)
             ctx = self._upload_contexts[client_address]
             raw_params = request.get("raw_parameters", b"")
@@ -2406,7 +2424,7 @@ class Server:
                 or ctx["offset"] < len(self.memory_areas[(S7Area.DB, ctx["block_num"])])
             ):
                 return self._build_error_response(request, 0x8104)
-            del self._upload_contexts[client_address]
+            self._upload_contexts.pop(client_address, None)
 
             logger.info(f"End upload from {client_address}")
 
@@ -2445,20 +2463,22 @@ class Server:
         try:
             raw_params = request.get("raw_parameters", b"")
 
-            # Parse and validate the target before allocating transfer state.
-            if len(raw_params) < 6:
+            if (
+                len(raw_params) != 32
+                or raw_params[:3] != bytes((S7Function.REQUEST_DOWNLOAD, 0, 1))
+                or raw_params[3:8] != bytes(5)
+                or raw_params[8:11] != b"\x09_0"
+                or raw_params[17:20] != b"P\x0d1"
+                or request.get("data_length") != 0
+                or client_address in self._download_contexts
+            ):
                 return self._build_error_response(request, 0x8104)
-
-            addr_len = raw_params[4]
-            address_end = 5 + addr_len
-            if addr_len < 7 or len(raw_params) < address_end:
-                return self._build_error_response(request, 0x8104)
-
-            block_addr = raw_params[5:address_end]
             try:
-                block_type = int(block_addr[0:2], 16)
-                block_num = int(block_addr[2:7])
-            except (ValueError, IndexError):
+                block_type = raw_params[11]
+                block_num = int(raw_params[12:17].decode("ascii"))
+                declared_size = int(raw_params[20:26].decode("ascii"))
+                mc7_size = int(raw_params[26:32].decode("ascii"))
+            except (UnicodeDecodeError, ValueError):
                 return self._build_error_response(request, 0x8104)
 
             logger.info(f"Request download from {client_address}: type={block_type:#02x}, num={block_num}")
@@ -2473,35 +2493,20 @@ class Server:
 
             area_capacity = len(self.memory_areas[area_key])
 
-            # The request includes an ASCII block length. Reject an oversized
-            # transfer early, while still enforcing the limit on every chunk.
-            if len(raw_params) <= address_end:
-                return self._build_error_response(request, 0x8104)
-
-            length_len = raw_params[address_end]
-            length_start = address_end + 1
-            length_end = length_start + length_len
-            if not length_len or len(raw_params) < length_end:
-                return self._build_error_response(request, 0x8104)
-
-            try:
-                declared_size = int(raw_params[length_start:length_end])
-            except ValueError:
-                return self._build_error_response(request, 0x8104)
-            if declared_size < 0 or declared_size > area_capacity:
+            if declared_size > area_capacity or mc7_size > declared_size:
                 logger.warning(
                     f"Download rejected: declared size {declared_size} outside DB{block_num} capacity 0..{area_capacity}"
                 )
                 return self._build_error_response(request, 0x8104)
 
             # Store download context
-            if not hasattr(self, "_download_contexts"):
-                self._download_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
             self._download_contexts[client_address] = {
                 "block_type": block_type,
                 "block_num": block_num,
                 "data": bytearray(),
                 "max_size": declared_size,
+                "phase": "start_ack",
+                "sequence": request["sequence"],
             }
 
             # Build response acknowledging download
@@ -2525,125 +2530,61 @@ class Server:
             logger.error(f"Error handling request download: {e}")
             return self._build_error_response(request, 0x8000)
 
-    def _handle_download_block(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
-        """
-        Handle download block - receive block data.
+    @staticmethod
+    def _build_download_service_request(context: Dict[str, Any], function: int) -> bytes:
+        """Ask the client for the next block fragment or the final acknowledgement."""
+        context["sequence"] = (context["sequence"] + 1) & 0xFFFF
+        address = b"_0" + bytes((context["block_type"],)) + f"{context['block_num']:05d}".encode("ascii") + b"P"
+        params = bytes((function,)) + bytes(7) + b"\x09" + address
+        return struct.pack(">BBHHHH", 0x32, S7PDUType.REQUEST, 0, context["sequence"], len(params), 0) + params
 
-        Args:
-            request: Parsed S7 request
-            client_address: Client address for logging
+    def _handle_download_response(self, pdu: bytes, client_address: Tuple[str, int]) -> Optional[bytes]:
+        """Advance a PLC-driven download after checking the client's ACK_DATA."""
+        context = self._download_contexts.get(client_address)
+        sequence = int.from_bytes(pdu[4:6], "big") if len(pdu) >= 6 else 0
+        request = {"sequence": sequence}
 
-        Returns:
-            Response PDU acknowledging data receipt
-        """
-        try:
-            # Get download context
-            if not hasattr(self, "_download_contexts") or client_address not in self._download_contexts:
-                logger.warning(f"Download block without request_download from {client_address}")
-                return self._build_error_response(request, 0x8104)
+        def reject() -> bytes:
+            self._download_contexts.pop(client_address, None)
+            return self._build_error_response(request, 0x8104)
 
-            ctx = self._download_contexts[client_address]
+        if context is None or len(pdu) < 12 or pdu[0:2] != bytes((0x32, S7PDUType.ACK_DATA)):
+            return reject()
+        _, _, _, _, param_len, data_len, error = struct.unpack(">BBHHHHH", pdu[:12])
+        if sequence != context["sequence"] or error != 0 or len(pdu) != 12 + param_len + data_len:
+            return reject()
+        params = pdu[12 : 12 + param_len]
+        data = pdu[12 + param_len :]
 
-            # Extract data from request
-            data_info = request.get("data", {})
-            block_data = data_info.get("data", b"")
+        if context["phase"] == "awaiting_end":
+            if params != bytes((S7Function.DOWNLOAD_ENDED,)) or data:
+                return reject()
+            area_key = (S7Area.DB, context["block_num"])
+            if area_key not in self.memory_areas or len(context["data"]) != context["max_size"]:
+                return reject()
+            with self.area_locks[area_key]:
+                self.memory_areas[area_key][: context["max_size"]] = context["data"]
+            self._download_contexts.pop(client_address, None)
+            return None
 
-            # Bound accumulated data by the pre-registered target area. The
-            # final storage copy is not the only allocation: this bytearray is
-            # grown for every DOWNLOAD_BLOCK request.
-            if len(ctx["data"]) + len(block_data) > ctx["max_size"]:
-                logger.warning(f"Download rejected: data exceeds target capacity {ctx['max_size']}")
-                del self._download_contexts[client_address]
-                return self._build_error_response(request, 0x8104)
-
-            ctx["data"].extend(block_data)
-
-            logger.info(f"Download block from {client_address}: received {len(block_data)} bytes")
-
-            # Build response
-            param_data = struct.pack(">B", S7Function.DOWNLOAD_BLOCK)
-
-            header = struct.pack(
-                ">BBHHHHBB",
-                0x32,  # Protocol ID
-                S7PDUType.ACK_DATA,  # PDU type
-                0x0000,  # Reserved
-                request["sequence"],  # Sequence
-                len(param_data),  # Parameter length
-                0x0000,  # Data length
-                0x00,  # Error class (success)
-                0x00,  # Error code (success)
-            )
-
-            return header + param_data
-
-        except Exception as e:
-            logger.error(f"Error handling download block: {e}")
-            return self._build_error_response(request, 0x8000)
-
-    def _handle_download_ended(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
-        """
-        Handle download ended - finalize block storage.
-
-        Args:
-            request: Parsed S7 request
-            client_address: Client address for logging
-
-        Returns:
-            Response PDU confirming download complete
-        """
-        try:
-            # Get download context
-            if not hasattr(self, "_download_contexts") or client_address not in self._download_contexts:
-                logger.warning(f"Download ended without download_block from {client_address}")
-                return self._build_error_response(request, 0x8104)
-
-            ctx = self._download_contexts[client_address]
-            block_type = ctx["block_type"]
-            block_num = ctx["block_num"]
-            block_data = ctx["data"]
-
-            # Store block data — only into pre-registered areas.
-            # Reject downloads to unknown areas to prevent unbounded memory
-            # allocation from attacker-controlled block numbers.
-            if block_type == 0x41:  # DB
-                area_key = (S7Area.DB, block_num)
-                if area_key in self.memory_areas:
-                    # Update existing area - copy data into existing area without resizing
-                    with self.area_locks[area_key]:
-                        existing_area = self.memory_areas[area_key]
-                        copy_len = min(len(block_data), len(existing_area))
-                        existing_area[0:copy_len] = block_data[0:copy_len]
-                else:
-                    logger.warning(f"Download rejected: area DB{block_num} not registered")
-                    del self._download_contexts[client_address]
-                    return self._build_error_response(request, 0x8104)
-
-            logger.info(f"Download ended from {client_address}: stored {len(block_data)} bytes to {block_type:#02x}:{block_num}")
-
-            # Clean up context
-            del self._download_contexts[client_address]
-
-            # Build response
-            param_data = struct.pack(">B", S7Function.DOWNLOAD_ENDED)
-
-            header = struct.pack(
-                ">BBHHHHBB",
-                0x32,  # Protocol ID
-                S7PDUType.ACK_DATA,  # PDU type
-                0x0000,  # Reserved
-                request["sequence"],  # Sequence
-                len(param_data),  # Parameter length
-                0x0000,  # Data length
-                0x00,  # Error class (success)
-                0x00,  # Error code (success)
-            )
-
-            return header + param_data
-
-        except Exception as e:
-            logger.error(f"Error handling download ended: {e}")
-            return self._build_error_response(request, 0x8000)
+        if context["phase"] != "awaiting_fragment" or len(params) != 2 or params[0] != S7Function.DOWNLOAD_BLOCK:
+            return reject()
+        if params[1] not in (0, 1) or len(data) < 4:
+            return reject()
+        length, marker = struct.unpack(">HH", data[:4])
+        payload = data[4:]
+        if marker != 0x00FB or length != len(payload) or len(payload) > 462:
+            return reject()
+        new_size = len(context["data"]) + len(payload)
+        if new_size > context["max_size"] or (params[1] == 0) != (new_size == context["max_size"]):
+            return reject()
+        if not payload and params[1] == 1:
+            return reject()
+        context["data"].extend(payload)
+        if params[1] == 0:
+            context["phase"] = "awaiting_end"
+            return self._build_download_service_request(context, S7Function.DOWNLOAD_ENDED)
+        return self._build_download_service_request(context, S7Function.DOWNLOAD_BLOCK)
 
     def __enter__(self) -> "Server":
         """Context manager entry."""

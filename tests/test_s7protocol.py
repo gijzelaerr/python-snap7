@@ -212,6 +212,12 @@ class TestUserDataParsing:
         assert resp["parameters"]["last_data_unit"] == 0x01
         assert resp["parameters"]["sequence_number"] == 0x05
 
+    @pytest.mark.parametrize("group,subfunction", [(3, 1), (4, 2)])
+    def test_userdata_rejects_response_for_different_operation(self, group: int, subfunction: int) -> None:
+        response = self.proto.parse_response(self._build_userdata_response(group=group, subfunction=subfunction))
+        with pytest.raises(S7ProtocolError, match="Unexpected USERDATA response"):
+            self.proto.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
+
 
 class TestUploadRequests:
     def setup_method(self) -> None:
@@ -227,6 +233,58 @@ class TestUploadRequests:
 
     def test_end_upload_request_matches_wire_layout(self) -> None:
         assert self.proto.build_end_upload_request(7).hex() == "320100000001000800001f00000000000007"
+
+
+class TestManagementAndDownloadVectors:
+    def setup_method(self) -> None:
+        self.proto = S7Protocol()
+
+    def test_list_data_blocks_request(self) -> None:
+        assert self.proto.build_list_blocks_of_type_request(0x41).hex() == "320700000001000800060001120411430200ff0900023041"
+
+    def test_get_db_info_request(self) -> None:
+        assert (
+            self.proto.build_get_block_info_request(0x41, 1).hex()
+            == "3207000000010008000c0001120411430300ff0900083041413030303031"
+        )
+
+    def test_set_clock_request(self) -> None:
+        from datetime import datetime, timezone
+
+        when = datetime(2026, 9, 23, 12, 34, 56, 789000, tzinfo=timezone.utc)
+        assert (
+            self.proto.build_set_clock_request(when).hex() == "3207000000010008000e0001120411470200ff09000a00192609231234567893"
+        )
+
+    def test_request_db_download(self) -> None:
+        assert self.proto.build_download_request(0x41, 1, bytes(64)).hex() == (
+            "320100000001002000001a00010000000000095f30413030303031500d31303030303634303030303238"
+        )
+
+    def test_download_response_vectors_and_pdu_boundary(self) -> None:
+        assert (
+            self.proto.build_download_fragment_response(1, False, b"\xde\xad").hex() == "3203000000010002000600001b01000200fbdead"
+        )
+        assert (
+            self.proto.build_download_fragment_response(1, True, b"\xbe\xef").hex() == "3203000000010002000600001b00000200fbbeef"
+        )
+        assert self.proto.build_download_ended_response(1).hex() == "3203000000010001000000001c"
+        assert len(self.proto.build_download_fragment_response(1, True, bytes(462))) == 480
+
+    @pytest.mark.parametrize("mutation", ["function", "address", "length", "trailing"])
+    def test_download_service_request_rejects_mutation(self, mutation: str) -> None:
+        address = b"_0A00001P"
+        packet = bytearray(struct.pack(">BBHHHH", 0x32, S7PDUType.REQUEST, 0, 7, 18, 0) + b"\x1b" + bytes(7) + b"\x09" + address)
+        if mutation == "function":
+            packet[10] = 0x1C
+        elif mutation == "address":
+            packet[-2] = ord("2")
+        elif mutation == "length":
+            packet[7] = 17
+        else:
+            packet += b"\x00"
+        with pytest.raises(S7ProtocolError):
+            self.proto.parse_download_service_request(bytes(packet), 0x1B, 1)
 
 
 class TestParseStartUploadResponse:
@@ -675,35 +733,24 @@ class TestSessionPassword:
         self.proto = S7Protocol()
 
     def test_encode_password_known_vector(self) -> None:
-        """Verify encoding against known Sharp7/rs-snap7 test vector.
-
-        'hello' (0x68 0x65 0x6C 0x6C 0x6F) XOR 0x55 each ->
-        (0x3D 0x30 0x39 0x39 0x3A), then rotate left 3 bits each ->
-        (0xE9 0x81 0xC9 0xC9 0xD1).  Remaining bytes are 0x00 XOR 0x55 = 0x55,
-        rotated left 3 = 0xAA.
-        """
-        encoded = S7Protocol.encode_password("hello")
+        """The encoded SECRET vector matches native Snap7 and the Lean corpus."""
+        encoded = S7Protocol.encode_password("SECRET")
         assert len(encoded) == 8
-        assert encoded == bytes([0xE9, 0x81, 0xC9, 0xC9, 0xD1, 0xAA, 0xAA, 0xAA])
+        assert encoded == bytes([6, 16, 16, 23, 0, 22, 117, 99])
 
     def test_encode_password_empty(self) -> None:
-        """Empty password encodes as 8 bytes of 0x00 XOR 0x55 rotated."""
-        encoded = S7Protocol.encode_password("")
-        # 0x00 XOR 0x55 = 0x55; 0x55 rotated left 3 = 0xAA
-        assert encoded == bytes([0xAA] * 8)
+        with pytest.raises(ValueError):
+            S7Protocol.encode_password("")
 
     def test_encode_password_max_length(self) -> None:
         """8-character password uses all 8 bytes."""
         encoded = S7Protocol.encode_password("ABCDEFGH")
         assert len(encoded) == 8
-        # Verify first byte: 'A' (0x41) XOR 0x55 = 0x14, rotated left 3 = 0xA0
-        assert encoded[0] == 0xA0
+        assert encoded[0] == (ord("A") ^ 0x55)
 
-    def test_encode_password_truncates_long(self) -> None:
-        """Passwords longer than 8 characters are truncated."""
-        enc_long = S7Protocol.encode_password("ABCDEFGHIJK")
-        enc_8 = S7Protocol.encode_password("ABCDEFGH")
-        assert enc_long == enc_8
+    def test_encode_password_rejects_long(self) -> None:
+        with pytest.raises(ValueError):
+            S7Protocol.encode_password("ABCDEFGHIJK")
 
     def test_set_session_password_request_structure(self) -> None:
         """Verify the set session password PDU structure."""
@@ -723,8 +770,7 @@ class TestSessionPassword:
         assert request[16] == 0x01
 
         # Data section starts after 10 + 8 = 18
-        # data[0] = 0x0A (return value for request)
-        assert request[18] == 0x0A
+        assert request[18:20] == b"\xff\x09"
         # data[2:4] = length = 8
         data_len = struct.unpack(">H", request[20:22])[0]
         assert data_len == 8
