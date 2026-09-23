@@ -999,6 +999,13 @@ class TestServerUserdataOperations(unittest.TestCase):
         result = self.client.set_plc_datetime(test_dt)
         self.assertEqual(result, 0)
 
+    def test_set_plc_datetime_rejects_malformed_payload(self) -> None:
+        request = self.server._parse_request(self.client.protocol.build_set_clock_request(datetime(2025, 6, 15, 12, 30, 45)))
+        request["data"]["data"] = b"\x00\x19\x25\x99\x15\x12\x30\x45\x00\x07"
+        response = self.server._handle_set_clock(request, request["parameters"], ("127.0.0.1", 12345))
+        with self.assertRaises(S7ProtocolError):
+            self.client.protocol.parse_response(response)
+
     def test_set_plc_system_datetime(self) -> None:
         """set_plc_system_datetime should succeed."""
         result = self.client.set_plc_system_datetime()

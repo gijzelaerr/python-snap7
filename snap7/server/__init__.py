@@ -1911,23 +1911,34 @@ class Server:
         data_section = request.get("data", {})
         raw_data = data_section.get("data", b"")
 
-        if len(raw_data) >= 8:
+        if len(raw_data) != 10 or raw_data[:2] != b"\x00\x19":
+            return self._build_userdata_error_response(request, 0x8104)
 
-            def from_bcd(value: int) -> int:
-                return ((value >> 4) * 10) + (value & 0x0F)
+        def from_bcd(value: int) -> int:
+            if value >> 4 > 9 or value & 0x0F > 9:
+                raise ValueError("Invalid BCD digit")
+            return ((value >> 4) * 10) + (value & 0x0F)
 
-            year = from_bcd(raw_data[1])
-            month = from_bcd(raw_data[2])
-            day = from_bcd(raw_data[3])
-            hour = from_bcd(raw_data[4])
-            minute = from_bcd(raw_data[5])
-            second = from_bcd(raw_data[6])
+        try:
+            from datetime import datetime
 
-            logger.info(
-                f"Set clock from {client_address}: 20{year:02d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}"
+            millisecond = from_bcd(raw_data[8]) * 10 + (raw_data[9] >> 4)
+            if millisecond > 999 or not 1 <= (raw_data[9] & 0x0F) <= 7:
+                raise ValueError("Invalid clock millisecond or weekday")
+            year = from_bcd(raw_data[2])
+            timestamp = datetime(
+                2000 + year if year < 90 else 1900 + year,
+                from_bcd(raw_data[3]),
+                from_bcd(raw_data[4]),
+                from_bcd(raw_data[5]),
+                from_bcd(raw_data[6]),
+                from_bcd(raw_data[7]),
+                millisecond * 1000,
             )
-        else:
-            logger.debug(f"Set clock from {client_address}: no time data provided")
+        except ValueError:
+            return self._build_userdata_error_response(request, 0x8104)
+
+        logger.info(f"Set clock from {client_address}: {timestamp}")
 
         # Return success (empty response data)
         return self._build_userdata_success_response(request, userdata_params, b"")
