@@ -232,6 +232,37 @@ class TestServerBeforeStart(unittest.TestCase):
 class TestServerRobustness(unittest.TestCase):
     """Test server robustness and edge cases."""
 
+    def test_upload_rejects_wrong_id_without_advancing_transfer(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(b"1234"))
+        address = ("127.0.0.1", 12345)
+
+        start = server._parse_request(server.protocol.build_start_upload_request(0x41, 2))
+        response = server._handle_start_upload(start, address)
+        self.assertEqual(response[10:12], b"\x00\x00")
+        upload_id = server._upload_contexts[address]["upload_id"]
+        wrong_id = (upload_id + 1) & 0xFF
+
+        wrong_upload = server._parse_request(server.protocol.build_upload_request(wrong_id))
+        response = server._handle_upload(wrong_upload, address)
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertEqual(server._upload_contexts[address]["offset"], 0)
+
+        upload = server._parse_request(server.protocol.build_upload_request(upload_id))
+        response = server._handle_upload(upload, address)
+        self.assertEqual(response[10:12], b"\x00\x00")
+        self.assertEqual(server._upload_contexts[address]["offset"], 4)
+
+        wrong_end = server._parse_request(server.protocol.build_end_upload_request(wrong_id))
+        response = server._handle_end_upload(wrong_end, address)
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertIn(address, server._upload_contexts)
+
+        end = server._parse_request(server.protocol.build_end_upload_request(upload_id))
+        response = server._handle_end_upload(end, address)
+        self.assertEqual(response[10:12], b"\x00\x00")
+        self.assertNotIn(address, server._upload_contexts)
+
     def test_max_clients_is_enforced(self) -> None:
         server = Server(max_clients=1)
         first = None
