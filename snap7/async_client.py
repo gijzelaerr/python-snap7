@@ -15,7 +15,7 @@ from types import TracebackType
 from datetime import datetime
 
 from .connection import TPDUSize
-from .s7protocol import S7Protocol, get_return_code_description
+from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_return_code_description
 from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin
@@ -687,6 +687,7 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_list_blocks_request()
         response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.LIST_ALL)
 
         data_info = response.get("data", {})
         return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
@@ -719,6 +720,7 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_list_blocks_of_type_request(type_code)
         response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE)
 
         data_info = response.get("data", {})
         return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
@@ -744,6 +746,7 @@ class AsyncClient(ClientMixin):
                 response_data = await conn.receive_data()
 
             response = self.protocol.parse_response(response_data)
+            self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE)
 
             data_info = response.get("data", {})
             return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
@@ -779,6 +782,7 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_get_block_info_request(type_code, db_number)
         response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.BLOCK_INFO)
 
         data_info = response.get("data", {})
         return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
@@ -819,18 +823,25 @@ class AsyncClient(ClientMixin):
         response = await self._send_receive(request)
 
         upload_info = self.protocol.parse_start_upload_response(response)
-        upload_id = upload_info.get("upload_id", 1)
+        upload_id = upload_info["upload_id"]
 
-        request = self.protocol.build_upload_request(upload_id)
-        response = await self._send_receive(request)
-
-        block_data = self.protocol.parse_upload_response(response)
+        block_data = bytearray()
+        for fragment_index in range(1000):
+            request = self.protocol.build_upload_request(upload_id)
+            response = await self._send_receive(request)
+            fragment, is_last = self.protocol.parse_upload_fragment(response, first_fragment=fragment_index == 0)
+            block_data.extend(fragment)
+            if is_last:
+                break
+        else:
+            raise S7ProtocolError("Upload response exceeded fragment limit")
 
         request = self.protocol.build_end_upload_request(upload_id)
         response = await self._send_receive(request)
+        self.protocol.check_end_upload_response(response)
 
         logger.info(f"Uploaded {len(block_data)} bytes from block {block_num}")
-        return bytearray(block_data)
+        return block_data
 
     async def download(self, data: bytearray, block_num: int = -1) -> int:
         """Download block to PLC."""
@@ -931,32 +942,27 @@ class AsyncClient(ClientMixin):
         response = await self._send_receive(request)
 
         upload_info = self.protocol.parse_start_upload_response(response)
-        upload_id = upload_info.get("upload_id", 1)
+        upload_id = upload_info["upload_id"]
 
-        request = self.protocol.build_upload_request(upload_id)
-        response = await self._send_receive(request)
-        block_data = self.protocol.parse_upload_response(response)
+        block_data = bytearray()
+        for fragment_index in range(1000):
+            request = self.protocol.build_upload_request(upload_id)
+            response = await self._send_receive(request)
+            fragment, is_last = self.protocol.parse_upload_fragment(
+                response, first_fragment=fragment_index == 0, include_block_header=True
+            )
+            block_data.extend(fragment)
+            if is_last:
+                break
+        else:
+            raise S7ProtocolError("Upload response exceeded fragment limit")
 
         request = self.protocol.build_end_upload_request(upload_id)
         response = await self._send_receive(request)
+        self.protocol.check_end_upload_response(response)
 
-        block_header = struct.pack(
-            ">BBHBBBBHH",
-            0x70,
-            block_type.value,
-            block_num,
-            0x00,
-            0x00,
-            0x00,
-            0x00,
-            len(block_data) + 14,
-            len(block_data),
-        )
-        block_footer = b"\x00" * 4
-        full_block = bytearray(block_header + block_data + block_footer)
-
-        logger.info(f"Full upload of block {block_type.name} {block_num}: {len(full_block)} bytes")
-        return full_block, len(full_block)
+        logger.info(f"Full upload of block {block_type.name} {block_num}: {len(block_data)} bytes")
+        return block_data, len(block_data)
 
     # ---------------------------------------------------------------
     # PLC control
@@ -994,6 +1000,7 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_get_clock_request()
         response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.TIME, S7UserDataSubfunction.GET_CLOCK)
         return self.protocol.parse_get_clock_response(response)
 
     async def set_plc_datetime(self, dt: datetime) -> int:
@@ -1002,7 +1009,8 @@ class AsyncClient(ClientMixin):
             raise S7ConnectionError("Not connected to PLC")
 
         request = self.protocol.build_set_clock_request(dt)
-        await self._send_receive(request)
+        response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK)
         logger.info(f"Set PLC datetime to {dt}")
         return 0
 
@@ -1032,6 +1040,7 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_read_szl_request(ssl_id, index)
         response = await self._send_receive(request)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
 
         data_info = response.get("data", {})
         return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
@@ -1058,6 +1067,7 @@ class AsyncClient(ClientMixin):
                 response_data = await conn.receive_data()
 
             response = self.protocol.parse_response(response_data)
+            self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
 
             data_info = response.get("data", {})
             return_code = data_info.get("return_code", 0xFF) if isinstance(data_info, dict) else 0xFF
@@ -1188,7 +1198,7 @@ class AsyncClient(ClientMixin):
         encoded = self.protocol.encode_password(password)
         request = self.protocol.build_set_session_password_request(encoded)
         response = await self._send_receive(request)
-        self.protocol.check_userdata_response(response)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.SET_SESSION_PASSWORD)
         logger.info("Session password set successfully")
         return 0
 
@@ -1209,7 +1219,7 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_clear_session_password_request()
         response = await self._send_receive(request)
-        self.protocol.check_userdata_response(response)
+        self.protocol.check_userdata_response(response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.CLEAR_SESSION_PASSWORD)
         logger.info("Session password cleared successfully")
         return 0
 

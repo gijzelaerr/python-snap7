@@ -8,7 +8,7 @@ These are differential tests, not a formal verification of Python.
 import struct
 from collections.abc import Callable
 from ctypes import POINTER, c_uint8, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -148,6 +148,24 @@ async def test_read_requires_matching_function_and_count(asynchronous: bool, par
     client = client_for(Peer(lambda _: (bytes.fromhex(params), bytes.fromhex(data))), asynchronous)
     with pytest.raises(S7ProtocolError):
         await read(client, Area.DB, 0, 1, WordLen.Byte)
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_get_plc_datetime_does_not_fabricate_time_on_userdata_error(asynchronous: bool) -> None:
+    client: Client | AsyncClient = AsyncClient() if asynchronous else Client()
+    response = {
+        "parameters": {"group": 7, "subfunction": 1, "error_code": 0x8104},
+        "data": {"return_code": 0xFF, "data": b""},
+    }
+    with (
+        patch.object(client, "get_connected", return_value=True),
+        patch.object(client, "_send_receive", return_value=response),
+        pytest.raises(S7ProtocolError, match="USERDATA request failed"),
+    ):
+        if isinstance(client, Client):
+            client.get_plc_datetime()
+        else:
+            await client.get_plc_datetime()
 
 
 @pytest.mark.parametrize(
