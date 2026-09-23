@@ -412,7 +412,7 @@ class TestServerRobustness(unittest.TestCase):
         response = server._handle_request_download(request, address)
 
         self.assertEqual(response[10:12], b"\x81\x04")
-        self.assertFalse(hasattr(server, "_download_contexts"))
+        self.assertEqual(server._download_contexts, {})
 
     def test_multiple_server_instances(self) -> None:
         """Test multiple server instances on different ports."""
