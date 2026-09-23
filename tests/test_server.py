@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from hypothesis import given, settings, strategies as st
 
 from snap7.client import Client
 from snap7.datatypes import S7Area, S7WordLen
@@ -268,17 +269,107 @@ class TestServerRobustness(unittest.TestCase):
 
         start_pdu = server.protocol.build_download_request(0x41, 2, b"1234")
         start_request = server._parse_request(start_pdu)
-        response = server._handle_request_download(start_request, address)
+        start_response = server._handle_request_download(start_request, address)
 
-        self.assertEqual(response[10:12], b"\x00\x00")
+        self.assertEqual(start_response[10:12], b"\x00\x00")
         self.assertEqual(server._download_contexts[address]["block_num"], 2)
         self.assertEqual(server._download_contexts[address]["max_size"], 4)
 
-        server._handle_download_block({"sequence": 1, "data": {"data": b"123"}}, address)
-        response = server._handle_download_block({"sequence": 2, "data": {"data": b"45"}}, address)
+        context = server._download_contexts[address]
+        context["phase"] = "awaiting_fragment"
+        server._build_download_service_request(context, 0x1B)
+        response = server._handle_download_response(
+            server.protocol.build_download_fragment_response(context["sequence"], False, b"123"), address
+        )
+        self.assertIsNotNone(response)
+        assert response is not None
+        self.assertEqual(response[10], 0x1B)
+        response = server._handle_download_response(
+            server.protocol.build_download_fragment_response(context["sequence"], True, b"45"), address
+        )
+        assert response is not None
 
         self.assertEqual(response[10:12], b"\x81\x04")
         self.assertNotIn(address, server._download_contexts)
+
+    def test_download_requires_final_ack_before_writing(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(4))
+        address = ("127.0.0.1", 12345)
+        request = server._parse_request(server.protocol.build_download_request(0x41, 2, b"1234"))
+        server._handle_request_download(request, address)
+        context = server._download_contexts[address]
+        context["phase"] = "awaiting_fragment"
+        server._build_download_service_request(context, 0x1B)
+        response = server._handle_download_response(
+            server.protocol.build_download_fragment_response(context["sequence"], True, b"1234"), address
+        )
+        assert response is not None
+        self.assertEqual(response[10], 0x1C)
+        self.assertEqual(server.memory_areas[(S7Area.DB, 2)], bytearray(4))
+        self.assertIsNone(
+            server._handle_download_response(server.protocol.build_download_ended_response(context["sequence"]), address)
+        )
+        self.assertEqual(server.memory_areas[(S7Area.DB, 2)], bytearray(b"1234"))
+
+    def test_download_rejects_invalid_fragment_state(self) -> None:
+        for mutation in ("sequence", "marker", "length", "early_end", "wrong_continuation"):
+            with self.subTest(mutation=mutation):
+                server = Server()
+                server.register_area(SrvArea.DB, 2, bytearray(4))
+                address = ("127.0.0.1", 12345)
+                request = server._parse_request(server.protocol.build_download_request(0x41, 2, b"1234"))
+                server._handle_request_download(request, address)
+                context = server._download_contexts[address]
+                context["phase"] = "awaiting_fragment"
+                server._build_download_service_request(context, 0x1B)
+                payload = b"12" if mutation == "early_end" else b"1234"
+                is_last = mutation != "wrong_continuation"
+                fragment = bytearray(server.protocol.build_download_fragment_response(context["sequence"], is_last, payload))
+                if mutation == "sequence":
+                    fragment[5] ^= 1
+                elif mutation == "marker":
+                    fragment[17] = 0xFA
+                elif mutation == "length":
+                    fragment[15] += 1
+                response = server._handle_download_response(bytes(fragment), address)
+                assert response is not None
+                self.assertEqual(response[10:12], b"\x81\x04")
+                self.assertNotIn(address, server._download_contexts)
+                self.assertEqual(server.memory_areas[(S7Area.DB, 2)], bytearray(4))
+
+    def test_download_rejects_fragment_above_pdu_limit(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(463))
+        address = ("127.0.0.1", 12345)
+        request = server._parse_request(server.protocol.build_download_request(0x41, 2, bytes(463)))
+        server._handle_request_download(request, address)
+        context = server._download_contexts[address]
+        context["phase"] = "awaiting_fragment"
+        server._build_download_service_request(context, 0x1B)
+        fragment = server.protocol.build_download_fragment_response(context["sequence"], True, bytes(463))
+        response = server._handle_download_response(fragment, address)
+        assert response is not None
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertEqual(server.memory_areas[(S7Area.DB, 2)], bytearray(463))
+
+    def test_download_rejects_wrong_final_reference(self) -> None:
+        server = Server()
+        server.register_area(SrvArea.DB, 2, bytearray(4))
+        address = ("127.0.0.1", 12345)
+        request = server._parse_request(server.protocol.build_download_request(0x41, 2, b"1234"))
+        server._handle_request_download(request, address)
+        context = server._download_contexts[address]
+        context["phase"] = "awaiting_fragment"
+        server._build_download_service_request(context, 0x1B)
+        server._handle_download_response(
+            server.protocol.build_download_fragment_response(context["sequence"], True, b"1234"), address
+        )
+        wrong_sequence = (context["sequence"] + 1) & 0xFFFF
+        response = server._handle_download_response(server.protocol.build_download_ended_response(wrong_sequence), address)
+        assert response is not None
+        self.assertEqual(response[10:12], b"\x81\x04")
+        self.assertEqual(server.memory_areas[(S7Area.DB, 2)], bytearray(4))
 
     def test_oversized_download_is_rejected_before_context_allocation(self) -> None:
         server = Server()
@@ -657,6 +748,12 @@ class TestServerBlockOperations(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(self.client.db_read(2, 0, 4), download_data)
+
+    def test_download_collects_multiple_fragments(self) -> None:
+        expected = bytearray(i % 251 for i in range(600))
+        self.client.pdu_length = 240
+        self.assertEqual(self.client.download(expected, block_num=4), 0)
+        self.assertEqual(self.client.db_read(4, 0, 600), expected)
 
 
 @pytest.mark.server
@@ -1105,6 +1202,42 @@ class TestServerErrorScenarios(unittest.TestCase):
         """Uploading a non-existent block must return a PLC error."""
         with self.assertRaises(S7ProtocolError):
             self.client.upload(999)
+
+
+@pytest.mark.server
+@settings(max_examples=40, deadline=None)
+@given(st.integers(min_value=0, max_value=1200))
+def test_download_fragment_coverage_and_commit_boundary(size: int) -> None:
+    """Every legal chunk plan preserves bytes and commits only after END_DOWNLOAD."""
+    server = Server()
+    original = bytearray([0xA5] * size)
+    server.register_area(SrvArea.DB, 7, original)
+    unchanged = bytes(original)
+    address = ("127.0.0.1", 12345)
+    expected = bytes(i % 251 for i in range(size))
+    request = server._parse_request(server.protocol.build_download_request(0x41, 7, expected))
+    response = server._handle_request_download(request, address)
+    assert response[10:12] == b"\x00\x00"
+    context = server._download_contexts[address]
+    context["phase"] = "awaiting_fragment"
+    server._build_download_service_request(context, 0x1B)
+
+    offset = 0
+    while True:
+        chunk = expected[offset : offset + 462]
+        offset += len(chunk)
+        is_last = offset == size
+        fragment = server.protocol.build_download_fragment_response(context["sequence"], is_last, chunk)
+        assert len(fragment) <= 480
+        next_request = server._handle_download_response(fragment, address)
+        assert bytes(server.memory_areas[(S7Area.DB, 7)]) == unchanged
+        assert next_request is not None
+        if is_last:
+            assert next_request[10] == 0x1C
+            break
+        assert next_request[10] == 0x1B
+    assert server._handle_download_response(server.protocol.build_download_ended_response(context["sequence"]), address) is None
+    assert server.memory_areas[(S7Area.DB, 7)] == expected
 
 
 if __name__ == "__main__":
