@@ -1335,6 +1335,10 @@ class Server:
 
             data_section = pdu[offset : offset + data_len]
             request["data"] = self._parse_data_section(data_section)
+            offset += data_len
+
+        if offset != len(pdu):
+            raise S7ProtocolError("S7 request contains trailing bytes")
 
         return request
 
@@ -2243,33 +2247,30 @@ class Server:
         try:
             raw_params = request.get("raw_parameters", b"")
 
-            # Parse block address from parameters
-            # Format: function + status + reserved + upload_id + block_addr_len + block_addr
-            block_type = 0x41  # Default to DB
-            block_num = 1
-
-            if len(raw_params) >= 10:
-                addr_len = raw_params[9]
-                if len(raw_params) >= 10 + addr_len:
-                    block_addr = raw_params[10 : 10 + addr_len]
-                    # Parse block address: type (2 hex) + num (5 digits) + filesystem
-                    try:
-                        block_type = int(block_addr[0:2], 16)
-                        block_num = int(block_addr[2:7])
-                    except (ValueError, IndexError):
-                        pass
+            # TReqFunStartUploadParams: function, six reserved bytes,
+            # upload ID, and `_0TNNNNNA` block address.
+            if (
+                len(raw_params) != 18
+                or raw_params[0] != S7Function.START_UPLOAD
+                or raw_params[8] != 9
+                or raw_params[9:11] != b"_0"
+                or raw_params[17:18] != b"A"
+            ):
+                return self._build_error_response(request, 0x8104)
+            block_type = raw_params[11]
+            try:
+                block_num = int(raw_params[12:17].decode("ascii"))
+            except (UnicodeDecodeError, ValueError):
+                return self._build_error_response(request, 0x8104)
 
             logger.info(f"Start upload request from {client_address}: type={block_type:#02x}, num={block_num}")
 
             # Generate upload ID and get block length
             upload_id = 1  # Simple upload ID
-            block_length = 0
-
-            # Check if block exists
-            if block_type == 0x41:  # DB
-                area_key = (S7Area.DB, block_num)
-                if area_key in self.memory_areas:
-                    block_length = len(self.memory_areas[area_key])
+            area_key = (S7Area.DB, block_num)
+            if block_type != 0x41 or area_key not in self.memory_areas:
+                return self._build_error_response(request, 0xD209)
+            block_length = len(self.memory_areas[area_key]) + 36
 
             # Store upload context for this client
             if not hasattr(self, "_upload_contexts"):
@@ -2281,19 +2282,10 @@ class Server:
                 "offset": 0,
             }
 
-            # Build response: function + status + reserved + upload_id + block_len_string_len + block_len_string
-            block_len_str = f"{block_length:06d}".encode("ascii")
-            param_data = (
-                struct.pack(
-                    ">BBBIB",
-                    S7Function.START_UPLOAD,
-                    0x00,  # Status
-                    0x00,  # Reserved
-                    upload_id,
-                    len(block_len_str),
-                )
-                + block_len_str
-            )
+            # TResFunStartUploadParams: function, six reserved bytes,
+            # upload ID, three reserved bytes, and five ASCII length digits.
+            block_len_str = f"{block_length:05d}".encode("ascii")
+            param_data = bytes((S7Function.START_UPLOAD,)) + bytes(6) + bytes((upload_id,)) + bytes(3) + block_len_str
 
             header = struct.pack(
                 ">BBHHHHBB",
@@ -2331,6 +2323,9 @@ class Server:
                 return self._build_error_response(request, 0x8104)
 
             ctx = self._upload_contexts[client_address]
+            raw_params = request.get("raw_parameters", b"")
+            if len(raw_params) != 8 or raw_params[0] != S7Function.UPLOAD or raw_params[7] != ctx["upload_id"]:
+                return self._build_error_response(request, 0x8104)
             block_type = ctx["block_type"]
             block_num = ctx["block_num"]
 
@@ -2342,20 +2337,33 @@ class Server:
                     with self.area_locks[area_key]:
                         block_data = bytes(self.memory_areas[area_key])
 
-            logger.info(f"Upload request from {client_address}: sending {len(block_data)} bytes")
+            offset = ctx["offset"]
+            first_fragment = offset == 0
+            compact_header = b""
+            if first_fragment:
+                compact_header_data = bytearray(36)
+                compact_header_data[2] = 0x01
+                compact_header_data[4] = 0x05  # S7 language: DB
+                compact_header_data[5] = 0x0A  # S7 sub-block type: DB
+                struct.pack_into(">H", compact_header_data, 6, block_num)
+                struct.pack_into(">I", compact_header_data, 8, len(block_data) + 36)
+                struct.pack_into(">H", compact_header_data, 34, len(block_data))
+                compact_header = bytes(compact_header_data)
+
+            chunk_capacity = 462 - len(compact_header)
+            chunk = block_data[offset : offset + chunk_capacity]
+            ctx["offset"] += len(chunk)
+            is_last = ctx["offset"] >= len(block_data)
+
+            logger.info(f"Upload request from {client_address}: sending {len(chunk)} bytes")
 
             # Build response with data
-            # Status: 0x00 = more data, 0x01 = last packet
-            param_data = struct.pack(
-                ">BBBI",
-                S7Function.UPLOAD,
-                0x01,  # Status: last packet
-                0x00,  # Reserved
-                ctx["upload_id"],
-            )
+            # EoU: 0x00 = end of upload, 0x01 = upload in progress.
+            param_data = bytes((S7Function.UPLOAD, 0x00 if is_last else 0x01))
 
-            # Data section: length (2 bytes) + unknown (2 bytes) + data
-            data_section = struct.pack(">HH", len(block_data), 0x00FB) + block_data
+            # The first fragment starts with the 36-byte compact block header.
+            payload = compact_header + chunk
+            data_section = struct.pack(">HH", len(payload), 0x00FB) + payload
 
             header = struct.pack(
                 ">BBHHHHBB",
@@ -2387,9 +2395,18 @@ class Server:
             Response PDU acknowledging end of upload
         """
         try:
-            # Clean up upload context
-            if hasattr(self, "_upload_contexts") and client_address in self._upload_contexts:
-                del self._upload_contexts[client_address]
+            if not hasattr(self, "_upload_contexts") or client_address not in self._upload_contexts:
+                return self._build_error_response(request, 0x8104)
+            ctx = self._upload_contexts[client_address]
+            raw_params = request.get("raw_parameters", b"")
+            if (
+                len(raw_params) != 8
+                or raw_params[0] != S7Function.END_UPLOAD
+                or raw_params[7] != ctx["upload_id"]
+                or ctx["offset"] < len(self.memory_areas[(S7Area.DB, ctx["block_num"])])
+            ):
+                return self._build_error_response(request, 0x8104)
+            del self._upload_contexts[client_address]
 
             logger.info(f"End upload from {client_address}")
 

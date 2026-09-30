@@ -944,8 +944,8 @@ class TestClient(unittest.TestCase):
         # read_szl_invalid_id - should raise error
         ssl_id = 0xFFFF
         index = 0xFFFF
-        self.assertRaises(RuntimeError, self.client.read_szl, ssl_id)
-        self.assertRaises(RuntimeError, self.client.read_szl, ssl_id, index)
+        self.assertRaises(S7ProtocolError, self.client.read_szl, ssl_id)
+        self.assertRaises(S7ProtocolError, self.client.read_szl, ssl_id, index)
 
     def test_read_szl_list(self) -> None:
         # Cli_ReadSZLList - returns list of available SZL IDs
