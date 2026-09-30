@@ -1684,54 +1684,31 @@ class Client(ClientMixin):
             else:
                 block_num = 1  # Default
 
-        # Step 1: Request download
-        request = self.protocol.build_download_request(block_type, block_num, bytes(data))
-        self._send_receive(request)
+        with self._reconnect_lock:
+            request = self.protocol.build_download_request(block_type, block_num, bytes(data))
+            response = self._send_receive(request)
+            if response.get("raw_parameters") != bytes((0x1A,)):
+                raise S7ProtocolError("Invalid request-download acknowledgement")
 
-        # Step 2: Download block (send data)
-        # Build a simple download block PDU
-        param_data = struct.pack(
-            ">BBB",
-            0x1B,  # S7Function.DOWNLOAD_BLOCK
-            0x01,  # Status: last packet
-            0x00,  # Reserved
-        )
+            offset = 0
+            max_slice = self.pdu_length - 18
+            if max_slice <= 0:
+                raise S7ProtocolError("Negotiated PDU is too small for download")
+            for _ in range(1000):
+                request_data = conn.receive_data()
+                sequence = self.protocol.parse_download_service_request(request_data, 0x1B, block_num)
+                fragment = bytes(data[offset : offset + max_slice])
+                offset += len(fragment)
+                is_last = offset == len(data)
+                self._send_data(conn, self.protocol.build_download_fragment_response(sequence, is_last, fragment))
+                if is_last:
+                    break
+            else:
+                raise S7ProtocolError("Download exceeded fragment limit")
 
-        # Data section: data to write
-        data_section = struct.pack(">HH", len(data), 0x00FB) + bytes(data)
-
-        header = struct.pack(
-            ">BBHHHH",
-            0x32,  # Protocol ID
-            0x01,  # PDU type REQUEST
-            0x0000,  # Reserved
-            self.protocol._next_sequence(),  # Sequence
-            len(param_data),  # Parameter length
-            len(data_section),  # Data length
-        )
-
-        self._send_data(conn, header + param_data + data_section)
-
-        response_data = conn.receive_data()
-        self.protocol.parse_response(response_data)
-
-        # Step 3: Download ended
-        param_data = struct.pack(">B", 0x1C)  # S7Function.DOWNLOAD_ENDED
-
-        header = struct.pack(
-            ">BBHHHH",
-            0x32,  # Protocol ID
-            0x01,  # PDU type REQUEST
-            0x0000,  # Reserved
-            self.protocol._next_sequence(),  # Sequence
-            len(param_data),  # Parameter length
-            0x0000,  # Data length
-        )
-
-        self._send_data(conn, header + param_data)
-
-        response_data = conn.receive_data()
-        self.protocol.parse_response(response_data)
+            request_data = conn.receive_data()
+            sequence = self.protocol.parse_download_service_request(request_data, 0x1C, block_num)
+            self._send_data(conn, self.protocol.build_download_ended_response(sequence))
 
         logger.info(f"Downloaded {len(data)} bytes to block {block_num}")
         return 0

@@ -693,26 +693,20 @@ class S7Protocol:
         Returns:
             Complete S7 PDU for request download
         """
-        # Block address string
-        block_addr = f"{block_type:02X}{block_num:05d}P".encode("ascii")
+        if not 0 <= block_type <= 0xFF or not 0 <= block_num <= 99999:
+            raise ValueError("Invalid block type or number")
+        if len(block_data) > 999999:
+            raise ValueError("Block is too large for the download request")
+        if len(block_data) >= 36 and block_data[2] == 1 and block_data[4] == 5:
+            mc7_size = struct.unpack(">H", block_data[34:36])[0]
+        else:
+            mc7_size = len(block_data) - 36 if len(block_data) >= 36 else len(block_data)
+        if mc7_size > 999999:
+            raise ValueError("MC7 size is too large for the download request")
 
-        # Block length as string
-        length_str = f"{len(block_data):06d}".encode("ascii")
-
-        # Parameters
-        param_data = (
-            struct.pack(
-                ">BBBBB",
-                S7Function.REQUEST_DOWNLOAD,  # Function code
-                0x00,  # Status
-                0x00,  # Reserved
-                0x00,  # Reserved
-                len(block_addr),  # Block address length
-            )
-            + block_addr
-            + struct.pack(">B", len(length_str))
-            + length_str
-        )
+        block_addr = b"_0" + bytes((block_type,)) + f"{block_num:05d}".encode("ascii") + b"P"
+        sizes = b"1" + f"{len(block_data):06d}{mc7_size:06d}".encode("ascii")
+        param_data = bytes((S7Function.REQUEST_DOWNLOAD, 0, 1)) + bytes(5) + b"\x09" + block_addr + b"\x0d" + sizes
 
         header = struct.pack(
             ">BBHHHH",
@@ -725,6 +719,37 @@ class S7Protocol:
         )
 
         return header + param_data
+
+    @staticmethod
+    def parse_download_service_request(pdu: bytes, function: int, block_num: int) -> int:
+        """Validate a PLC request for a download slice or completion acknowledgement."""
+        if len(pdu) != 28 or pdu[0:2] != bytes((0x32, S7PDUType.REQUEST)):
+            raise S7ProtocolError("Invalid PLC download request header")
+        sequence, param_len, data_len = struct.unpack(">HHH", pdu[4:10])
+        if param_len != 18 or data_len != 0:
+            raise S7ProtocolError("Invalid PLC download request lengths")
+        params = pdu[10:]
+        expected_address = b"_0" + bytes((0x41,)) + f"{block_num:05d}".encode("ascii") + b"P"
+        if params[0] != function or params[8] != 9 or params[9:] != expected_address:
+            raise S7ProtocolError("Unexpected PLC download request")
+        return int(sequence)
+
+    @staticmethod
+    def build_download_fragment_response(sequence: int, is_last: bool, data: bytes) -> bytes:
+        """Reply to a PLC DOWNLOAD_BLOCK request with one bounded fragment."""
+        if not 0 <= sequence <= 0xFFFF or len(data) > 0xFFFF:
+            raise ValueError("Invalid download response sequence or payload length")
+        parameters = bytes((S7Function.DOWNLOAD_BLOCK, 0 if is_last else 1))
+        payload = struct.pack(">HH", len(data), 0x00FB) + data
+        header = struct.pack(">BBHHHHH", 0x32, S7PDUType.ACK_DATA, 0, sequence, 2, len(payload), 0)
+        return header + parameters + payload
+
+    @staticmethod
+    def build_download_ended_response(sequence: int) -> bytes:
+        """Acknowledge the PLC's DOWNLOAD_ENDED request."""
+        if not 0 <= sequence <= 0xFFFF:
+            raise ValueError("Invalid download response sequence")
+        return struct.pack(">BBHHHHH", 0x32, S7PDUType.ACK_DATA, 0, sequence, 1, 0, 0) + bytes((S7Function.DOWNLOAD_ENDED,))
 
     def build_delete_block_request(self, block_type: int, block_num: int) -> bytes:
         """
@@ -850,16 +875,7 @@ class S7Protocol:
         )
 
         # Data section: block type (0x30 prefix + type per Snap7 C format)
-        data_section = struct.pack(
-            ">BBHBBBB",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
-            0x0004,  # Length (4 bytes)
-            0x30,  # Block type indicator
-            block_type,  # Block type code
-            0x0A,  # Trailing bytes per Snap7 C
-            0x00,
-        )
+        data_section = struct.pack(">BBHBB", 0xFF, 0x09, 2, 0x30, block_type)
 
         # S7 header for USER_DATA
         header = struct.pack(
@@ -986,15 +1002,7 @@ class S7Protocol:
         # Block number is 5-digit zero-padded ASCII (e.g., 1 -> "00001")
         block_num_ascii = f"{block_num:05d}".encode("ascii")
         data_payload = struct.pack(">BB", 0x30, block_type) + b"A" + block_num_ascii
-        data_section = (
-            struct.pack(
-                ">BBH",
-                0x0A,  # Return value (request)
-                0x00,  # Transport size
-                len(data_payload),  # Length
-            )
-            + data_payload
-        )
+        data_section = struct.pack(">BBH", 0xFF, 0x09, len(data_payload)) + data_payload
 
         # S7 header for USER_DATA
         header = struct.pack(
@@ -1267,17 +1275,20 @@ class S7Protocol:
         def to_bcd(value: int) -> int:
             return ((value // 10) << 4) | (value % 10)
 
-        year = dt.year % 100  # Only last 2 digits
+        year = dt.year % 100
+        millisecond = dt.microsecond // 1000
         bcd_time = struct.pack(
-            ">BBBBBBBB",
-            0x00,  # Reserved
-            to_bcd(year),  # Year (BCD)
+            ">BBBBBBBBBB",
+            0x00,
+            0x19,  # Siemens date/time prefix
+            to_bcd(year),
             to_bcd(dt.month),  # Month (BCD)
             to_bcd(dt.day),  # Day (BCD)
             to_bcd(dt.hour),  # Hour (BCD)
             to_bcd(dt.minute),  # Minute (BCD)
             to_bcd(dt.second),  # Second (BCD)
-            (dt.weekday() + 1) & 0x0F,  # Day of week (1=Monday)
+            to_bcd(millisecond // 10),
+            ((millisecond % 10) << 4) | ((dt.weekday() + 1) & 0x0F),
         )
 
         # Parameter section for USER_DATA clock request
@@ -1294,15 +1305,7 @@ class S7Protocol:
         )
 
         # Data section with BCD time
-        data_section = (
-            struct.pack(
-                ">BBH",
-                0x0A,  # Return value (request)
-                0x00,  # Transport size
-                len(bcd_time),  # Length
-            )
-            + bcd_time
-        )
+        data_section = struct.pack(">BBH", 0xFF, 0x09, len(bcd_time)) + bcd_time
 
         # S7 header for USER_DATA
         header = struct.pack(
@@ -1363,8 +1366,8 @@ class S7Protocol:
     def encode_password(password: str) -> bytes:
         """Encode an S7 session password into the 8-byte wire format.
 
-        The encoding pads or truncates the password to 8 characters, XORs each
-        byte with ``0x55``, then rotates each byte left by 3 bits.
+        Snap7 pads with spaces, XORs with ``0x55``, and chains each byte
+        from the encoded byte two positions earlier.
 
         Args:
             password: Plaintext password (max 8 characters).
@@ -1372,12 +1375,13 @@ class S7Protocol:
         Returns:
             8-byte encoded password block.
         """
-        # Pad/truncate to exactly 8 bytes
-        raw = password.encode("ascii")[:8].ljust(8, b"\x00")
+        raw = password.encode("ascii")
+        if not 1 <= len(raw) <= 8:
+            raise ValueError("Session password must contain between one and eight ASCII characters")
+        raw = raw.ljust(8, b" ")
         encoded = bytearray(8)
         for i in range(8):
-            xored = raw[i] ^ 0x55
-            encoded[i] = ((xored << 3) | (xored >> 5)) & 0xFF
+            encoded[i] = raw[i] ^ 0x55 ^ (encoded[i - 2] if i >= 2 else 0)
         return bytes(encoded)
 
     def build_set_session_password_request(self, encoded_password: bytes) -> bytes:
@@ -1405,15 +1409,9 @@ class S7Protocol:
         )
 
         # Data section: encoded password
-        data_section = (
-            struct.pack(
-                ">BBH",
-                0x0A,  # Return value (request)
-                0x00,  # Transport size
-                len(encoded_password),  # Length
-            )
-            + encoded_password
-        )
+        if len(encoded_password) != 8:
+            raise ValueError("Encoded session password must contain eight bytes")
+        data_section = struct.pack(">BBH", 0xFF, 0x09, 8) + encoded_password
 
         header = struct.pack(
             ">BBHHHH",

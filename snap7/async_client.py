@@ -857,44 +857,33 @@ class AsyncClient(ClientMixin):
             else:
                 block_num = 1
 
-        # Step 1: Request download
         request = self.protocol.build_download_request(block_type, block_num, bytes(data))
-        await self._send_receive(request)
-
-        # Step 2: Download block (send data)
-        param_data = struct.pack(">BBB", 0x1B, 0x01, 0x00)
-        data_section = struct.pack(">HH", len(data), 0x00FB) + bytes(data)
-        header = struct.pack(
-            ">BBHHHH",
-            0x32,
-            0x01,
-            0x0000,
-            self.protocol._next_sequence(),
-            len(param_data),
-            len(data_section),
-        )
-
         async with self._lock:
-            await self._send_data(conn, header + param_data + data_section)
+            await self._send_data(conn, request)
             response_data = await conn.receive_data()
-        self.protocol.parse_response(response_data)
+            response = self.protocol.parse_response(response_data)
+            if response["sequence"] != int.from_bytes(request[4:6], "big") or response.get("raw_parameters") != bytes((0x1A,)):
+                raise S7ProtocolError("Invalid request-download acknowledgement")
 
-        # Step 3: Download ended
-        param_data = struct.pack(">B", 0x1C)
-        header = struct.pack(
-            ">BBHHHH",
-            0x32,
-            0x01,
-            0x0000,
-            self.protocol._next_sequence(),
-            len(param_data),
-            0x0000,
-        )
+            offset = 0
+            max_slice = self.pdu_length - 18
+            if max_slice <= 0:
+                raise S7ProtocolError("Negotiated PDU is too small for download")
+            for _ in range(1000):
+                request_data = await conn.receive_data()
+                sequence = self.protocol.parse_download_service_request(request_data, 0x1B, block_num)
+                fragment = bytes(data[offset : offset + max_slice])
+                offset += len(fragment)
+                is_last = offset == len(data)
+                await self._send_data(conn, self.protocol.build_download_fragment_response(sequence, is_last, fragment))
+                if is_last:
+                    break
+            else:
+                raise S7ProtocolError("Download exceeded fragment limit")
 
-        async with self._lock:
-            await self._send_data(conn, header + param_data)
-            response_data = await conn.receive_data()
-        self.protocol.parse_response(response_data)
+            request_data = await conn.receive_data()
+            sequence = self.protocol.parse_download_service_request(request_data, 0x1C, block_num)
+            await self._send_data(conn, self.protocol.build_download_ended_response(sequence))
 
         logger.info(f"Downloaded {len(data)} bytes to block {block_num}")
         return 0
