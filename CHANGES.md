@@ -1,6 +1,12 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+* Add a safe, Gherkin-based real-PLC acceptance program with restored scratch
+  writes and sanitized JSON/JUnit reports (#840).
+
 3.2.0
 -----
 
