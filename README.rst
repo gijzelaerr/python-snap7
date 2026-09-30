@@ -49,3 +49,6 @@ Documentation
 
 Read the full documentation at
 `python-snap7.readthedocs.io <https://python-snap7.readthedocs.io/en/latest/>`_.
+
+The safe volunteer hardware-test procedure is in
+`Real-PLC acceptance testing <doc/real-plc-testing.rst>`_.
