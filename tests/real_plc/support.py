@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import struct
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from snap7.client import Client
@@ -60,7 +60,7 @@ EXPECTED_BOOLS = (True, False, False, False, False, False, False, False)
 class PLCConfig:
     """Connection settings; ``host`` is deliberately never reportable."""
 
-    host: str
+    host: str = field(repr=False)
     port: int
     rack: int
     slot: int
@@ -134,7 +134,7 @@ class ClassicS7Adapter:
         metadata: dict[str, str | int] = {"protocol_path": self.protocol_name}
         try:
             order_code = self.client.get_order_code()
-            metadata["order_code"] = order_code.Code.rstrip(b"\x00").decode("ascii", errors="replace")
+            metadata["order_code"] = order_code.OrderCode.rstrip(b"\x00").decode("ascii", errors="replace")
             metadata["firmware"] = f"{order_code.V1}.{order_code.V2}.{order_code.V3}"
         except Exception as error:  # noqa: BLE001 - optional metadata differs by PLC family
             metadata["order_code_status"] = f"unavailable:{type(error).__name__}"

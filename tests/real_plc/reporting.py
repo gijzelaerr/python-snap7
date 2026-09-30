@@ -14,6 +14,7 @@ from typing import Any
 
 SCHEMA_VERSION = "1.0"
 _IPV4 = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+_JUNIT_HOSTNAME = re.compile(r'\shostname="[^"]*"')
 _SENSITIVE_ASSIGNMENT = re.compile(r"(?i)(password|passwd|secret|private[_ -]?key|plc[_ -]?(?:ip|host))\s*[:=]\s*([^\s,;]+)")
 
 
@@ -22,6 +23,15 @@ def sanitize_diagnostic(value: object, limit: int = 12_000) -> str:
     text = _IPV4.sub("<redacted-ip>", str(value))
     text = _SENSITIVE_ASSIGNMENT.sub(lambda match: f"{match.group(1)}=<redacted>", text)
     return text[:limit]
+
+
+def sanitize_junit(path: Path, addresses: tuple[str, ...] = ()) -> None:
+    """Strip the test-host name and PLC addresses from a pytest JUnit XML file in place."""
+    text = _JUNIT_HOSTNAME.sub("", path.read_text(encoding="utf-8"))
+    for address in addresses:
+        if address:
+            text = text.replace(address, "<redacted-host>")
+    path.write_text(_IPV4.sub("<redacted-ip>", text), encoding="utf-8")
 
 
 def _git_source() -> dict[str, object]:

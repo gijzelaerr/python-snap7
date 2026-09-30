@@ -51,7 +51,9 @@ The runner prints a Gherkin-aware terminal summary and writes JUnit XML plus a
 schema-versioned, sanitized JSON report beneath ``real-plc-results/``. The JSON
 records exact source state, host environment, PLC metadata, scenario tags,
 pass/fail/skip results, and bounded diagnostics. It deliberately never reads the
-PLC address into the report. Review both artifacts before publishing them.
+PLC address into the report. After the run, the JUnit XML is rewritten to drop
+the test host name and redact the PLC address and any IPv4 addresses. Review
+both artifacts before publishing them.
 
 Add ``--allow-write`` only after confirming DB2 is disposable scratch space.
 ``--allow-admin`` remains separate so write permission never implies permission
