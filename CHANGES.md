@@ -6,6 +6,9 @@ Unreleased
 
 * Add a safe, Gherkin-based real-PLC acceptance program with restored scratch
   writes and sanitized JSON/JUnit reports (#840).
+* Add an `on_operation` callback to the synchronous and asynchronous clients,
+  invoked after each PLC operation with its name, duration, and whether it
+  raised (#843).
 
 3.2.0
 -----

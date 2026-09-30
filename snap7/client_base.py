@@ -5,9 +5,13 @@ Contains pure-computation methods (no I/O) that are identical between
 the two implementations.
 """
 
+import asyncio
 import logging
 import struct
-from typing import Optional
+import time
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, Optional, TypeVar
 
 from .datatypes import S7Area, S7DataTypes, S7WordLen
 from .error import S7ProtocolError
@@ -20,6 +24,55 @@ from .type import (
 
 logger = logging.getLogger(__name__)
 
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _instrumented(operation: str) -> Callable[[F], F]:
+    """Wrap a Client/AsyncClient method to report its duration and outcome to ``self._on_operation``."""
+
+    def decorator(func: F) -> F:
+        if asyncio.iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_wrapper(self: "ClientMixin", *args: Any, **kwargs: Any) -> Any:
+                if self._on_operation is None:
+                    return await func(self, *args, **kwargs)
+                started = time.monotonic()
+                error = False
+                try:
+                    return await func(self, *args, **kwargs)
+                except Exception:
+                    error = True
+                    raise
+                finally:
+                    try:
+                        self._on_operation(operation, time.monotonic() - started, error)
+                    except Exception:
+                        logger.debug("on_operation callback raised an exception", exc_info=True)
+
+            return async_wrapper  # type: ignore[return-value]
+
+        @wraps(func)
+        def sync_wrapper(self: "ClientMixin", *args: Any, **kwargs: Any) -> Any:
+            if self._on_operation is None:
+                return func(self, *args, **kwargs)
+            started = time.monotonic()
+            error = False
+            try:
+                return func(self, *args, **kwargs)
+            except Exception:
+                error = True
+                raise
+            finally:
+                try:
+                    self._on_operation(operation, time.monotonic() - started, error)
+                except Exception:
+                    logger.debug("on_operation callback raised an exception", exc_info=True)
+
+        return sync_wrapper  # type: ignore[return-value]
+
+    return decorator
+
 
 class ClientMixin:
     """Methods shared between Client and AsyncClient.
@@ -30,7 +83,7 @@ class ClientMixin:
 
     Subclasses must provide the following attributes (set in __init__):
         host, local_tsap, remote_tsap, connection_type, session_password,
-        pdu_length, connected, _exec_time, _last_error, _params
+        pdu_length, connected, _exec_time, _last_error, _params, _on_operation
     """
 
     # Declared for type checkers — concrete values set by subclass __init__
@@ -44,6 +97,7 @@ class ClientMixin:
     _exec_time: int
     _last_error: int
     _params: dict[Parameter, int]
+    _on_operation: Optional[Callable[[str, float, bool], None]]
 
     def get_pdu_length(self) -> int:
         """Get negotiated PDU length.

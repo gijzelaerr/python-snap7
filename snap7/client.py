@@ -11,8 +11,7 @@ import struct
 import sys
 import threading
 import time
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Sequence
 from typing import List, Any, Optional, Tuple, Union, Callable, cast
 from datetime import datetime
 from ctypes import (
@@ -25,9 +24,8 @@ from .connection import ISOTCPConnection
 from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_return_code_description
 from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
-from .client_base import ClientMixin
+from .client_base import ClientMixin, _instrumented
 from .log import PLCLoggerAdapter, OperationLogger
-from .metrics import MetricsRegistry
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
 from .tags import Tag, _STRING_RE
@@ -302,7 +300,7 @@ class Client(ClientMixin):
         rate_limit_burst: int | None = None,
         on_disconnect: Optional[Callable[[], None]] = None,
         on_reconnect: Optional[Callable[[], None]] = None,
-        metrics: Optional[MetricsRegistry] = None,
+        on_operation: Optional[Callable[[str, float, bool], None]] = None,
         **kwargs: Any,
     ):
         """
@@ -322,7 +320,8 @@ class Client(ClientMixin):
             rate_limit_burst: Token bucket capacity. Defaults to one second of requests.
             on_disconnect: Optional callback invoked when connection is lost.
             on_reconnect: Optional callback invoked after successful reconnection.
-            metrics: Optional registry that accumulates Prometheus-style operation metrics.
+            on_operation: Optional callback invoked after each PLC operation with its
+                name, duration in seconds, and whether it raised.
             **kwargs: Ignored. Kept for backwards compatibility.
         """
         self.connection: Optional[ISOTCPConnection] = None
@@ -380,7 +379,7 @@ class Client(ClientMixin):
         self._max_delay = max_delay
         self._on_disconnect = on_disconnect
         self._on_reconnect = on_reconnect
-        self._metrics = metrics
+        self._on_operation = on_operation
         self._rate_limiter = RequestRateLimiter(
             max_requests_per_second,
             algorithm=rate_limit_algorithm,
@@ -487,22 +486,6 @@ class Client(ClientMixin):
             self._do_reconnect()
             return self._send_receive(request_builder(), max_stale_retries)
 
-    @contextmanager
-    def _instrumented(self, operation: str) -> Iterator[None]:
-        """Record the wrapped block's duration and outcome in ``self._metrics``, if set."""
-        if self._metrics is None:
-            yield
-            return
-        started = time.monotonic()
-        error = False
-        try:
-            yield
-        except Exception:
-            error = True
-            raise
-        finally:
-            self._metrics.record(operation, time.monotonic() - started, error)
-
     def _do_reconnect(self) -> None:
         """Perform reconnection with exponential backoff and jitter.
 
@@ -519,8 +502,6 @@ class Client(ClientMixin):
                     pass
 
             self._is_alive = False
-            if self._metrics is not None:
-                self._metrics.set_connected(self.host, False)
             if self._on_disconnect is not None:
                 try:
                     self._on_disconnect()
@@ -555,8 +536,6 @@ class Client(ClientMixin):
 
                     self.connected = True
                     self._is_alive = True
-                    if self._metrics is not None:
-                        self._metrics.set_connected(self.host, True)
                     logger.info(f"Reconnected to {self.host}:{self.port}")
 
                     if self._on_reconnect is not None:
@@ -673,8 +652,6 @@ class Client(ClientMixin):
 
             self.connected = True
             self._is_alive = True
-            if self._metrics is not None:
-                self._metrics.set_connected(address, True)
             self._exec_time = int((time.time() - start_time) * 1000)
             self.logger.update_context(plc_host=address, rack=rack, slot=slot, protocol="legacy")
             self.logger.info(f"Connected to {address}:{tcp_port} rack {rack} slot {slot}")
@@ -782,8 +759,6 @@ class Client(ClientMixin):
 
         self.connected = False
         self._is_alive = False
-        if self._metrics is not None:
-            self._metrics.set_connected(self.host, False)
         self._opt_plan = None
         logger.info(f"Disconnected from {self.host}:{self.port}")
         return 0
@@ -1023,6 +998,7 @@ class Client(ClientMixin):
                 f"Try passing the actual DB size explicitly: client.db_fill({db_number}, {filler}, size=<actual_size>)"
             )
 
+    @_instrumented("read_area")
     def read_area(self, area: Area, db_number: int, start: int, size: int, word_len: Optional[WordLen] = None) -> bytearray:
         """
         Read data from memory area.
@@ -1041,57 +1017,57 @@ class Client(ClientMixin):
         Returns:
             Data read from area
         """
-        with self._instrumented("read_area"):
-            start_time = time.time()
+        start_time = time.time()
 
-            # Map area enum to native area
-            s7_area = self._map_area(area)
+        # Map area enum to native area
+        s7_area = self._map_area(area)
 
-            # Determine word length
-            if word_len is not None:
-                s7_word_len = S7WordLen(word_len)
-            elif area == Area.TM:
-                s7_word_len = S7WordLen.TIMER
-            elif area == Area.CT:
-                s7_word_len = S7WordLen.COUNTER
-            else:
-                s7_word_len = S7WordLen.BYTE
+        # Determine word length
+        if word_len is not None:
+            s7_word_len = S7WordLen(word_len)
+        elif area == Area.TM:
+            s7_word_len = S7WordLen.TIMER
+        elif area == Area.CT:
+            s7_word_len = S7WordLen.COUNTER
+        else:
+            s7_word_len = S7WordLen.BYTE
 
-            max_chunk = self._read_chunk_count(s7_word_len)
-            if size <= max_chunk:
-                # Single request - use reconnect-aware send/receive
-                def build_request() -> bytes:
-                    return self.protocol.build_read_request(
-                        area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, count=size
-                    )
+        max_chunk = self._read_chunk_count(s7_word_len)
+        if size <= max_chunk:
+            # Single request - use reconnect-aware send/receive
+            def build_request() -> bytes:
+                return self.protocol.build_read_request(
+                    area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, count=size
+                )
 
-                response = self._send_receive_with_reconnect(build_request)
-                values = self.protocol.extract_read_data(response, s7_word_len, size)
-                self._exec_time = int((time.time() - start_time) * 1000)
-                return bytearray(values)
-
-            # Split into chunks
-            result = bytearray()
-            offset = 0
-            remaining = size
-            while remaining > 0:
-                chunk_size = min(remaining, max_chunk)
-                chunk_offset = offset * self._element_address_step(s7_word_len)
-
-                def build_chunk_request(o: int = chunk_offset, cs: int = chunk_size) -> bytes:
-                    return self.protocol.build_read_request(
-                        area=s7_area, db_number=db_number, start=start + o, word_len=s7_word_len, count=cs
-                    )
-
-                response = self._send_receive_with_reconnect(build_chunk_request)
-                values = self.protocol.extract_read_data(response, s7_word_len, chunk_size)
-                result.extend(values)
-                offset += chunk_size
-                remaining -= chunk_size
-
+            response = self._send_receive_with_reconnect(build_request)
+            values = self.protocol.extract_read_data(response, s7_word_len, size)
             self._exec_time = int((time.time() - start_time) * 1000)
-            return result
+            return bytearray(values)
 
+        # Split into chunks
+        result = bytearray()
+        offset = 0
+        remaining = size
+        while remaining > 0:
+            chunk_size = min(remaining, max_chunk)
+            chunk_offset = offset * self._element_address_step(s7_word_len)
+
+            def build_chunk_request(o: int = chunk_offset, cs: int = chunk_size) -> bytes:
+                return self.protocol.build_read_request(
+                    area=s7_area, db_number=db_number, start=start + o, word_len=s7_word_len, count=cs
+                )
+
+            response = self._send_receive_with_reconnect(build_chunk_request)
+            values = self.protocol.extract_read_data(response, s7_word_len, chunk_size)
+            result.extend(values)
+            offset += chunk_size
+            remaining -= chunk_size
+
+        self._exec_time = int((time.time() - start_time) * 1000)
+        return result
+
+    @_instrumented("write_area")
     def write_area(self, area: Area, db_number: int, start: int, data: bytearray, word_len: Optional[WordLen] = None) -> int:
         """
         Write data to memory area.
@@ -1109,56 +1085,56 @@ class Client(ClientMixin):
         Returns:
             0 on success
         """
-        with self._instrumented("write_area"):
-            start_time = time.time()
+        start_time = time.time()
 
-            # Map area enum to native area
-            s7_area = self._map_area(area)
+        # Map area enum to native area
+        s7_area = self._map_area(area)
 
-            # Determine word length
-            if word_len is not None:
-                s7_word_len = S7WordLen(word_len)
-            elif area == Area.TM:
-                s7_word_len = S7WordLen.TIMER
-            elif area == Area.CT:
-                s7_word_len = S7WordLen.COUNTER
-            else:
-                s7_word_len = S7WordLen.BYTE
+        # Determine word length
+        if word_len is not None:
+            s7_word_len = S7WordLen(word_len)
+        elif area == Area.TM:
+            s7_word_len = S7WordLen.TIMER
+        elif area == Area.CT:
+            s7_word_len = S7WordLen.COUNTER
+        else:
+            s7_word_len = S7WordLen.BYTE
 
-            max_chunk = self._write_chunk_bytes(s7_word_len, len(data))
-            if len(data) <= max_chunk:
-                # Single request
-                def build_request() -> bytes:
-                    return self.protocol.build_write_request(
-                        area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, data=bytes(data)
-                    )
+        max_chunk = self._write_chunk_bytes(s7_word_len, len(data))
+        if len(data) <= max_chunk:
+            # Single request
+            def build_request() -> bytes:
+                return self.protocol.build_write_request(
+                    area=s7_area, db_number=db_number, start=start, word_len=s7_word_len, data=bytes(data)
+                )
 
-                response = self._send_receive_with_reconnect(build_request)
-                self.protocol.check_write_response(response)
-                self._exec_time = int((time.time() - start_time) * 1000)
-                return 0
-
-            # Split into chunks
-            offset = 0
-            remaining = len(data)
-            while remaining > 0:
-                chunk_size = min(remaining, max_chunk)
-                chunk_data = data[offset : offset + chunk_size]
-                chunk_offset = offset // S7DataTypes.get_size_bytes(s7_word_len) * self._element_address_step(s7_word_len)
-
-                def build_chunk_request(o: int = chunk_offset, cd: bytes = bytes(chunk_data)) -> bytes:
-                    return self.protocol.build_write_request(
-                        area=s7_area, db_number=db_number, start=start + o, word_len=s7_word_len, data=cd
-                    )
-
-                response = self._send_receive_with_reconnect(build_chunk_request)
-                self.protocol.check_write_response(response)
-                offset += chunk_size
-                remaining -= chunk_size
-
+            response = self._send_receive_with_reconnect(build_request)
+            self.protocol.check_write_response(response)
             self._exec_time = int((time.time() - start_time) * 1000)
             return 0
 
+        # Split into chunks
+        offset = 0
+        remaining = len(data)
+        while remaining > 0:
+            chunk_size = min(remaining, max_chunk)
+            chunk_data = data[offset : offset + chunk_size]
+            chunk_offset = offset // S7DataTypes.get_size_bytes(s7_word_len) * self._element_address_step(s7_word_len)
+
+            def build_chunk_request(o: int = chunk_offset, cd: bytes = bytes(chunk_data)) -> bytes:
+                return self.protocol.build_write_request(
+                    area=s7_area, db_number=db_number, start=start + o, word_len=s7_word_len, data=cd
+                )
+
+            response = self._send_receive_with_reconnect(build_chunk_request)
+            self.protocol.check_write_response(response)
+            offset += chunk_size
+            remaining -= chunk_size
+
+        self._exec_time = int((time.time() - start_time) * 1000)
+        return 0
+
+    @_instrumented("read_multi_vars")
     def read_multi_vars(self, items: Union[List[dict[str, Any]], "Array[S7DataItem]"]) -> Tuple[int, Any]:
         """Read multiple variables in a single request.
 
@@ -1414,6 +1390,7 @@ class Client(ClientMixin):
                 for blk, buf in zip(packet.blocks, block_data_list):
                     blk.buffer = buf
 
+    @_instrumented("write_multi_vars")
     def write_multi_vars(self, items: Union[List[dict[str, Any]], List[S7DataItem]]) -> int:
         """
         Write multiple variables in a single request.
@@ -1641,6 +1618,7 @@ class Client(ClientMixin):
 
         return self.protocol.parse_get_block_info(response)
 
+    @_instrumented("upload")
     def upload(self, block_num: int) -> bytearray:
         """
         Upload block from PLC.
@@ -1687,6 +1665,7 @@ class Client(ClientMixin):
         logger.info(f"Uploaded {len(block_data)} bytes from block {block_num}")
         return block_data
 
+    @_instrumented("download")
     def download(self, data: bytearray, block_num: int = -1) -> int:
         """
         Download block to PLC.

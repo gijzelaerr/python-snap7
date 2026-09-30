@@ -1,20 +1,21 @@
-"""Prometheus exposition for S7 client operations.
+"""
+Prometheus-style metrics for the classic S7 client.
 
-Accumulates per-operation counters and durations in a :class:`MetricsRegistry`,
-and optionally serves them as ``GET /metrics`` via :class:`MetricsServer`::
-
-    from snap7.client import Client
-    from snap7.metrics import MetricsRegistry, MetricsServer
+Feeds the ``on_operation`` hook and the existing ``on_disconnect``/``on_reconnect``
+callbacks into a small registry, and serves it as ``GET /metrics``::
 
     registry = MetricsRegistry()
     server = MetricsServer(registry, port=9110)
     server.start()
 
-    client = Client(metrics=registry)
+    connection_id = "192.168.1.10:102/0/1"
+    client = Client(
+        on_operation=registry.record,
+        on_disconnect=lambda: registry.set_connected(connection_id, False),
+        on_reconnect=lambda: registry.set_connected(connection_id, True),
+    )
     client.connect("192.168.1.10", 0, 1)
-    client.db_read(1, 0, 4)
-
-    server.stop()
+    registry.set_connected(connection_id, True)
 """
 
 from __future__ import annotations
@@ -48,9 +49,9 @@ class MetricsRegistry:
             if error:
                 self._errors[operation] = self._errors.get(operation, 0) + 1
 
-    def set_connected(self, plc: str, connected: bool) -> None:
+    def set_connected(self, connection_id: str, connected: bool) -> None:
         with self._lock:
-            self._connected[plc] = connected
+            self._connected[connection_id] = connected
 
     def render(self) -> str:
         with self._lock:
@@ -63,15 +64,18 @@ class MetricsRegistry:
             "# HELP snap7_client_connected Whether the client is currently connected to a PLC.",
             "# TYPE snap7_client_connected gauge",
         ]
-        for plc in sorted(connected):
-            lines.append(f'snap7_client_connected{{plc="{_label(plc)}"}} {int(connected[plc])}')
+        for connection_id in sorted(connected):
+            label = _label(connection_id)
+            lines.append(f'snap7_client_connected{{connection="{label}"}} {int(connected[connection_id])}')
 
         lines += [
-            "# HELP snap7_operations_total Total number of client operations.",
-            "# TYPE snap7_operations_total counter",
+            "# HELP snap7_operation_duration_seconds Time spent in client operations.",
+            "# TYPE snap7_operation_duration_seconds summary",
         ]
-        for operation in sorted(counts):
-            lines.append(f'snap7_operations_total{{operation="{_label(operation)}"}} {counts[operation]}')
+        for operation in sorted(duration_sum):
+            labels = f'{{operation="{_label(operation)}"}}'
+            lines.append(f"snap7_operation_duration_seconds_sum{labels} {duration_sum[operation]}")
+            lines.append(f"snap7_operation_duration_seconds_count{labels} {counts[operation]}")
 
         lines += [
             "# HELP snap7_operation_errors_total Total number of client operations that raised.",
@@ -80,12 +84,6 @@ class MetricsRegistry:
         for operation in sorted(errors):
             lines.append(f'snap7_operation_errors_total{{operation="{_label(operation)}"}} {errors[operation]}')
 
-        lines += [
-            "# HELP snap7_operation_duration_seconds_sum Cumulative time spent in client operations.",
-            "# TYPE snap7_operation_duration_seconds_sum counter",
-        ]
-        for operation in sorted(duration_sum):
-            lines.append(f'snap7_operation_duration_seconds_sum{{operation="{_label(operation)}"}} {duration_sum[operation]}')
         return "\n".join(lines) + "\n"
 
 
@@ -116,7 +114,7 @@ class _MetricsHTTPServer(ThreadingHTTPServer):
 class MetricsServer:
     """Serves a MetricsRegistry as ``GET /metrics`` on a background thread."""
 
-    def __init__(self, registry: MetricsRegistry, host: str = "0.0.0.0", port: int = 9110) -> None:
+    def __init__(self, registry: MetricsRegistry, host: str = "127.0.0.1", port: int = 9110) -> None:
         self._registry = registry
         self._host = host
         self._port = port
@@ -141,3 +139,28 @@ class MetricsServer:
         if self._thread is not None:
             self._thread.join(timeout=2.0)
             self._thread = None
+
+
+if __name__ == "__main__":
+    from snap7 import Client
+
+    registry = MetricsRegistry()
+    server = MetricsServer(registry)
+    server.start()
+    print(f"metrics on http://{server._host}:{server.port}/metrics")
+
+    connection_id = "192.168.1.10:102/0/1"
+    client = Client(
+        on_operation=registry.record,
+        on_disconnect=lambda: registry.set_connected(connection_id, False),
+        on_reconnect=lambda: registry.set_connected(connection_id, True),
+    )
+    client.connect("192.168.1.10", 0, 1)
+    registry.set_connected(connection_id, True)
+    try:
+        client.db_read(1, 0, 4)
+    finally:
+        registry.set_connected(connection_id, False)
+        client.disconnect()
+        client.destroy()
+        server.stop()
