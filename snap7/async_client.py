@@ -11,6 +11,7 @@ import logging
 import struct
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
 from typing import List, Any, Optional, Tuple, Type
 from types import TracebackType
 from datetime import datetime
@@ -339,6 +340,7 @@ class AsyncClient(ClientMixin):
         self._exec_time = 0
         self._last_error = 0
         self._on_operation = on_operation
+        self._operation_depth: ContextVar[int] = ContextVar("snap7_async_client_operation_depth", default=0)
 
         self._lock = asyncio.Lock()
         self._rate_limiter = RequestRateLimiter(

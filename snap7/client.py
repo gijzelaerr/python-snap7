@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 from collections.abc import Sequence
+from contextvars import ContextVar
 from typing import List, Any, Optional, Tuple, Union, Callable, cast
 from datetime import datetime
 from ctypes import (
@@ -380,6 +381,7 @@ class Client(ClientMixin):
         self._on_disconnect = on_disconnect
         self._on_reconnect = on_reconnect
         self._on_operation = on_operation
+        self._operation_depth: ContextVar[int] = ContextVar("snap7_client_operation_depth", default=0)
         self._rate_limiter = RequestRateLimiter(
             max_requests_per_second,
             algorithm=rate_limit_algorithm,

@@ -86,6 +86,23 @@ class TestClientOperationHook(unittest.TestCase):
         assert "write_multi_vars" in names
         assert "read_multi_vars" in names
 
+    def test_nested_calls_are_not_double_reported(self) -> None:
+        self.client.use_optimizer = False
+        write_items = [
+            {"area": Area.DB, "db_number": 1, "start": 0, "data": bytearray(b"\xaa\xbb")},
+            {"area": Area.DB, "db_number": 1, "start": 2, "data": bytearray(b"\xcc\xdd")},
+        ]
+        self.client.write_multi_vars(write_items)
+        assert self.calls == [("write_multi_vars", self.calls[0][1], False)]
+
+        self.calls.clear()
+        read_items = [
+            {"area": Area.DB, "db_number": 1, "start": 0, "size": 2},
+            {"area": Area.DB, "db_number": 1, "start": 2, "size": 2},
+        ]
+        self.client.read_multi_vars(read_items)
+        assert self.calls == [("read_multi_vars", self.calls[0][1], False)]
+
     def test_hook_raising_does_not_break_the_call(self) -> None:
         def bad_hook(name: str, seconds: float, error: bool) -> None:
             raise RuntimeError("boom")
@@ -169,3 +186,16 @@ async def test_async_hook_raising_does_not_break_the_call(async_server: Server) 
         assert result == bytearray(4)
     finally:
         await client.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_async_nested_calls_are_not_double_reported(
+    async_client_with_hook: tuple[AsyncClient, list[tuple[str, float, bool]]],
+) -> None:
+    client, calls = async_client_with_hook
+    write_items = [
+        {"area": Area.DB, "db_number": 1, "start": 0, "data": bytearray(b"\xaa\xbb")},
+        {"area": Area.DB, "db_number": 1, "start": 2, "data": bytearray(b"\xcc\xdd")},
+    ]
+    await client.write_multi_vars(write_items)
+    assert calls == [("write_multi_vars", calls[0][1], False)]
