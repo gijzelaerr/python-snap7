@@ -84,6 +84,29 @@ Set ``rate_limit_behavior="raise"`` to raise
 not make a synchronous client thread-safe; see :doc:`thread-safety`.
 
 
+Operation Metrics
+-----------------
+
+Both client implementations accept an ``on_operation`` callback, invoked after
+each PLC operation with its name, duration in seconds, and whether it raised::
+
+   from s7 import Client
+
+   def on_operation(name: str, seconds: float, error: bool) -> None:
+       print(f"{name} took {seconds:.3f}s" + (" (failed)" if error else ""))
+
+   client = Client(on_operation=on_operation)
+   client.connect("192.168.1.10", 0, 1)
+   client.db_read(1, 0, 4)
+
+A raising callback is caught and logged rather than propagated, so it cannot
+break the operation it is instrumenting.
+
+``example/prometheus_metrics.py`` builds a small Prometheus text-format
+registry and HTTP server on top of this hook and the existing
+``on_disconnect``/``on_reconnect`` callbacks.
+
+
 Manual Reconnection
 -------------------
 

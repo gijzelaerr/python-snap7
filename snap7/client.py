@@ -12,6 +12,7 @@ import sys
 import threading
 import time
 from collections.abc import Sequence
+from contextvars import ContextVar
 from typing import List, Any, Optional, Tuple, Union, Callable, cast
 from datetime import datetime
 from ctypes import (
@@ -24,7 +25,7 @@ from .connection import ISOTCPConnection
 from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_return_code_description
 from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
-from .client_base import ClientMixin
+from .client_base import ClientMixin, _instrumented
 from .log import PLCLoggerAdapter, OperationLogger
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
@@ -300,6 +301,7 @@ class Client(ClientMixin):
         rate_limit_burst: int | None = None,
         on_disconnect: Optional[Callable[[], None]] = None,
         on_reconnect: Optional[Callable[[], None]] = None,
+        on_operation: Optional[Callable[[str, float, bool], None]] = None,
         **kwargs: Any,
     ):
         """
@@ -319,6 +321,8 @@ class Client(ClientMixin):
             rate_limit_burst: Token bucket capacity. Defaults to one second of requests.
             on_disconnect: Optional callback invoked when connection is lost.
             on_reconnect: Optional callback invoked after successful reconnection.
+            on_operation: Optional callback invoked after each PLC operation with its
+                name, duration in seconds, and whether it raised.
             **kwargs: Ignored. Kept for backwards compatibility.
         """
         self.connection: Optional[ISOTCPConnection] = None
@@ -376,6 +380,8 @@ class Client(ClientMixin):
         self._max_delay = max_delay
         self._on_disconnect = on_disconnect
         self._on_reconnect = on_reconnect
+        self._on_operation = on_operation
+        self._operation_depth: ContextVar[int] = ContextVar("snap7_client_operation_depth", default=0)
         self._rate_limiter = RequestRateLimiter(
             max_requests_per_second,
             algorithm=rate_limit_algorithm,
@@ -994,6 +1000,7 @@ class Client(ClientMixin):
                 f"Try passing the actual DB size explicitly: client.db_fill({db_number}, {filler}, size=<actual_size>)"
             )
 
+    @_instrumented("read_area")
     def read_area(self, area: Area, db_number: int, start: int, size: int, word_len: Optional[WordLen] = None) -> bytearray:
         """
         Read data from memory area.
@@ -1062,6 +1069,7 @@ class Client(ClientMixin):
         self._exec_time = int((time.time() - start_time) * 1000)
         return result
 
+    @_instrumented("write_area")
     def write_area(self, area: Area, db_number: int, start: int, data: bytearray, word_len: Optional[WordLen] = None) -> int:
         """
         Write data to memory area.
@@ -1128,6 +1136,7 @@ class Client(ClientMixin):
         self._exec_time = int((time.time() - start_time) * 1000)
         return 0
 
+    @_instrumented("read_multi_vars")
     def read_multi_vars(self, items: Union[List[dict[str, Any]], "Array[S7DataItem]"]) -> Tuple[int, Any]:
         """Read multiple variables in a single request.
 
@@ -1383,6 +1392,7 @@ class Client(ClientMixin):
                 for blk, buf in zip(packet.blocks, block_data_list):
                     blk.buffer = buf
 
+    @_instrumented("write_multi_vars")
     def write_multi_vars(self, items: Union[List[dict[str, Any]], List[S7DataItem]]) -> int:
         """
         Write multiple variables in a single request.
@@ -1610,6 +1620,7 @@ class Client(ClientMixin):
 
         return self.protocol.parse_get_block_info(response)
 
+    @_instrumented("upload")
     def upload(self, block_num: int) -> bytearray:
         """
         Upload block from PLC.
@@ -1656,6 +1667,7 @@ class Client(ClientMixin):
         logger.info(f"Uploaded {len(block_data)} bytes from block {block_num}")
         return block_data
 
+    @_instrumented("download")
     def download(self, data: bytearray, block_num: int = -1) -> int:
         """
         Download block to PLC.

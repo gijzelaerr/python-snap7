@@ -5,9 +5,14 @@ Contains pure-computation methods (no I/O) that are identical between
 the two implementations.
 """
 
+import inspect
 import logging
 import struct
-from typing import Optional
+import time
+from collections.abc import Callable
+from contextvars import ContextVar
+from functools import wraps
+from typing import Any, Optional, TypeVar
 
 from .datatypes import S7Area, S7DataTypes, S7WordLen
 from .error import S7ProtocolError
@@ -20,6 +25,71 @@ from .type import (
 
 logger = logging.getLogger(__name__)
 
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _report_operation(hook: Callable[[str, float, bool], None], operation: str, started: float, error: bool) -> None:
+    try:
+        hook(operation, time.monotonic() - started, error)
+    except Exception:
+        logger.debug("on_operation callback raised an exception", exc_info=True)
+
+
+def _instrumented(operation: str) -> Callable[[F], F]:
+    """Wrap a Client/AsyncClient method to report its duration and outcome to ``self._on_operation``.
+
+    Calls nested inside an already-instrumented call (e.g. ``read_area`` invoked
+    from ``read_multi_vars``) run normally but are not reported on their own, so a
+    single logical operation is not counted and timed twice.
+    """
+
+    def decorator(func: F) -> F:
+        if inspect.iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_wrapper(self: "ClientMixin", *args: Any, **kwargs: Any) -> Any:
+                hook = self._on_operation
+                if hook is None:
+                    return await func(self, *args, **kwargs)
+                depth = self._operation_depth.get()
+                token = self._operation_depth.set(depth + 1)
+                started = time.monotonic()
+                error = False
+                try:
+                    return await func(self, *args, **kwargs)
+                except Exception:
+                    error = True
+                    raise
+                finally:
+                    self._operation_depth.reset(token)
+                    if depth == 0:
+                        _report_operation(hook, operation, started, error)
+
+            return async_wrapper  # type: ignore[return-value]
+
+        @wraps(func)
+        def sync_wrapper(self: "ClientMixin", *args: Any, **kwargs: Any) -> Any:
+            hook = self._on_operation
+            if hook is None:
+                return func(self, *args, **kwargs)
+            depth = self._operation_depth.get()
+            token = self._operation_depth.set(depth + 1)
+            started = time.monotonic()
+            error = False
+            try:
+                return func(self, *args, **kwargs)
+            except Exception:
+                error = True
+                raise
+            finally:
+                self._operation_depth.reset(token)
+                if depth == 0:
+                    _report_operation(hook, operation, started, error)
+
+        return sync_wrapper  # type: ignore[return-value]
+
+    return decorator
+
 
 class ClientMixin:
     """Methods shared between Client and AsyncClient.
@@ -30,7 +100,8 @@ class ClientMixin:
 
     Subclasses must provide the following attributes (set in __init__):
         host, local_tsap, remote_tsap, connection_type, session_password,
-        pdu_length, connected, _exec_time, _last_error, _params
+        pdu_length, connected, _exec_time, _last_error, _params, _on_operation,
+        _operation_depth
     """
 
     # Declared for type checkers — concrete values set by subclass __init__
@@ -44,6 +115,8 @@ class ClientMixin:
     _exec_time: int
     _last_error: int
     _params: dict[Parameter, int]
+    _on_operation: Optional[Callable[[str, float, bool], None]]
+    _operation_depth: ContextVar[int]
 
     def get_pdu_length(self) -> int:
         """Get negotiated PDU length.

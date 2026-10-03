@@ -10,6 +10,8 @@ import asyncio
 import logging
 import struct
 import time
+from collections.abc import Callable
+from contextvars import ContextVar
 from typing import List, Any, Optional, Tuple, Type
 from types import TracebackType
 from datetime import datetime
@@ -18,7 +20,7 @@ from .connection import TPDUSize
 from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_return_code_description
 from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
-from .client_base import ClientMixin
+from .client_base import ClientMixin, _instrumented
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
 from .client import _parse_force_szl
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
@@ -319,6 +321,7 @@ class AsyncClient(ClientMixin):
         rate_limit_algorithm: RateLimitAlgorithm = "fixed",
         rate_limit_behavior: RateLimitBehavior = "block",
         rate_limit_burst: int | None = None,
+        on_operation: Optional[Callable[[str, float, bool], None]] = None,
     ) -> None:
         self.connection: Optional[AsyncISOTCPConnection] = None
         self.protocol = S7Protocol()
@@ -336,6 +339,8 @@ class AsyncClient(ClientMixin):
 
         self._exec_time = 0
         self._last_error = 0
+        self._on_operation = on_operation
+        self._operation_depth: ContextVar[int] = ContextVar("snap7_async_client_operation_depth", default=0)
 
         self._lock = asyncio.Lock()
         self._rate_limiter = RequestRateLimiter(
@@ -539,6 +544,7 @@ class AsyncClient(ClientMixin):
     # Core read / write
     # ---------------------------------------------------------------
 
+    @_instrumented("read_area")
     async def read_area(self, area: Area, db_number: int, start: int, size: int) -> bytearray:
         """Read data from memory area.
 
@@ -585,6 +591,7 @@ class AsyncClient(ClientMixin):
         self._exec_time = int((time.time() - start_time) * 1000)
         return result
 
+    @_instrumented("write_area")
     async def write_area(self, area: Area, db_number: int, start: int, data: bytearray) -> int:
         """Write data to memory area.
 
@@ -630,6 +637,7 @@ class AsyncClient(ClientMixin):
         self._exec_time = int((time.time() - start_time) * 1000)
         return 0
 
+    @_instrumented("read_multi_vars")
     async def read_multi_vars(self, items: List[dict[str, Any]]) -> Tuple[int, list[bytearray]]:
         """Read multiple variables (sequentially, one read_area per item).
 
@@ -654,6 +662,7 @@ class AsyncClient(ClientMixin):
             results.append(data)
         return (0, results)
 
+    @_instrumented("write_multi_vars")
     async def write_multi_vars(self, items: List[dict[str, Any]]) -> int:
         """Write multiple variables (sequentially, one write_area per item).
 
@@ -812,6 +821,7 @@ class AsyncClient(ClientMixin):
     # Upload / Download / Delete
     # ---------------------------------------------------------------
 
+    @_instrumented("upload")
     async def upload(self, block_num: int) -> bytearray:
         """Upload block from PLC (3-step: START_UPLOAD, UPLOAD, END_UPLOAD)."""
         if not self.get_connected():
@@ -843,6 +853,7 @@ class AsyncClient(ClientMixin):
         logger.info(f"Uploaded {len(block_data)} bytes from block {block_num}")
         return block_data
 
+    @_instrumented("download")
     async def download(self, data: bytearray, block_num: int = -1) -> int:
         """Download block to PLC."""
         if not self.get_connected():
