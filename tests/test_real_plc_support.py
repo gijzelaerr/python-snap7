@@ -9,8 +9,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests.real_plc.reporting import RealPLCReport, sanitize_diagnostic
-from tests.real_plc.support import ScratchRestoreGuard, assert_canonical_fixture, canonical_fixture_bytes
+from snap7.type import S7OrderCode
+from tests.real_plc.reporting import RealPLCReport, sanitize_diagnostic, sanitize_junit
+from tests.real_plc.support import (
+    ClassicS7Adapter,
+    PLCConfig,
+    ScratchRestoreGuard,
+    assert_canonical_fixture,
+    canonical_fixture_bytes,
+)
 
 
 def test_canonical_fixture_validates_all_documented_types() -> None:
@@ -75,3 +82,36 @@ def test_report_sanitizes_network_and_credentials(tmp_path: Path, monkeypatch: p
 
 def test_sanitize_diagnostic_caps_size() -> None:
     assert len(sanitize_diagnostic("x" * 20, limit=5)) == 5
+
+
+def test_plc_config_repr_omits_host() -> None:
+    config = PLCConfig(host="plc.example.internal", port=102, rack=0, slot=1, read_db=1, write_db=2)
+    assert "plc.example.internal" not in repr(config)
+
+
+def test_runtime_metadata_reports_order_code() -> None:
+    adapter = ClassicS7Adapter(PLCConfig(host="unused", port=102, rack=0, slot=1, read_db=1, write_db=2))
+    adapter.client = MagicMock()
+    adapter.client.get_order_code.return_value = S7OrderCode(b"6ES7 212-1AE40-0XB0 ", 4, 7, 3)
+    adapter.client.get_cpu_state.return_value = "S7CpuStatusRun"
+    metadata = adapter.runtime_metadata()
+    assert metadata["order_code"] == "6ES7 212-1AE40-0XB0 "
+    assert metadata["firmware"] == "4.7.3"
+    assert "order_code_status" not in metadata
+
+
+def test_sanitize_junit_removes_host_details(tmp_path: Path) -> None:
+    junit = tmp_path / "report.junit.xml"
+    junit.write_text(
+        '<testsuites><testsuite name="pytest" hostname="lab-bench-7" tests="1">'
+        "<testcase><failure>PLCConfig(host='plc.example.internal') connect 192.168.10.2</failure></testcase>"
+        "</testsuite></testsuites>",
+        encoding="utf-8",
+    )
+    sanitize_junit(junit, ("plc.example.internal",))
+    text = junit.read_text(encoding="utf-8")
+    assert "lab-bench-7" not in text
+    assert "hostname" not in text
+    assert "plc.example.internal" not in text
+    assert "192.168.10.2" not in text
+    assert 'tests="1"' in text

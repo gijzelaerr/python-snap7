@@ -4,10 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+# Run as a script from tools/, so make the repository's tests package importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from tests.real_plc.reporting import sanitize_junit  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,7 +76,10 @@ def main() -> int:
         pytest_args.append("--allow-plc-write")
     if args.allow_admin:
         pytest_args.append("--allow-plc-admin")
-    return pytest.main(pytest_args)
+    exit_code = pytest.main(pytest_args)
+    if junit.exists():
+        sanitize_junit(junit, (args.plc_ip,))
+    return int(exit_code)
 
 
 if __name__ == "__main__":
