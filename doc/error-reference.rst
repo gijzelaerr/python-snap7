@@ -20,6 +20,13 @@ The following table maps common S7 error strings to their likely cause and fix.
        S7-1500 PLCs restrict certain operations.
      - Check Siemens documentation for your PLC model. Some functions are only
        available on S7-300/400.
+   * - ``S7 protocol error (class=0x81, code=0x04): This service is not
+       implemented on the module``
+     - The CPU does not support the requested service. In hardware tests, an
+       S7-1200 with PUT/GET enabled returned it for block upload, and an
+       S7-1500 with PUT/GET disabled returned it for every read.
+     - Enable PUT/GET for reads and writes. Treat block upload and download
+       as unsupported on S7-1200/1500 unless verified on your CPU.
    * - ``CPU : Item not available``
      - Wrong DB number, the DB does not exist, or the address is out of range.
      - Verify the DB number exists on the PLC and that the offset and size are

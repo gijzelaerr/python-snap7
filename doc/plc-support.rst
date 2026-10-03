@@ -73,6 +73,13 @@ passwords, diagnostic SZLs, and clock operations vary by model, firmware, and
 protection level. See :doc:`advanced` and handle
 :class:`~snap7.error.S7ProtocolError` when probing optional PLC capabilities.
 
+For example, an S7-1200 CPU 1212C (firmware V4.7.3) with PUT/GET enabled
+serves DB reads and writes but refuses ``upload()`` of a non-optimized DB with
+``S7ProtocolError`` class 0x81, code 0x04 ("This service is not implemented on
+the module") (`#907 <https://github.com/gijzelaerr/python-snap7/issues/907>`_).
+Treat block upload and download on S7-1200/1500 as unsupported unless verified
+on your CPU and firmware.
+
 Alternatives for Unsupported PLCs
 ---------------------------------
 
