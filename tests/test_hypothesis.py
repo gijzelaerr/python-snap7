@@ -90,8 +90,7 @@ def test_bool_roundtrip_any_bit(bit_index: int, value: bool) -> None:
 def test_byte_roundtrip(value: int) -> None:
     data = bytearray(1)
     set_byte(data, 0, value)
-    # get_byte returns the value as an int (despite the bytes type annotation)
-    assert get_byte(data, 0) == value  # type: ignore[comparison-overlap]
+    assert get_byte(data, 0) == value
 
 
 @given(st.integers(min_value=0, max_value=255))

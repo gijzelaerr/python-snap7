@@ -32,7 +32,7 @@ def get_bool(bytearray_: Buffer, byte_index: int, bool_index: int) -> bool:
     return current_value == index_value
 
 
-def get_byte(bytearray_: Buffer, byte_index: int) -> bytes:
+def get_byte(bytearray_: Buffer, byte_index: int) -> int:
     """Get byte value from bytearray.
 
     Notes:
@@ -48,11 +48,11 @@ def get_byte(bytearray_: Buffer, byte_index: int) -> bytes:
     data = bytearray_[byte_index : byte_index + 1]
     data[0] = data[0] & 0xFF
     packed = struct.pack("B", *data)
-    value: bytes = struct.unpack("B", packed)[0]
+    value: int = struct.unpack("B", packed)[0]
     return value
 
 
-def get_word(bytearray_: Buffer, byte_index: int) -> bytearray:
+def get_word(bytearray_: Buffer, byte_index: int) -> int:
     """Get word value from bytearray.
 
     Notes:
@@ -73,7 +73,7 @@ def get_word(bytearray_: Buffer, byte_index: int) -> bytearray:
     data[1] = data[1] & 0xFF
     data[0] = data[0] & 0xFF
     packed = struct.pack("2B", *data)
-    value: bytearray = struct.unpack(">H", packed)[0]
+    value: int = struct.unpack(">H", packed)[0]
     return value
 
 
@@ -122,7 +122,7 @@ def get_uint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_uint(data, 0)
             65535
     """
-    return int(get_word(bytearray_, byte_index))
+    return get_word(bytearray_, byte_index)
 
 
 def get_real(bytearray_: Buffer, byte_index: int) -> float:

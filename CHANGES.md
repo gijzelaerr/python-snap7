@@ -9,6 +9,8 @@ Unreleased
 * Add an `on_operation` callback to the synchronous and asynchronous clients,
   invoked after each PLC operation with its name, duration, and whether it
   raised (#843).
+* Fix the return type annotations of `snap7.util.get_byte` and `get_word`, which
+  return `int`, not `bytes`/`bytearray`.
 
 3.2.0
 -----

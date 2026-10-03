@@ -75,7 +75,7 @@ class TestGetterSetterRoundtrip:
     def test_byte(self, value: int) -> None:
         data = bytearray(1)
         set_byte(data, 0, value)
-        assert get_byte(data, 0) == value  # type: ignore[comparison-overlap]
+        assert get_byte(data, 0) == value
 
     @given(st.integers(-128, 127))
     def test_sint(self, value: int) -> None:
@@ -105,7 +105,7 @@ class TestGetterSetterRoundtrip:
     def test_word(self, value: int) -> None:
         data = bytearray(2)
         set_word(data, 0, value)
-        assert get_word(data, 0) == value  # type: ignore[comparison-overlap]
+        assert get_word(data, 0) == value
 
     @given(st.integers(-2147483648, 2147483647))
     def test_dint(self, value: int) -> None:
