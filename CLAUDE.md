@@ -76,14 +76,13 @@ The Makefile wraps the same commands (`make setup`, `make test`, `make mypy`, `m
   on the ruff-format hook. If the hook reformats, amend and re-push.
 - **If using AI coding assistants**: review the generated code carefully. Large, unfocused, or unreviewed
   AI-generated PRs are likely to be rejected.
+- **No AI attribution**: never add AI assistants as author or co-author, and never add `Co-Authored-By:` trailers,
+  "Generated with ..." footers, or similar AI attribution to commit messages, PR descriptions, or issue comments.
 
-## Release Branches and Changelog
+## Releases and Changelog
 
-- `master` contains the complete changelog, including releases made from maintenance branches.
-- Maintain pending maintenance-release notes on the relevant release branch (for example, `v3.1`).
-- After tagging a maintenance release, immediately forward-port its finalized `CHANGES.md` section to `master` in a
-  changelog-only pull request. Do not merge the maintenance branch into `master`.
-- Changes intended for both lines should normally land on `master` first and then be cherry-picked to the
-  maintenance branch.
-- A release is not complete until its finalized changelog section is present on `master`; the production publish
-  workflow enforces this before uploading to PyPI.
+- All releases, including patch releases, are made from `master`. There are no maintenance branches.
+- Add user-facing changes to the `Unreleased` section of `CHANGES.md` in the same PR, with the PR number.
+- To release: in a "Prepare X.Y.Z release" PR, bump `version` in `pyproject.toml`, run `uv lock`, and rename
+  `Unreleased` to the version. After merging, tag `X.Y.Z` on `master` and run the "Publish distribution to PyPI"
+  workflow, which checks that the version's changelog section is on `master`.
