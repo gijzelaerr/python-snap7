@@ -1,18 +1,35 @@
 CHANGES
 ========
 
-Unreleased
-----------
+3.2.1
+-----
 
-* Add a safe, Gherkin-based real-PLC acceptance program with restored scratch
-  writes and sanitized JSON/JUnit reports (#840).
+Bug-fix and packaging release, with a few small additions.
+
+### Packaging
+
+* Include the full test suite (`tests/__init__.py`, `tests/conftest.py`, PLC setup
+  files), examples, docs, and `CHANGES.md` in the source distribution (#912, #913).
+* Remove leftover HarpoS7 test fixtures and transpiler from the S7CommPlus
+  split (#914).
+
+### New features
+
 * Add an `on_operation` callback to the synchronous and asynchronous clients,
   invoked after each PLC operation with its name, duration, and whether it
-  raised (#843).
+  raised, plus an example Prometheus metrics exporter (#843, #901).
+* Add a safe, Gherkin-based real-PLC acceptance program with restored scratch
+  writes and sanitized JSON/JUnit reports (#840, #892, #908).
+
+### Bug fixes
+
+* Match the classic Snap7 upload wire layout, collect every upload fragment, and
+  reject malformed, truncated, or mismatched S7/USERDATA responses (#903).
+* Use the PLC-driven request/response sequence for block download and match
+  classic S7 wire vectors for list-blocks-of-type, set clock, get block info,
+  and password requests (#904).
 * Fix the return type annotations of `snap7.util.get_byte` and `get_word`, which
-  return `int`, not `bytes`/`bytearray`.
-* Include the full test suite (`tests/__init__.py`, `tests/conftest.py`, PLC setup
-  files), examples, docs, and `CHANGES.md` in the source distribution (#912).
+  return `int`, not `bytes`/`bytearray` (#910).
 
 3.2.0
 -----

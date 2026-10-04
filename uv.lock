@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -1030,7 +1030,7 @@ wheels = [
 
 [[package]]
 name = "python-snap7"
-version = "3.2.0"
+version = "3.2.1"
 source = { editable = "." }
 
 [package.optional-dependencies]
