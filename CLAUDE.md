@@ -76,6 +76,8 @@ The Makefile wraps the same commands (`make setup`, `make test`, `make mypy`, `m
   on the ruff-format hook. If the hook reformats, amend and re-push.
 - **If using AI coding assistants**: review the generated code carefully. Large, unfocused, or unreviewed
   AI-generated PRs are likely to be rejected.
+- **No AI attribution**: never add AI assistants as author or co-author, and never add `Co-Authored-By:` trailers,
+  "Generated with ..." footers, or similar AI attribution to commit messages, PR descriptions, or issue comments.
 
 ## Release Branches and Changelog
 
