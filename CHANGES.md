@@ -11,6 +11,8 @@ Unreleased
   raised (#843).
 * Fix the return type annotations of `snap7.util.get_byte` and `get_word`, which
   return `int`, not `bytes`/`bytearray`.
+* Include the full test suite (`tests/__init__.py`, `tests/conftest.py`, PLC setup
+  files), examples, docs, and `CHANGES.md` in the source distribution (#912).
 
 3.2.0
 -----
