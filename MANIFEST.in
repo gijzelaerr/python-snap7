@@ -1,1 +1,9 @@
 include README.rst
+include CHANGES.md
+include LICENSE
+include tox.ini
+graft tests
+prune tests/fixtures
+graft example
+graft doc
+global-exclude *.py[cod] __pycache__
