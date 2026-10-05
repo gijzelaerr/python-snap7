@@ -59,6 +59,25 @@ For S7-1200 and S7-1500 PLCs, classic S7 protocol access requires the
 **PUT/GET** option to be enabled. See :doc:`tia-portal-config` for
 step-by-step instructions.
 
+.. note::
+
+   S7-1200 and S7-1500 CPUs natively speak **S7CommPlus**, the protocol TIA
+   Portal itself uses. python-snap7 does not implement it. What it uses on
+   these CPUs is the classic S7 protocol, which the CPU only serves as a
+   compatibility feature (PUT/GET). That compatibility path is deliberately
+   limited:
+
+   - it only reaches non-optimized data blocks and the I/O, marker, timer and
+     counter areas, so symbolic access to optimized DBs is not possible;
+   - program blocks (OB/FC/FB) and block upload/download are generally
+     refused, and the project source is never available;
+   - it has no authentication, which is why Siemens disables it by default.
+
+   If you need optimized DBs, symbolic access or any of the above, use an
+   S7CommPlus client such as the standalone
+   `s7commplus project <https://github.com/gijzelaerr/s7commplus>`_, OPC UA,
+   or TIA Portal Openness, rather than trying to make python-snap7 do it.
+
 .. warning::
 
    PUT/GET access provides unauthenticated read/write access to PLC memory.
