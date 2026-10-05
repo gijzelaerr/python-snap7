@@ -22,6 +22,26 @@ using the classic S7 protocol. It supports S7-300 and S7-400 controllers, as
 well as S7-1200 and S7-1500 controllers with PUT/GET access enabled. It
 supports Python 3.10+ on Windows, Linux, and macOS without native dependencies.
 
+S7-1200 and S7-1500
+===================
+
+On S7-1200 and S7-1500 controllers, python-snap7 only works when PUT/GET access
+is enabled in TIA Portal, and it cannot access optimized data blocks. PUT/GET
+is unauthenticated and disabled by default, so leaving it disabled is the more
+secure configuration.
+
+If PUT/GET is disabled, or you need optimized data blocks or symbolic access,
+use `s7commplus <https://github.com/gijzelaerr/s7commplus>`_ instead::
+
+   pip install s7commplus
+
+s7commplus is a separate, younger project that implements S7CommPlus, the
+protocol these controllers speak natively. Check the
+`firmware versions validated so far <https://s7commplus.readthedocs.io/en/latest/connections.html>`_
+before relying on it, and see the
+`PLC support matrix <https://python-snap7.readthedocs.io/en/latest/plc-support.html>`_
+for what python-snap7 supports on each controller family.
+
 Installation
 ============
 
