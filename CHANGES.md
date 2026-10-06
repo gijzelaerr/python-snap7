@@ -1,6 +1,15 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### New features
+
+* Add the typed DB accessors (`db_read_int`, `db_write_real`, `db_read_string`, ...,
+  `db_read_array`/`db_write_array`) and the tag helpers (`read_tag`, `write_tag`,
+  `read_tags`) to `AsyncClient`, matching the synchronous `Client`.
+
 3.2.1
 -----
 
