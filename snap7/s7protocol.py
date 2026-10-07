@@ -1288,7 +1288,7 @@ class S7Protocol:
             to_bcd(dt.minute),  # Minute (BCD)
             to_bcd(dt.second),  # Second (BCD)
             to_bcd(millisecond // 10),
-            ((millisecond % 10) << 4) | ((dt.weekday() + 1) & 0x0F),
+            ((millisecond % 10) << 4) | (dt.isoweekday() % 7 + 1),  # S7 weekday: 1=Sunday .. 7=Saturday
         )
 
         # Parameter section for USER_DATA clock request
