@@ -24,6 +24,9 @@ Unreleased
 * `parse_get_clock_response` now accepts the ten-byte S7 clock reply (reserved, century, then the time with milliseconds)
   that native Snap7 and PLCs send, and still accepts the legacy eight-byte form. The bundled server emits the
   ten-byte form (#934).
+* `parse_response` now fails on any nonzero S7 header error word, as native Snap7 does, instead of only when the error
+  class is nonzero. Read and upload responses with error class 0 and a nonzero error code were previously treated as
+  successes while the write path rejected them (#930).
 
 3.2.1
 -----
