@@ -30,6 +30,9 @@ Unreleased
 * `parse_list_blocks_response` now requires exactly the seven four-byte block-type entries (28 bytes) that native Snap7
   expects, with distinct, known type codes. Empty or partial tables and duplicate entries are rejected instead of being
   reported as zero block counts (#939).
+* `set_plc_datetime` and the session-password calls now accept the null acknowledgement (return code 0x0A, no data) that
+  real PLCs send for services that return no data, instead of failing with "Object does not exist". The bundled
+  server acknowledges these services the same way (#940).
 
 3.2.1
 -----

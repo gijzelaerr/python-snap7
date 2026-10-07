@@ -1945,8 +1945,8 @@ class Server:
 
         logger.info(f"Set clock from {client_address}: {timestamp}")
 
-        # Return success (empty response data)
-        return self._build_userdata_success_response(request, userdata_params, b"")
+        # Return success (null acknowledgement, as real PLCs send for set clock)
+        return self._build_userdata_success_response(request, userdata_params, b"", null_ack=True)
 
     def _handle_security(
         self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
@@ -1958,7 +1958,7 @@ class Server:
         """
         logger.debug(f"Security request from {client_address} (returning success)")
         # Return success - emulator doesn't require password
-        return self._build_userdata_success_response(request, userdata_params, b"")
+        return self._build_userdata_success_response(request, userdata_params, b"", null_ack=True)
 
     def _handle_list_all_blocks(
         self, request: Dict[str, Any], userdata_params: Dict[str, Any], client_address: Tuple[str, int]
@@ -2203,7 +2203,9 @@ class Server:
 
         return header + param_data + data_section
 
-    def _build_userdata_success_response(self, request: Dict[str, Any], userdata_params: Dict[str, Any], data: bytes) -> bytes:
+    def _build_userdata_success_response(
+        self, request: Dict[str, Any], userdata_params: Dict[str, Any], data: bytes, null_ack: bool = False
+    ) -> bytes:
         """
         Build USER_DATA success response PDU.
 
@@ -2211,6 +2213,8 @@ class Server:
             request: Original request
             userdata_params: Parsed USER_DATA parameters
             data: Response data
+            null_ack: Acknowledge with the no-data form a real PLC uses for services that return nothing
+                (return code 0x0A, transport size 0, length 0) instead of 0xFF/0x09
 
         Returns:
             Success response PDU
@@ -2237,7 +2241,10 @@ class Server:
         )
 
         # Data section: return code (0xFF = success) + data
-        data_section = struct.pack(">BBH", 0xFF, 0x09, len(data)) + data
+        if null_ack:
+            data_section = struct.pack(">BBH", 0x0A, 0x00, 0)
+        else:
+            data_section = struct.pack(">BBH", 0xFF, 0x09, len(data)) + data
 
         # Build S7 header for USERDATA (10 bytes, no error_class/error_code in header)
         header = struct.pack(

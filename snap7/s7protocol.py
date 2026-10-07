@@ -1488,6 +1488,8 @@ class S7Protocol:
         response: Dict[str, Any],
         expected_group: int | None = None,
         expected_subfunction: int | None = None,
+        *,
+        accept_null_ack: bool = False,
     ) -> None:
         """Check a USERDATA response for errors.
 
@@ -1496,6 +1498,11 @@ class S7Protocol:
 
         Args:
             response: Parsed S7 response from :meth:`parse_response`.
+            expected_group: Expected function group, if it should be verified.
+            expected_subfunction: Expected subfunction, if it should be verified.
+            accept_null_ack: For services that return no data (set clock, session passwords). Real PLCs
+                acknowledge these with return code 0x0A, transport size 0 and length 0 next to a zero
+                parameter error code, which is then a success.
 
         Raises:
             ~snap7.error.S7ProtocolError: If the response indicates an error.
@@ -1516,7 +1523,13 @@ class S7Protocol:
         data_info = response.get("data", {})
         if isinstance(data_info, dict):
             return_code = data_info.get("return_code", 0xFF)
-            if return_code != 0xFF:
+            null_ack = (
+                accept_null_ack
+                and return_code == 0x0A
+                and data_info.get("transport_size", 0) == 0
+                and data_info.get("data_length", 0) == 0
+            )
+            if return_code != 0xFF and not null_ack:
                 desc = get_return_code_description(return_code)
                 raise S7ProtocolError(f"USERDATA request failed: {desc} (0x{return_code:02x})")
         else:
@@ -1653,7 +1666,9 @@ class S7Protocol:
             raise S7ProtocolError("S7 response contains trailing bytes")
 
         if pdu_type == S7PDUType.USERDATA:
-            self.check_userdata_response(response)
+            # The null acknowledgement is only a success for no-data services; callers that expect data
+            # run check_userdata_response again without accept_null_ack.
+            self.check_userdata_response(response, accept_null_ack=True)
 
         return response
 

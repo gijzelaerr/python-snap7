@@ -1892,7 +1892,9 @@ class Client(ClientMixin):
         # Build and send set clock request
         request = self.protocol.build_set_clock_request(dt)
         response = self._send_receive(request)
-        self.protocol.check_userdata_response(response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK)
+        self.protocol.check_userdata_response(
+            response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK, accept_null_ack=True
+        )
 
         logger.info(f"Set PLC datetime to {dt}")
         return 0
@@ -2093,7 +2095,9 @@ class Client(ClientMixin):
             return self.protocol.build_set_session_password_request(encoded)
 
         response = self._send_receive_with_reconnect(build_request)
-        self.protocol.check_userdata_response(response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.SET_SESSION_PASSWORD)
+        self.protocol.check_userdata_response(
+            response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.SET_SESSION_PASSWORD, accept_null_ack=True
+        )
         logger.info("Session password set successfully")
         return 0
 
@@ -2116,7 +2120,9 @@ class Client(ClientMixin):
             return self.protocol.build_clear_session_password_request()
 
         response = self._send_receive_with_reconnect(build_request)
-        self.protocol.check_userdata_response(response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.CLEAR_SESSION_PASSWORD)
+        self.protocol.check_userdata_response(
+            response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.CLEAR_SESSION_PASSWORD, accept_null_ack=True
+        )
         logger.info("Session password cleared successfully")
         return 0
 

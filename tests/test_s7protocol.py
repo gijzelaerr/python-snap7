@@ -540,6 +540,33 @@ class TestParseResponseHeaderError:
         response = proto.parse_response(self._ack_data(0, 0))
         assert proto.extract_read_data(response, S7WordLen.BYTE, 4) == [0x11, 0x22, 0x33, 0x44]
 
+class TestUserdataNullAck:
+    # Captured from a real S7-300 (Wireshark sample s7comm_reading_setting_plc_time.pcap, frame 44)
+    SET_CLOCK_ACK = bytes.fromhex("320700000c00000c00040001120812870201000000000a000000")
+
+    def test_null_ack_accepted_for_set_clock(self) -> None:
+        proto = S7Protocol()
+        response = proto.parse_response(self.SET_CLOCK_ACK)
+        proto.check_userdata_response(response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK, accept_null_ack=True)
+
+    def test_null_ack_rejected_by_default(self) -> None:
+        proto = S7Protocol()
+        response = proto.parse_response(self.SET_CLOCK_ACK)
+        with pytest.raises(S7ProtocolError, match="0x0a"):
+            proto.check_userdata_response(response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK)
+
+    def test_null_ack_with_parameter_error_rejected(self) -> None:
+        pdu = bytearray(self.SET_CLOCK_ACK)
+        pdu[20:22] = bytes([0x81, 0x04])  # parameter error code
+        with pytest.raises(S7ProtocolError):
+            S7Protocol().parse_response(bytes(pdu))
+
+    def test_other_return_codes_still_rejected_with_null_ack(self) -> None:
+        pdu = bytearray(self.SET_CLOCK_ACK)
+        pdu[22] = 0x05  # address out of range
+        with pytest.raises(S7ProtocolError):
+            S7Protocol().parse_response(bytes(pdu))
+
 
 class TestParseGetClockResponse:
     def setup_method(self) -> None:
