@@ -1599,8 +1599,9 @@ class S7Protocol:
         if pdu_type not in (S7PDUType.ACK, S7PDUType.ACK_DATA, S7PDUType.USERDATA):
             raise S7ProtocolError(f"Expected response PDU, got {pdu_type}")
 
+        # Like native Snap7, treat the whole 16-bit header error word as the failure indicator
         combined_error = (error_class << 8) | error_code
-        if error_class != 0:
+        if combined_error != 0:
             error_msg = get_protocol_error_message(combined_error)
             raise S7ProtocolError(
                 f"S7 protocol error (class={error_class:#04x}, code={error_code:#04x}): {error_msg}",

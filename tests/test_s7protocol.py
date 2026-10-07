@@ -505,6 +505,29 @@ class TestParseReadSZLResponse:
         assert result["data"] == b""
 
 
+class TestParseResponseHeaderError:
+    def _ack_data(self, error_class: int, error_code: int) -> bytes:
+        params = bytes([4, 1])
+        data = bytes([0xFF, 4, 0, 0x20, 0x11, 0x22, 0x33, 0x44])
+        return struct.pack(">BBHHHHBB", 0x32, 3, 0, 1, len(params), len(data), error_class, error_code) + params + data
+
+    def test_error_code_with_class_zero_is_rejected(self) -> None:
+        with pytest.raises(S7ProtocolError, match="0x20") as exc_info:
+            S7Protocol().parse_response(self._ack_data(0, 0x20))
+        assert exc_info.value.error_code == 0x0020
+
+    def test_error_class_is_still_rejected(self) -> None:
+        with pytest.raises(S7ProtocolError):
+            S7Protocol().parse_response(self._ack_data(0x81, 0x04))
+
+    def test_zero_error_word_is_accepted(self) -> None:
+        from snap7.datatypes import S7WordLen
+
+        proto = S7Protocol()
+        response = proto.parse_response(self._ack_data(0, 0))
+        assert proto.extract_read_data(response, S7WordLen.BYTE, 4) == [0x11, 0x22, 0x33, 0x44]
+
+
 class TestParseGetClockResponse:
     def setup_method(self) -> None:
         self.proto = S7Protocol()
