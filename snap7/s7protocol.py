@@ -1268,6 +1268,9 @@ class S7Protocol:
 
         Returns:
             Complete S7 PDU for set clock request
+
+        Raises:
+            ValueError: If the year is outside 1990-2089, which the two-digit S7 year cannot represent.
         """
 
         # Convert datetime to BCD format
@@ -1275,6 +1278,9 @@ class S7Protocol:
         def to_bcd(value: int) -> int:
             return ((value // 10) << 4) | (value % 10)
 
+        # The two-digit S7 year maps 90-99 to 1990-1999 and 00-89 to 2000-2089
+        if not 1990 <= dt.year <= 2089:
+            raise ValueError(f"S7 clock supports years 1990-2089, got {dt.year}")
         year = dt.year % 100
         millisecond = dt.microsecond // 1000
         bcd_time = struct.pack(
