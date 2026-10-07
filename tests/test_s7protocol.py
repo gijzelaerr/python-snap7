@@ -378,37 +378,50 @@ class TestParseListBlocksResponse:
     def setup_method(self) -> None:
         self.proto = S7Protocol()
 
+    @staticmethod
+    def _table(entries: list[tuple[int, int]]) -> dict[str, Any]:
+        # Each entry: indicator(0x30) + type + count(2 bytes)
+        return {"data": {"data": b"".join(struct.pack(">BBH", 0x30, t, c) for t, c in entries)}}
+
+    _ALL_TYPES = (0x38, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46)
+
     def test_valid_response(self) -> None:
-        # Build entries: indicator(0x30) + type + count(2 bytes)
-        data = b""
-        data += struct.pack(">BBH", 0x30, 0x38, 5)  # OB: 5
-        data += struct.pack(">BBH", 0x30, 0x41, 3)  # DB: 3
-        data += struct.pack(">BBH", 0x30, 0x43, 7)  # FC: 7
-        response = {"data": {"data": data}}
+        counts = {0x38: 5, 0x41: 3, 0x43: 7}
+        response = self._table([(t, counts.get(t, 0)) for t in self._ALL_TYPES])
         result = self.proto.parse_list_blocks_response(response)
         assert result["OBCount"] == 5
         assert result["DBCount"] == 3
         assert result["FCCount"] == 7
         assert result["FBCount"] == 0
 
-    def test_empty_data(self) -> None:
-        response = {"data": {"data": b""}}
-        result = self.proto.parse_list_blocks_response(response)
-        assert result["DBCount"] == 0
+    def test_empty_data_rejected(self) -> None:
+        with pytest.raises(S7ProtocolError, match="28 bytes"):
+            self.proto.parse_list_blocks_response({"data": {"data": b""}})
 
-    def test_no_data(self) -> None:
-        response: dict[str, Any] = {}
-        result = self.proto.parse_list_blocks_response(response)
-        assert all(v == 0 for v in result.values())
+    def test_no_data_rejected(self) -> None:
+        with pytest.raises(S7ProtocolError, match="28 bytes"):
+            self.proto.parse_list_blocks_response({})
+
+    def test_partial_table_rejected(self) -> None:
+        with pytest.raises(S7ProtocolError, match="28 bytes"):
+            self.proto.parse_list_blocks_response(self._table([(0x38, 1)]))
+
+    def test_oversized_table_rejected(self) -> None:
+        with pytest.raises(S7ProtocolError, match="28 bytes"):
+            self.proto.parse_list_blocks_response(self._table([(t, 0) for t in self._ALL_TYPES] + [(0x41, 1)]))
+
+    def test_duplicate_block_type_rejected(self) -> None:
+        entries = [(t, 0) for t in self._ALL_TYPES[:-1]] + [(0x38, 9)]
+        with pytest.raises(S7ProtocolError, match="Duplicate"):
+            self.proto.parse_list_blocks_response(self._table(entries))
 
     def test_unknown_block_type_rejected(self) -> None:
-        data = struct.pack(">BBH", 0x30, 0xFF, 99)  # unknown type
-        response = {"data": {"data": data}}
+        entries = [(t, 0) for t in self._ALL_TYPES[:-1]] + [(0xFF, 99)]
         with pytest.raises(S7ProtocolError, match="entry"):
-            self.proto.parse_list_blocks_response(response)
+            self.proto.parse_list_blocks_response(self._table(entries))
 
     def test_truncated_entry_rejected(self) -> None:
-        with pytest.raises(S7ProtocolError, match="multiple of four"):
+        with pytest.raises(S7ProtocolError, match="28 bytes"):
             self.proto.parse_list_blocks_response({"data": {"data": b"\x30\x41\x00"}})
 
 
