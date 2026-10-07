@@ -21,6 +21,9 @@ Unreleased
   day was off by one position. The bundled server's clock reply uses the same convention now (#932).
 * `set_plc_datetime` now raises `ValueError` for years outside 1990-2089 instead of silently sending a different
   year, since the two-digit S7 year cannot represent them (#933).
+* `parse_get_clock_response` now accepts the ten-byte S7 clock reply (reserved, century, then the time with milliseconds)
+  that native Snap7 and PLCs send, and still accepts the legacy eight-byte form. The bundled server emits the
+  ten-byte form (#934).
 
 3.2.1
 -----
