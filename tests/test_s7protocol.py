@@ -264,6 +264,15 @@ class TestManagementAndDownloadVectors:
             when = datetime(2026, 9, 27, 12, 0, 0) + timedelta(days=offset)
             assert self.proto.build_set_clock_request(when)[-1] & 0x0F == expected, when.strftime("%A")
 
+    def test_set_clock_year_range(self) -> None:
+        from datetime import datetime
+
+        assert self.proto.build_set_clock_request(datetime(1990, 1, 1))
+        assert self.proto.build_set_clock_request(datetime(2089, 12, 31, 23, 59, 59))
+        for year in (1989, 2090):
+            with pytest.raises(ValueError, match="1990-2089"):
+                self.proto.build_set_clock_request(datetime(year, 1, 1))
+
     def test_request_db_download(self) -> None:
         assert self.proto.build_download_request(0x41, 1, bytes(64)).hex() == (
             "320100000001002000001a00010000000000095f30413030303031500d31303030303634303030303238"

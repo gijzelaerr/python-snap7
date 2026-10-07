@@ -19,6 +19,8 @@ Unreleased
   (`'0' type '00001' 'A'`), instead of before it. The bundled server parses the new layout (#929).
 * `set_plc_datetime` encoded the weekday as Monday=1, but S7 DATE_AND_TIME counts Sunday=1 .. Saturday=7, so every
   day was off by one position. The bundled server's clock reply uses the same convention now (#932).
+* `set_plc_datetime` now raises `ValueError` for years outside 1990-2089 instead of silently sending a different
+  year, since the two-digit S7 year cannot represent them (#933).
 
 3.2.1
 -----
