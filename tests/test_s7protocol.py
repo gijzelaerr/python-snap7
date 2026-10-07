@@ -540,6 +540,7 @@ class TestParseResponseHeaderError:
         response = proto.parse_response(self._ack_data(0, 0))
         assert proto.extract_read_data(response, S7WordLen.BYTE, 4) == [0x11, 0x22, 0x33, 0x44]
 
+
 class TestUserdataNullAck:
     # Captured from a real S7-300 (Wireshark sample s7comm_reading_setting_plc_time.pcap, frame 44)
     SET_CLOCK_ACK = bytes.fromhex("320700000c00000c00040001120812870201000000000a000000")
