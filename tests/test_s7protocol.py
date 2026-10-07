@@ -274,6 +274,16 @@ class TestManagementAndDownloadVectors:
             with pytest.raises(ValueError, match="1990-2089"):
                 self.proto.build_set_clock_request(datetime(year, 1, 1))
 
+    def test_compress_request_matches_real_job(self) -> None:
+        # Parameter block sent by an engineering tool (CISA icsnpp-s7comm snap7.pcap): _GARB
+        request = self.proto.build_compress_request()
+        assert request[10:] == bytes.fromhex("28000000000000fd0000055f47415242")
+
+    def test_copy_ram_to_rom_request_matches_real_job(self) -> None:
+        # Parameter block sent by an engineering tool (CISA icsnpp-s7comm snap7.pcap): file system EP, _MODU
+        request = self.proto.build_copy_ram_to_rom_request()
+        assert request[10:] == bytes.fromhex("28000000000000fd00024550055f4d4f4455")
+
     def test_request_db_download(self) -> None:
         assert self.proto.build_download_request(0x41, 1, bytes(64)).hex() == (
             "320100000001002000001a00010000000000095f30413030303031500d31303030303634303030303238"

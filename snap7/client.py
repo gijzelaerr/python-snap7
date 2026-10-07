@@ -1917,7 +1917,7 @@ class Client(ClientMixin):
         """
         Compress PLC memory.
 
-        Sends real S7 PLC_CONTROL protocol with PI service "_MSZL".
+        Sends real S7 PLC_CONTROL protocol with PI service "_GARB".
 
         Args:
             timeout: Timeout in milliseconds (used for receive timeout)
@@ -1940,7 +1940,7 @@ class Client(ClientMixin):
         """
         Copy RAM to ROM.
 
-        Sends real S7 PLC_CONTROL protocol with PI service "_MSZL" and file ID "P".
+        Sends real S7 PLC_CONTROL protocol with PI service "_MODU" and file system "EP".
 
         Args:
             timeout: Timeout in milliseconds (used for receive timeout)

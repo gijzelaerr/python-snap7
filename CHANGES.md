@@ -33,6 +33,9 @@ Unreleased
 * `set_plc_datetime` and the session-password calls now accept the null acknowledgement (return code 0x0A, no data) that
   real PLCs send for services that return no data, instead of failing with "Object does not exist". The bundled
   server acknowledges these services the same way (#940).
+* Compress now uses the PI service `_GARB` and copy RAM to ROM uses file system `EP` with `_MODU`, matching real
+  engineering tools and native Snap7, instead of the invented `_MSZL`. The bundled server recognises the new
+  requests (#941).
 
 3.2.1
 -----
