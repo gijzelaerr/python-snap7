@@ -1059,8 +1059,8 @@ class S7Protocol:
         # Data section: SZL ID and Index
         data_section = struct.pack(
             ">BBHHH",
-            0x0A,  # Return value (request)
-            0x00,  # Transport size
+            0xFF,  # Return value (0xFF, as engineering tools and native Snap7 send for requests carrying data)
+            0x09,  # Transport size (octet string)
             0x0004,  # Length (4 bytes for ID + Index)
             szl_id,  # SZL ID
             szl_index,  # SZL Index
@@ -1091,18 +1091,23 @@ class S7Protocol:
         Returns:
             Complete S7 PDU for follow-up request
         """
-        # Parameter section: same as initial but with DataRef = sequence_number
+        # Parameter section as sent by engineering tools for continuation requests: 12 bytes, method 0x12,
+        # DataRef = sequence_number, followed by last-data-unit and error code fields set to zero
         type_group = 0x40 | (group & 0x0F)  # Type 4 (request) | group
         param_data = struct.pack(
-            ">BBBBBBBB",
+            ">BBBBBBBBBBBB",
             0x00,  # Reserved
             0x01,  # Parameter count
             0x12,  # Type/length header
-            0x04,  # Length of following data
-            0x11,  # Method (0x11 = request)
+            0x08,  # Length of following data
+            0x12,  # Method (0x12)
             type_group,  # Type | Group
             subfunction,  # Subfunction
             sequence_number,  # DataRef from previous response
+            0x00,  # Last data unit
+            0x00,  # Reserved
+            0x00,  # Error code high
+            0x00,  # Error code low
         )
 
         # Minimal data section for follow-up

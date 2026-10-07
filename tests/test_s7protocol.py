@@ -284,6 +284,12 @@ class TestManagementAndDownloadVectors:
         request = self.proto.build_copy_ram_to_rom_request()
         assert request[10:] == bytes.fromhex("28000000000000fd00024550055f4d4f4455")
 
+    def test_read_szl_request_matches_real_tool(self) -> None:
+        # Captured from a real S7-300 session: SZL id 0x0132 index 4. Bytes 4-5 are the PDU reference.
+        real = bytes.fromhex("320700000300000800080001120411440100ff09000401320004")
+        request = self.proto.build_read_szl_request(0x0132, 4)
+        assert request[:4] + request[6:] == real[:4] + real[6:]
+
     def test_request_db_download(self) -> None:
         assert self.proto.build_download_request(0x41, 1, bytes(64)).hex() == (
             "320100000001002000001a00010000000000095f30413030303031500d31303030303634303030303238"

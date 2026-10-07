@@ -136,7 +136,7 @@ class TestFollowupRequestBuilder:
         # Extract param_len and data_len from header
         param_len = struct.unpack(">H", pdu[6:8])[0]
         data_len = struct.unpack(">H", pdu[8:10])[0]
-        assert param_len == 8
+        assert param_len == 12
         assert data_len == 4
 
         # Parameter section starts at offset 10
@@ -144,11 +144,12 @@ class TestFollowupRequestBuilder:
         assert params[0] == 0x00  # Reserved
         assert params[1] == 0x01  # Param count
         assert params[2] == 0x12  # Type header
-        assert params[3] == 0x04  # Length
-        assert params[4] == 0x11  # Method (request)
+        assert params[3] == 0x08  # Length
+        assert params[4] == 0x12  # Method, as engineering tools send for continuation requests
         assert params[5] == 0x44  # Type(4) | Group(4=SZL)
         assert params[6] == 0x01  # Subfunction
         assert params[7] == 0x02  # DataRef = sequence_number
+        assert params[8:12] == bytes(4)
 
         # Data section
         data = pdu[10 + param_len :]
