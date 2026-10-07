@@ -998,10 +998,10 @@ class S7Protocol:
             0x00,  # DataRef (0x00 for initial request)
         )
 
-        # Data section: [0x30, type, 'A', ASCII_num(5)] per Snap7 C format
+        # Data section: [0x30, type, ASCII_num(5), 'A'] per Snap7 C TReqDataBlockInfo
         # Block number is 5-digit zero-padded ASCII (e.g., 1 -> "00001")
         block_num_ascii = f"{block_num:05d}".encode("ascii")
-        data_payload = struct.pack(">BB", 0x30, block_type) + b"A" + block_num_ascii
+        data_payload = struct.pack(">BB", 0x30, block_type) + block_num_ascii + b"A"
         data_section = struct.pack(">BBH", 0xFF, 0x09, len(data_payload)) + data_payload
 
         # S7 header for USER_DATA

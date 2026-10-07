@@ -2098,13 +2098,13 @@ class Server:
         # Block type code constants
         block_db = 0x41  # Data Block
 
-        # Parse request: handle new format [0x30, type, 'A', ASCII_num(5)]
+        # Parse request: handle the Snap7 format [0x30, type, ASCII_num(5), 'A']
         # and old format [type, num(2), 0x41]
         if len(raw_data) >= 8 and raw_data[0] == 0x30:
-            # New format: 0x30 + type + 'A' + 5-digit ASCII number
+            # Snap7 format: 0x30 + type + 5-digit ASCII number + 'A'
             requested_type = raw_data[1]
             try:
-                block_number = int(raw_data[3:8].decode("ascii"))
+                block_number = int(raw_data[2:7].decode("ascii"))
             except (ValueError, UnicodeDecodeError):
                 block_number = 1
         elif len(raw_data) >= 3:
