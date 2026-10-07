@@ -10,9 +10,9 @@ import asyncio
 import logging
 import struct
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextvars import ContextVar
-from typing import List, Any, Optional, Tuple, Type
+from typing import List, Any, Optional, Tuple, Type, Union
 from types import TracebackType
 from datetime import datetime
 
@@ -21,6 +21,8 @@ from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_
 from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin, _instrumented
+from .tags import Tag
+from .client import Client, _decode_tag, _encode_tag
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
 from .client import _parse_force_szl
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
@@ -59,6 +61,8 @@ class AsyncISOTCPConnection:
     COTP_PARAM_PDU_SIZE = 0xC0
     COTP_PARAM_CALLING_TSAP = 0xC1
     COTP_PARAM_CALLED_TSAP = 0xC2
+    COTP_PARAM_SUBNET_ID = 0xC6
+    COTP_PARAM_ROUTING_TSAP = 0xC7
 
     def __init__(
         self,
@@ -82,6 +86,17 @@ class AsyncISOTCPConnection:
 
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
+
+        # Routing parameters (set via set_routing)
+        self._routing: bool = False
+        self._subnet_id: int = 0
+        self._routing_tsap: int = 0
+
+    def set_routing(self, subnet_id: int, dest_rack: int, dest_slot: int) -> None:
+        """Configure S7 routing parameters for multi-subnet access (experimental)."""
+        self._routing = True
+        self._subnet_id = subnet_id & 0xFFFF
+        self._routing_tsap = 0x0100 | (dest_rack << 5) | dest_slot
 
     async def connect(self, timeout: float = 5.0) -> None:
         """Establish ISO on TCP connection."""
@@ -204,6 +219,9 @@ class AsyncISOTCPConnection:
         called_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLED_TSAP, 2, self.remote_tsap)
         pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
         parameters = calling_tsap + called_tsap + pdu_size_param
+        if self._routing:
+            parameters += struct.pack(">BBH", self.COTP_PARAM_SUBNET_ID, 2, self._subnet_id)
+            parameters += struct.pack(">BBH", self.COTP_PARAM_ROUTING_TSAP, 2, self._routing_tsap)
         total_length = 6 + len(parameters)
         cr_pdu = struct.pack(">B", total_length) + base_pdu[1:] + parameters
 
@@ -457,6 +475,78 @@ class AsyncClient(ClientMixin):
 
         return self
 
+    @property
+    def is_alive(self) -> bool:
+        """Whether the client is connected.
+
+        Unlike the synchronous client there is no background heartbeat, so this
+        reflects the connection state seen by the last operation.
+        """
+        return self.connected and self.connection is not None and self.connection.connected
+
+    async def connect_routed(
+        self,
+        host: str,
+        router_rack: int,
+        router_slot: int,
+        subnet: int,
+        dest_rack: int,
+        dest_slot: int,
+        port: int = 102,
+        timeout: float = 5.0,
+    ) -> "AsyncClient":
+        """Connect to an S7 PLC via a routing gateway on another subnet.
+
+        .. warning:: This method is experimental and may change in future versions.
+
+        Args:
+            host: IP address of the routing gateway PLC
+            router_rack: Rack number of the gateway PLC
+            router_slot: Slot number of the gateway PLC
+            subnet: Subnet ID of the target network (0x0000-0xFFFF)
+            dest_rack: Rack number of the destination PLC
+            dest_slot: Slot number of the destination PLC
+            port: TCP port (default 102)
+            timeout: Connection timeout in seconds
+
+        Returns:
+            Self for method chaining
+        """
+        self.host = host
+        self.port = port
+        self.rack = router_rack
+        self.slot = router_slot
+        self._params[Parameter.RemotePort] = port
+
+        # Remote TSAP targets the gateway rack/slot
+        self.remote_tsap = (self.connection_type << 8) | (router_rack << 5) | router_slot
+
+        try:
+            start_time = time.time()
+
+            self.connection = AsyncISOTCPConnection(
+                host=host, port=port, local_tsap=self.local_tsap, remote_tsap=self.remote_tsap
+            )
+            self.connection.set_routing(subnet, dest_rack, dest_slot)
+            await self.connection.connect(timeout=timeout)
+
+            await self._setup_communication()
+
+            self.connected = True
+            self._exec_time = int((time.time() - start_time) * 1000)
+            logger.info(
+                f"Connected (routed) to {host}:{port} via rack {router_rack} slot {router_slot}, "
+                f"subnet {subnet:#06x} -> rack {dest_rack} slot {dest_slot}"
+            )
+        except Exception as e:
+            await self.disconnect()
+            if isinstance(e, S7Error):
+                raise
+            else:
+                raise S7ConnectionError(f"Routed connection failed: {e}")
+
+        return self
+
     async def disconnect(self) -> int:
         """Disconnect from S7 PLC.
 
@@ -507,6 +597,224 @@ class AsyncClient(ClientMixin):
         logger.debug(f"db_write: DB{db_number}, start={start}, size={len(data)}")
         await self.write_area(Area.DB, db_number, start, data)
         return 0
+
+    # ---------------------------------------------------------------
+    # Typed DB access and tag helpers (parity with the sync Client)
+    # ---------------------------------------------------------------
+
+    async def db_read_array(self, db_number: int, start: int, count: int, fmt: str = ">f") -> list[Any]:
+        """Read *count* consecutive values of struct format *fmt* from a DB."""
+        item_size = struct.calcsize(fmt)
+        data = await self.db_read(db_number, start, item_size * count)
+        return [struct.unpack_from(fmt, data, i * item_size)[0] for i in range(count)]
+
+    async def db_write_array(self, db_number: int, start: int, values: list[Any], fmt: str = ">f") -> int:
+        """Write *values* packed with struct format *fmt* to a DB. Returns 0 on success."""
+        item_size = struct.calcsize(fmt)
+        data = bytearray(item_size * len(values))
+        for i, v in enumerate(values):
+            struct.pack_into(fmt, data, i * item_size, v)
+        return await self.db_write(db_number, start, data)
+
+    async def db_read_bool(self, db_number: int, byte_offset: int, bit_offset: int) -> bool:
+        """Read a single bit from a DB."""
+        from .util import get_bool
+
+        data = await self.db_read(db_number, byte_offset, 1)
+        return get_bool(data, 0, bit_offset)
+
+    async def db_write_bool(self, db_number: int, byte_offset: int, bit_offset: int, value: bool) -> None:
+        """Write a single bit to a DB, preserving the other bits in the byte."""
+        from .util import set_bool
+
+        data = await self.db_read(db_number, byte_offset, 1)
+        set_bool(data, 0, bit_offset, value)
+        await self.db_write(db_number, byte_offset, data)
+
+    async def db_read_byte(self, db_number: int, offset: int) -> int:
+        """Read a BYTE (8-bit unsigned) from a DB."""
+        data = await self.db_read(db_number, offset, 1)
+        return data[0]
+
+    async def db_write_byte(self, db_number: int, offset: int, value: int) -> None:
+        """Write a BYTE (8-bit unsigned) to a DB."""
+        from .util import set_byte
+
+        data = bytearray(1)
+        set_byte(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_int(self, db_number: int, offset: int) -> int:
+        """Read an INT (16-bit signed) from a DB."""
+        from .util import get_int
+
+        return get_int(await self.db_read(db_number, offset, 2), 0)
+
+    async def db_write_int(self, db_number: int, offset: int, value: int) -> None:
+        """Write an INT (16-bit signed) to a DB."""
+        from .util import set_int
+
+        data = bytearray(2)
+        set_int(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_uint(self, db_number: int, offset: int) -> int:
+        """Read a UINT (16-bit unsigned) from a DB."""
+        from .util import get_uint
+
+        return get_uint(await self.db_read(db_number, offset, 2), 0)
+
+    async def db_write_uint(self, db_number: int, offset: int, value: int) -> None:
+        """Write a UINT (16-bit unsigned) to a DB."""
+        from .util import set_uint
+
+        data = bytearray(2)
+        set_uint(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_word(self, db_number: int, offset: int) -> int:
+        """Read a WORD (16-bit unsigned) from a DB."""
+        data = await self.db_read(db_number, offset, 2)
+        return (data[0] << 8) | data[1]
+
+    async def db_write_word(self, db_number: int, offset: int, value: int) -> None:
+        """Write a WORD (16-bit unsigned) to a DB."""
+        from .util import set_word
+
+        data = bytearray(2)
+        set_word(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_dint(self, db_number: int, offset: int) -> int:
+        """Read a DINT (32-bit signed) from a DB."""
+        from .util import get_dint
+
+        return get_dint(await self.db_read(db_number, offset, 4), 0)
+
+    async def db_write_dint(self, db_number: int, offset: int, value: int) -> None:
+        """Write a DINT (32-bit signed) to a DB."""
+        from .util import set_dint
+
+        data = bytearray(4)
+        set_dint(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_udint(self, db_number: int, offset: int) -> int:
+        """Read a UDINT (32-bit unsigned) from a DB."""
+        from .util import get_udint
+
+        return get_udint(await self.db_read(db_number, offset, 4), 0)
+
+    async def db_write_udint(self, db_number: int, offset: int, value: int) -> None:
+        """Write a UDINT (32-bit unsigned) to a DB."""
+        from .util import set_udint
+
+        data = bytearray(4)
+        set_udint(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_dword(self, db_number: int, offset: int) -> int:
+        """Read a DWORD (32-bit unsigned) from a DB."""
+        from .util import get_dword
+
+        return get_dword(await self.db_read(db_number, offset, 4), 0)
+
+    async def db_write_dword(self, db_number: int, offset: int, value: int) -> None:
+        """Write a DWORD (32-bit unsigned) to a DB."""
+        from .util import set_dword
+
+        data = bytearray(4)
+        set_dword(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_real(self, db_number: int, offset: int) -> float:
+        """Read a REAL (32-bit float) from a DB."""
+        from .util import get_real
+
+        return get_real(await self.db_read(db_number, offset, 4), 0)
+
+    async def db_write_real(self, db_number: int, offset: int, value: float) -> None:
+        """Write a REAL (32-bit float) to a DB."""
+        from .util import set_real
+
+        data = bytearray(4)
+        set_real(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_lreal(self, db_number: int, offset: int) -> float:
+        """Read a LREAL (64-bit float) from a DB."""
+        from .util import get_lreal
+
+        return get_lreal(await self.db_read(db_number, offset, 8), 0)
+
+    async def db_write_lreal(self, db_number: int, offset: int, value: float) -> None:
+        """Write a LREAL (64-bit float) to a DB."""
+        from .util import set_lreal
+
+        data = bytearray(8)
+        set_lreal(data, 0, value)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_string(self, db_number: int, offset: int) -> str:
+        """Read an S7 STRING from a DB (header first to learn the max length)."""
+        from .util import get_string
+
+        header = await self.db_read(db_number, offset, 2)
+        data = await self.db_read(db_number, offset, 2 + header[0])
+        return get_string(data, 0)
+
+    async def db_write_string(self, db_number: int, offset: int, value: str, max_length: int = 254) -> None:
+        """Write an S7 STRING with the given maximum length to a DB."""
+        from .util import set_string
+
+        data = bytearray(2 + max_length)
+        set_string(data, 0, value, max_length)
+        await self.db_write(db_number, offset, data)
+
+    async def db_read_wstring(self, db_number: int, offset: int) -> str:
+        """Read an S7 WSTRING from a DB (header first to learn the max length)."""
+        from .util import get_wstring
+
+        header = await self.db_read(db_number, offset, 4)
+        max_len = (header[0] << 8) | header[1]
+        data = await self.db_read(db_number, offset, 4 + max_len * 2)
+        return get_wstring(data, 0)
+
+    async def db_write_wstring(self, db_number: int, offset: int, value: str, max_length: int = 254) -> None:
+        """Write an S7 WSTRING with the given maximum length (in characters) to a DB."""
+        from .util import set_wstring
+
+        data = bytearray(4 + max_length * 2)
+        set_wstring(data, 0, value, max_length)
+        await self.db_write(db_number, offset, data)
+
+    async def read_tag(self, tag: "Union[Tag, str]", encoding: str = "latin-1") -> Any:
+        """Read a typed value by :class:`~snap7.tags.Tag` or PLC4X-style address string."""
+        resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+        if resolved.is_symbolic:
+            raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
+        data = await self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, resolved.size)
+        return _decode_tag(resolved, bytearray(data), encoding=encoding)
+
+    async def write_tag(self, tag: "Union[Tag, str]", value: Any, encoding: str = "latin-1") -> int:
+        """Write a typed value by :class:`~snap7.tags.Tag` or address string. Returns 0 on success."""
+        resolved = Tag.from_string(tag) if isinstance(tag, str) else tag
+        if resolved.is_symbolic:
+            raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
+        buf = bytearray(resolved.size)
+        if resolved.datatype.upper() == "BOOL":
+            # Preserve the other bits of the byte
+            current = await self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, 1)
+            buf[0] = current[0]
+        _encode_tag(resolved, buf, value, encoding=encoding)
+        return await self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
+
+    async def read_tags(self, tags: "Sequence[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
+        """Read multiple tags in a single optimized request, in input order."""
+        resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
+        items = [{"area": Area(t.area), "db_number": t.db_number, "start": t.byte_offset, "size": t.size} for t in resolved]
+        _code, data_list = await self.read_multi_vars(items)
+        return [_decode_tag(t, bytearray(d), encoding=encoding) for t, d in zip(resolved, data_list)]
 
     async def db_get(self, db_number: int, size: int = 0) -> bytearray:
         """Get entire DB.
@@ -1089,6 +1397,14 @@ class AsyncClient(ClientMixin):
             szl.Data[i] = b
 
         return szl
+
+    async def read_diagnostic_buffer(self) -> list[dict[str, Any]]:
+        """Read the PLC diagnostic buffer (experimental), newest first.
+
+        Each entry is a dict with keys ``event_id``, ``timestamp`` and ``info``.
+        """
+        szl = await self.read_szl(0x00A0, 0)
+        return Client._parse_diagnostic_buffer(bytes(szl.Data[: szl.Header.LengthDR]))
 
     async def read_szl_list(self) -> bytes:
         """Read list of available SZL IDs."""
