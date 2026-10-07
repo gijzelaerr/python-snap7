@@ -1318,7 +1318,9 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_set_clock_request(dt)
         response = await self._send_receive(request)
-        self.protocol.check_userdata_response(response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK)
+        self.protocol.check_userdata_response(
+            response, S7UserDataGroup.TIME, S7UserDataSubfunction.SET_CLOCK, accept_null_ack=True
+        )
         logger.info(f"Set PLC datetime to {dt}")
         return 0
 
@@ -1514,7 +1516,9 @@ class AsyncClient(ClientMixin):
         encoded = self.protocol.encode_password(password)
         request = self.protocol.build_set_session_password_request(encoded)
         response = await self._send_receive(request)
-        self.protocol.check_userdata_response(response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.SET_SESSION_PASSWORD)
+        self.protocol.check_userdata_response(
+            response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.SET_SESSION_PASSWORD, accept_null_ack=True
+        )
         logger.info("Session password set successfully")
         return 0
 
@@ -1535,7 +1539,9 @@ class AsyncClient(ClientMixin):
 
         request = self.protocol.build_clear_session_password_request()
         response = await self._send_receive(request)
-        self.protocol.check_userdata_response(response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.CLEAR_SESSION_PASSWORD)
+        self.protocol.check_userdata_response(
+            response, S7UserDataGroup.SECURITY, S7UserDataSubfunction.CLEAR_SESSION_PASSWORD, accept_null_ack=True
+        )
         logger.info("Session password cleared successfully")
         return 0
 
