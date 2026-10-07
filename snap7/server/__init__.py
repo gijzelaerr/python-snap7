@@ -1875,7 +1875,7 @@ class Server:
         - Byte 4: Hour (BCD, 0-23)
         - Byte 5: Minute (BCD, 0-59)
         - Byte 6: Second (BCD, 0-59)
-        - Byte 7: Day of week (1=Monday)
+        - Byte 7: Day of week (1=Sunday .. 7=Saturday)
         """
         from datetime import datetime
 
@@ -1894,7 +1894,7 @@ class Server:
             to_bcd(now.hour),  # Hour (BCD)
             to_bcd(now.minute),  # Minute (BCD)
             to_bcd(now.second),  # Second (BCD)
-            (now.weekday() + 1) & 0x0F,  # Day of week (1=Monday)
+            now.isoweekday() % 7 + 1,  # Day of week (1=Sunday .. 7=Saturday)
         )
 
         logger.debug(f"Get clock from {client_address}: returning {now}")

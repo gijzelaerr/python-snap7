@@ -17,6 +17,8 @@ Unreleased
   capacity of 8192 characters or more was rejected, including ones written by `set_wstring` (#923).
 * The get-block-info request now places the trailing `A` after the block number, as native Snap7 does
   (`'0' type '00001' 'A'`), instead of before it. The bundled server parses the new layout (#929).
+* `set_plc_datetime` encoded the weekday as Monday=1, but S7 DATE_AND_TIME counts Sunday=1 .. Saturday=7, so every
+  day was off by one position. The bundled server's clock reply uses the same convention now (#932).
 
 3.2.1
 -----
