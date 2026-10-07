@@ -36,6 +36,9 @@ Unreleased
 * Compress now uses the PI service `_GARB` and copy RAM to ROM uses file system `EP` with `_MODU`, matching real
   engineering tools and native Snap7, instead of the invented `_MSZL`. The bundled server recognises the new
   requests (#941).
+* Read-SZL requests now carry the `0xFF`/octet-string data header and continuation requests the 12-byte parameter
+  block (method `0x12`) that real engineering tools send; both previously used the header of a request without data
+  and an 8-byte parameter block (#942).
 
 3.2.1
 -----
