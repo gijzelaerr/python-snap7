@@ -114,6 +114,10 @@ _STOP_PARAMS = bytes.fromhex("29000000000009") + b"P_PROGRAM"
 _HOT_START_PARAMS = bytes.fromhex("28000000000000fd000009") + b"P_PROGRAM"
 # Cold start: same as hot start but with block "C " before PI service
 _COLD_START_PARAMS = bytes.fromhex("28000000000000fd0002432009") + b"P_PROGRAM"
+# Compress: function(0x28) + 7 reserved + block count(0) + PI length(5) + "_GARB" (as native Snap7 TReqFunCompress)
+_COMPRESS_PARAMS = bytes.fromhex("28000000000000fd000005") + b"_GARB"
+# Copy RAM to ROM: like compress but with file system "EP" before PI service "_MODU" (native TReqFunCopyRamToRom)
+_COPY_RAM_TO_ROM_PARAMS = bytes.fromhex("28000000000000fd0002455005") + b"_MODU"
 
 
 class S7Protocol:
@@ -402,7 +406,7 @@ class S7Protocol:
         Build PLC control request using the S7 PI service PDU format.
 
         Args:
-            operation: Control operation ('stop', 'hot_start', 'cold_start')
+            operation: Control operation ('stop', 'hot_start', 'cold_start', 'compress', 'copy_ram_to_rom')
 
         Returns:
             Complete S7 PDU for PLC control
@@ -411,6 +415,8 @@ class S7Protocol:
             "stop": _STOP_PARAMS,
             "hot_start": _HOT_START_PARAMS,
             "cold_start": _COLD_START_PARAMS,
+            "compress": _COMPRESS_PARAMS,
+            "copy_ram_to_rom": _COPY_RAM_TO_ROM_PARAMS,
         }
 
         if operation not in params:
@@ -449,87 +455,23 @@ class S7Protocol:
         """
         Build PLC control request for memory compression.
 
-        Uses PI service "_MSZL" (compress memory).
+        Uses PI service "_GARB" (compress memory), as native Snap7 does.
 
         Returns:
             Complete S7 PDU for compress request
         """
-        # PI service command for compress
-        pi_service = b"_MSZL"
-
-        # Parameter section: function code + PI service
-        # Format: func(1) + unknown(7) + pi_len(1) + pi_service
-        param_data = (
-            struct.pack(
-                ">BBBBBBBBB",
-                S7Function.PLC_CONTROL,  # 0x28
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                len(pi_service),  # PI service length
-            )
-            + pi_service
-        )
-
-        header = struct.pack(
-            ">BBHHHH",
-            0x32,  # Protocol ID
-            S7PDUType.REQUEST,  # PDU type
-            0x0000,  # Reserved
-            self._next_sequence(),  # Sequence
-            len(param_data),  # Parameter length
-            0x0000,  # Data length
-        )
-
-        return header + param_data
+        return self.build_plc_control_request("compress")
 
     def build_copy_ram_to_rom_request(self) -> bytes:
         """
         Build PLC control request for copying RAM to ROM.
 
-        Uses PI service "_MSZL" with file system parameters.
+        Uses PI service "_MODU" with the "EP" file system, as native Snap7 does.
 
         Returns:
             Complete S7 PDU for copy RAM to ROM request
         """
-        # PI service command for copy RAM to ROM
-        # Uses EP parameter for target file system
-        pi_service = b"_MSZL"
-        file_id = b"P"  # P = passive file system (ROM)
-
-        # Parameter section with file system identifier
-        param_data = (
-            struct.pack(
-                ">BBBBBBBBB",
-                S7Function.PLC_CONTROL,  # 0x28
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                0x00,  # Reserved
-                len(file_id),  # File ID length
-                len(pi_service),  # PI service length
-            )
-            + file_id
-            + pi_service
-        )
-
-        header = struct.pack(
-            ">BBHHHH",
-            0x32,  # Protocol ID
-            S7PDUType.REQUEST,  # PDU type
-            0x0000,  # Reserved
-            self._next_sequence(),  # Sequence
-            len(param_data),  # Parameter length
-            0x0000,  # Data length
-        )
-
-        return header + param_data
+        return self.build_plc_control_request("copy_ram_to_rom")
 
     # ========================================================================
     # Block Transfer PDU Builders (Upload/Download)

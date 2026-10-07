@@ -1129,14 +1129,10 @@ class Server:
             pi_service = params.get("pi_service", b"")
 
             # Check for PI service operations
-            if pi_service == b"_MSZL":
-                file_id = params.get("file_id", b"")
-                if file_id == b"P":
-                    # Copy RAM to ROM
-                    logger.info(f"Copy RAM to ROM requested from {client_address}")
-                else:
-                    # Compress memory
-                    logger.info(f"Compress memory requested from {client_address}")
+            if pi_service == b"_MODU":
+                logger.info(f"Copy RAM to ROM requested from {client_address}")
+            elif pi_service == b"_GARB":
+                logger.info(f"Compress memory requested from {client_address}")
             elif len(params) >= 2:
                 # Has restart type parameter - start operation
                 restart_type = params.get("restart_type", 1)
@@ -1411,9 +1407,10 @@ class Server:
             if b"P_PROGRAM" in param_data:
                 restart_type = 2 if b"C " in param_data else 1
                 return {"function_code": function_code, "restart_type": restart_type, "pi_service": b"P_PROGRAM"}
-            elif b"_MSZL" in param_data:
-                file_id = b"P" if b"P_MSZL" in param_data else b""
-                return {"function_code": function_code, "pi_service": b"_MSZL", "file_id": file_id}
+            elif b"_MODU" in param_data:
+                return {"function_code": function_code, "pi_service": b"_MODU", "file_id": b"EP"}
+            elif b"_GARB" in param_data:
+                return {"function_code": function_code, "pi_service": b"_GARB"}
             elif b"_DELE" in param_data:
                 return {"function_code": function_code, "pi_service": b"_DELE"}
             if len(param_data) >= 2 and param_data[1] in (1, 2):
