@@ -1341,26 +1341,39 @@ class S7Protocol:
         data_info = response.get("data", {})
         raw_data = data_info.get("data", b"")
 
-        if len(raw_data) != 8:
-            raise S7ProtocolError("Clock response must contain exactly eight bytes")
+        # The S7 clock data is ten bytes: reserved, century (0x19/0x20), then year, month, day,
+        # hour, minute, second and milliseconds/weekday. The older eight-byte form (no century byte,
+        # no milliseconds) is still accepted.
+        if len(raw_data) == 10:
+            time_bytes = raw_data[2:]
+        elif len(raw_data) == 8:
+            time_bytes = raw_data[1:]
+        else:
+            raise S7ProtocolError("Clock response must contain ten bytes (or eight in the legacy form)")
 
-        # Parse BCD time
         def from_bcd(value: int) -> int:
+            if value >> 4 > 9 or value & 0x0F > 9:
+                raise S7ProtocolError("Clock response contains an invalid BCD timestamp")
             return ((value >> 4) * 10) + (value & 0x0F)
 
-        # Skip first byte (reserved)
-        year = from_bcd(raw_data[1])
-        month = from_bcd(raw_data[2])
-        day = from_bcd(raw_data[3])
-        hour = from_bcd(raw_data[4])
-        minute = from_bcd(raw_data[5])
-        second = from_bcd(raw_data[6])
+        year = from_bcd(time_bytes[0])
+        month = from_bcd(time_bytes[1])
+        day = from_bcd(time_bytes[2])
+        hour = from_bcd(time_bytes[3])
+        minute = from_bcd(time_bytes[4])
+        second = from_bcd(time_bytes[5])
+        microsecond = 0
+        if len(raw_data) == 10:
+            # Byte 8: milliseconds hundreds/tens (BCD); high nibble of byte 9: milliseconds ones
+            microsecond = (from_bcd(time_bytes[6]) * 10 + (time_bytes[7] >> 4)) * 1000
+            if microsecond > 999000:
+                raise S7ProtocolError("Clock response contains an invalid BCD timestamp")
 
-        # Determine century (assume 2000s for years 0-99)
+        # The two-digit S7 year maps 90-99 to 1990-1999 and 00-89 to 2000-2089
         full_year = 2000 + year if year < 90 else 1900 + year
 
         try:
-            return dt_class(full_year, month, day, hour, minute, second)
+            return dt_class(full_year, month, day, hour, minute, second, microsecond)
         except ValueError as exc:
             raise S7ProtocolError("Clock response contains an invalid BCD timestamp") from exc
 

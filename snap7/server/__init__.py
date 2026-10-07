@@ -1867,15 +1867,17 @@ class Server:
         """
         Handle get clock request - returns current server time.
 
-        Returns time in BCD format (8 bytes):
+        Returns time in BCD format (10 bytes, as native Snap7 ``TResDataGetTime``):
         - Byte 0: Reserved (0x00)
-        - Byte 1: Year (BCD, 0-99)
-        - Byte 2: Month (BCD, 1-12)
-        - Byte 3: Day (BCD, 1-31)
-        - Byte 4: Hour (BCD, 0-23)
-        - Byte 5: Minute (BCD, 0-59)
-        - Byte 6: Second (BCD, 0-59)
-        - Byte 7: Day of week (1=Sunday .. 7=Saturday)
+        - Byte 1: Century (0x19 for years 1990-1999, 0x20 for 2000-2089)
+        - Byte 2: Year (BCD, 0-99)
+        - Byte 3: Month (BCD, 1-12)
+        - Byte 4: Day (BCD, 1-31)
+        - Byte 5: Hour (BCD, 0-23)
+        - Byte 6: Minute (BCD, 0-59)
+        - Byte 7: Second (BCD, 0-59)
+        - Byte 8: Milliseconds hundreds/tens (BCD)
+        - Byte 9: Milliseconds ones (high nibble) and day of week (low nibble, 1=Sunday .. 7=Saturday)
         """
         from datetime import datetime
 
@@ -1885,16 +1887,19 @@ class Server:
             return ((value // 10) << 4) | (value % 10)
 
         year = now.year % 100
+        millisecond = now.microsecond // 1000
         bcd_time = struct.pack(
-            ">BBBBBBBB",
+            ">BBBBBBBBBB",
             0x00,  # Reserved
+            0x19 if now.year < 2000 else 0x20,  # Century
             to_bcd(year),  # Year (BCD)
             to_bcd(now.month),  # Month (BCD)
             to_bcd(now.day),  # Day (BCD)
             to_bcd(now.hour),  # Hour (BCD)
             to_bcd(now.minute),  # Minute (BCD)
             to_bcd(now.second),  # Second (BCD)
-            now.isoweekday() % 7 + 1,  # Day of week (1=Sunday .. 7=Saturday)
+            to_bcd(millisecond // 10),  # Milliseconds hundreds/tens (BCD)
+            ((millisecond % 10) << 4) | (now.isoweekday() % 7 + 1),  # Milliseconds ones, day of week (1=Sunday)
         )
 
         logger.debug(f"Get clock from {client_address}: returning {now}")

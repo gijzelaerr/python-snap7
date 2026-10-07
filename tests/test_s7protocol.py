@@ -17,6 +17,7 @@ from snap7.s7protocol import (
     _COLD_START_PARAMS,
 )
 from snap7.error import S7ProtocolError
+from datetime import datetime
 
 
 class TestGetReturnCodeDescription:
@@ -526,9 +527,25 @@ class TestParseGetClockResponse:
         result = self.proto.parse_get_clock_response(response)
         assert result.year == 1990
 
+    def test_ten_byte_native_layout(self) -> None:
+        # reserved, century, then 1990-01-01 00:00:00 (year, month, day, hour, minute, second, ms/weekday)
+        raw_data = bytes([0x00, 0x19, 0x90, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01])
+        result = self.proto.parse_get_clock_response({"data": {"data": raw_data}})
+        assert result == datetime(1990, 1, 1, 0, 0, 0)
+
+    def test_ten_byte_with_milliseconds_and_century(self) -> None:
+        raw_data = bytes([0x00, 0x20, 0x26, 0x10, 0x07, 0x12, 0x30, 0x45, 0x12, 0x34])
+        result = self.proto.parse_get_clock_response({"data": {"data": raw_data}})
+        assert result == datetime(2026, 10, 7, 12, 30, 45, 123000)
+
+    def test_ten_byte_invalid_milliseconds_rejected(self) -> None:
+        raw_data = bytes([0x00, 0x20, 0x26, 0x10, 0x07, 0x12, 0x30, 0x45, 0xFF, 0x04])
+        with pytest.raises(S7ProtocolError, match="invalid BCD"):
+            self.proto.parse_get_clock_response({"data": {"data": raw_data}})
+
     def test_short_data_rejected(self) -> None:
         response = {"data": {"data": b"\x00\x01"}}
-        with pytest.raises(S7ProtocolError, match="eight bytes"):
+        with pytest.raises(S7ProtocolError, match="ten bytes"):
             self.proto.parse_get_clock_response(response)
 
     def test_invalid_bcd_date_rejected(self) -> None:
