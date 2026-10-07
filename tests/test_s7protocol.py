@@ -245,7 +245,7 @@ class TestManagementAndDownloadVectors:
     def test_get_db_info_request(self) -> None:
         assert (
             self.proto.build_get_block_info_request(0x41, 1).hex()
-            == "3207000000010008000c0001120411430300ff0900083041413030303031"
+            == "3207000000010008000c0001120411430300ff0900083041303030303141"
         )
 
     def test_set_clock_request(self) -> None:

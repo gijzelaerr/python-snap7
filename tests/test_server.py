@@ -797,6 +797,7 @@ class TestServerUserdataOperations(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.server = Server()
         cls.server.register_area(SrvArea.DB, 1, bytearray(100))
+        cls.server.register_area(SrvArea.DB, 7, bytearray(123))
         cls.server.start(tcp_port=SERVER_PORT + 1)
 
     @classmethod
@@ -1036,6 +1037,12 @@ class TestServerUserdataOperations(unittest.TestCase):
         response = self.server._handle_set_clock(request, request["parameters"], ("127.0.0.1", 12345))
         with self.assertRaises(S7ProtocolError):
             self.client.protocol.parse_response(response)
+
+    def test_get_block_info_selects_requested_block_number(self) -> None:
+        """The server must read the block number from the request, not fall back to DB1."""
+        info = self.client.get_block_info(Block.DB, 7)
+        self.assertEqual(info.BlkNumber, 7)
+        self.assertEqual(info.MC7Size, 123)
 
     def test_set_plc_system_datetime(self) -> None:
         """set_plc_system_datetime should succeed."""

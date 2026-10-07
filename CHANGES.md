@@ -15,6 +15,8 @@ Unreleased
 
 * `get_wstring` compared the declared maximum in bytes with the 16382-character limit, so any WSTRING with a
   capacity of 8192 characters or more was rejected, including ones written by `set_wstring` (#923).
+* The get-block-info request now places the trailing `A` after the block number, as native Snap7 does
+  (`'0' type '00001' 'A'`), instead of before it. The bundled server parses the new layout (#929).
 
 3.2.1
 -----
