@@ -257,11 +257,11 @@ class TestManagementAndDownloadVectors:
         )
 
     def test_set_clock_weekday_is_sunday_based(self) -> None:
-        from datetime import datetime
+        from datetime import datetime, timedelta
 
         # 2026-09-27 is a Sunday; the S7 weekday nibble is 1=Sunday .. 7=Saturday
         for offset, expected in enumerate([1, 2, 3, 4, 5, 6, 7]):
-            when = datetime(2026, 9, 27 + offset, 12, 0, 0)
+            when = datetime(2026, 9, 27, 12, 0, 0) + timedelta(days=offset)
             assert self.proto.build_set_clock_request(when)[-1] & 0x0F == expected, when.strftime("%A")
 
     def test_request_db_download(self) -> None:
