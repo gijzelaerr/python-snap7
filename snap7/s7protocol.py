@@ -913,10 +913,9 @@ class S7Protocol:
         data_info = response.get("data", {})
         raw_data = data_info.get("data", b"")
 
-        if not raw_data:
-            return result
-        if len(raw_data) % 4 != 0:
-            raise S7ProtocolError("Block-count response length is not a multiple of four")
+        # Native Snap7 requires exactly seven four-byte entries (28 bytes)
+        if len(raw_data) != 28:
+            raise S7ProtocolError("Block-count response must contain exactly seven entries (28 bytes)")
 
         # Parse block entries (4 bytes each: 0x30 | type | count_hi | count_lo)
         # Block type codes
@@ -930,17 +929,18 @@ class S7Protocol:
             0x46: "SFBCount",  # System Function Block
         }
 
-        offset = 0
-        while offset + 4 <= len(raw_data):
+        seen: set[int] = set()
+        for offset in range(0, 28, 4):
             indicator = raw_data[offset]
             block_type = raw_data[offset + 1]
             count = struct.unpack(">H", raw_data[offset + 2 : offset + 4])[0]
 
             if indicator != 0x30 or block_type not in type_to_name:
                 raise S7ProtocolError("Invalid block-count response entry")
+            if block_type in seen:
+                raise S7ProtocolError("Duplicate block type in block-count response")
+            seen.add(block_type)
             result[type_to_name[block_type]] = count
-
-            offset += 4
 
         return result
 

@@ -27,6 +27,9 @@ Unreleased
 * `parse_response` now fails on any nonzero S7 header error word, as native Snap7 does, instead of only when the error
   class is nonzero. Read and upload responses with error class 0 and a nonzero error code were previously treated as
   successes while the write path rejected them (#930).
+* `parse_list_blocks_response` now requires exactly the seven four-byte block-type entries (28 bytes) that native Snap7
+  expects, with distinct, known type codes. Empty or partial tables and duplicate entries are rejected instead of being
+  reported as zero block counts (#939).
 
 3.2.1
 -----
