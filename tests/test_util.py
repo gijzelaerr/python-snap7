@@ -643,6 +643,23 @@ class TestNewSetters(unittest.TestCase):
         set_wstring(data, 0, "hello", 10)
         self.assertEqual(get_wstring(data, 0), "hello")
 
+    def test_wstring_round_trip_capacities(self) -> None:
+        from snap7.util import set_wstring, get_wstring
+
+        for capacity in (0, 1, 8191, 8192, 16382):
+            data = bytearray(4 + capacity * 2)
+            value = "a" * min(capacity, 3)
+            set_wstring(data, 0, value, capacity)
+            self.assertEqual(get_wstring(data, 0), value, capacity)
+
+    def test_get_wstring_rejects_capacity_over_limit(self) -> None:
+        from snap7.util import get_wstring
+
+        data = bytearray(4 + 16384 * 2)
+        data[0:2] = (16383).to_bytes(2, "big")
+        with self.assertRaises(TypeError):
+            get_wstring(data, 0)
+
     def test_set_wstring_unicode(self) -> None:
         from snap7.util import set_wstring, get_wstring
 
