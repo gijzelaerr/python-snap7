@@ -11,6 +11,11 @@ Unreleased
   `read_tags`) to `AsyncClient`, matching the synchronous `Client`, as well as
   `is_alive`, `connect_routed`, and `read_diagnostic_buffer`. (#922)
 
+### Bug fixes
+
+* `get_wstring` compared the declared maximum in bytes with the 16382-character limit, so any WSTRING with a
+  capacity of 8192 characters or more was rejected, including ones written by `set_wstring` (#923).
+
 3.2.1
 -----
 
