@@ -2233,6 +2233,11 @@ class Client(ClientMixin):
         szl = self.read_szl(0x00A0, 0)
         raw = bytes(szl.Data[: szl.Header.LengthDR])
 
+        return self._parse_diagnostic_buffer(raw)
+
+    @classmethod
+    def _parse_diagnostic_buffer(cls, raw: bytes) -> list[dict[str, Any]]:
+        """Decode raw SZL 0x00A0 data into diagnostic entries."""
         entries: list[dict[str, Any]] = []
         # Each diagnostic entry is 20 bytes
         entry_size = 20
@@ -2243,7 +2248,7 @@ class Client(ClientMixin):
             # BCD-encoded timestamp at offset 2..9
             ts_bytes = raw[offset + 2 : offset + 10]
             try:
-                ts = self._parse_bcd_timestamp(ts_bytes)
+                ts = cls._parse_bcd_timestamp(ts_bytes)
             except Exception:
                 ts = None
 

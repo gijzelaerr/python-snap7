@@ -22,7 +22,7 @@ from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin, _instrumented
 from .tags import Tag
-from .client import _decode_tag, _encode_tag
+from .client import Client, _decode_tag, _encode_tag
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
 from .client import _parse_force_szl
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
@@ -61,6 +61,8 @@ class AsyncISOTCPConnection:
     COTP_PARAM_PDU_SIZE = 0xC0
     COTP_PARAM_CALLING_TSAP = 0xC1
     COTP_PARAM_CALLED_TSAP = 0xC2
+    COTP_PARAM_SUBNET_ID = 0xC6
+    COTP_PARAM_ROUTING_TSAP = 0xC7
 
     def __init__(
         self,
@@ -84,6 +86,17 @@ class AsyncISOTCPConnection:
 
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
+
+        # Routing parameters (set via set_routing)
+        self._routing: bool = False
+        self._subnet_id: int = 0
+        self._routing_tsap: int = 0
+
+    def set_routing(self, subnet_id: int, dest_rack: int, dest_slot: int) -> None:
+        """Configure S7 routing parameters for multi-subnet access (experimental)."""
+        self._routing = True
+        self._subnet_id = subnet_id & 0xFFFF
+        self._routing_tsap = 0x0100 | (dest_rack << 5) | dest_slot
 
     async def connect(self, timeout: float = 5.0) -> None:
         """Establish ISO on TCP connection."""
@@ -206,6 +219,9 @@ class AsyncISOTCPConnection:
         called_tsap = struct.pack(">BBH", self.COTP_PARAM_CALLED_TSAP, 2, self.remote_tsap)
         pdu_size_param = struct.pack(">BBB", self.COTP_PARAM_PDU_SIZE, 1, self.tpdu_size)
         parameters = calling_tsap + called_tsap + pdu_size_param
+        if self._routing:
+            parameters += struct.pack(">BBH", self.COTP_PARAM_SUBNET_ID, 2, self._subnet_id)
+            parameters += struct.pack(">BBH", self.COTP_PARAM_ROUTING_TSAP, 2, self._routing_tsap)
         total_length = 6 + len(parameters)
         cr_pdu = struct.pack(">B", total_length) + base_pdu[1:] + parameters
 
@@ -456,6 +472,78 @@ class AsyncClient(ClientMixin):
                 raise
             else:
                 raise S7ConnectionError(f"Connection failed: {e}")
+
+        return self
+
+    @property
+    def is_alive(self) -> bool:
+        """Whether the client is connected.
+
+        Unlike the synchronous client there is no background heartbeat, so this
+        reflects the connection state seen by the last operation.
+        """
+        return self.connected and self.connection is not None and self.connection.connected
+
+    async def connect_routed(
+        self,
+        host: str,
+        router_rack: int,
+        router_slot: int,
+        subnet: int,
+        dest_rack: int,
+        dest_slot: int,
+        port: int = 102,
+        timeout: float = 5.0,
+    ) -> "AsyncClient":
+        """Connect to an S7 PLC via a routing gateway on another subnet.
+
+        .. warning:: This method is experimental and may change in future versions.
+
+        Args:
+            host: IP address of the routing gateway PLC
+            router_rack: Rack number of the gateway PLC
+            router_slot: Slot number of the gateway PLC
+            subnet: Subnet ID of the target network (0x0000-0xFFFF)
+            dest_rack: Rack number of the destination PLC
+            dest_slot: Slot number of the destination PLC
+            port: TCP port (default 102)
+            timeout: Connection timeout in seconds
+
+        Returns:
+            Self for method chaining
+        """
+        self.host = host
+        self.port = port
+        self.rack = router_rack
+        self.slot = router_slot
+        self._params[Parameter.RemotePort] = port
+
+        # Remote TSAP targets the gateway rack/slot
+        self.remote_tsap = (self.connection_type << 8) | (router_rack << 5) | router_slot
+
+        try:
+            start_time = time.time()
+
+            self.connection = AsyncISOTCPConnection(
+                host=host, port=port, local_tsap=self.local_tsap, remote_tsap=self.remote_tsap
+            )
+            self.connection.set_routing(subnet, dest_rack, dest_slot)
+            await self.connection.connect(timeout=timeout)
+
+            await self._setup_communication()
+
+            self.connected = True
+            self._exec_time = int((time.time() - start_time) * 1000)
+            logger.info(
+                f"Connected (routed) to {host}:{port} via rack {router_rack} slot {router_slot}, "
+                f"subnet {subnet:#06x} -> rack {dest_rack} slot {dest_slot}"
+            )
+        except Exception as e:
+            await self.disconnect()
+            if isinstance(e, S7Error):
+                raise
+            else:
+                raise S7ConnectionError(f"Routed connection failed: {e}")
 
         return self
 
@@ -1309,6 +1397,14 @@ class AsyncClient(ClientMixin):
             szl.Data[i] = b
 
         return szl
+
+    async def read_diagnostic_buffer(self) -> list[dict[str, Any]]:
+        """Read the PLC diagnostic buffer (experimental), newest first.
+
+        Each entry is a dict with keys ``event_id``, ``timestamp`` and ``info``.
+        """
+        szl = await self.read_szl(0x00A0, 0)
+        return Client._parse_diagnostic_buffer(bytes(szl.Data[: szl.Header.LengthDR]))
 
     async def read_szl_list(self) -> bytes:
         """Read list of available SZL IDs."""

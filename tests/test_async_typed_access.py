@@ -1,16 +1,20 @@
 """Tests for typed DB access and tag helpers on the AsyncClient."""
 
 import logging
+import struct
 from collections.abc import AsyncGenerator, Generator
+from datetime import datetime
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 
 from snap7.async_client import AsyncClient
+from snap7.error import S7Error
 from snap7.server import Server
 from snap7.tags import Tag
-from snap7.type import Area, SrvArea
+from snap7.type import Area, S7SZL, SrvArea
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -115,3 +119,50 @@ async def test_symbolic_tag_not_supported(client: AsyncClient) -> None:
         await client.read_tag(tag)
     with pytest.raises(NotImplementedError):
         await client.write_tag(tag, 1)
+
+
+async def test_is_alive(server: Server) -> None:
+    c = AsyncClient()
+    assert not c.is_alive
+    await c.connect(ip, rack, slot, tcpport)
+    assert c.is_alive
+    await c.disconnect()
+    assert not c.is_alive
+
+
+async def test_connect_routed() -> None:
+    srv = Server()
+    srv.register_area(SrvArea.DB, 1, bytearray(100))
+    srv.start(tcp_port=11103)
+    try:
+        c = AsyncClient()
+        result = await c.connect_routed(ip, 0, 2, subnet=0x0001, dest_rack=0, dest_slot=3, port=11103)
+        assert result is c
+        assert c.is_alive
+        assert c.connection is not None
+        assert c.connection._routing_tsap == 0x0100 | (0 << 5) | 3
+        assert len(await c.db_read(1, 0, 10)) == 10
+        await c.disconnect()
+    finally:
+        srv.stop()
+        srv.destroy()
+
+
+async def test_connect_routed_failure_raises(server: Server) -> None:
+    c = AsyncClient()
+    with pytest.raises(S7Error):
+        await c.connect_routed(ip, 0, 2, subnet=1, dest_rack=0, dest_slot=3, port=11104, timeout=1.0)
+    assert not c.is_alive
+
+
+async def test_read_diagnostic_buffer(client: AsyncClient) -> None:
+    entry = struct.pack(">H", 0x4302) + bytes([0x26, 0x10, 0x07, 0x12, 0x30, 0x45, 0x00, 0x00]) + bytes(10)
+    szl = S7SZL()
+    szl.Header.LengthDR = len(entry) * 2
+    for i, b in enumerate(entry * 2):
+        szl.Data[i] = b
+    with patch.object(client, "read_szl", AsyncMock(return_value=szl)):
+        entries = await client.read_diagnostic_buffer()
+    assert [e["event_id"] for e in entries] == [0x4302, 0x4302]
+    assert entries[0]["timestamp"] == datetime(2026, 10, 7, 12, 30, 45)
+    assert entries[0]["info"] == bytes(10).hex()
