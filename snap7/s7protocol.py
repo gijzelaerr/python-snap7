@@ -1460,6 +1460,8 @@ class S7Protocol:
             if param_error != 0:
                 error_msg = get_protocol_error_message(param_error)
                 raise S7ProtocolError(f"USERDATA request failed: {error_msg} (0x{param_error:04x})")
+            if params.get("last_data_unit", 0) not in (0x00, 0x01):
+                raise S7ProtocolError(f"Invalid USERDATA last data unit value 0x{params['last_data_unit']:02x}")
             if expected_group is not None and params.get("group") != expected_group:
                 raise S7ProtocolError("Unexpected USERDATA response function group")
             if expected_subfunction is not None and params.get("subfunction") != expected_subfunction:
@@ -1689,7 +1691,7 @@ class S7Protocol:
             [6]    Subfunction
             [7]    Sequence number (used as DataRef in follow-up)
             [8]    Data unit reference
-            [9]    Last data unit (0x00 = last, non-zero = more)
+            [9]    Last data unit (0x00 = last, 0x01 = more)
             [10-11] Error code
         """
         type_group = param_data[5]
