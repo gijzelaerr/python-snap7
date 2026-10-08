@@ -218,6 +218,10 @@ def get_string(bytearray_: Buffer, byte_index: int, encoding: str = "latin-1") -
             "String contains {str_length} chars, but max. {max_string_size} chars are expected or is "
             "larger than 254. Bytearray doesn't seem to be a valid string."
         )
+    if byte_index + 2 + str_length > len(bytearray_):
+        raise ValueError(
+            f"String contains {str_length} chars, but only {len(bytearray_) - byte_index - 2} bytes are in the buffer"
+        )
     raw = bytes(bytearray_[byte_index + 2 : byte_index + 2 + str_length])
     return raw.decode(encoding)
 
@@ -795,4 +799,8 @@ def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
         )
 
     wstr_bytes = wstr_chars * 2
+    if wstring_start + wstr_bytes > len(bytearray_):
+        raise ValueError(
+            f"WString contains {wstr_chars} chars, but only {len(bytearray_) - wstring_start} bytes are in the buffer"
+        )
     return bytes(bytearray_[wstring_start : wstring_start + wstr_bytes]).decode("utf-16-be")

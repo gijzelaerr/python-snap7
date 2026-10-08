@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from snap7 import DB, Row
 from snap7.type import Area, WordLen
-from snap7.util import get_byte, get_time, get_fstring, get_int
+from snap7.util import get_byte, get_time, get_fstring, get_int, get_string, get_wstring
 from snap7.util import set_byte, set_time, set_fstring, set_int
 from snap7.util.db import print_row
 
@@ -1495,3 +1495,16 @@ class TestRowWriteWithRowOffset:
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.parametrize(
+    "func,data",
+    [
+        (get_string, bytearray([3, 3, 65])),
+        (get_string, bytearray([5, 4, 65, 66])),
+        (get_wstring, bytearray([0, 3, 0, 3, 0, 65, 0, 66])),
+    ],
+)
+def test_get_string_short_buffer_raises(func, data) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(ValueError):
+        func(data, 0)
