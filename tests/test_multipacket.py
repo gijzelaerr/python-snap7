@@ -442,3 +442,13 @@ class TestTPDUSize:
         conn = ISOTCPConnection("127.0.0.1", tpdu_size=TPDUSize.S_2048)
         cr_pdu = conn._build_cotp_cr()
         assert cr_pdu[-3:] == bytes([0xC0, 0x01, TPDUSize.S_2048])
+
+
+@pytest.mark.parametrize("last", [0x02, 0xFF])
+def test_userdata_invalid_last_data_unit_rejected(last: int) -> None:
+    """Only 0x00 and 0x01 are valid last-data-unit values."""
+    params = bytes([0, 1, 0x12, 8, 0x12, 0x84, 1, 1, 0, last, 0, 0])
+    data = bytes([0xFF, 9, 0, 4]) + b"abcd"
+    pdu = struct.pack(">BBHHHH", 0x32, 7, 0, 1, len(params), len(data)) + params + data
+    with pytest.raises(S7ProtocolError):
+        S7Protocol().parse_response(pdu)

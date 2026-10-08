@@ -15,6 +15,8 @@ Unreleased
 
 * `get_string` and `get_wstring` now raise `ValueError` when the buffer is shorter than the declared current length,
   instead of silently returning a truncated value (#945).
+* USERDATA responses whose last-data-unit byte is neither `0x00` nor `0x01` are rejected with `S7ProtocolError`
+  instead of being treated as "more data" (#943).
 * `get_wstring` compared the declared maximum in bytes with the 16382-character limit, so any WSTRING with a
   capacity of 8192 characters or more was rejected, including ones written by `set_wstring` (#923).
 * The get-block-info request now places the trailing `A` after the block number, as native Snap7 does
