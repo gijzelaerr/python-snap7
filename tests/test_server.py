@@ -857,6 +857,20 @@ class TestServerUserdataOperations(unittest.TestCase):
         self.assertEqual(result.V2, 9)
         self.assertEqual(result.V3, 2)
 
+    def test_parse_order_code_strips_trailing_space(self) -> None:
+        """The structured MLFB field is space padded on real PLCs; the padding is not part of the order code."""
+        from snap7.szl import parse_order_code_szl
+        from snap7.type import S7SZL
+
+        payload = b"\x00\x1c\x00\x01\x00\x01" + b"6ES7 212-1BE40-0XB0 " + b"\x00\x00\x00\x02\x00\x00"
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+
+        result = parse_order_code_szl(szl)
+        self.assertEqual(result.OrderCode, b"6ES7 212-1BE40-0XB0")
+
     def test_parse_order_code_s71510sp(self) -> None:
         """Parse a real S7-1510SP dump — should use 0x0007 firmware, not 0x0081 boot loader.
 
