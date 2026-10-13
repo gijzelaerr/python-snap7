@@ -52,6 +52,49 @@ Supported PLCs
      - Full
      - Use the :class:`~snap7.logo.Logo` class.
 
+Tested and Verified Hardware
+----------------------------
+
+The table lists real CPUs the :doc:`real-plc-testing` acceptance suite has been
+run against, with the firmware and python-snap7 version used. Every run reached
+the CPU over the classic S7 protocol with PUT/GET enabled and non-optimized
+fixture data blocks. A pass means the 13 acceptance scenarios succeeded: five
+read-only smoke scenarios (session, canonical fixture read, multi-read,
+reconnect, repeated operations) and eight scratch-write round trips (INT, REAL,
+BYTE, WORD, DWORD, DINT, CHAR, BOOL), each restored and read back.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 12 12 14 12 30
+
+   * - CPU
+     - Firmware
+     - Result
+     - python-snap7
+     - Date
+     - Report
+   * - S7-1200 CPU 1212C (``6ES7 212-1BE40-0XB0``)
+     - V4.7.3
+     - 13/13 pass
+     - 3.2.1
+     - 2026-10-04
+     - `#919 <https://github.com/gijzelaerr/python-snap7/issues/919>`_
+       (rerun of `#907 <https://github.com/gijzelaerr/python-snap7/issues/907>`_)
+   * - S7-1500 CPU 1511F-1 PN (fail-safe)
+     - V2.9.7
+     - 13/13 pass
+     - 3.2.0
+     - 2026-10-01
+     - `#909 <https://github.com/gijzelaerr/python-snap7/issues/909>`_
+
+Notes:
+
+- On the S7-1200 CPU 1212C, ``upload()`` of a non-optimized DB is refused with
+  class 0x81, code 0x04 (see Feature Availability below). Block upload and
+  download were not run on the S7-1500 CPU 1511F-1 PN.
+- Administrative scenarios (``--allow-admin``) were not run.
+- To add your CPU, follow the result policy in :doc:`real-plc-testing`.
+
 Enabling PUT/GET Access
 -----------------------
 

@@ -44,6 +44,12 @@ Unreleased
   block (method `0x12`) that real engineering tools send; both previously used the header of a request without data
   and an 8-byte parameter block (#942).
 
+### Documentation
+
+* Add a "Tested and Verified Hardware" section to the PLC support matrix, listing the CPUs, firmware versions and
+  python-snap7 versions the real-PLC acceptance suite has passed on (S7-1200 CPU 1212C V4.7.3, S7-1500 CPU 1511F-1 PN
+  V2.9.7). (#947)
+
 3.2.1
 -----
 
