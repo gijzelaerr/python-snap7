@@ -44,6 +44,9 @@ Unreleased
   block (method `0x12`) that real engineering tools send; both previously used the header of a request without data
   and an 8-byte parameter block (#942).
 
+* `get_order_code` no longer keeps the trailing space padding of the order code on S7-1200/1500 CPUs, for example
+  `6ES7 212-1BE40-0XB0 ` is now `6ES7 212-1BE40-0XB0` (#949).
+
 ### Documentation
 
 * Add a "Tested and Verified Hardware" section to the PLC support matrix, listing the CPUs, firmware versions and

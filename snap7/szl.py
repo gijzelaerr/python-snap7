@@ -104,7 +104,7 @@ def _parse_order_code_structured(data: bytes, record_len: int, ndr: int, order_c
 
         if record_id == 0x0001 and record_len >= 22:
             found_structured = True
-            order_code.OrderCode = rec[2:22].rstrip(b"\x00")
+            order_code.OrderCode = rec[2:22].rstrip(b"\x00 ")
             if record_len >= 26 and not has_0x0007 and (rec[23] != 0 or rec[24] != 0):
                 order_code.V1, order_code.V2, order_code.V3 = rec[23], rec[24], rec[25]
 
