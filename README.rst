@@ -72,3 +72,5 @@ Read the full documentation at
 
 The safe volunteer hardware-test procedure is in
 `Real-PLC acceptance testing <doc/real-plc-testing.rst>`_.
+The CPUs and firmware versions it has passed on are listed under
+`Tested and Verified Hardware <doc/plc-support.rst>`_.
