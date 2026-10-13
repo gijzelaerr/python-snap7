@@ -87,3 +87,6 @@ before expanding the host matrix; hosted CI already covers supported Python
 versions and operating systems without hardware. Test evidence stays in issues.
 Volunteer coordination may use Discussions, but is not a substitute for an
 attached structured result.
+
+Passing results are summarized, with CPU, firmware and python-snap7 version, in
+:ref:`tested-hardware`.
