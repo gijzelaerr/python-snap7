@@ -14,7 +14,7 @@ Unreleased
 ### Bug fixes
 
 * The `s7` command now prints an install hint and exits when the optional `click` dependency is missing, instead of
-  failing with an `ImportError` traceback, so `click` stays an optional `cli` extra.
+  failing with an `ImportError` traceback, so `click` stays an optional `cli` extra (#954).
 * `get_string` and `get_wstring` now raise `ValueError` when the buffer is shorter than the declared current length,
   instead of silently returning a truncated value (#945).
 * USERDATA responses whose last-data-unit byte is neither `0x00` nor `0x01` are rejected with `S7ProtocolError`
