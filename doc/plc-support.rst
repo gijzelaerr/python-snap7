@@ -80,12 +80,14 @@ BYTE, WORD, DWORD, DINT, CHAR, BOOL), each restored and read back.
      - 2026-10-04
      - `#919 <https://github.com/gijzelaerr/python-snap7/issues/919>`_
        (rerun of `#907 <https://github.com/gijzelaerr/python-snap7/issues/907>`_)
-   * - S7-1500 CPU 1511F-1 PN (fail-safe)
+   * - S7-1500 CPU 1511F-1 PN (fail-safe) (``6ES7 511-1FK02-0AB0``)
      - V2.9.7
      - 13/13 pass
-     - 3.2.0
-     - 2026-10-01
-     - `#909 <https://github.com/gijzelaerr/python-snap7/issues/909>`_
+     - 3.2.1
+     - 2026-10-13
+     - `#952 <https://github.com/gijzelaerr/python-snap7/issues/952>`_
+       (rerun of `#909 <https://github.com/gijzelaerr/python-snap7/issues/909>`_,
+       python-snap7 3.2.0, 2026-10-01)
 
 Notes:
 
