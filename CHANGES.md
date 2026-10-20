@@ -1,8 +1,8 @@
 CHANGES
 ========
 
-Unreleased
-----------
+3.3.0
+-----
 
 ### New features
 
@@ -43,7 +43,6 @@ Unreleased
 * Read-SZL requests now carry the `0xFF`/octet-string data header and continuation requests the 12-byte parameter
   block (method `0x12`) that real engineering tools send; both previously used the header of a request without data
   and an 8-byte parameter block (#942).
-
 * `get_order_code` no longer keeps the trailing space padding of the order code on S7-1200/1500 CPUs, for example
   `6ES7 212-1BE40-0XB0 ` is now `6ES7 212-1BE40-0XB0` (#949).
 
