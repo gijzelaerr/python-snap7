@@ -52,6 +52,8 @@ Supported PLCs
      - Full
      - Use the :class:`~snap7.logo.Logo` class.
 
+.. _tested-hardware:
+
 Tested and Verified Hardware
 ----------------------------
 
