@@ -1070,8 +1070,12 @@ class Server:
             return (0x01, bytearray())
 
     def _handle_write_area(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
-        """Handle write area request."""
+        """Handle write area request (single or multi-item)."""
         try:
+            params = request.get("parameters", {})
+            if params.get("item_count", 1) > 1 and "address_specs" in params:
+                return self._handle_multi_write_area(request, client_address)
+
             # Parse address specification from request parameters
             addr_info = self._parse_write_address(request)
             if not addr_info:
@@ -1121,6 +1125,70 @@ class Server:
         except Exception as e:
             logger.error(f"Error handling write request: {e}")
             return self._build_error_response(request, 0x8000)
+
+    def _handle_multi_write_area(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
+        """Handle multi-item write area request.
+
+        Splits the data section into one block per address specification, writes
+        each item to its own area, and returns one return code per item.
+        """
+        params = request["parameters"]
+        address_specs: List[Dict[str, Any]] = params["address_specs"]
+        item_count = len(address_specs)
+        data_section: bytes = request.get("raw_data", b"")
+
+        return_codes = bytearray()
+        offset = 0
+        for i, addr in enumerate(address_specs):
+            if offset + 4 > len(data_section):
+                # Data section is missing this item
+                return_codes.append(0x07)
+                continue
+
+            transport_size = data_section[offset + 1]
+            length = struct.unpack(">H", data_section[offset + 2 : offset + 4])[0]
+            # BIT, REAL and OCTET STRING lengths are in bytes, the others in bits
+            byte_length = length if transport_size in (0x03, 0x07, 0x09) else length // 8
+            write_data = data_section[offset + 4 : offset + 4 + byte_length]
+            offset += 4 + byte_length
+            # Fill byte for even alignment (not after last item)
+            if i < item_count - 1 and byte_length % 2 != 0:
+                offset += 1
+
+            if len(write_data) != byte_length:
+                return_codes.append(0x07)
+                continue
+
+            area = addr.get("area", S7Area.DB)
+            db_number = addr.get("db_number", 0)
+            start = addr.get("start", 0)
+            return_code = self._write_item_to_memory_area(area, db_number, start, bytearray(write_data))
+            return_codes.append(return_code)
+            if return_code == 0xFF:
+                self._emit_event(
+                    EVC_DATA_WRITE,
+                    param1=self._event_area(area),
+                    param2=db_number,
+                    param3=start,
+                    param4=len(write_data),
+                    sender=self._event_sender(client_address),
+                )
+
+        header = struct.pack(
+            ">BBHHHHBB",
+            0x32,
+            S7PDUType.ACK_DATA,
+            0x0000,
+            request["sequence"],
+            0x0002,  # param length
+            len(return_codes),
+            0x00,
+            0x00,
+        )
+
+        parameters = struct.pack(">BB", S7Function.WRITE_AREA, item_count)
+
+        return header + parameters + bytes(return_codes)
 
     def _handle_plc_control(self, request: Dict[str, Any], client_address: Tuple[str, int]) -> bytes:
         """Handle PLC control request (start, compress, copy_ram_to_rom)."""
@@ -1236,6 +1304,38 @@ class Server:
             logger.error(f"Error parsing write address: {e}")
             return None
 
+    def _write_item_to_memory_area(self, area: S7Area, db_number: int, start: int, write_data: bytearray) -> int:
+        """
+        Write one item to a registered memory area.
+
+        Returns:
+            Item return code: ``0xFF`` on success, ``0x0A`` when the area is not
+            registered, and ``0x05`` when the range is outside the registered area.
+            Nothing is written unless the whole item fits.
+        """
+        try:
+            area_key = (area, db_number)
+
+            if area_key not in self.memory_areas:
+                logger.warning(f"Memory area {area}#{db_number} not registered for write")
+                return 0x0A
+
+            with self.area_locks[area_key]:
+                area_data = self.memory_areas[area_key]
+
+                if start < 0 or start + len(write_data) > len(area_data):
+                    logger.warning(f"Write range [{start}, {start + len(write_data)}) exceeds area size {len(area_data)}")
+                    return 0x05
+
+                area_data[start : start + len(write_data)] = write_data
+
+                logger.debug(f"Wrote {len(write_data)} bytes to {area}#{db_number} at offset {start}")
+                return 0xFF
+
+        except Exception as e:
+            logger.error(f"Error writing to memory area: {e}")
+            return 0x01
+
     def _write_to_memory_area(self, area: S7Area, db_number: int, start: int, write_data: bytearray) -> bool:
         """
         Write data to registered memory area.
@@ -1339,6 +1439,7 @@ class Server:
                 raise S7ProtocolError("Data section extends beyond PDU")
 
             data_section = pdu[offset : offset + data_len]
+            request["raw_data"] = data_section
             request["data"] = self._parse_data_section(data_section)
             offset += data_len
 
@@ -1393,8 +1494,19 @@ class Server:
         elif function_code == S7Function.WRITE_AREA:
             # Parse write area parameters (same format as read)
             if len(param_data) >= 14:  # Minimum for write area request
-                # Function code (1) + item count (1) + address spec (12)
+                # Function code (1) + item count (1) + N * address spec (12 each)
                 item_count = param_data[1]
+
+                if item_count > 1:
+                    # Multi-item write: parse all address specs
+                    write_specs: List[Dict[str, Any]] = []
+                    offset = 2
+                    for _ in range(item_count):
+                        if offset + 12 > len(param_data):
+                            break
+                        write_specs.append(self._parse_address_specification(param_data[offset : offset + 12]))
+                        offset += 12
+                    return {"function_code": function_code, "item_count": item_count, "address_specs": write_specs}
 
                 # Parse address specification starting at byte 2
                 if len(param_data) >= 14:

@@ -1,6 +1,15 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### Bug fixes
+
+* The server now handles multi-item WRITE_VAR requests, such as a `PUT` with several areas. Previously only the
+  first item was written while the response still reported success; now every item is written and gets its own
+  return code (#958).
+
 3.3.0
 -----
 

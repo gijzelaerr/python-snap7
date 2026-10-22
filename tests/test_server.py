@@ -13,8 +13,9 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 from snap7.client import Client
-from snap7.datatypes import S7Area, S7WordLen
+from snap7.datatypes import S7Area, S7DataTypes, S7WordLen
 from snap7.error import S7ConnectionError, S7ProtocolError, error_text, server_errors
+from snap7.s7protocol import S7Function, S7PDUType
 from snap7.server import EVC_DATA_READ, EVC_DATA_WRITE, EVC_SERVER_STARTED, EVC_SERVER_STOPPED, Server, ServerISOConnection
 from snap7.type import Block, Parameter, SrvArea, SrvEvent, mkEvent, mkLog
 
@@ -1297,6 +1298,66 @@ def test_download_fragment_coverage_and_commit_boundary(size: int) -> None:
         assert next_request[10] == 0x1B
     assert server._handle_download_response(server.protocol.build_download_ended_response(context["sequence"]), address) is None
     assert server.memory_areas[(S7Area.DB, 7)] == expected
+
+
+def _build_multi_write_request(items: list[tuple[int, int, bytes]]) -> bytes:
+    """Build a WRITE_VAR request with one BYTE item per (db_number, start, data)."""
+    param_data = struct.pack(">BB", S7Function.WRITE_AREA, len(items))
+    param_data += b"".join(
+        S7DataTypes.encode_address(S7Area.DB, db, start, S7WordLen.BYTE, len(data)) for db, start, data in items
+    )
+    data_section = bytearray()
+    for i, (_, _, data) in enumerate(items):
+        data_section += struct.pack(">BBH", 0x00, 0x04, len(data) * 8) + data
+        if i < len(items) - 1 and len(data) % 2:
+            data_section.append(0x00)  # fill byte
+    header = struct.pack(">BBHHHH", 0x32, S7PDUType.REQUEST, 0, 1, len(param_data), len(data_section))
+    return header + param_data + bytes(data_section)
+
+
+@pytest.mark.server
+def test_multi_item_write_writes_every_item() -> None:
+    """A multi-item WRITE_VAR (e.g. a PUT with several areas) writes all items."""
+    server = Server()
+    buffers = {n: bytearray(100) for n in (6, 7, 8, 9)}
+    for n, buf in buffers.items():
+        server.register_area(SrvArea.DB, n, buf)
+
+    items = [
+        (6, 0, bytes([11, 12, 13, 14])),
+        (7, 10, bytes([21, 22])),
+        (8, 20, bytes([31])),
+        (9, 30, bytes([41, 42, 43])),
+    ]
+    response = server._process_request(_build_multi_write_request(items), ("127.0.0.1", 12345))
+
+    assert response is not None
+    assert response[12:14] == bytes([S7Function.WRITE_AREA, 4])
+    assert response[14:] == b"\xff\xff\xff\xff"
+    assert buffers[6][0:4] == bytes([11, 12, 13, 14])
+    assert buffers[7][10:12] == bytes([21, 22])
+    assert buffers[8][20:21] == bytes([31])
+    assert buffers[9][30:33] == bytes([41, 42, 43])
+
+
+@pytest.mark.server
+def test_multi_item_write_reports_per_item_errors() -> None:
+    """Failing items get their own return code and do not block the others."""
+    server = Server()
+    buffer = bytearray(10)
+    server.register_area(SrvArea.DB, 1, buffer)
+
+    items = [
+        (99, 0, bytes([1])),  # unregistered DB
+        (1, 8, bytes([2, 3, 4])),  # crosses the end of DB1
+        (1, 0, bytes([5, 6])),
+    ]
+    response = server._process_request(_build_multi_write_request(items), ("127.0.0.1", 12345))
+
+    assert response is not None
+    assert response[12:14] == bytes([S7Function.WRITE_AREA, 3])
+    assert response[14:] == b"\x0a\x05\xff"
+    assert buffer == bytearray([5, 6, 0, 0, 0, 0, 0, 0, 0, 0])
 
 
 if __name__ == "__main__":
