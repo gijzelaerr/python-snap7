@@ -1,6 +1,14 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### Bug fixes
+
+* Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
+  when setting it. Previously `12 a3` decoded to `.130` (#966).
+
 3.3.1
 -----
 
