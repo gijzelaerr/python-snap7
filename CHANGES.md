@@ -1,6 +1,14 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### Bug fixes
+
+* `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
+  stale fragment was added to the result (#967).
+
 3.3.1
 -----
 
