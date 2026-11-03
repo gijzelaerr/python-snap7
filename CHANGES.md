@@ -1,6 +1,14 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### Bug fixes
+
+* `set_wchar` now raises `ValueError` for a character above U+FFFF, as `set_wstring` does. Previously it grew the
+  buffer by two bytes, shifting every later field (#968).
+
 3.3.1
 -----
 
