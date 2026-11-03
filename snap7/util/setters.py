@@ -542,6 +542,11 @@ def set_wchar(bytearray_: Buffer, byte_index: int, chr_: str) -> Buffer:
     Returns:
         Buffer with the written value.
 
+    Raises:
+        TypeError: if the value is not a string.
+        ValueError: if the value is not a single character, or is outside the Basic Multilingual Plane
+            (codepoint > U+FFFF) and so does not fit in a `wchar`.
+
     Examples:
         >>> data = bytearray(2)
         >>> set_wchar(data, 0, 'C')
@@ -552,6 +557,8 @@ def set_wchar(bytearray_: Buffer, byte_index: int, chr_: str) -> Buffer:
         raise TypeError(f"Value value:{chr_} is not from Type string")
     if len(chr_) != 1:
         raise ValueError(f"Expected single character, got length {len(chr_)}")
+    if ord(chr_) > 0xFFFF:
+        raise ValueError(f"Character U+{ord(chr_):X} is outside the Basic Multilingual Plane and does not fit in a wchar")
     encoded = chr_.encode("utf-16-be")
     bytearray_[byte_index : byte_index + 2] = encoded
     return bytearray_
