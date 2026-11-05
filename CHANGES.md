@@ -10,6 +10,12 @@ Unreleased
   value, for applications that batch their own raw reads and writes. The private names in `snap7.client` still
   work (#973).
 
+### Bug fixes
+
+* `parse_tag` now raises `ValueError` under `strict=True`, the default, for a type with no known size, such as
+  `DB1.DBB0:STRING` without a length. Previously this failed only when `.size` was read. `S5TIME` now has a size
+  and can be read, but not yet written (#974).
+
 3.3.1
 -----
 

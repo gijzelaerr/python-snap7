@@ -102,7 +102,7 @@ Supported types
 ``UINT``, ``WORD``, ``DINT``, ``UDINT``, ``DWORD``, ``LINT``, ``ULINT``,
 ``LWORD``, ``REAL``, ``LREAL``, ``TIME``, ``LTIME``, ``TOD``, ``LTOD``,
 ``DATE``, ``DT``, ``LDT``, ``DTL``, ``STRING[n]``, ``WSTRING[n]``,
-``FSTRING[n]``.
+``FSTRING[n]``. ``S5TIME`` can be read but not yet written.
 
 Arrays are supported for any fixed-size type via ``[count]`` suffix.
 
