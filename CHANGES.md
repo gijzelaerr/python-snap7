@@ -1,6 +1,15 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### New features
+
+* Add `snap7.tags.decode_tag` and `snap7.tags.encode_tag`, which convert between a tag's raw bytes and a Python
+  value, for applications that batch their own raw reads and writes. The private names in `snap7.client` still
+  work (#973).
+
 3.3.1
 -----
 
