@@ -1,6 +1,15 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### Bug fixes
+
+* All `snap7.util` setters now raise `ValueError` when the value doesn't fit in the buffer. Most of them silently grew
+  a short `bytearray`, which changed the length written to the PLC or shifted later fields, and `set_lreal`,
+  `set_string`, `set_bool` and the other single-byte setters raised `struct.error` or `IndexError` (#975).
+
 3.3.1
 -----
 
