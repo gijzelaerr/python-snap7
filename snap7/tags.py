@@ -47,6 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Union
 
+from . import util
 from .type import Area
 
 # Type name → byte size for fixed-size types
@@ -463,6 +464,213 @@ def parse_tag(address: str, *, strict: bool = True, name: str = "") -> Tag:
             f"or ':TYPE' (PLC4X). Pass strict=False to accept bare short forms."
         )
     return NodeS7Tag.parse(s, name)
+
+
+# ---------------------------------------------------------------------------
+# Raw bytes <-> Python values
+# ---------------------------------------------------------------------------
+
+
+def decode_tag(tag: Tag, data: bytearray, encoding: str = "latin-1") -> Any:
+    """Decode a Tag's raw bytes into a typed Python value.
+
+    Args:
+        tag: The tag describing the value.
+        data: The tag's raw bytes, starting at offset 0, as read from the PLC.
+        encoding: Character encoding for ``STRING`` and ``FSTRING``.
+
+    Returns:
+        The decoded value, or a list of values when ``tag.count`` is above 1.
+
+    Raises:
+        ValueError: If the tag's type is unknown or has no decoder.
+    """
+    upper = tag.datatype.upper()
+    # Variable-length string types
+    match = _STRING_RE.match(upper)
+    if match:
+        kind, length = match.group(1), int(match.group(2))
+        if kind == "FSTRING":
+            return util.get_fstring(data, 0, length, encoding=encoding)
+        if kind == "STRING":
+            return util.get_string(data, 0, encoding=encoding)
+        if kind == "WSTRING":
+            return util.get_wstring(data, 0)
+
+    # Arrays
+    if tag.count > 1:
+        per = tag.size // tag.count
+        return [_decode_scalar(upper, data[i * per : (i + 1) * per], tag.bit) for i in range(tag.count)]
+
+    return _decode_scalar(upper, data, tag.bit)
+
+
+def _decode_scalar(datatype: str, data: bytearray, bit: int) -> Any:
+    """Decode a single scalar value of the given type."""
+    if datatype == "BOOL":
+        return util.get_bool(data, 0, bit)
+    if datatype == "BYTE":
+        return util.get_byte(data, 0)
+    if datatype == "SINT":
+        return util.get_sint(data, 0)
+    if datatype == "USINT":
+        return util.get_usint(data, 0)
+    if datatype == "CHAR":
+        return util.get_char(data, 0)
+    if datatype == "INT":
+        return util.get_int(data, 0)
+    if datatype == "UINT":
+        return util.get_uint(data, 0)
+    if datatype == "WORD":
+        return util.get_word(data, 0)
+    if datatype == "WCHAR":
+        return util.get_wchar(data, 0)
+    if datatype == "DATE":
+        return util.get_date(data, 0)
+    if datatype == "DINT":
+        return util.get_dint(data, 0)
+    if datatype == "UDINT":
+        return util.get_udint(data, 0)
+    if datatype == "DWORD":
+        return util.get_dword(data, 0)
+    if datatype == "REAL":
+        return util.get_real(data, 0)
+    if datatype == "TIME":
+        return util.get_time(data, 0)
+    if datatype == "TOD":
+        return util.get_tod(data, 0)
+    if datatype == "LINT":
+        return util.get_lint(data, 0)
+    if datatype == "ULINT":
+        return util.get_ulint(data, 0)
+    if datatype == "LWORD":
+        return util.get_lword(data, 0)
+    if datatype == "LREAL":
+        return util.get_lreal(data, 0)
+    if datatype == "LTIME":
+        return util.get_ltime(data, 0)
+    if datatype == "LTOD":
+        return util.get_ltod(data, 0)
+    if datatype == "LDT":
+        return util.get_ldt(data, 0)
+    if datatype == "DT":
+        return util.get_dt(data, 0)
+    if datatype == "DTL":
+        return util.get_dtl(data, 0)
+    raise ValueError(f"Unsupported tag datatype: {datatype}")
+
+
+def encode_tag(tag: Tag, buf: bytearray, value: Any, encoding: str = "latin-1") -> None:
+    """Encode a typed Python value into a Tag's byte buffer.
+
+    Args:
+        tag: The tag describing the value.
+        buf: Buffer of at least ``tag.size`` bytes. For ``BOOL`` it must hold the
+            byte's current value, since the other bits are kept.
+        value: The value, or a sequence of values when ``tag.count`` is above 1.
+        encoding: Character encoding for ``STRING`` and ``FSTRING``.
+
+    Raises:
+        ValueError: If the tag's type is unknown or has no encoder.
+    """
+    upper = tag.datatype.upper()
+    match = _STRING_RE.match(upper)
+    if match:
+        kind, length = match.group(1), int(match.group(2))
+        if kind == "FSTRING":
+            util.set_fstring(buf, 0, value, length, encoding=encoding)
+            return
+        if kind == "STRING":
+            util.set_string(buf, 0, value, length, encoding=encoding)
+            return
+        if kind == "WSTRING":
+            util.set_wstring(buf, 0, value, length)
+            return
+
+    if tag.count > 1:
+        per = tag.size // tag.count
+        for i, v in enumerate(value):
+            _encode_scalar(upper, buf, i * per, v, tag.bit)
+        return
+
+    _encode_scalar(upper, buf, 0, value, tag.bit)
+
+
+def _encode_scalar(datatype: str, buf: bytearray, offset: int, value: Any, bit: int) -> None:
+    """Encode a single scalar value at the given offset."""
+    if datatype == "BOOL":
+        util.set_bool(buf, offset, bit, value)
+        return
+    if datatype in ("BYTE", "USINT"):
+        util.set_byte(buf, offset, value) if datatype == "BYTE" else util.set_usint(buf, offset, value)
+        return
+    if datatype == "SINT":
+        util.set_sint(buf, offset, value)
+        return
+    if datatype == "CHAR":
+        util.set_char(buf, offset, value)
+        return
+    if datatype == "INT":
+        util.set_int(buf, offset, value)
+        return
+    if datatype == "UINT":
+        util.set_uint(buf, offset, value)
+        return
+    if datatype == "WORD":
+        util.set_word(buf, offset, value)
+        return
+    if datatype == "WCHAR":
+        util.set_wchar(buf, offset, value)
+        return
+    if datatype == "DATE":
+        util.set_date(buf, offset, value)
+        return
+    if datatype == "DINT":
+        util.set_dint(buf, offset, value)
+        return
+    if datatype == "UDINT":
+        util.set_udint(buf, offset, value)
+        return
+    if datatype == "DWORD":
+        util.set_dword(buf, offset, value)
+        return
+    if datatype == "REAL":
+        util.set_real(buf, offset, value)
+        return
+    if datatype == "TIME":
+        util.set_time(buf, offset, value)
+        return
+    if datatype == "TOD":
+        util.set_tod(buf, offset, value)
+        return
+    if datatype == "LINT":
+        util.set_lint(buf, offset, value)
+        return
+    if datatype == "ULINT":
+        util.set_ulint(buf, offset, value)
+        return
+    if datatype == "LWORD":
+        util.set_lword(buf, offset, value)
+        return
+    if datatype == "LREAL":
+        util.set_lreal(buf, offset, value)
+        return
+    if datatype == "LTIME":
+        util.set_ltime(buf, offset, value)
+        return
+    if datatype == "LTOD":
+        util.set_ltod(buf, offset, value)
+        return
+    if datatype == "LDT":
+        util.set_ldt(buf, offset, value)
+        return
+    if datatype == "DT":
+        util.set_dt(buf, offset, value)
+        return
+    if datatype == "DTL":
+        util.set_dtl(buf, offset, value)
+        return
+    raise ValueError(f"Unsupported tag datatype: {datatype}")
 
 
 # ---------------------------------------------------------------------------

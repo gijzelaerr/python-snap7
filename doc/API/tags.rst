@@ -79,6 +79,22 @@ forms like ``M7.1`` or ``IW22`` (dispatched to the nodeS7 parser)::
    parse_tag("M7.1")                # raises: ambiguous under strict=True
    parse_tag("M7.1", strict=False)  # → NodeS7Tag (BOOL)
 
+Encoding and decoding
+---------------------
+
+:func:`~snap7.tags.decode_tag` and :func:`~snap7.tags.encode_tag` convert
+between a tag's raw bytes and a Python value, for applications that batch their
+own raw reads and writes instead of using ``read_tag`` and ``write_tag``::
+
+   from s7.tags import decode_tag, encode_tag, parse_tag
+
+   tag = parse_tag("DB1.DBD0:REAL")
+   value = decode_tag(tag, client.db_read(tag.db_number, tag.byte_offset, tag.size))
+
+   buf = bytearray(tag.size)
+   encode_tag(tag, buf, 21.5)
+   client.db_write(tag.db_number, tag.byte_offset, buf)
+
 Supported types
 ---------------
 
