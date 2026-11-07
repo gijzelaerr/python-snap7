@@ -6,7 +6,7 @@ and TPDU size configuration.
 """
 
 import struct
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import pytest
 
@@ -18,7 +18,10 @@ from snap7.error import (
     S7PacketLostError,
     get_protocol_error_message,
 )
+from snap7.async_client import AsyncClient
+from snap7.client import Client
 from snap7.connection import TPDUSize, ISOTCPConnection
+from snap7.type import Block
 
 
 @pytest.mark.client
@@ -452,3 +455,97 @@ def test_userdata_invalid_last_data_unit_rejected(last: int) -> None:
     pdu = struct.pack(">BBHHHH", 0x32, 7, 0, 1, len(params), len(data)) + params + data
     with pytest.raises(S7ProtocolError):
         S7Protocol().parse_response(pdu)
+
+
+ENTRY_1, ENTRY_2, WRONG_ENTRY = b"\x00\x01\x22\x05", b"\x00\x02\x22\x05", b"\x00\x09\x22\x05"
+SZL_HEADER = b"\x00\x1c\x00\x00"
+
+
+class ScriptedConnection:
+    """Answers with scripted USERDATA replies whose PDU reference is relative to the last request's."""
+
+    connected = True
+
+    def __init__(self, group: int, subfunction: int, replies: list[tuple[int, int, bytes]]) -> None:
+        self.group = group
+        self.subfunction = subfunction
+        self.replies = replies
+        self.reference = 0
+
+    def check_connection(self) -> bool:
+        return True
+
+    def disconnect(self) -> None:
+        pass
+
+    def send_data(self, request: bytes) -> None:
+        self.reference = struct.unpack(">H", request[4:6])[0]
+
+    def receive_data(self) -> bytes:
+        offset, last, payload = self.replies.pop(0)
+        params = bytes([0, 1, 0x12, 8, 0x12, 0x80 | self.group, self.subfunction, 1, 0, last, 0, 0])
+        data = bytes([0xFF, 9]) + struct.pack(">H", len(payload)) + payload
+        header = struct.pack(">BBHHHH", 0x32, 7, 0, self.reference + offset, len(params), len(data))
+        return header + params + data
+
+
+class AsyncScriptedConnection(ScriptedConnection):
+    async def send_data(self, request: bytes) -> None:  # type: ignore[override]
+        super().send_data(request)
+
+    async def receive_data(self) -> bytes:  # type: ignore[override]
+        return super().receive_data()
+
+
+def _sync_call(service: str, replies: list[tuple[int, int, bytes]]) -> Any:
+    client = Client()
+    client.connected = True
+    if service == "blocks":
+        client.connection = cast(Any, ScriptedConnection(3, 2, replies))
+        return client.list_blocks_of_type(Block.DB, 100)
+    client.connection = cast(Any, ScriptedConnection(4, 1, replies))
+    szl = client.read_szl(0x001C, 0)
+    return bytes(szl.Data[: szl.Header.LengthDR])
+
+
+async def _async_call(service: str, replies: list[tuple[int, int, bytes]]) -> Any:
+    client = AsyncClient()
+    client.connected = True
+    if service == "blocks":
+        client.connection = cast(Any, AsyncScriptedConnection(3, 2, replies))
+        return await client.list_blocks_of_type(Block.DB, 100)
+    client.connection = cast(Any, AsyncScriptedConnection(4, 1, replies))
+    szl = await client.read_szl(0x001C, 0)
+    return bytes(szl.Data[: szl.Header.LengthDR])
+
+
+def _first_reply(service: str) -> tuple[int, int, bytes]:
+    return (0, 1, ENTRY_1 if service == "blocks" else SZL_HEADER + ENTRY_1)
+
+
+def _expected(service: str) -> Any:
+    return [1, 2] if service == "blocks" else ENTRY_1 + ENTRY_2
+
+
+@pytest.mark.client
+@pytest.mark.parametrize("service", ["blocks", "szl"])
+class TestFollowupReference:
+    """A follow-up reply counts only when its PDU reference matches the follow-up request."""
+
+    def test_sync_stale_reply_is_skipped(self, service: str) -> None:
+        replies = [_first_reply(service), (-1, 0, WRONG_ENTRY), (0, 0, ENTRY_2)]
+        assert _sync_call(service, replies) == _expected(service)
+        assert not replies
+
+    async def test_async_stale_reply_is_skipped(self, service: str) -> None:
+        replies = [_first_reply(service), (-1, 0, WRONG_ENTRY), (0, 0, ENTRY_2)]
+        assert await _async_call(service, replies) == _expected(service)
+        assert not replies
+
+    def test_sync_reply_ahead_is_refused(self, service: str) -> None:
+        with pytest.raises(S7ProtocolError):
+            _sync_call(service, [_first_reply(service)] + [(1, 0, WRONG_ENTRY)] * 4)
+
+    async def test_async_reply_ahead_is_refused(self, service: str) -> None:
+        with pytest.raises(S7ProtocolError):
+            await _async_call(service, [_first_reply(service)] + [(1, 0, WRONG_ENTRY)] * 4)
