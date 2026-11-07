@@ -14,6 +14,8 @@ Unreleased
 
 * Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
   when setting it. Previously `12 a3` decoded to `.130` (#966).
+* `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
+  stale fragment was added to the result (#967).
 
 3.3.1
 -----

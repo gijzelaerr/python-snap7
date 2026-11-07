@@ -1315,8 +1315,6 @@ class Client(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        conn = self._get_connection()
-
         # Map Block enum to S7 block type codes
         block_type_codes = {
             Block.OB: 0x38,  # Organization Block
@@ -1358,10 +1356,7 @@ class Client(ClientMixin):
                 break
 
             followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-            self._send_data(conn, followup)
-
-            response_data = conn.receive_data()
-            response = self.protocol.parse_response(response_data)
+            response = self._send_receive(followup)
             self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE)
 
             # Check for errors
@@ -1967,8 +1962,6 @@ class Client(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        conn = self._get_connection()
-
         # Build and send read SZL request
         request = self.protocol.build_read_szl_request(ssl_id, index)
         response = self._send_receive(request)
@@ -1998,10 +1991,7 @@ class Client(ClientMixin):
                 break
 
             followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-            self._send_data(conn, followup)
-
-            response_data = conn.receive_data()
-            response = self.protocol.parse_response(response_data)
+            response = self._send_receive(followup)
             self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
 
             # Check for errors
