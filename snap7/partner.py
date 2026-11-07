@@ -838,12 +838,16 @@ class Partner:
         if self._connection is None:
             raise S7ConnectionError("No connection object")
 
+        # The CR's source reference is the active partner's own; the CC echoes it
+        # as its destination reference, and our DR addresses it later (#972).
+        peer_ref = struct.unpack(">H", payload[4:6])[0]
+        self._connection.dst_ref = peer_ref
         cc_pdu = struct.pack(
             ">BBHHB",
             6,  # PDU length
             0xD0,  # COTP_CC
-            self._connection.src_ref,  # Destination reference (our src_ref)
-            0x0001,  # Source reference
+            peer_ref,  # Destination reference (the active partner's)
+            self._connection.src_ref,  # Source reference (ours)
             0x00,  # Class 0
         )
         # Add PDU size parameter

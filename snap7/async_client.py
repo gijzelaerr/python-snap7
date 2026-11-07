@@ -255,7 +255,8 @@ class AsyncISOTCPConnection:
         if pdu_type != self.COTP_CC:
             raise S7ConnectionError(f"Expected COTP CC, got {pdu_type:#02x}")
 
-        self.dst_ref = dst_ref
+        # The CC's source reference is the peer's; see ISOTCPConnection._parse_cotp_cc (#972).
+        self.dst_ref = src_ref
 
         # Parse parameters
         offset = 7
