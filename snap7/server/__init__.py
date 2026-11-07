@@ -2036,9 +2036,10 @@ class Server:
         try:
             from datetime import datetime
 
-            millisecond = from_bcd(raw_data[8]) * 10 + (raw_data[9] >> 4)
-            if millisecond > 999 or not 1 <= (raw_data[9] & 0x0F) <= 7:
+            millisecond_ones = raw_data[9] >> 4
+            if millisecond_ones > 9 or not 1 <= (raw_data[9] & 0x0F) <= 7:
                 raise ValueError("Invalid clock millisecond or weekday")
+            millisecond = from_bcd(raw_data[8]) * 10 + millisecond_ones
             year = from_bcd(raw_data[2])
             timestamp = datetime(
                 2000 + year if year < 90 else 1900 + year,

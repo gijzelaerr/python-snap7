@@ -10,6 +10,11 @@ Unreleased
   value, for applications that batch their own raw reads and writes. The private names in `snap7.client` still
   work (#973).
 
+### Bug fixes
+
+* Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
+  when setting it. Previously `12 a3` decoded to `.130` (#966).
+
 3.3.1
 -----
 
