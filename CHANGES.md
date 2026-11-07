@@ -9,9 +9,9 @@ Unreleased
 * Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
   when setting it. Previously `12 a3` decoded to `.130` (#966).
 * `disconnect()` now addresses its COTP disconnect request to the PLC's connection reference, in both clients.
-  Previously it used the client's own reference, which a CP 343-1 does not accept, so the CP kept the connection
-  allocated until it was restarted. The passive `Partner` now echoes the active partner's reference in its connection
-  confirm (#979).
+  Previously it used the client's own reference. That is the likely reason a CP 343-1 kept each connection
+  allocated until it was restarted (#972, not yet confirmed on the CP). The passive `Partner` now echoes the active
+  partner's reference in its connection confirm (#979).
 
 3.3.1
 -----
