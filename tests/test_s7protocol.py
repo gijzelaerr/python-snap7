@@ -623,6 +623,12 @@ class TestParseGetClockResponse:
         with pytest.raises(S7ProtocolError, match="invalid BCD"):
             self.proto.parse_get_clock_response({"data": {"data": raw_data}})
 
+    @pytest.mark.parametrize("digit", range(0xA, 0x10))
+    def test_ten_byte_invalid_millisecond_ones_digit_rejected(self, digit: int) -> None:
+        raw_data = bytes([0x00, 0x20, 0x26, 0x10, 0x07, 0x12, 0x30, 0x45, 0x12, digit << 4 | 0x03])
+        with pytest.raises(S7ProtocolError, match="invalid BCD"):
+            self.proto.parse_get_clock_response({"data": {"data": raw_data}})
+
     def test_short_data_rejected(self) -> None:
         response = {"data": {"data": b"\x00\x01"}}
         with pytest.raises(S7ProtocolError, match="ten bytes"):
