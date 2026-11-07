@@ -1053,6 +1053,13 @@ class TestServerUserdataOperations(unittest.TestCase):
         with self.assertRaises(S7ProtocolError):
             self.client.protocol.parse_response(response)
 
+    def test_set_plc_datetime_rejects_invalid_millisecond_digit(self) -> None:
+        request = self.server._parse_request(self.client.protocol.build_set_clock_request(datetime(2025, 6, 15, 12, 30, 45)))
+        request["data"]["data"] = b"\x00\x19\x25\x06\x15\x12\x30\x45\x12\xa1"
+        response = self.server._handle_set_clock(request, request["parameters"], ("127.0.0.1", 12345))
+        with self.assertRaises(S7ProtocolError):
+            self.client.protocol.parse_response(response)
+
     def test_get_block_info_selects_requested_block_number(self) -> None:
         """The server must read the block number from the request, not fall back to DB1."""
         info = self.client.get_block_info(Block.DB, 7)
