@@ -62,6 +62,7 @@ _TYPE_SIZE: dict[str, int] = {
     "WORD": 2,
     "WCHAR": 2,
     "DATE": 2,
+    "S5TIME": 2,
     "DINT": 4,
     "UDINT": 4,
     "DWORD": 4,
@@ -440,9 +441,11 @@ def parse_tag(address: str, *, strict: bool = True, name: str = "") -> Tag:
     Args:
         address: Tag address string.
         strict: When ``True`` (default), require one of the dialect markers
-            above. Bare short forms like ``M7.1`` or ``IW22`` raise
+            above and a type with a known size. Bare short forms like ``M7.1``
+            or ``IW22``, unknown types and ``STRING`` without a length raise
             :class:`ValueError`. When ``False``, bare forms are dispatched
-            to the nodeS7 parser (which accepts them).
+            to the nodeS7 parser (which accepts them), and the type is not
+            checked until :attr:`Tag.size` is read.
         name: Optional tag name to store on the resulting Tag.
 
     Returns:
@@ -450,20 +453,28 @@ def parse_tag(address: str, *, strict: bool = True, name: str = "") -> Tag:
         detected.
 
     Raises:
-        ValueError: If the input is ambiguous under strict mode, or if
-            the selected parser fails to parse.
+        ValueError: If the input is ambiguous or its type has no known size
+            under strict mode, or if the selected parser fails to parse.
     """
     s = address.strip()
+    tag: Tag
     if "," in s:
-        return NodeS7Tag.parse(s, name)
-    if ":" in s:
-        return PLC4XTag.parse(s, name)
-    if strict:
+        tag = NodeS7Tag.parse(s, name)
+    elif ":" in s:
+        tag = PLC4XTag.parse(s, name)
+    elif strict:
         raise ValueError(
             f"Ambiguous tag syntax {address!r}: must contain ',' (nodeS7) "
             f"or ':TYPE' (PLC4X). Pass strict=False to accept bare short forms."
         )
-    return NodeS7Tag.parse(s, name)
+    else:
+        tag = NodeS7Tag.parse(s, name)
+    if strict:
+        try:
+            tag.size
+        except ValueError as e:
+            raise ValueError(f"Tag address {address!r} has a type with no known size: {tag.datatype}") from e
+    return tag
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +538,8 @@ def _decode_scalar(datatype: str, data: bytearray, bit: int) -> Any:
         return util.get_wchar(data, 0)
     if datatype == "DATE":
         return util.get_date(data, 0)
+    if datatype == "S5TIME":
+        return util.get_s5time(data, 0)
     if datatype == "DINT":
         return util.get_dint(data, 0)
     if datatype == "UDINT":

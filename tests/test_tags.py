@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from snap7.tags import NodeS7Tag, PLC4XTag, Tag, decode_tag, encode_tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
+from snap7 import util
 from snap7.type import Area
 
 
@@ -184,6 +185,31 @@ class TestTagCodec:
 
         assert _decode_tag is decode_tag
         assert _encode_tag is encode_tag
+
+
+class TestParseTagKnownSize:
+    @pytest.mark.parametrize("address", ["DB1.DBW0:BOGUS", "DB1.DBB0:STRING", "DB1:0:WSTRING", "MW0:BOGUS"])
+    def test_strict_refuses_a_type_without_a_size(self, address: str) -> None:
+        with pytest.raises(ValueError, match="no known size"):
+            parse_tag(address)
+
+    def test_not_strict_leaves_the_type_unchecked(self) -> None:
+        tag = parse_tag("DB1.DBW0:BOGUS", strict=False)
+        assert tag.datatype == "BOGUS"
+        with pytest.raises(ValueError, match="Unknown S7 type"):
+            tag.size
+
+    def test_explicit_parsers_are_unchanged(self) -> None:
+        assert PLC4XTag.parse("DB1.DBW0:BOGUS").datatype == "BOGUS"
+
+    def test_s5time_has_a_size_and_decodes(self) -> None:
+        tag = parse_tag("DB1.DBW0:S5TIME")
+        assert tag.size == 2
+        assert decode_tag(tag, bytearray(bytes.fromhex("0123"))) == util.get_s5time(bytearray(bytes.fromhex("0123")), 0)
+
+    def test_s5time_write_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="S5TIME"):
+            encode_tag(parse_tag("DB1.DBW0:S5TIME"), bytearray(2), "10ms")
 
 
 class TestLoadCsv:
