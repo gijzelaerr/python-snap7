@@ -1,8 +1,8 @@
 CHANGES
 ========
 
-Unreleased
-----------
+3.4.0
+-----
 
 ### New features
 
