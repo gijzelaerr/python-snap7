@@ -12,9 +12,13 @@ Unreleased
 
 ### Bug fixes
 
+* Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
+  when setting it. Previously `12 a3` decoded to `.130` (#966).
 * `parse_tag` now raises `ValueError` under `strict=True`, the default, for a type with no known size, such as
   `DB1.DBB0:STRING` without a length. Previously this failed only when `.size` was read. `S5TIME` now has a size
   and can be read, but not yet written (#974).
+* `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
+  stale fragment was added to the result (#967).
 
 3.3.1
 -----

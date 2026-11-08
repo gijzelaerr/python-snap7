@@ -1022,8 +1022,6 @@ class AsyncClient(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        conn = self._get_connection()
-
         block_type_codes = {
             Block.OB: 0x38,
             Block.DB: 0x41,
@@ -1057,12 +1055,8 @@ class AsyncClient(ClientMixin):
             if last_data_unit == 0x00:
                 break
 
-            async with self._lock:
-                followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-                await self._send_data(conn, followup)
-                response_data = await conn.receive_data()
-
-            response = self.protocol.parse_response(response_data)
+            followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
+            response = await self._send_receive(followup)
             self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE)
 
             data_info = response.get("data", {})
@@ -1346,8 +1340,6 @@ class AsyncClient(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        conn = self._get_connection()
-
         request = self.protocol.build_read_szl_request(ssl_id, index)
         response = await self._send_receive(request)
         self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
@@ -1371,12 +1363,8 @@ class AsyncClient(ClientMixin):
             if last_data_unit == 0x00:
                 break
 
-            async with self._lock:
-                followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-                await self._send_data(conn, followup)
-                response_data = await conn.receive_data()
-
-            response = self.protocol.parse_response(response_data)
+            followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
+            response = await self._send_receive(followup)
             self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
 
             data_info = response.get("data", {})
