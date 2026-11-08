@@ -7,7 +7,7 @@ import asyncio
 import logging
 import struct
 from collections.abc import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -338,6 +338,24 @@ def test_async_cotp_accepts_valid_pdu_sizes(parameter: bytes, expected: int) -> 
     connection._parse_cotp_cc(base + parameter)
 
     assert connection.pdu_size == expected
+
+
+@pytest.mark.asyncio
+async def test_async_disconnect_request_addresses_the_peer_reference() -> None:
+    """The DR carries the CC's source reference as its destination reference (#972)."""
+    connection = AsyncISOTCPConnection("127.0.0.1")
+    # COTP CC from a CP 343-1 (#972): dst-ref 0x0001 echoes ours, src-ref 0x4431 is the CP's.
+    connection._parse_cotp_cc(bytes.fromhex("11 d0 0001 4431 00 c0 01 0a c1 02 01 00 c2 02 01 02"))
+    assert connection.dst_ref == 0x4431
+    writer = MagicMock()
+    writer.drain = AsyncMock()
+    writer.wait_closed = AsyncMock()
+    connection._writer = writer
+    connection.connected = True
+
+    await connection.disconnect()
+
+    writer.write.assert_called_once_with(bytes.fromhex("03 00 00 0c 06 80 4431 0001 00 00"))
 
 
 @pytest.mark.parametrize(

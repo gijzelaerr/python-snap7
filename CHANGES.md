@@ -16,6 +16,10 @@ Unreleased
   when setting it. Previously `12 a3` decoded to `.130` (#966).
 * `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
   stale fragment was added to the result (#967).
+* `disconnect()` now addresses its COTP disconnect request to the PLC's connection reference, in both clients.
+  Previously it used the client's own reference. That is the likely reason a CP 343-1 kept each connection
+  allocated until it was restarted (#972, not yet confirmed on the CP). The passive `Partner` now echoes the active
+  partner's reference in its connection confirm (#979).
 
 3.3.1
 -----

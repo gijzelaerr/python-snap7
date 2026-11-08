@@ -342,7 +342,10 @@ class ISOTCPConnection:
         """
         Parse COTP Connection Confirm PDU.
 
-        Extracts destination reference and negotiated PDU size.
+        Extracts the peer's reference and the negotiated PDU size. The CC's
+        source reference is the peer's own reference, which every later TPDU
+        addressed to it (the DR) carries as its destination reference. Its
+        destination reference only echoes ours (#972).
         """
         if len(data) < 7:
             raise S7ConnectionError("Invalid COTP CC: too short")
@@ -352,7 +355,7 @@ class ISOTCPConnection:
         if pdu_type != self.COTP_CC:
             raise S7ConnectionError(f"Expected COTP CC, got {pdu_type:#02x}")
 
-        self.dst_ref = dst_ref
+        self.dst_ref = src_ref
 
         # Parse parameters if present
         if len(data) > 7:

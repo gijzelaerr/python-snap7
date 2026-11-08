@@ -139,6 +139,25 @@ def _free_port() -> int:
 class TestPartnerPDU:
     """Unit tests for partner PDU building and parsing."""
 
+    def test_passive_cc_echoes_the_active_partner_reference(self) -> None:
+        """The CC's destination reference is the CR's source reference, and the DR uses it later (#972)."""
+        p = Partner()
+        p._connection = ISOTCPConnection("127.0.0.1")
+        active, passive = socket.socketpair()
+        try:
+            # COTP CR with source reference 0x1234 and a TPDU-size parameter.
+            active.sendall(bytes.fromhex("03 00 00 0e 09 e0 0000 1234 00 c0 01 0a"))
+            p._handle_cotp_cr(passive)
+            cc = active.recv(1024)
+        finally:
+            active.close()
+            passive.close()
+        assert cc[5] == 0xD0
+        dst_ref, src_ref = struct.unpack(">HH", cc[6:10])
+        assert dst_ref == 0x1234
+        assert src_ref == p._connection.src_ref
+        assert p._connection.dst_ref == 0x1234
+
     def test_build_partner_data_pdu_small(self) -> None:
         p = Partner()
         data = b"\x01\x02\x03"
