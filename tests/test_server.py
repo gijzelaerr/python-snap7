@@ -1203,6 +1203,43 @@ class TestHandshakeLogging(unittest.TestCase):
 
 
 @pytest.mark.server
+def test_data_pdu_with_wrong_tpkt_version_is_not_executed() -> None:
+    """A TPKT version other than 3 is refused on data PDUs too, not only on the Connection Request (#977).
+
+    The frames are the reproduction from #977: the bundled Snap7 C library in 1.x
+    validated the version on the Connection Request only, and executed this Write Var.
+    """
+    cotp_cr = bytes.fromhex("03 00 00 16 11 e0 00 00 00 01 00 c1 02 01 00 c2 02 01 02 c0 01 0a")
+    s7_setup = bytes.fromhex("03 00 00 19 02 f0 80 32 01 00 00 00 01 00 08 00 00 f0 00 00 01 00 01 01 e0")
+    # Write Var of 0x5A to DB1.DBB0, in a TPKT whose version byte is 4 instead of 3.
+    write_var = bytes.fromhex(
+        "04 00 00 24 02 f0 80 32 01 00 00 00 02 00 0e 00 05 05 01 12 0a 10 02 00 01 00 01 84 00 00 00 00 04 00 08 5a"
+    )
+    db1 = bytearray(4)
+    server = Server()
+    server.register_area(SrvArea.DB, 1, db1)
+    server.start(0)
+    try:
+        assert server.server_socket is not None
+        port = server.server_socket.getsockname()[1]
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+            sock.sendall(cotp_cr)
+            assert sock.recv(1024)[5] == 0xD0  # COTP Connection Confirm
+            sock.sendall(s7_setup)
+            assert sock.recv(1024)[:2] == b"\x03\x00"  # setup reply
+            sock.sendall(write_var)
+            try:
+                reply = sock.recv(1024)
+            except ConnectionResetError:  # Windows reports the close as a reset
+                reply = b""
+            assert reply == b""  # the server closes the connection without a reply
+        assert db1[0] == 0
+    finally:
+        server.stop()
+        server.destroy()
+
+
+@pytest.mark.server
 class TestServerErrorScenarios(unittest.TestCase):
     """Test error handling paths in the server."""
 

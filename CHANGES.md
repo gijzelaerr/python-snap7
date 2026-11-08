@@ -4,10 +4,18 @@ CHANGES
 Unreleased
 ----------
 
+### New features
+
+* Add `snap7.tags.decode_tag` and `snap7.tags.encode_tag`, which convert between a tag's raw bytes and a Python
+  value, for applications that batch their own raw reads and writes. The private names in `snap7.client` still
+  work (#973).
+
 ### Bug fixes
 
 * Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
   when setting it. Previously `12 a3` decoded to `.130` (#966).
+* `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
+  stale fragment was added to the result (#967).
 * `disconnect()` now addresses its COTP disconnect request to the PLC's connection reference, in both clients.
   Previously it used the client's own reference. That is the likely reason a CP 343-1 kept each connection
   allocated until it was restarted (#972, not yet confirmed on the CP). The passive `Partner` now echoes the active
