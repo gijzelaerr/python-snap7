@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from snap7.tags import NodeS7Tag, PLC4XTag, Tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
+from snap7.tags import NodeS7Tag, PLC4XTag, Tag, decode_tag, encode_tag, from_browse, load_csv, load_json, load_tia_xml, parse_tag
 from snap7.type import Area
 
 
@@ -145,6 +145,45 @@ class TestTagSize:
     def test_unknown_type_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown S7 type"):
             Tag(Area.DB, 1, 0, "MYSTERY").size  # noqa: B018
+
+
+class TestTagCodec:
+    @pytest.mark.parametrize(
+        "address, value",
+        [
+            ("DB1.DBX0.3:BOOL", True),
+            ("DB1:0:INT", -2),
+            ("DB1:0:REAL", 1.5),
+            ("DB1:0:INT[3]", [1, -2, 3]),
+            ("DB1:0:STRING[8]", "abc"),
+            ("DB1:0:WSTRING[8]", "abc"),
+        ],
+    )
+    def test_round_trip(self, address: str, value: object) -> None:
+        tag = parse_tag(address)
+        buf = bytearray(tag.size)
+        encode_tag(tag, buf, value)
+        assert decode_tag(tag, buf) == value
+
+    def test_known_bytes(self) -> None:
+        tag = parse_tag("DB1:0:INT")
+        assert decode_tag(tag, bytearray(bytes.fromhex("fffe"))) == -2
+        buf = bytearray(2)
+        encode_tag(tag, buf, -2)
+        assert buf.hex() == "fffe"
+
+    def test_unknown_type_raises(self) -> None:
+        tag = Tag(area=Area.DB, db_number=1, byte_offset=0, datatype="BOGUS")
+        with pytest.raises(ValueError):
+            decode_tag(tag, bytearray(2))
+        with pytest.raises(ValueError):
+            encode_tag(tag, bytearray(2), 1)
+
+    def test_private_names_still_work(self) -> None:
+        from snap7.client import _decode_tag, _encode_tag
+
+        assert _decode_tag is decode_tag
+        assert _encode_tag is encode_tag
 
 
 class TestLoadCsv:
