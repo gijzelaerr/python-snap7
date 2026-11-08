@@ -12,6 +12,8 @@ Unreleased
 
 ### Bug fixes
 
+* `set_wchar` now raises `ValueError` for a character above U+FFFF, as `set_wstring` does. Previously it grew the
+  buffer by two bytes, shifting every later field (#968).
 * Clock data with a milliseconds digit above 9 is now rejected, by the client when reading the clock and by the server
   when setting it. Previously `12 a3` decoded to `.130` (#966).
 * `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
