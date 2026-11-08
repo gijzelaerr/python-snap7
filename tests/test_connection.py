@@ -81,10 +81,31 @@ class TestParseCOTPCC:
 
     def test_valid_cc(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
-        # Build a valid CC: len, type, dst_ref, src_ref, class_opt
-        cc_data = struct.pack(">BBHHB", 6, 0xD0, 0x1234, 0x0001, 0x00)
+        # Build a valid CC: len, type, dst_ref (echoes ours), src_ref (the peer's), class_opt
+        cc_data = struct.pack(">BBHHB", 6, 0xD0, 0x0001, 0x1234, 0x00)
         conn._parse_cotp_cc(cc_data)
         assert conn.dst_ref == 0x1234
+
+    # COTP CC from a CP 343-1 in front of an S7-313C-2 DP, captured for #972 (after the
+    # TPKT header): dst-ref 0x0001 echoes our reference, src-ref 0x4431 is the CP's.
+    CAPTURED_CC = bytes.fromhex("11 d0 0001 4431 00 c0 01 0a c1 02 01 00 c2 02 01 02")
+    # The DR must address the CP's reference; python-snap7 3.3.1 sent 06 80 0001 0001 00 00.
+    EXPECTED_DR = bytes.fromhex("03 00 00 0c 06 80 4431 0001 00 00")
+
+    def test_captured_cc_gives_the_peer_reference(self) -> None:
+        conn = ISOTCPConnection("1.2.3.4")
+        conn._parse_cotp_cc(self.CAPTURED_CC)
+        assert conn.dst_ref == 0x4431
+        assert conn.src_ref == 0x0001
+
+    def test_disconnect_request_addresses_the_peer_reference(self) -> None:
+        conn = ISOTCPConnection("1.2.3.4")
+        conn._parse_cotp_cc(self.CAPTURED_CC)
+        sock = MagicMock()
+        conn.socket = sock
+        conn.connected = True
+        conn.disconnect()
+        sock.sendall.assert_called_once_with(self.EXPECTED_DR)
 
     def test_cc_too_short(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")

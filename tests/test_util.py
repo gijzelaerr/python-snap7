@@ -692,6 +692,14 @@ class TestNewSetters(unittest.TestCase):
         set_wchar(data, 0, "Ω")
         self.assertEqual(get_wchar(data, 0), "Ω")
 
+    def test_set_wchar_outside_bmp_rejected(self) -> None:
+        from snap7.util import set_wchar
+
+        data = bytearray(b"\x00\x41\x00\x42")
+        with self.assertRaises(ValueError):
+            set_wchar(data, 0, "\U0001f600")
+        self.assertEqual(data, bytearray(b"\x00\x41\x00\x42"))
+
     def test_set_lword(self) -> None:
         from snap7.util import set_lword, get_lword
 

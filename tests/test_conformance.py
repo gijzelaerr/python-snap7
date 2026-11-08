@@ -135,10 +135,10 @@ class TestCOTPConformance:
         assert dt[3:] == payload
 
     def test_cotp_cc_parsing(self) -> None:
-        """CC PDU parsing extracts destination reference."""
+        """CC PDU parsing takes the peer's reference from the CC's source reference (#972)."""
         conn = ISOTCPConnection("127.0.0.1")
-        # Build a minimal CC: pdu_len, type=0xD0, dst_ref, src_ref, class
-        cc = struct.pack(">BBHHB", 6, 0xD0, 0x0042, 0x0001, 0x00)
+        # Build a minimal CC: pdu_len, type=0xD0, dst_ref (echoes ours), src_ref (the peer's), class
+        cc = struct.pack(">BBHHB", 6, 0xD0, 0x0001, 0x0042, 0x00)
         conn._parse_cotp_cc(cc)
         assert conn.dst_ref == 0x0042
 

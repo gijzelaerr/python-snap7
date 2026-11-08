@@ -21,8 +21,8 @@ from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_
 from .datatypes import S7DataTypes, S7WordLen
 from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin, _instrumented
-from .tags import Tag
-from .client import Client, _decode_tag, _encode_tag
+from .tags import Tag, decode_tag, encode_tag
+from .client import Client
 from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
 from .client import _parse_force_szl
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
@@ -255,7 +255,8 @@ class AsyncISOTCPConnection:
         if pdu_type != self.COTP_CC:
             raise S7ConnectionError(f"Expected COTP CC, got {pdu_type:#02x}")
 
-        self.dst_ref = dst_ref
+        # The CC's source reference is the peer's; see ISOTCPConnection._parse_cotp_cc (#972).
+        self.dst_ref = src_ref
 
         # Parse parameters
         offset = 7
@@ -794,7 +795,7 @@ class AsyncClient(ClientMixin):
         if resolved.is_symbolic:
             raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
         data = await self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, resolved.size)
-        return _decode_tag(resolved, bytearray(data), encoding=encoding)
+        return decode_tag(resolved, bytearray(data), encoding=encoding)
 
     async def write_tag(self, tag: "Union[Tag, str]", value: Any, encoding: str = "latin-1") -> int:
         """Write a typed value by :class:`~snap7.tags.Tag` or address string. Returns 0 on success."""
@@ -806,7 +807,7 @@ class AsyncClient(ClientMixin):
             # Preserve the other bits of the byte
             current = await self.read_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, 1)
             buf[0] = current[0]
-        _encode_tag(resolved, buf, value, encoding=encoding)
+        encode_tag(resolved, buf, value, encoding=encoding)
         return await self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
 
     async def read_tags(self, tags: "Sequence[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
@@ -814,7 +815,7 @@ class AsyncClient(ClientMixin):
         resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
         items = [{"area": Area(t.area), "db_number": t.db_number, "start": t.byte_offset, "size": t.size} for t in resolved]
         _code, data_list = await self.read_multi_vars(items)
-        return [_decode_tag(t, bytearray(d), encoding=encoding) for t, d in zip(resolved, data_list)]
+        return [decode_tag(t, bytearray(d), encoding=encoding) for t, d in zip(resolved, data_list)]
 
     async def db_get(self, db_number: int, size: int = 0) -> bytearray:
         """Get entire DB.
@@ -1022,8 +1023,6 @@ class AsyncClient(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        conn = self._get_connection()
-
         block_type_codes = {
             Block.OB: 0x38,
             Block.DB: 0x41,
@@ -1057,12 +1056,8 @@ class AsyncClient(ClientMixin):
             if last_data_unit == 0x00:
                 break
 
-            async with self._lock:
-                followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-                await self._send_data(conn, followup)
-                response_data = await conn.receive_data()
-
-            response = self.protocol.parse_response(response_data)
+            followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
+            response = await self._send_receive(followup)
             self.protocol.check_userdata_response(response, S7UserDataGroup.BLOCK_INFO, S7UserDataSubfunction.LIST_BLOCKS_OF_TYPE)
 
             data_info = response.get("data", {})
@@ -1346,8 +1341,6 @@ class AsyncClient(ClientMixin):
         if not self.get_connected():
             raise S7ConnectionError("Not connected to PLC")
 
-        conn = self._get_connection()
-
         request = self.protocol.build_read_szl_request(ssl_id, index)
         response = await self._send_receive(request)
         self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
@@ -1371,12 +1364,8 @@ class AsyncClient(ClientMixin):
             if last_data_unit == 0x00:
                 break
 
-            async with self._lock:
-                followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
-                await self._send_data(conn, followup)
-                response_data = await conn.receive_data()
-
-            response = self.protocol.parse_response(response_data)
+            followup = self.protocol.build_userdata_followup_request(group, subfunction, sequence_number)
+            response = await self._send_receive(followup)
             self.protocol.check_userdata_response(response, S7UserDataGroup.SZL, S7UserDataSubfunction.READ_SZL)
 
             data_info = response.get("data", {})
