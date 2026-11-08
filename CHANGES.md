@@ -25,6 +25,9 @@ Unreleased
   Previously it used the client's own reference. That is the likely reason a CP 343-1 kept each connection
   allocated until it was restarted (#972, not yet confirmed on the CP). The passive `Partner` now echoes the active
   partner's reference in its connection confirm (#979).
+* All `snap7.util` setters now raise `ValueError` when the value doesn't fit in the buffer. Most of them silently grew
+  a short `bytearray`, which changed the length written to the PLC or shifted later fields, and `set_lreal`,
+  `set_string`, `set_bool` and the other single-byte setters raised `struct.error` or `IndexError` (#975).
 
 3.3.1
 -----

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 from snap7 import DB, Row
 from snap7.type import Area, WordLen
 from snap7.util import get_byte, get_time, get_fstring, get_int, get_string, get_wstring
-from snap7.util import set_byte, set_time, set_fstring, set_int
+from snap7.util import set_byte, set_time, set_fstring, set_int, setters
 from snap7.util.db import print_row
 
 test_spec = """
@@ -1499,6 +1499,80 @@ class TestRowWriteWithRowOffset:
         row.write(mock_client)
         # The data written should start at db_offset + row_offset
         mock_client.db_write.assert_called_once()
+
+
+# Setter name, arguments after the byte index, bytes needed at index 0.
+_SETTER_SIZES = [
+    ("set_bool", (0, True), 1),
+    ("set_byte", (1,), 1),
+    ("set_usint", (1,), 1),
+    ("set_sint", (1,), 1),
+    ("set_char", ("a",), 1),
+    ("set_word", (1,), 2),
+    ("set_int", (1,), 2),
+    ("set_uint", (1,), 2),
+    ("set_wchar", ("a",), 2),
+    ("set_date", (datetime.date(2024, 1, 1),), 2),
+    ("set_real", (1.0,), 4),
+    ("set_dword", (1,), 4),
+    ("set_dint", (1,), 4),
+    ("set_udint", (1,), 4),
+    ("set_time", ("0:0:0:1.0",), 4),
+    ("set_tod", (datetime.timedelta(seconds=1),), 4),
+    ("set_fstring", ("a", 4), 4),
+    ("set_string", ("ab", 4), 6),
+    ("set_wstring", ("ab", 4), 8),
+    ("set_lreal", (1.0,), 8),
+    ("set_lword", (1,), 8),
+    ("set_lint", (1,), 8),
+    ("set_ulint", (1,), 8),
+    ("set_ltime", (datetime.timedelta(seconds=1),), 8),
+    ("set_ltod", (datetime.timedelta(seconds=1),), 8),
+    ("set_ldt", (datetime.datetime(2024, 1, 1),), 8),
+    ("set_dt", (datetime.datetime(2024, 1, 1),), 8),
+    ("set_dtl", (datetime.datetime(2024, 1, 1),), 12),
+]
+
+
+@pytest.mark.util
+@pytest.mark.parametrize("name, args, size", _SETTER_SIZES)
+def test_setter_refuses_a_short_buffer(name: str, args: tuple[object, ...], size: int) -> None:
+    setter = getattr(setters, name)
+    short = bytearray(size - 1)
+    with pytest.raises(ValueError, match="do not fit"):
+        setter(short, 0, *args)
+    assert len(short) == size - 1
+
+
+@pytest.mark.util
+@pytest.mark.parametrize("name, args, size", _SETTER_SIZES)
+def test_setter_refuses_a_buffer_short_after_the_index(name: str, args: tuple[object, ...], size: int) -> None:
+    setter = getattr(setters, name)
+    with pytest.raises(ValueError, match="do not fit"):
+        setter(bytearray(size), 1, *args)
+
+
+@pytest.mark.util
+@pytest.mark.parametrize("name, args, size", _SETTER_SIZES)
+def test_setter_accepts_an_exact_buffer(name: str, args: tuple[object, ...], size: int) -> None:
+    buffer = bytearray(size)
+    getattr(setters, name)(buffer, 0, *args)
+    assert len(buffer) == size
+
+
+@pytest.mark.util
+def test_set_wstring_needs_room_for_the_value_only() -> None:
+    buffer = bytearray(6)
+    setters.set_wstring(buffer, 0, "a")
+    assert get_wstring(buffer, 0) == "a"
+
+
+@pytest.mark.util
+def test_row_set_value_refuses_a_short_buffer() -> None:
+    row = Row(bytearray(1), "0 value INT")
+    with pytest.raises(ValueError, match="do not fit"):
+        row["value"] = 1
+    assert len(row.get_bytearray()) == 1
 
 
 if __name__ == "__main__":

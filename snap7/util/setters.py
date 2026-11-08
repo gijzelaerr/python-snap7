@@ -10,6 +10,16 @@ from .getters import get_bool
 Buffer = Union[bytearray, memoryview]
 
 
+def _check_space(buffer: Buffer, byte_index: int, size: int) -> None:
+    """Raise ValueError if ``size`` bytes don't fit at ``byte_index``.
+
+    A slice assignment past the end would otherwise grow a bytearray, which changes
+    the length of what gets written back to the PLC or shifts the fields after it.
+    """
+    if byte_index + size > len(buffer):
+        raise ValueError(f"{size} bytes at index {byte_index} do not fit in a buffer of {len(buffer)} bytes")
+
+
 def set_bool(bytearray_: Buffer, byte_index: int, bool_index: int, value: bool) -> Buffer:
     """Set boolean value on location in bytearray.
 
@@ -25,6 +35,7 @@ def set_bool(bytearray_: Buffer, byte_index: int, bool_index: int, value: bool) 
         >>> buffer
             bytearray(b"\\x01")
     """
+    _check_space(bytearray_, byte_index, 1)
     if value not in {0, 1, True, False}:
         raise TypeError(f"Value value:{value} is not a boolean expression.")
 
@@ -60,6 +71,7 @@ def set_byte(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
         >>> set_byte(buffer, 0, 255)
             bytearray(b"\\xFF")
     """
+    _check_space(bytearray_, byte_index, 1)
     _int = int(_int)
     bytearray_[byte_index : byte_index + 1] = struct.pack("B", _int)
     return bytearray_
@@ -79,6 +91,7 @@ def set_word(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
     Return:
         buffer with the written value
     """
+    _check_space(bytearray_, byte_index, 2)
     _int = int(_int)
     bytearray_[byte_index : byte_index + 2] = struct.pack(">H", _int)
     return bytearray_
@@ -103,6 +116,7 @@ def set_int(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
         >>> set_int(data, 0, 255)
             bytearray(b'\\x00\\xff')
     """
+    _check_space(bytearray_, byte_index, 2)
     # make sure were dealing with an int
     _int = int(_int)
     bytearray_[byte_index : byte_index + 2] = struct.pack(">h", _int)
@@ -129,6 +143,7 @@ def set_uint(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
         >>> set_uint(data, 0, 65535)
             bytearray(b'\\xff\\xff')
     """
+    _check_space(bytearray_, byte_index, 2)
     # make sure were dealing with an int
     _int = int(_int)
     bytearray_[byte_index : byte_index + 2] = struct.pack(">H", _int)
@@ -155,6 +170,7 @@ def set_real(bytearray_: Buffer, byte_index: int, real: Union[bool, str, float, 
         >>> set_real(data, 0, 123.321)
             bytearray(b'B\\xf6\\xa4Z')
     """
+    _check_space(bytearray_, byte_index, 4)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">f", float(real))
     return bytearray_
 
@@ -180,6 +196,7 @@ def set_fstring(bytearray_: Buffer, byte_index: int, value: str, max_length: int
         >>> data
             bytearray(b'hello world    \x00\x00\x00\x00\x00')
     """
+    _check_space(bytearray_, byte_index, max_length)
     encoded = value.encode(encoding)
     size = len(encoded)
     if size > max_length:
@@ -216,6 +233,7 @@ def set_string(bytearray_: Buffer, byte_index: int, value: str, max_size: int = 
         >>> data
             bytearray(b'\\xff\\x0bhello world\\x00\\x00\\x00\\x00\\x00\\x00\\x00')
     """
+    _check_space(bytearray_, byte_index, 2 + max_size)
     if not isinstance(value, str):
         raise TypeError(f"Value value:{value} is not from Type string")
 
@@ -260,6 +278,7 @@ def set_dword(bytearray_: Buffer, byte_index: int, dword: int) -> Buffer:
         >>> data
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
+    _check_space(bytearray_, byte_index, 4)
     dword = int(dword)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">I", dword)
     return bytearray_
@@ -284,6 +303,7 @@ def set_dint(bytearray_: Buffer, byte_index: int, dint: int) -> Buffer:
         >>> data
             bytearray(b'\\x7f\\xff\\xff\\xff')
     """
+    _check_space(bytearray_, byte_index, 4)
     dint = int(dint)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">i", dint)
     return bytearray_
@@ -308,6 +328,7 @@ def set_udint(bytearray_: Buffer, byte_index: int, udint: int) -> Buffer:
         >>> data
             bytearray(b'\\xff\\xff\\xff\\xff')
     """
+    _check_space(bytearray_, byte_index, 4)
     udint = int(udint)
     bytearray_[byte_index : byte_index + 4] = struct.pack(">I", udint)
     return bytearray_
@@ -334,6 +355,7 @@ def set_time(bytearray_: Buffer, byte_index: int, time_string: str) -> Buffer:
         >>> data
             bytearray(b'\x8d\xda\xaf\x00')
     """
+    _check_space(bytearray_, byte_index, 4)
     sign = 1
     if re.fullmatch(
         r"(-?(2[0-3]|1?\d):(2[0-3]|1?\d|\d):([1-5]?\d):[1-5]?\d.\d{1,3})|"
@@ -381,6 +403,7 @@ def set_usint(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
         >>> set_usint(data, 0, 255)
             bytearray(b'\\xff')
     """
+    _check_space(bytearray_, byte_index, 1)
     _int = int(_int)
     bytearray_[byte_index] = struct.pack(">B", _int)[0]
     return bytearray_
@@ -407,6 +430,7 @@ def set_sint(bytearray_: Buffer, byte_index: int, _int: int) -> Buffer:
         >>> set_sint(data, 0, 127)
             bytearray(b'\\x7f')
     """
+    _check_space(bytearray_, byte_index, 1)
     _int = int(_int)
     bytearray_[byte_index] = struct.pack(">b", _int)[0]
     return bytearray_
@@ -436,6 +460,7 @@ def set_lreal(bytearray_: Buffer, byte_index: int, lreal: float) -> Buffer:
         >>> Client().db_write(db_number=1, start=10, data=data)
 
     """
+    _check_space(bytearray_, byte_index, 8)
     lreal = float(lreal)
     struct.pack_into(">d", bytearray_, byte_index, lreal)
     return bytearray_
@@ -463,6 +488,7 @@ def set_lword(bytearray_: Buffer, byte_index: int, lword: int) -> Buffer:
         >>> data
         bytearray(b'\\x00\\x00\\x00\\x00\\x00\\x00\\xab\\xcd')
     """
+    _check_space(bytearray_, byte_index, 8)
     lword = int(lword)
     bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", lword)
     return bytearray_
@@ -489,6 +515,7 @@ def set_char(bytearray_: Buffer, byte_index: int, chr_: str) -> Buffer:
         >>> data
         bytearray('0x43')
     """
+    _check_space(bytearray_, byte_index, 1)
     if not isinstance(chr_, str):
         raise TypeError(f"Value value:{chr_} is not from Type string")
 
@@ -519,6 +546,7 @@ def set_date(bytearray_: Buffer, byte_index: int, date_: date) -> Buffer:
         >>> data
             bytearray(b'\x30\xd8')
     """
+    _check_space(bytearray_, byte_index, 2)
     if date_ < date(1990, 1, 1):
         raise ValueError("date is lower than specification allows.")
     elif date_ > date(2168, 12, 31):
@@ -553,6 +581,7 @@ def set_wchar(bytearray_: Buffer, byte_index: int, chr_: str) -> Buffer:
         >>> data
         bytearray(b'\\x00C')
     """
+    _check_space(bytearray_, byte_index, 2)
     if not isinstance(chr_, str):
         raise TypeError(f"Value value:{chr_} is not from Type string")
     if len(chr_) != 1:
@@ -602,14 +631,16 @@ def set_wstring(bytearray_: Buffer, byte_index: int, value: str, max_size: int =
     if size > max_size:
         raise ValueError(f"size {size} > max_size {max_size}")
 
+    encoded = value.encode("utf-16-be")
+    _check_space(bytearray_, byte_index, 4 + len(encoded))
+
     # set max string size (2 bytes, big-endian)
     bytearray_[byte_index : byte_index + 2] = struct.pack(">H", max_size)
 
     # set current length (2 bytes, big-endian)
     bytearray_[byte_index + 2 : byte_index + 4] = struct.pack(">H", size)
 
-    # encode and write UTF-16-BE characters
-    encoded = value.encode("utf-16-be")
+    # write UTF-16-BE characters
     bytearray_[byte_index + 4 : byte_index + 4 + len(encoded)] = encoded
 
 
@@ -633,6 +664,7 @@ def set_tod(bytearray_: Buffer, byte_index: int, tod: timedelta) -> Buffer:
         >>> data = bytearray(4)
         >>> set_tod(data, 0, timedelta(hours=12, minutes=30, seconds=15, milliseconds=500))
     """
+    _check_space(bytearray_, byte_index, 4)
     if tod.days >= 1 or tod < timedelta(0):
         raise ValueError("TIME_OF_DAY must be between 00:00:00.000 and 23:59:59.999")
     ms = (tod.days * 86400 + tod.seconds) * 1000 + tod.microseconds // 1000
@@ -667,6 +699,7 @@ def set_dtl(bytearray_: Buffer, byte_index: int, dt_: datetime) -> Buffer:
         >>> data = bytearray(12)
         >>> set_dtl(data, 0, datetime(2024, 3, 27, 14, 30, 0))
     """
+    _check_space(bytearray_, byte_index, 12)
     if dt_ > datetime(2554, 12, 31, 23, 59, 59):
         raise ValueError("date_val is higher than specification allows.")
 
@@ -711,6 +744,7 @@ def set_dt(bytearray_: Buffer, byte_index: int, dt_: datetime) -> Buffer:
         >>> data = bytearray(8)
         >>> set_dt(data, 0, datetime(2020, 7, 12, 17, 32, 2, 854000))
     """
+    _check_space(bytearray_, byte_index, 8)
 
     def byte_to_bcd(val: int) -> int:
         return ((val // 10) << 4) | (val % 10)
@@ -759,6 +793,7 @@ def set_lint(bytearray_: Buffer, byte_index: int, value: int) -> Buffer:
         >>> data = bytearray(8)
         >>> set_lint(data, 0, 12345)
     """
+    _check_space(bytearray_, byte_index, 8)
     bytearray_[byte_index : byte_index + 8] = struct.pack(">q", value)
     return bytearray_
 
@@ -782,6 +817,7 @@ def set_ulint(bytearray_: Buffer, byte_index: int, value: int) -> Buffer:
         >>> data = bytearray(8)
         >>> set_ulint(data, 0, 12345)
     """
+    _check_space(bytearray_, byte_index, 8)
     bytearray_[byte_index : byte_index + 8] = struct.pack(">Q", value)
     return bytearray_
 
@@ -806,6 +842,7 @@ def set_ltime(bytearray_: Buffer, byte_index: int, value: timedelta) -> Buffer:
         >>> data = bytearray(8)
         >>> set_ltime(data, 0, timedelta(seconds=1))
     """
+    _check_space(bytearray_, byte_index, 8)
     # Use integer arithmetic to avoid float precision loss
     nanoseconds = (value.days * 86400 + value.seconds) * 1_000_000_000 + value.microseconds * 1000
     bytearray_[byte_index : byte_index + 8] = struct.pack(">q", nanoseconds)
@@ -832,6 +869,7 @@ def set_ltod(bytearray_: Buffer, byte_index: int, value: timedelta) -> Buffer:
         >>> data = bytearray(8)
         >>> set_ltod(data, 0, timedelta(hours=12, minutes=30))
     """
+    _check_space(bytearray_, byte_index, 8)
     if value.days >= 1:
         raise ValueError("LTOD value must be less than 24 hours")
     nanoseconds = (value.days * 86400 + value.seconds) * 1_000_000_000 + value.microseconds * 1000
@@ -860,6 +898,7 @@ def set_ldt(bytearray_: Buffer, byte_index: int, value: datetime) -> Buffer:
         >>> data = bytearray(8)
         >>> set_ldt(data, 0, datetime(2024, 1, 15, 10, 30, 0))
     """
+    _check_space(bytearray_, byte_index, 8)
     epoch = datetime(1970, 1, 1)
     delta = value - epoch
     nanoseconds = (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
