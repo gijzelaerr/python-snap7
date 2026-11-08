@@ -1312,9 +1312,10 @@ class S7Protocol:
         microsecond = 0
         if len(raw_data) == 10:
             # Byte 8: milliseconds hundreds/tens (BCD); high nibble of byte 9: milliseconds ones
-            microsecond = (from_bcd(time_bytes[6]) * 10 + (time_bytes[7] >> 4)) * 1000
-            if microsecond > 999000:
+            millisecond_ones = time_bytes[7] >> 4
+            if millisecond_ones > 9:
                 raise S7ProtocolError("Clock response contains an invalid BCD timestamp")
+            microsecond = (from_bcd(time_bytes[6]) * 10 + millisecond_ones) * 1000
 
         # The two-digit S7 year maps 90-99 to 1990-1999 and 00-89 to 2000-2089
         full_year = 2000 + year if year < 90 else 1900 + year
