@@ -11,6 +11,7 @@ import struct
 import logging
 import sys
 import threading
+import time
 from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
 from typing import Any
@@ -123,13 +124,22 @@ class Partner:
         self.last_error = 0
 
         # Buffer for send/recv operations
-        self._send_data: Optional[bytes] = None
-        self._recv_data: Optional[bytes] = None
+        self._send_data1: Optional[bytes] = None
+        self._send_data2: Optional[bytes] = None
+        self._send_data3: Optional[bytes] = None
+        self._send_data4: Optional[bytes] = None
+        self._recv_data1: Optional[bytes] = None
+        self._recv_data2: Optional[bytes] = None
+        self._recv_data3: Optional[bytes] = None
+        self._recv_data4: Optional[bytes] = None
+        self._recv_data_count: Optional[int] = None #0=Bsend 1-4=Usend
         self._async_send_in_progress = False
         self._async_send_result = 0
         self._async_recv_in_progress = False
         self._async_recv_result = 0
         self._async_recv_started = False
+
+        self.reconnects = 0
 
         logger.info(f"S7 Partner initialized (active={active}, pure Python implementation)")
 
@@ -245,6 +255,76 @@ class Partner:
         logger.info("Partner stopped")
         return 0
 
+    def set_socket_timeout(self, timeout: float) -> None:
+        if timeout < 0:
+            return
+        self._connection.socket.settimeout(timeout)
+    
+    def get_recv_data_r_id(self) -> Tuple:
+        """
+        Get data1-4, data_count and r_id received by b_recv() or async receive.
+
+        Returns:
+            Received data and r_id
+        """
+        with self._io_lock:
+            data1 = self._recv_data1
+            data2 = self._recv_data2
+            data3 = self._recv_data3
+            data4 = self._recv_data4
+            data_count = self._recv_data_count
+            r_id = self._recv_r_id
+        
+        return data1, data2, data3, data4, data_count, r_id
+    
+    def check_status(self, socket_timeout = 0.1, recon_wtime1 = 0.2, recon_wtime2 = 0.2) -> c_int32:
+        """
+        Check partner status. Reconnect if not connectet
+
+        Returns:
+            Status code (0=stopped, 1=running, 2=connected)
+        """
+        with self._io_lock:
+            if self.connected:
+                if self._connection is None or not self._connection.connected:
+                    self.connected = False
+                
+                    #Reconnect
+                    self.stop()
+                    time.sleep(recon_wtime1)
+                    
+                    while not self.connected:
+                        try:
+                            self.start()
+                        except Exception:
+                            time.sleep(2)
+                    
+                    self._connection.socket.settimeout(socket_timeout)
+                    
+                    time.sleep(recon_wtime2)
+                    self.reconnects += 1
+        
+        if self.connected:
+            return c_int32(PartnerStatus.CONNECTED)
+        elif self.running:
+            return c_int32(PartnerStatus.RUNNING)
+        else:
+            return c_int32(PartnerStatus.STOPPED)
+
+    def clear_receive_buffer(self):
+        original_timeout = self._connection.socket.gettimeout()
+        try:
+            self._connection.socket.settimeout(0)
+            while True:
+                data = self._connection.socket.recv(4096)
+                if not data:
+                    break
+        except Exception:
+            pass
+        
+        finally:
+            self._connection.socket.settimeout(original_timeout)
+
     def b_send(self) -> int:
         """
         Send data synchronously (blocking).
@@ -254,7 +334,7 @@ class Partner:
         Returns:
             0 on success
         """
-        if self._send_data is None:
+        if self._send_data1 is None:
             return -1
 
         if not self.connected or self._connection is None:
@@ -265,7 +345,7 @@ class Partner:
 
         try:
             # Build partner data PDU
-            pdu = self._build_partner_data_pdu(self._send_data)
+            pdu = self._build_partner_data_pdu(self._send_data1)
 
             with self._io_lock:
                 # Send via ISO connection
@@ -275,10 +355,10 @@ class Partner:
                 ack_data = self._connection.receive_data()
             self._parse_partner_ack(ack_data)
 
-            self.bytes_sent += len(self._send_data)
+            self.bytes_sent += len(self._send_data1)
             self.last_send_time = int((datetime.now() - start_time).total_seconds() * 1000)
 
-            logger.debug(f"Sent {len(self._send_data)} bytes synchronously")
+            logger.debug(f"Sent {len(self._send_data1)} bytes synchronously")
             return 0
 
         except Exception as e:
@@ -286,7 +366,7 @@ class Partner:
             self.last_error = -1
             logger.error(f"Synchronous send failed: {e}")
             raise S7ConnectionError(f"Send failed: {e}")
-
+        
     def b_recv(self) -> int:
         """
         Receive data synchronously (blocking).
@@ -296,7 +376,7 @@ class Partner:
         """
         if not self.connected or self._connection is None:
             self.recv_errors += 1
-            self._recv_data = None
+            self._recv_data1 = None
             return -1
 
         start_time = datetime.now()
@@ -313,7 +393,7 @@ class Partner:
 
             self.bytes_recv += len(received)
             self.last_recv_time = int((datetime.now() - start_time).total_seconds() * 1000)
-            self._recv_data = received
+            self._recv_data1 = received
             self._recv_r_id = r_id
 
             # Call receive callback if set
@@ -342,7 +422,7 @@ class Partner:
         Returns:
             0 on success (send initiated)
         """
-        if self._send_data is None:
+        if self._send_data1 is None:
             return -1
 
         if not self.connected:
@@ -353,9 +433,9 @@ class Partner:
         self._async_send_result = 1  # In progress
 
         # Queue the send operation
-        self._async_send_queue.put(self._send_data)
+        self._async_send_queue.put(self._send_data1)
 
-        logger.debug(f"Async send initiated for {len(self._send_data)} bytes")
+        logger.debug(f"Async send initiated for {len(self._send_data1)} bytes")
         return 0
 
     def check_as_b_send_completion(self) -> Tuple[str, c_int32]:
@@ -446,7 +526,7 @@ class Partner:
             return -1
 
         try:
-            self._recv_data = self._async_recv_queue.get_nowait()
+            self._recv_data1 = self._async_recv_queue.get_nowait()
             return 0  # Data available
         except Empty:
             return 1  # No data yet
@@ -613,7 +693,7 @@ class Partner:
         Args:
             data: Data to send
         """
-        self._send_data = data
+        self._send_data1 = data
 
     def get_recv_data(self) -> Optional[bytes]:
         """
@@ -622,7 +702,7 @@ class Partner:
         Returns:
             Received data or None
         """
-        return self._recv_data
+        return self._recv_data1
 
     def get_recv_r_id(self) -> int:
         """
@@ -720,11 +800,11 @@ class Partner:
                 data = self._async_send_queue.get(timeout=0.1)
 
                 try:
-                    old_data = self._send_data
-                    self._send_data = data
+                    old_data = self._send_data1
+                    self._send_data1 = data
                     with self._io_lock:
                         result = self.b_send()
-                    self._send_data = old_data
+                    self._send_data1 = old_data
                     self._async_send_result = result
 
                     if self._send_callback_fn:
@@ -782,7 +862,7 @@ class Partner:
                 break
 
             # Data received successfully
-            self._recv_data = received
+            self._recv_data1 = received
             self._recv_r_id = r_id
             self._async_recv_queue.put(received)
             self.bytes_recv += len(received)
