@@ -11,6 +11,7 @@ import struct
 import logging
 import sys
 import threading
+import time
 from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
 from typing import Any
@@ -87,6 +88,13 @@ class Partner:
         # S7 protocol handler (for setup communication and PDU formatting)
         self._protocol = S7Protocol()
         self.pdu_length = 480
+        self.usend_payload_length = self.pdu_length - 28
+        self.bsend_payload_length = self.pdu_length - 36
+        self.bsend_fragm_payload_length = self.pdu_length - 34
+        
+        # Sequence counter
+        self.bsend_param_sequence = 1
+        self.du_ref_nr = 1
 
         # R-ID for bsend/brecv matching (default 0, can be set by caller)
         self.r_id: int = 0
@@ -108,7 +116,7 @@ class Partner:
         self.last_recv_time = 0
 
         # Callbacks
-        self._recv_callback: Optional[Callable[[bytes], None]] = None
+        self._recv_callback: Optional[Callable[[bytes, bytes, bytes, bytes, int], None]] = None
         self._send_callback_fn: Optional[Callable[[int], None]] = None
 
         # Async operation support
@@ -124,7 +132,11 @@ class Partner:
 
         # Buffer for send/recv operations
         self._send_data: Optional[bytes] = None
-        self._recv_data: Optional[bytes] = None
+        self._recv_data1: Optional[bytes] = None
+        self._recv_data2: Optional[bytes] = None
+        self._recv_data3: Optional[bytes] = None
+        self._recv_data4: Optional[bytes] = None
+        self._recv_data_count: Optional[int] = None #0=Bsend 1-4=Usend
         self._async_send_in_progress = False
         self._async_send_result = 0
         self._async_recv_in_progress = False
@@ -196,6 +208,11 @@ class Partner:
             self._stop_event.clear()
             self._async_thread = threading.Thread(target=self._async_processor, daemon=True)
             self._async_thread.start()
+            
+            # Payload length
+            self.usend_payload_length = self.pdu_length - 28
+            self.bsend_payload_length = self.pdu_length - 36
+            self.bsend_fragm_payload_length = self.pdu_length - 34
 
             logger.info(f"Partner started ({'active' if self.active else 'passive'} mode)")
             return 0
@@ -303,24 +320,63 @@ class Partner:
 
         try:
             with self._io_lock:
-                # Receive partner data
-                data = self._connection.receive_data()
-                received, r_id, pdu_ref = self._parse_partner_data_pdu(data)
+                last_segment = False
+                fragmented = False
+                reassembled = bytearray()
+                bsend_lengh = 0
+                
+                while last_segment == False:
+                    data = self._connection.receive_data()
+                    value1, value2, value3, value4, val_count, r_id, pdu_ref, par_seq_num, _, par_last_unit, data_bsend_lengh = self._parse_partner_data_pdu(data)
 
-                # Send acknowledgment with the same PDU reference
-                ack = self._build_partner_ack(pdu_ref)
-                self._connection.send_data(ack)
+                    if val_count == 0: #0=Bsend 1-4 Usend
+                        
+                        if par_seq_num == 0:
+                            sequence = self._next_bsend_param_sequence() #set sequence for new fragemneted transmission
+                            bsend_lengh = data_bsend_lengh
+                        else:
+                            sequence = par_seq_num
+                        
+                        ack = self._build_partner_ack(pdu_ref, sequence)
+                        self._connection.send_data(ack)
+                        
+                    if par_last_unit == 0:
+                        last_segment = True
+                        if fragmented == True:
+                            reassembled += bytearray(value1)
+                            value1 = bytes(reassembled)
+                            if bsend_lengh != len(value1):
+                                raise S7ConnectionError("Incorrect bsend-lenght")
+                    else:
+                        fragmented = True
+                        reassembled += bytearray(value1)
+        
+            if val_count < 0:
+                logger.debug("Unknown USERDATA-Type")
+                return -1
+            
+            bytes_rcv = len(value1)
+            if val_count >= 2:
+                bytes_rcv += len(value2)
+                if val_count >= 3:
+                    bytes_rcv += len(value3)
+                    if val_count == 4:
+                        bytes_rcv += len(value4)
 
-            self.bytes_recv += len(received)
             self.last_recv_time = int((datetime.now() - start_time).total_seconds() * 1000)
-            self._recv_data = received
+            self._recv_data1 = value1
+            self._recv_data2 = value2
+            self._recv_data3 = value3
+            self._recv_data4 = value4
+            self._recv_data_count = val_count
             self._recv_r_id = r_id
+            self.bytes_recv += bytes_rcv
 
             # Call receive callback if set
             if self._recv_callback:
-                self._recv_callback(received)
+                self._recv_callback(value1, value2, value3, value4, val_count)
 
-            logger.debug(f"Received {len(received)} bytes synchronously")
+            logger.debug(f"Received {bytes_rcv} bytes synchronously")
             return 0
 
         except socket.timeout:
@@ -446,7 +502,7 @@ class Partner:
             return -1
 
         try:
-            self._recv_data = self._async_recv_queue.get_nowait()
+            self._recv_data1, self._recv_data2, self._recv_data3, self._recv_data4, self._recv_data_count = self._async_recv_queue.get_nowait()
             return 0  # Data available
         except Empty:
             return 1  # No data yet
@@ -575,7 +631,7 @@ class Partner:
         logger.debug(f"Setting parameter {parameter} to {value}")
         return 0
 
-    def set_recv_callback(self, callback: Optional[Callable[[bytes], None]] = None) -> int:
+    def set_recv_callback(self, callback: Optional[Callable[[bytes, bytes, bytes, bytes, int], None]] = None) -> int:
         """
         Register a callback for incoming data.
 
@@ -632,6 +688,13 @@ class Partner:
             R-ID value (0 if no data has been received yet)
         """
         return self._recv_r_id
+    
+    def _next_bsend_param_sequence(self) -> int:
+        """Get next sequence number for BSend parameter."""
+        self.bsend_param_sequence = (self.bsend_param_sequence + 1) & 0xFF
+        if self.bsend_param_sequence == 0: #must not be 0
+            self.bsend_param_sequence += 1
+        return self.bsend_param_sequence
 
     def _connect_to_remote(self) -> None:
         """Connect to remote partner (active mode).
@@ -758,10 +821,38 @@ class Partner:
                     old_timeout = conn.socket.gettimeout()
                     conn.socket.settimeout(self.recv_timeout)
                     try:
-                        data = conn.receive_data()
-                        received, r_id, pdu_ref = self._parse_partner_data_pdu(data)
-                        ack = self._build_partner_ack(pdu_ref)
-                        conn.send_data(ack)
+                        last_segment = False
+                        fragmented = False
+                        reassembled = bytearray()
+                        bsend_lengh = 0
+                        
+                        while last_segment == False:
+                            data = conn.receive_data()
+                            value1, value2, value3, value4, val_count, r_id, pdu_ref, par_seq_num, _, par_last_unit, data_bsend_lengh = self._parse_partner_data_pdu(data)
+
+                            if val_count == 0: #0=Bsend 1-4 Usend
+                                
+                                if par_seq_num == 0:
+                                    sequence = self._next_bsend_param_sequence() #set sequence for new fragemneted transmission
+                                    bsend_lengh = data_bsend_lengh
+                                else:
+                                    sequence = par_seq_num
+                                
+                                ack = self._build_partner_ack(pdu_ref, sequence)
+                                conn.send_data(ack)
+                                
+                            if par_last_unit == 0:
+                                last_segment = True
+                                if fragmented == True:
+                                    reassembled += bytearray(value1)
+                                    value1 = bytes(reassembled)
+                                    if bsend_lengh != len(value1):
+                                        raise S7ConnectionError("Incorrect bsend-lenght")
+                            else:
+                                fragmented = True
+                                conn.socket.settimeout(old_timeout) #Set timeout for next segment
+                                reassembled += bytearray(value1)
+
                     finally:
                         try:
                             if conn.socket is not None:
@@ -773,6 +864,7 @@ class Partner:
                 # ISOTCPConnection.receive_data() sets it to False on timeout
                 if conn is not None:
                     conn.connected = True
+                time.sleep(0.001) 
                 continue
             except Exception as e:
                 self.recv_errors += 1
@@ -782,17 +874,31 @@ class Partner:
                 break
 
             # Data received successfully
-            self._recv_data = received
-            self._recv_r_id = r_id
-            self._async_recv_queue.put(received)
-            self.bytes_recv += len(received)
-            self._async_recv_result = 0
-            self._async_recv_in_progress = False
+            if val_count >= 0:
+                with self._io_lock:
+                    bytes_rcv = len(value1)
+                    if val_count >= 2:
+                        bytes_rcv += len(value2)
+                        if val_count >= 3:
+                            bytes_rcv += len(value3)
+                            if val_count == 4:
+                                bytes_rcv += len(value4)
+                                
+                    self._recv_data1 = value1
+                    self._recv_data2 = value2
+                    self._recv_data3 = value3
+                    self._recv_data4 = value4
+                    self._recv_data_count = val_count
+                    self._recv_r_id = r_id
+                    self._async_recv_queue.put([value1, value2, value3, value4, val_count])
+                    self.bytes_recv += bytes_rcv
+                    self._async_recv_result = 0
+                    self._async_recv_in_progress = False
 
-            if self._recv_callback:
-                self._recv_callback(received)
+                if self._recv_callback:
+                    self._recv_callback(value1, value2, value3, value4, val_count)
 
-            logger.debug(f"Async received {len(received)} bytes")
+                logger.debug(f"Async received {bytes_rcv} bytes")
 
     def _setup_communication(self) -> None:
         """Perform S7 Communication Setup after COTP connection.
@@ -979,14 +1085,14 @@ class Partner:
 
         return header + param + data_section
 
-    def _parse_partner_data_pdu(self, pdu: bytes) -> Tuple[bytes, int, int]:
+    def _parse_partner_data_pdu(self, pdu: bytes) -> Tuple[bytes, bytes, bytes, bytes, int, int, int, int, int, int, int]:
         """Parse an incoming partner data push PDU and extract the payload.
 
         Returns:
-            Tuple of (payload, r_id, pdu_ref).  *r_id* and *pdu_ref* are
-            extracted from the variable specification block and the S7
-            header respectively.  If the variable specification is absent
-            both default to ``0``.
+            Tuple of (val1, val2, val3, val4, val_count, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh).
+            *r_id* and *pdu_ref* are extracted from the variable
+            specification block and the S7 header respectively.
+            If the variable specification is absent both default to ``0``.
         """
         if len(pdu) < 6:
             raise S7Error("Invalid partner PDU: too short")
@@ -1000,27 +1106,107 @@ class Partner:
             if len(pdu) < 10:
                 raise S7Error("USERDATA partner PDU too short")
             _, _, _, pdu_ref, param_len, data_len = struct.unpack(">BBHHHH", pdu[:10])
-            data_offset = 10 + param_len
-            if data_offset + 4 > len(pdu):
-                raise S7Error("Partner data section too short")
-            # Skip 4-byte data section header (return_code, transport_size, length)
-            payload = pdu[data_offset + 4 : data_offset + 4 + data_len - 4] if data_len > 4 else b""
-            # Parse PBC variable specification block if present
-            # Format: 12 06 13 00 [R-ID 4 bytes] [length 2 bytes] = 10 bytes
-            r_id = 0
-            if len(payload) >= 2 and payload[0] == 0x12:
-                var_len = payload[1]
-                if var_len == 0x06 and len(payload) >= 8:
-                    syntax_id = payload[2]
-                    if syntax_id == 0x13:
-                        (r_id,) = struct.unpack(">I", payload[4:8])
-                        # skip var spec header (2) + body (var_len) + length field (2)
-                        payload = payload[2 + var_len + 2 :]
-            return payload, r_id, pdu_ref
+
+            if len(pdu) < 10 + param_len + data_len:
+                raise S7Error("USERDATA partner PDU too short")    
+
+            param = pdu[10 : 10 + param_len]
+            data = pdu[10 + param_len : 10 + param_len + data_len]
+            
+            par_func, par_items, par_var_spec, par_addr_lengh, par_syntax_id = struct.unpack(">BBBBB", param[:5])
+            
+            val_count = 0 #Nr of usend-items - 0 = bsend
+            
+            if par_func == 0x00 and par_items == 1 and par_var_spec == 0x12 and par_addr_lengh == 8 and par_syntax_id == 0x12 and data_len >= 13: #BSend
+                #BSend-data
+                par_func_group, par_subfunc, par_seq_num, par_duref_num, par_last_unit, par_error_code = struct.unpack(">BBBBBH", param[5:12])
+                                
+                _, _, _, data_var_spec, data_var_len, data_syntax_id, _, data_r_id = struct.unpack(">BBHBBBBI", data[:12])
+                
+                payload = bytes()
+                r_id = 0
+                data_bsend_lengh = 0
+                
+                if par_func_group == 0x46 and par_subfunc == 0x01 and par_error_code == 0:
+                    if par_last_unit == 0x00 and par_seq_num == 0x00: #not fragmented transmission
+                        data_bsend_lengh = struct.unpack(">H", data[12:14])[0]
+                        if data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13 and data_bsend_lengh >= 1:
+                            r_id = data_r_id
+                            # skip data header (6) + body (var_len) + length field (2)
+                            payload = data[6 + data_var_len + 2 :]
+                            
+                    elif par_last_unit == 0x01 and par_seq_num == 0x00: #first segment of fragmented transmission
+                        data_bsend_lengh = struct.unpack(">H", data[12:14])[0]
+                        if data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13 and data_bsend_lengh >= 1:
+                            r_id = data_r_id
+                            # skip data header (6) + body (var_len) + length field (2)
+                            payload = data[6 + data_var_len + 2:]
+                            
+                    elif par_seq_num != 0x00: #next segment of fragmented transmission
+                        if data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13:
+                            r_id = data_r_id
+                            # skip data header (6) + body (var_len)
+                            payload = data[6 + data_var_len:]
+                            
+                    else:
+                        val_count = -1
+
+                return payload, _, _, _, val_count, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh
+                
+            elif par_func == 0x00 and par_var_spec == 0x12 and par_syntax_id == 0x13 and data_len >= 6: #USend
+                #USend-data
+                r_id = struct.unpack(">I", param[6:10])[0]
+                
+                payload = bytes()
+                par_seq_num = 0
+                par_duref_num = 0
+                par_last_unit = 0
+                data_bsend_lengh = 0
+                
+                _, _, data_items = struct.unpack(">BBH", data[:4])
+                
+                value1 = bytes()
+                value2 = bytes()
+                value3 = bytes()
+                value4 = bytes()
+                
+                if data_items >= 1 and data_items <= 4:
+                    item_start = 4
+                    for nr in range(1, data_items + 1):
+                        _, item_tranportsize, item_length = struct.unpack(">BBH", data[item_start:item_start + 4])
+                        if item_tranportsize >= 3 and item_tranportsize <= 4:
+                            item_bytes = int(item_length / 8)
+                        else:
+                            item_bytes = item_length
+                            
+                        value = bytes(data[item_start + 4:item_start + 4 + item_bytes])
+                        
+                        if nr == 1:
+                            value1 = value
+                        elif nr == 2:
+                            value2 = value
+                        elif nr == 3:
+                            value3 = value
+                        elif nr == 4:
+                            value4 = value
+                        
+                        ##additional byte if length is odd
+                        if item_bytes % 2 != 0:
+                            item_bytes += 1
+                            
+                        #Start next item    
+                        item_start += 4 + item_bytes
+                        val_count = nr
+                 
+                return value1, value2, value3, value4, val_count, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh
+
+            else:
+                return bytes(0x00), _, _, _, -1, 0, 0, 0, 0, 0, 0
+                #raise S7Error("Unknown USERDATA-Type")
         else:
             raise S7Error(f"Unexpected PDU type in partner data: {pdu_type:#04x}")
 
-    def _build_partner_ack(self, pdu_ref: int = 0) -> bytes:
+    def _build_partner_ack(self, pdu_ref: int = 0, sequence: int = 0) -> bytes:
         """Build an S7 USERDATA acknowledgment PDU for a received bsend.
 
         The PLC expects the same PDU reference in the ACK as in the
@@ -1032,7 +1218,7 @@ class Partner:
         Returns:
             Complete S7 PDU bytes.
         """
-        sequence = self._protocol._next_sequence()
+        #sequence = self._protocol._next_sequence()
 
         param = struct.pack(
             ">BBBBBBBB",
@@ -1111,3 +1297,4 @@ class Partner:
             self.stop()
         except Exception:
             pass
+
