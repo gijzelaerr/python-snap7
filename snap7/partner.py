@@ -87,6 +87,13 @@ class Partner:
         # S7 protocol handler (for setup communication and PDU formatting)
         self._protocol = S7Protocol()
         self.pdu_length = 480
+        self.usend_payload_length = self.pdu_length - 28
+        self.bsend_payload_length = self.pdu_length - 36
+        self.bsend_fragm_payload_length = self.pdu_length - 34
+        
+        # Sequence counter
+        self.bsend_param_sequence = 1
+        self.du_ref_nr = 1
 
         # R-ID for bsend/brecv matching (default 0, can be set by caller)
         self.r_id: int = 0
@@ -123,7 +130,10 @@ class Partner:
         self.last_error = 0
 
         # Buffer for send/recv operations
-        self._send_data: Optional[bytes] = None
+        self._send_data1: Optional[bytes] = None
+        self._send_data2: Optional[bytes] = None
+        self._send_data3: Optional[bytes] = None
+        self._send_data4: Optional[bytes] = None
         self._recv_data: Optional[bytes] = None
         self._async_send_in_progress = False
         self._async_send_result = 0
@@ -196,6 +206,11 @@ class Partner:
             self._stop_event.clear()
             self._async_thread = threading.Thread(target=self._async_processor, daemon=True)
             self._async_thread.start()
+            
+            # Payload length
+            self.usend_payload_length = self.pdu_length - 28
+            self.bsend_payload_length = self.pdu_length - 36
+            self.bsend_fragm_payload_length = self.pdu_length - 34
 
             logger.info(f"Partner started ({'active' if self.active else 'passive'} mode)")
             return 0
@@ -254,7 +269,7 @@ class Partner:
         Returns:
             0 on success
         """
-        if self._send_data is None:
+        if self._send_data1 is None:
             return -1
 
         if not self.connected or self._connection is None:
@@ -265,7 +280,7 @@ class Partner:
 
         try:
             # Build partner data PDU
-            pdu = self._build_partner_data_pdu(self._send_data)
+            pdu = self._build_partner_data_pdu(self._send_data1)
 
             with self._io_lock:
                 # Send via ISO connection
@@ -275,10 +290,71 @@ class Partner:
                 ack_data = self._connection.receive_data()
             self._parse_partner_ack(ack_data)
 
-            self.bytes_sent += len(self._send_data)
+            self.bytes_sent += len(self._send_data1)
             self.last_send_time = int((datetime.now() - start_time).total_seconds() * 1000)
 
-            logger.debug(f"Sent {len(self._send_data)} bytes synchronously")
+            logger.debug(f"Sent {len(self._send_data1)} bytes synchronously")
+            return 0
+
+        except Exception as e:
+            self.send_errors += 1
+            self.last_error = -1
+            logger.error(f"Synchronous send failed: {e}")
+            raise S7ConnectionError(f"Send failed: {e}")
+        
+    def u_send(self, item_count: int) -> int:
+        """
+        Send data synchronously (blocking).
+
+        Note: Call set_send_data() first to set the data to send.
+
+        Returns:
+            0 on success
+        """
+        if item_count < 1 or item_count > 4:
+            return -1
+                
+        if self._send_data1 is None:
+            return -1
+
+        if item_count >= 2 and self._send_data2 is None:
+            return -1
+
+        if item_count >= 3 and self._send_data3 is None:
+            return -1
+        
+        if item_count == 4 and self._send_data4 is None:
+            return -1
+
+        if not self.connected or self._connection is None:
+            self.send_errors += 1
+            raise S7ConnectionError("Not connected")
+
+        start_time = datetime.now()
+
+        try:
+            # Build partner data PDU
+            pdu = self._build_partner_data_pdu_u(self._send_data1, self._send_data2, self._send_data3, self._send_data4, item_count)
+            
+            # Stop async recv-listener
+            self._async_recv_in_progress = False
+
+            with self._io_lock:
+                # Send via ISO connection
+                self._connection.send_data(pdu)
+
+            bytes_snd = len(self._send_data1)
+            if item_count >= 2 and self._send_data2 != None:
+                bytes_snd += len(self._send_data2)
+                if item_count >= 3 and self._send_data3 != None:
+                    bytes_snd += len(self._send_data3)
+                    if item_count == 4 and self._send_data4 != None:
+                        bytes_snd += len(self._send_data4)
+
+            self.bytes_sent += bytes_snd
+            self.last_send_time = int((datetime.now() - start_time).total_seconds() * 1000)
+
+            logger.debug(f"Sent {bytes_snd} bytes synchronously")
             return 0
 
         except Exception as e:
@@ -342,7 +418,7 @@ class Partner:
         Returns:
             0 on success (send initiated)
         """
-        if self._send_data is None:
+        if self._send_data1 is None:
             return -1
 
         if not self.connected:
@@ -353,9 +429,9 @@ class Partner:
         self._async_send_result = 1  # In progress
 
         # Queue the send operation
-        self._async_send_queue.put(self._send_data)
+        self._async_send_queue.put(self._send_data1)
 
-        logger.debug(f"Async send initiated for {len(self._send_data)} bytes")
+        logger.debug(f"Async send initiated for {len(self._send_data1)} bytes")
         return 0
 
     def check_as_b_send_completion(self) -> Tuple[str, c_int32]:
@@ -613,7 +689,7 @@ class Partner:
         Args:
             data: Data to send
         """
-        self._send_data = data
+        self._send_data1 = data
 
     def get_recv_data(self) -> Optional[bytes]:
         """
@@ -720,11 +796,11 @@ class Partner:
                 data = self._async_send_queue.get(timeout=0.1)
 
                 try:
-                    old_data = self._send_data
-                    self._send_data = data
+                    old_data = self._send_data1
+                    self._send_data1 = data
                     with self._io_lock:
                         result = self.b_send()
-                    self._send_data = old_data
+                    self._send_data1 = old_data
                     self._async_send_result = result
 
                     if self._send_callback_fn:
@@ -973,6 +1049,86 @@ class Partner:
             S7PDUType.USERDATA,
             0x0000,
             sequence,
+            len(param),
+            len(data_section),
+        )
+
+        return header + param + data_section
+    
+    def _build_partner_data_pdu_u(self, data1: bytes, data2: Optional[bytes] = None, data3: Optional[bytes] = None, data4: Optional[bytes] = None, item_count: int = 1, r_id: Optional[int] = None) -> bytes:
+        """Build an S7 USERDATA PDU for partner data push (Usend).
+
+        The PDU uses the standard S7 USERDATA header (10 bytes) followed by
+        a parameter section that identifies this as a PBC (Program Block
+        Communication) push with the R-ID and a variable specification
+        block, and a data section with the payload.
+
+        Args:
+            data: Payload to send.
+            r_id: Request ID for usend/urecv matching.  Falls back to ``self.r_id``.
+
+        Returns:
+            Complete S7 PDU bytes (without COTP/TPKT framing).
+        """
+        if r_id is None:
+            r_id = self.r_id
+
+        # Parameter section: USERDATA header (10 bytes)
+        param = struct.pack(
+            ">BBBBBBI",
+            0x00,  # reserved
+            0x01,  # parameter count
+            0x12,  # type header
+            0x06,  # length of following parameter data
+            0x13,  # method: syntax id: PBC-r-id
+            0x00,  # PBC unknown
+            r_id,  # R_ID
+        )
+
+        # Data section: header with item_count + (variable spec + payload length + payload) of max 4 items
+        # Variable specification: PBC USend unknown 2, transport size (0x04=byte, word, dword),
+        var_spec = struct.pack(">BB", 0x00, 0x04)
+        # payload length in bits + payload
+        data = var_spec + struct.pack(">H", len(data1) * 8) + data1
+        items = 1
+        
+        if item_count >= 2 and data2 != None:
+            #additional byte if length was odd
+            if len(data1) % 2 != 0:
+                data += struct.pack(">B", 0x00)
+            
+            #Variable specification, payload length in bits + payload
+            data += var_spec + struct.pack(">H", len(data2) * 8) + data2
+            items = 2
+ 
+            if item_count >= 3 and data3 != None:
+                #additional byte if length was odd
+                if len(data2) % 2 != 0:
+                    data += struct.pack(">B", 0x00)
+                
+                #Variable specification, payload length in bits + payload
+                data += var_spec + struct.pack(">H", len(data3) * 8) + data3
+                items = 3
+ 
+                if item_count == 4 and data4 != None:
+                    #additional byte if length was odd
+                    if len(data3) % 2 != 0:
+                        data += struct.pack(">B", 0x00)
+
+                    #Variable specification, payload length in bits + payload
+                    data += var_spec + struct.pack(">H", len(data4) * 8) + data4
+                    items = 4            
+            
+        # Data header: return_code=0xFF, PBC Usend unknown 1=0x02, itenm count(1-4)
+        data_section = struct.pack(">BBH", 0xFF, 0x02, items) + data
+        
+        # S7 USERDATA header (10 bytes)
+        header = struct.pack(
+            ">BBHHHH",
+            0x32,
+            S7PDUType.USERDATA,
+            0x0000,
+            0x0000, #sequence,
             len(param),
             len(data_section),
         )
