@@ -17,7 +17,8 @@ from snap7.datatypes import S7Area, S7DataTypes, S7WordLen
 from snap7.error import S7ConnectionError, S7ProtocolError, error_text, server_errors
 from snap7.s7protocol import S7Function, S7PDUType
 from snap7.server import EVC_DATA_READ, EVC_DATA_WRITE, EVC_SERVER_STARTED, EVC_SERVER_STOPPED, Server, ServerISOConnection
-from snap7.type import Block, Parameter, SrvArea, SrvEvent, mkEvent, mkLog
+from snap7.szl import parse_cpu_state_szl
+from snap7.type import S7SZL, Block, Parameter, SrvArea, SrvEvent, mkEvent, mkLog
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -1074,10 +1075,76 @@ class TestServerUserdataOperations(unittest.TestCase):
     # ------------------------------------------------------------------
     # get_cpu_state (SZL-based CPU state request)
     # ------------------------------------------------------------------
-    def test_get_cpu_state(self) -> None:
-        """get_cpu_state should return a string state."""
-        state = self.client.get_cpu_state()
-        self.assertIsInstance(state, str)
+    def test_get_cpu_state_follows_server(self) -> None:
+        """get_cpu_state reports the state the server is in, read from SZL 0x0424."""
+        try:
+            for status, expected in ((4, "S7CpuStatusStop"), (0, "S7CpuStatusUnknown"), (8, "S7CpuStatusRun")):
+                self.server.set_cpu_status(status)
+                self.assertEqual(self.client.get_cpu_state(), expected)
+        finally:
+            self.server.set_cpu_status(8)
+
+    def test_szl_0424_record_layout(self) -> None:
+        """SZL 0x0424 is a partial-list header plus one 20-byte record with the mode at offset 3."""
+        szl = self.client.read_szl(0x0424, 0)
+        data = bytes(b & 0xFF for b in szl.Data[: szl.Header.LengthDR])
+        self.assertEqual(len(data), 24)
+        self.assertEqual(struct.unpack(">HH", data[:4]), (20, 1))
+        self.assertEqual(data[4:8], bytes([0x43, 0x02, 0xFF, 0x08]))
+
+    def test_read_without_address_is_refused(self) -> None:
+        """A read request with no address specification gets an error, not DB1 defaults."""
+        request = self.client.protocol.build_cpu_state_request()
+        with self.assertRaises(S7ProtocolError):
+            self.client._send_receive(request)
+        # The connection survives the refusal
+        self.assertEqual(len(self.client.db_read(1, 0, 4)), 4)
+
+    def test_heartbeat_probe(self) -> None:
+        """A refused probe still proves the link; a transport failure does not."""
+        self.client._heartbeat_probe()
+        with patch.object(self.client, "get_cpu_state", side_effect=S7ProtocolError("refused")):
+            self.client._heartbeat_probe()
+        with patch.object(self.client, "get_cpu_state", side_effect=S7ConnectionError("gone")):
+            with self.assertRaises(S7ConnectionError):
+                self.client._heartbeat_probe()
+
+
+@pytest.mark.server
+class TestParseCpuStateSzl(unittest.TestCase):
+    """parse_cpu_state_szl maps the bzu-id byte of SZL 0x0424 to an S7CpuStatus string."""
+
+    @staticmethod
+    def _szl(mode: int) -> S7SZL:
+        payload = struct.pack(">HH", 20, 1) + bytes([0x43, 0x02, 0xFF, mode]) + bytes(16)
+        szl = S7SZL()
+        szl.Header.LengthDR = len(payload)
+        szl.Header.NDR = 1
+        for i, b in enumerate(payload):
+            szl.Data[i] = b
+        return szl
+
+    def test_modes(self) -> None:
+        cases = {
+            0x00: "S7CpuStatusUnknown",
+            0x08: "S7CpuStatusRun",
+            0x58: "S7CpuStatusRun",  # previous mode startup, requested mode RUN
+            0x03: "S7CpuStatusStop",  # STOP (self initialization), seen on older CPUs
+            0x04: "S7CpuStatusStop",
+            0x84: "S7CpuStatusStop",  # previous mode RUN, requested mode STOP
+            0x05: "S7CpuStatusStop",  # startup
+            0x0A: "S7CpuStatusStop",  # HOLD
+            0x0D: "S7CpuStatusStop",  # DEFECT
+        }
+        for mode, expected in cases.items():
+            with self.subTest(mode=hex(mode)):
+                self.assertEqual(parse_cpu_state_szl(self._szl(mode)), expected)
+
+    def test_short_reply_is_an_error(self) -> None:
+        szl = self._szl(0x08)
+        szl.Header.LengthDR = 7
+        with self.assertRaises(S7ProtocolError):
+            parse_cpu_state_szl(szl)
 
 
 @pytest.mark.server

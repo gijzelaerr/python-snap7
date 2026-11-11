@@ -406,9 +406,13 @@ async def test_download_collects_all_fragments(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_cpu_state(client: AsyncClient) -> None:
-    state = await client.get_cpu_state()
-    assert isinstance(state, str)
+async def test_get_cpu_state(client: AsyncClient, server: Server) -> None:
+    try:
+        for status, expected in ((4, "S7CpuStatusStop"), (0, "S7CpuStatusUnknown"), (8, "S7CpuStatusRun")):
+            server.set_cpu_status(status)
+            assert await client.get_cpu_state() == expected
+    finally:
+        server.set_cpu_status(8)
 
 
 @pytest.mark.asyncio

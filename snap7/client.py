@@ -24,14 +24,14 @@ from ctypes import (
 from .connection import ISOTCPConnection
 from .s7protocol import S7Protocol, S7UserDataGroup, S7UserDataSubfunction, get_return_code_description
 from .datatypes import S7DataTypes, S7WordLen
-from .error import S7Error, S7ConnectionError, S7ProtocolError, S7StalePacketError, S7TimeoutError
+from .error import S7Error, S7ConnectionError, S7PacketLostError, S7ProtocolError, S7StalePacketError, S7TimeoutError
 from .client_base import ClientMixin, _instrumented
 from .log import PLCLoggerAdapter, OperationLogger
 from .optimizer import ReadItem, ReadPacket, sort_items, merge_items, packetize, extract_results
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
 from .tags import Tag, decode_tag, encode_tag
 
-from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
+from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_cpu_state_szl, parse_order_code_szl, parse_protection_szl
 from .type import (
     Area,
     Block,
@@ -421,7 +421,7 @@ class Client(ClientMixin):
             try:
                 with self._reconnect_lock:
                     if self.connected and self.connection is not None:
-                        self.get_cpu_state()
+                        self._heartbeat_probe()
                         self._is_alive = True
             except Exception as e:
                 logger.warning(f"Heartbeat probe failed: {e}")
@@ -433,6 +433,20 @@ class Client(ClientMixin):
                         self._do_reconnect()
                     except S7ConnectionError:
                         logger.warning("Heartbeat reconnection failed")
+
+    def _heartbeat_probe(self) -> None:
+        """Ask the PLC for its CPU state to prove the connection is alive.
+
+        A PLC that answers with a refusal (for example a CPU without
+        SZL 0x0424) has still answered, so only a transport failure or a lost
+        or stale reply is raised.
+        """
+        try:
+            self.get_cpu_state()
+        except (S7PacketLostError, S7StalePacketError):
+            raise
+        except (S7ProtocolError, RuntimeError) as e:
+            logger.debug(f"Heartbeat probe was refused, connection is alive: {e}")
 
     def connect(self, address: str, rack: int, slot: int, tcp_port: int = 102) -> "Client":
         """
@@ -1387,15 +1401,18 @@ class Client(ClientMixin):
 
     def get_cpu_state(self) -> str:
         """
-        Get CPU state (running/stopped).
+        Get the CPU operating state by reading SZL 0x0424.
 
         Returns:
-            CPU state string
-        """
-        request = self.protocol.build_cpu_state_request()
-        response = self._send_receive(request)
+            ``"S7CpuStatusRun"``, ``"S7CpuStatusStop"`` or ``"S7CpuStatusUnknown"``.
+            Startup, HOLD and DEFECT are reported as ``"S7CpuStatusStop"``, as
+            native Snap7 does.
 
-        return self.protocol.extract_cpu_state(response)
+        Raises:
+            S7ConnectionError: If the client is not connected.
+            S7ProtocolError: If the PLC refuses SZL 0x0424 or its reply is too short.
+        """
+        return parse_cpu_state_szl(self.read_szl(0x0424, 0))
 
     def get_block_info(self, block_type: Block, db_number: int) -> TS7BlockInfo:
         """
