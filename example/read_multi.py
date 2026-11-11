@@ -1,68 +1,40 @@
 """
-Example usage of the read_multi_vars function
+Read several variables in one call.
 
-This was tested against a S7-319 CPU
+``read_tags`` takes address strings and returns decoded values. ``read_multi_vars``
+takes a list of dicts and returns the raw bytes, for when you decode them yourself.
+Both batch the reads into as few PDU exchanges as the PLC allows.
+
+Usage:
+    python example/read_multi.py 192.168.1.10
 """
 
-import ctypes
+import sys
 
-from snap7 import Client
-from snap7.error import check_error
-from snap7.type import S7DataItem, Area, WordLen
-from snap7.util import get_real, get_int
+from s7 import Client
+from s7.type import Area
+from s7.util import get_int, get_real
 
-client = Client()
-client.connect("10.100.5.2", 0, 2)
 
-data_items = (S7DataItem * 3)()
+def main(address: str) -> None:
+    client = Client()
+    client.connect(address, 0, 1)
+    try:
+        # Decoded values, in the order of the request.
+        level, setpoint, count = client.read_tags(["DB200.DBD16:REAL", "DB200.DBD12:REAL", "DB200.DBW2:INT"])
+        print(f"level={level!r} setpoint={setpoint!r} count={count!r}")
 
-data_items[0].Area = ctypes.c_int32(Area.DB.value)
-data_items[0].WordLen = ctypes.c_int32(WordLen.Byte.value)
-data_items[0].Result = ctypes.c_int32(0)
-data_items[0].DBNumber = ctypes.c_int32(200)
-data_items[0].Start = ctypes.c_int32(16)
-data_items[0].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
+        # Raw bytes: one bytearray per item, in the order of the request.
+        items = [
+            {"area": Area.DB, "db_number": 200, "start": 16, "size": 4},  # REAL
+            {"area": Area.DB, "db_number": 200, "start": 12, "size": 4},  # REAL
+            {"area": Area.DB, "db_number": 200, "start": 2, "size": 2},  # INT
+        ]
+        _, buffers = client.read_multi_vars(items)
+        print([get_real(buffers[0], 0), get_real(buffers[1], 0), get_int(buffers[2], 0)])
+    finally:
+        client.disconnect()
 
-data_items[1].Area = ctypes.c_int32(Area.DB.value)
-data_items[1].WordLen = ctypes.c_int32(WordLen.Byte.value)
-data_items[1].Result = ctypes.c_int32(0)
-data_items[1].DBNumber = ctypes.c_int32(200)
-data_items[1].Start = ctypes.c_int32(12)
-data_items[1].Amount = ctypes.c_int32(4)  # reading a REAL, 4 bytes
 
-data_items[2].Area = ctypes.c_int32(Area.DB.value)
-data_items[2].WordLen = ctypes.c_int32(WordLen.Byte.value)
-data_items[2].Result = ctypes.c_int32(0)
-data_items[2].DBNumber = ctypes.c_int32(200)
-data_items[2].Start = ctypes.c_int32(2)
-data_items[2].Amount = ctypes.c_int32(2)  # reading an INT, 2 bytes
-
-# create buffers to receive the data
-# use the Amount attribute on each item to size the buffer
-for di in data_items:
-    # create the buffer
-    buffer = ctypes.create_string_buffer(di.Amount)
-
-    # cast the pointer to the buffer to the required type
-    pBuffer = ctypes.cast(ctypes.pointer(buffer), ctypes.POINTER(ctypes.c_uint8))
-    di.pData = pBuffer
-
-result, data_items = client.read_multi_vars(data_items)
-
-for di in data_items:
-    check_error(di.Result)
-
-result_values = []
-# function to cast bytes to match data_types[] above
-byte_to_value = [get_real, get_real, get_int]
-
-# unpack and test the result of each read
-for i in range(0, len(data_items)):
-    btv = byte_to_value[i]
-    di = data_items[i]
-    value = btv(di.pData, 0)
-    result_values.append(value)
-print(result_values)
-
-client.disconnect()
-client.destroy()
+if __name__ == "__main__":
+    main(sys.argv[1] if len(sys.argv) > 1 else "192.168.1.10")

@@ -17,30 +17,36 @@ https://github.com/gijzelaerr/python-snap7/blob/master/example/
 the minimun amount of data being read or written to a plc is 1 byte.
 """
 
-from snap7 import Client
-from snap7.util import set_bool, set_int
-
-plc = Client()
-plc.connect("192.168.200.24", 0, 3)
-
-# In this example boolean in DB 31 at byte 120 and bit 5 is changed. = 120.5
-
-reading = plc.db_read(31, 120, 1)  # read 1 byte from db 31 staring from byte 120
-set_bool(reading, 0, 5, True)  # set a value of fifth bit
-plc.db_write(31, 120, reading)  # write back the bytearray and now the boolean value is changed in the PLC.
-
-# NOTE you could also use the read_area and write_area functions.
-# then you can specify an area to read from:
-# https://github.com/gijzelaerr/python-snap7/blob/master/snap7/types.py
-
-from snap7.type import Area  # noqa: E402
+from s7 import Client
+from s7.type import Area
+from s7.util import set_bool, set_int
 
 
-# play with these functions.
-plc.read_area(area=Area.MK, db_number=0, start=20, size=2)
+def main() -> None:
+    plc = Client()
+    plc.connect("192.168.200.24", 0, 3)
 
-data = bytearray()
-set_int(data, 0, 127)
-plc.write_area(area=Area.MK, db_number=0, start=20, data=data)
-# read the client source code!
-# and official snap7 documentation
+    # In this example boolean in DB 31 at byte 120 and bit 5 is changed. = 120.5
+
+    reading = plc.db_read(31, 120, 1)  # read 1 byte from db 31 staring from byte 120
+    set_bool(reading, 0, 5, True)  # set a value of fifth bit
+    plc.db_write(31, 120, reading)  # write back the bytearray and now the boolean value is changed in the PLC.
+
+    # NOTE you could also use the read_area and write_area functions.
+    # then you can specify an area to read from:
+    # https://github.com/gijzelaerr/python-snap7/blob/master/snap7/type.py
+
+    # play with these functions.
+    plc.read_area(area=Area.MK, db_number=0, start=20, size=2)
+
+    data = bytearray(2)  # an INT is two bytes
+    set_int(data, 0, 127)
+    plc.write_area(area=Area.MK, db_number=0, start=20, data=data)
+    # read the client source code!
+    # and official snap7 documentation
+
+    plc.disconnect()
+
+
+if __name__ == "__main__":
+    main()
