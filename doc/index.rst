@@ -43,6 +43,7 @@ Welcome to python-snap7's documentation!
    :caption: API Reference
 
    API/client
+   API/async-client
    API/server
    API/partner
    API/logo

@@ -153,11 +153,12 @@ When the target PLC sits on a different subnet behind a gateway PLC, use
    data = client.db_read(1, 0, 4)
    client.disconnect()
 
-Legacy ``snap7`` Package
+The ``snap7`` import name
 -------------------------
 
-If you have existing code using ``snap7.Client``, it continues to work
-unchanged — ``snap7`` is an alias for ``s7``:
+Existing code that uses ``snap7.Client`` continues to work unchanged. The
+implementation lives in the ``snap7`` package and ``s7`` re-exports it, so
+both names give you the same classes:
 
 .. code-block:: python
 

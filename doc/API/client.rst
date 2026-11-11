@@ -27,7 +27,8 @@ Use ``AsyncClient`` when the surrounding application uses ``asyncio``::
 Both clients expose the same main PLC operations, including area and DB
 access, block transfer, CPU information and control, clock access, force
 operations, and session passwords. Methods that perform I/O are coroutines on
-``AsyncClient``. See :doc:`../advanced` for the less common operations.
+``AsyncClient``, which is documented in :doc:`async-client`. See
+:doc:`../advanced` for the less common operations.
 
 s7.Client
 ---------
@@ -35,11 +36,3 @@ s7.Client
 .. automodule:: snap7.client
    :members:
    :inherited-members:
-
-s7.AsyncClient
---------------
-
-.. automodule:: snap7.async_client
-   :members:
-   :inherited-members:
-   :exclude-members: AsyncISOTCPConnection
