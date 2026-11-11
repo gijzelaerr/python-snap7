@@ -1,6 +1,18 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### Bug fixes
+
+* `get_cpu_state()` now reads the CPU's operating state from SZL 0x0424, in both clients. Previously it sent a read
+  request with no address and returned `"S7CpuStatusRun"` whatever the PLC answered. Startup, HOLD and DEFECT are
+  reported as `"S7CpuStatusStop"`, as native Snap7 does. A PLC that refuses SZL 0x0424 now raises `S7ProtocolError`;
+  the heartbeat of the synchronous client counts such a refusal as a live connection. Not yet tested on hardware.
+* The server answers SZL 0x0424 from its CPU state, and refuses a read request that has no address specification.
+  Previously it answered such a request with the first four bytes of DB1.
+
 3.4.0
 -----
 

@@ -1021,9 +1021,9 @@ class Server:
                 )
                 return (area, db_number, start, byte_count)
 
-            # Fallback to defaults if parsing failed
-            logger.warning("Using default address values - address parsing may have failed")
-            return (S7Area.DB, 1, 0, 4)
+            # A read request without an address specification is malformed
+            logger.warning("Read request carries no address specification")
+            return None
 
         except Exception as e:
             logger.error(f"Error parsing read address: {e}")
@@ -1837,6 +1837,7 @@ class Server:
         - 0x001C: Component identification (for get_cpu_info)
         - 0x0011: Module identification (for get_order_code)
         - 0x0131: Communication parameters (for get_cp_info)
+        - 0x0424: Current operating mode transition (for get_cpu_state)
         - 0x0232: Protection level (for get_protection)
 
         Args:
@@ -1933,10 +1934,19 @@ class Server:
             # anl_sch: factory setting protection
             return struct.pack(">HHHHH", 1, 0, 0, 0, 0)  # No protection
 
+        # SZL 0x0424: current operating mode transition (get_cpu_state)
+        # Record layout: ereig(2) + ae(1) + bzu-id(1) + res(4) + anlinfo1..4(4) + time(8) = 20 bytes.
+        # bzu-id carries the requested mode in bits 0-3: 4 is STOP, 8 is RUN.
+        elif szl_id == 0x0424:
+            # Event IDs: 0x4302 "STARTUP to RUN", 0x4304 "STOP caused by PG STOP operation"
+            event_ids = {CPUState.RUN: 0x4302, CPUState.STOP: 0x4304}
+            record = struct.pack(">HBB", event_ids.get(self.cpu_state, 0x0000), 0xFF, int(self.cpu_state)) + bytes(16)
+            return struct.pack(">HH", len(record), 1) + record
+
         # SZL 0x0000: SZL list
         elif szl_id == 0x0000:
             # Return list of available SZL IDs
-            available_ids = [0x0000, 0x0011, 0x001C, 0x0131, 0x0232]
+            available_ids = [0x0000, 0x0011, 0x001C, 0x0131, 0x0232, 0x0424]
             szl_bytes = b""
             for id_val in available_ids:
                 szl_bytes += struct.pack(">H", id_val)

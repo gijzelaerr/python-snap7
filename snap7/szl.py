@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import struct
 
+from .error import S7ProtocolError
 from .type import S7CpInfo, S7CpuInfo, S7OrderCode, S7Protection, S7SZL
 
 
@@ -54,6 +55,41 @@ def parse_cpu_info_szl(szl: S7SZL) -> S7CpuInfo:
         info.ModuleTypeName = data[176:208].rstrip(b"\x00")
 
     return info
+
+
+def parse_cpu_state_szl(szl: S7SZL) -> str:
+    """Decode SZL 0x0424 (current operating mode transition) into an ``S7CpuStatus*`` string.
+
+    The payload is the 4-byte partial-list header (``LENTHDR``, ``N_DR``)
+    followed by one 20-byte record::
+
+        ereig(2)  ae(1)  bzu-id(1)  res(4)  anlinfo1..4(4)  time(8)
+
+    ``bzu-id`` holds the requested operating mode in bits 0-3 and the previous
+    one in bits 4-7 (1-4 are STOP variants, 5 and 7 are startup, 8 is RUN,
+    0xA is HOLD, 0xD is DEFECT). The layout follows Wireshark's S7comm
+    dissector (``packet-s7comm_szl_ids.c``) and matches the byte native Snap7
+    reads in ``opGetPlcStatus``.
+
+    Like native Snap7, only RUN is reported as ``S7CpuStatusRun``, a zero byte
+    as ``S7CpuStatusUnknown``, and every other mode (startup, HOLD and DEFECT
+    included) as ``S7CpuStatusStop``. Snap7 compares the whole byte against
+    0x08; this looks at the requested-mode nibble only, so a RUN reply that
+    also carries a previous mode is still reported as RUN.
+
+    Raises:
+        S7ProtocolError: If the reply is too short to hold the mode byte.
+    """
+    data = _szl_data(szl)
+    if len(data) < 8:
+        raise S7ProtocolError(f"SZL 0x0424 reply too short for an operating mode: {len(data)} bytes")
+
+    mode = data[7]
+    if mode == 0x00:
+        return "S7CpuStatusUnknown"
+    if mode & 0x0F == 0x08:
+        return "S7CpuStatusRun"
+    return "S7CpuStatusStop"
 
 
 def parse_cp_info_szl(szl: S7SZL) -> S7CpInfo:

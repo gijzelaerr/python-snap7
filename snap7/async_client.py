@@ -23,7 +23,7 @@ from .error import S7Error, S7ConnectionError, S7ProtocolError, S7TimeoutError
 from .client_base import ClientMixin, _instrumented
 from .tags import Tag, decode_tag, encode_tag
 from .client import Client
-from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_order_code_szl, parse_protection_szl
+from .szl import parse_cp_info_szl, parse_cpu_info_szl, parse_cpu_state_szl, parse_order_code_szl, parse_protection_szl
 from .client import _parse_force_szl
 from .rate_limiter import RateLimitAlgorithm, RateLimitBehavior, RequestRateLimiter
 from .type import (
@@ -1115,10 +1115,16 @@ class AsyncClient(ClientMixin):
         return parse_cpu_info_szl(await self.read_szl(0x001C, 0))
 
     async def get_cpu_state(self) -> str:
-        """Get CPU state (running/stopped)."""
-        request = self.protocol.build_cpu_state_request()
-        response = await self._send_receive(request)
-        return self.protocol.extract_cpu_state(response)
+        """Get the CPU operating state by reading SZL 0x0424.
+
+        Returns ``"S7CpuStatusRun"``, ``"S7CpuStatusStop"`` or ``"S7CpuStatusUnknown"``.
+        Startup, HOLD and DEFECT are reported as ``"S7CpuStatusStop"``, as native Snap7 does.
+
+        Raises:
+            S7ConnectionError: If the client is not connected.
+            S7ProtocolError: If the PLC refuses SZL 0x0424 or its reply is too short.
+        """
+        return parse_cpu_state_szl(await self.read_szl(0x0424, 0))
 
     # ---------------------------------------------------------------
     # Upload / Download / Delete

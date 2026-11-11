@@ -1487,12 +1487,16 @@ class S7Protocol:
 
     def build_cpu_state_request(self) -> bytes:
         """
-        Build CPU state request.
+        Build the request ``get_cpu_state()`` used to send.
+
+        .. deprecated:: 3.5
+           This is a read request without an address specification, which is
+           not a valid S7 PDU. The clients read SZL 0x0424 instead; see
+           :func:`snap7.szl.parse_cpu_state_szl`. Kept for backwards compatibility.
 
         Returns:
-            Complete S7 PDU for CPU state query
+            S7 PDU for the old CPU state query
         """
-        # Simple CPU state request - in real S7 this would be a userdata function
         header = struct.pack(
             ">BBHHHH",
             0x32,  # Protocol ID
@@ -1503,24 +1507,26 @@ class S7Protocol:
             0x0000,  # Data length
         )
 
-        # Use a custom function code for CPU state
-        parameters = struct.pack(">B", 0x04)  # Use READ_AREA function for simplicity
+        parameters = struct.pack(">B", 0x04)  # READ_AREA function code, nothing else
 
         return header + parameters
 
     def extract_cpu_state(self, response: Dict[str, Any]) -> str:
         """
-        Extract CPU state from response.
+        Return ``"S7CpuStatusRun"`` whatever the response holds.
+
+        .. deprecated:: 3.5
+           This never looked at the response. The clients read SZL 0x0424
+           instead; see :func:`snap7.szl.parse_cpu_state_szl`. Kept for
+           backwards compatibility.
 
         Args:
-            response: Parsed S7 response
+            response: Parsed S7 response (ignored)
 
         Returns:
-            CPU state string in S7CpuStatus format (e.g., 'S7CpuStatusRun')
+            Always ``"S7CpuStatusRun"``
         """
-        # Map internal states to S7 status format for API compatibility with master branch
-        # The cpu_statuses dict in type.py uses: {0: "S7CpuStatusUnknown", 4: "S7CpuStatusStop", 8: "S7CpuStatusRun"}
-        return "S7CpuStatusRun"  # Default state for pure Python server
+        return "S7CpuStatusRun"
 
     def parse_response(self, pdu: bytes) -> Dict[str, Any]:
         """
