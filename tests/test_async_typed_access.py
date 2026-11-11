@@ -119,6 +119,14 @@ async def test_symbolic_tag_not_supported(client: AsyncClient) -> None:
         await client.read_tag(tag)
     with pytest.raises(NotImplementedError):
         await client.write_tag(tag, 1)
+    with pytest.raises(NotImplementedError):
+        await client.read_tags(["DB1:400:INT", tag])
+
+
+async def test_read_tags_above_20(client: AsyncClient) -> None:
+    await client.db_write(1, 500, bytearray(range(25)))
+    tags = [f"DB1.DBB{500 + i}:BYTE" for i in range(25)]
+    assert await client.read_tags(tags) == list(range(25))
 
 
 async def test_is_alive(server: Server) -> None:

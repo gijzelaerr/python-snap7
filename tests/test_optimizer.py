@@ -7,6 +7,7 @@ import time
 from .conftest import get_free_tcp_port
 from ctypes import c_char
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 import pytest
 
@@ -23,6 +24,7 @@ from snap7.optimizer import (
     packetize,
     extract_results,
 )
+from snap7.tags import Tag
 from snap7.type import Area, SrvArea
 
 
@@ -185,6 +187,18 @@ class TestPacketize:
         packets = packetize(blocks, pdu_size=240)
         assert len(packets) == 2
 
+    def test_item_count_limit(self) -> None:
+        # 45 two-byte blocks fit the byte budgets of a 960-byte PDU, but not the 20-item limit
+        blocks = [ReadBlock(area=0x84, db_number=i, start_offset=0, byte_length=2, items=[]) for i in range(45)]
+        packets = packetize(blocks, pdu_size=960)
+        assert [len(p.blocks) for p in packets] == [20, 20, 5]
+
+    def test_item_count_limit_is_configurable(self) -> None:
+        blocks = [ReadBlock(area=0x84, db_number=i, start_offset=0, byte_length=2, items=[]) for i in range(7)]
+        assert [len(p.blocks) for p in packetize(blocks, pdu_size=960, max_items=3)] == [3, 3, 1]
+        with pytest.raises(ValueError):
+            packetize(blocks, pdu_size=960, max_items=0)
+
     def test_oversized_block_split(self) -> None:
         # A block larger than pdu - overhead should be split at item boundaries
         items = [
@@ -283,6 +297,35 @@ class TestMultiReadServer:
         assert len(results) == 2
         assert results[0] == bytearray(self.db1_data[0:4])
         assert results[1] == bytearray(self.db1_data[10:14])
+
+    def test_multi_read_above_20_blocks(self) -> None:
+        """26 reads that cannot be merged are spread over requests of at most 20 items."""
+        offsets = range(0, 100, 8)  # gaps of 7 bytes, wider than multi_read_max_gap
+        items = [{"area": Area.DB, "db_number": db, "start": o, "size": 1} for db in (1, 2) for o in offsets]
+        assert len(items) == 26
+        assert self.client.multi_read_max_gap < 7
+
+        build = self.client.protocol.build_multi_read_request
+        with patch.object(self.client.protocol, "build_multi_read_request", side_effect=build) as spy:
+            result_code, results = self.client.read_multi_vars(items)
+
+        assert result_code == 0
+        expected = [bytearray([o]) for o in offsets] + [bytearray([100 + o]) for o in offsets]
+        assert results == expected
+        spec_counts = [len(call.args[0]) for call in spy.call_args_list]
+        assert spec_counts and max(spec_counts) <= 20
+        assert sum(spec_counts) >= 25  # a lone block may go out as a plain read
+
+    def test_read_tags_above_20(self) -> None:
+        """read_tags accepts more than 20 tags and keeps their order."""
+        tags = [f"DB{db}.DBB{o}:BYTE" for db in (1, 2) for o in range(0, 100, 8)]
+        values = self.client.read_tags(tags)
+        assert values == list(range(0, 100, 8)) + [100 + o for o in range(0, 100, 8)]
+
+    def test_read_tags_refuses_symbolic(self) -> None:
+        tag = Tag(Area.DB, 1, 0, "INT", access_sequence=[1, 2])
+        with pytest.raises(NotImplementedError):
+            self.client.read_tags(["DB1.DBB0:BYTE", tag])
 
     def test_multi_read_different_dbs(self) -> None:
         """Read items from DB1 and DB2."""

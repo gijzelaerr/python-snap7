@@ -14,6 +14,10 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
+# Most address specifications a CPU accepts in one read request.  This is the
+# limit native Snap7 enforces as ``MaxVars``.
+MAX_ITEMS_PER_PDU = 20
+
 # Areas that support contiguous-block merging.  Counter (0x1C) and Timer
 # (0x1D) use element-based addressing, not byte-based, so merging them
 # as contiguous byte ranges would produce incorrect reads.
@@ -206,12 +210,13 @@ def _split_block(block: ReadBlock, max_block_size: int) -> list[ReadBlock]:
     return sub_blocks
 
 
-def packetize(blocks: list[ReadBlock], pdu_size: int) -> list[ReadPacket]:
+def packetize(blocks: list[ReadBlock], pdu_size: int, max_items: int = MAX_ITEMS_PER_PDU) -> list[ReadPacket]:
     """Pack blocks into PDU-sized packets.
 
-    Two budgets are enforced per packet:
+    Three limits are enforced per packet:
       - **Request budget**: ``12 (header) + 2 (func+count) + 12*N (address specs) <= pdu_size``
       - **Reply budget**: ``12 (header) + 2 (func+count) + sum(4 + ceil_even(length)) <= pdu_size``
+      - **Item count**: at most *max_items* blocks (address specs)
 
     Oversized blocks are first split at item boundaries, then blocks are
     greedily packed into packets.
@@ -219,10 +224,17 @@ def packetize(blocks: list[ReadBlock], pdu_size: int) -> list[ReadPacket]:
     Args:
         blocks: Merged read blocks.
         pdu_size: Negotiated PDU size in bytes.
+        max_items: Maximum number of blocks per packet (default 20).
 
     Returns:
         List of ReadPackets.
+
+    Raises:
+        ValueError: If *max_items* is less than 1.
     """
+    if max_items < 1:
+        raise ValueError(f"max_items must be at least 1, got {max_items}")
+
     # First split any oversized blocks
     # Max data payload per block in a single-block packet
     max_single_block = pdu_size - 12 - 2 - 4  # header + param + data item header
@@ -248,8 +260,9 @@ def packetize(blocks: list[ReadBlock], pdu_size: int) -> list[ReadPacket]:
 
         fits_request = current_req_used + req_cost <= pdu_size
         fits_reply = current_reply_used + reply_cost <= pdu_size
+        fits_count = len(current_packet.blocks) < max_items
 
-        if current_packet.blocks and (not fits_request or not fits_reply):
+        if current_packet.blocks and (not fits_request or not fits_reply or not fits_count):
             # Start a new packet
             packets.append(current_packet)
             current_packet = ReadPacket()

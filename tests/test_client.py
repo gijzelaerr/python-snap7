@@ -1239,15 +1239,30 @@ class TestMaxVars:
     def test_max_vars_constant(self) -> None:
         assert Client.MAX_VARS == 20
 
-    def test_read_multi_vars_rejects_too_many(self) -> None:
+    def test_read_multi_vars_ctypes_rejects_too_many(self) -> None:
+        """The ctypes form keeps the MAX_VARS limit of the native API."""
         client = Client()
         client.connected = True
-        mock_conn = MagicMock()
-        client.connection = mock_conn
+        client.connection = MagicMock()
 
-        items = [{"area": Area.DB, "db_number": 1, "start": i, "size": 1} for i in range(21)]
+        items = (S7DataItem * 21)()
+        for item in items:
+            item.Area = Area.DB.value
         with pytest.raises(ValueError, match="Too many items.*21.*MAX_VARS.*20"):
             client.read_multi_vars(items)
+
+    def test_read_multi_vars_dicts_above_max(self) -> None:
+        """The dict form has no item limit when the optimizer is off either."""
+        client = Client()
+        client.connected = True
+        client.connection = MagicMock()
+        client.use_optimizer = False
+        client.read_area = MagicMock(return_value=bytearray(1))
+
+        items = [{"area": Area.DB, "db_number": 1, "start": i, "size": 1} for i in range(21)]
+        result_code, results = client.read_multi_vars(items)
+        assert result_code == 0
+        assert len(results) == 21
 
     def test_write_multi_vars_rejects_too_many(self) -> None:
         client = Client()
