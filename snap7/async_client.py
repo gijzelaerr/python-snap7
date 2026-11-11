@@ -811,8 +811,10 @@ class AsyncClient(ClientMixin):
         return await self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
 
     async def read_tags(self, tags: "Sequence[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
-        """Read multiple tags in a single optimized request, in input order."""
+        """Read any number of tags, returning the values in input order."""
         resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
+        if any(t.is_symbolic for t in resolved):
+            raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
         items = [{"area": Area(t.area), "db_number": t.db_number, "start": t.byte_offset, "size": t.size} for t in resolved]
         _code, data_list = await self.read_multi_vars(items)
         return [decode_tag(t, bytearray(d), encoding=encoding) for t, d in zip(resolved, data_list)]
@@ -951,15 +953,14 @@ class AsyncClient(ClientMixin):
         """Read multiple variables (sequentially, one read_area per item).
 
         Args:
-            items: List of item dicts with keys: area, db_number, start, size
+            items: List of item dicts with keys: area, db_number, start, size.
+                Any number of items is accepted.
 
         Returns:
             Tuple of (result_code, list_of_bytearrays)
         """
         if not items:
             return (0, [])
-        if len(items) > self.MAX_VARS:
-            raise ValueError(f"Too many items: {len(items)} exceeds MAX_VARS ({self.MAX_VARS})")
 
         results: list[bytearray] = []
         for item in items:

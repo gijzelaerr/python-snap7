@@ -107,7 +107,7 @@ class Client(ClientMixin):
         >>> client.disconnect()
     """
 
-    MAX_VARS = 20  # Max variables per multi-read/multi-write request
+    MAX_VARS = 20  # Max variables per multi-read/multi-write PDU
 
     def __init__(
         self,
@@ -728,10 +728,11 @@ class Client(ClientMixin):
         return self.write_area(Area(resolved.area), resolved.db_number, resolved.byte_offset, buf)
 
     def read_tags(self, tags: "Sequence[Union[Tag, str]]", encoding: str = "latin-1") -> list[Any]:
-        """Read multiple tags in a single optimized request.
+        """Read multiple tags in as few requests as possible.
 
         Uses the multi-variable read optimizer when available to batch
-        reads into minimal PDU exchanges.
+        reads into minimal PDU exchanges. Any number of tags is accepted;
+        tags that do not fit in one request go into further requests.
 
         Args:
             tags: Sequence of :class:`~snap7.tags.Tag` instances or address strings.
@@ -741,6 +742,8 @@ class Client(ClientMixin):
             List of decoded values in the same order as input.
         """
         resolved = [Tag.from_string(t) if isinstance(t, str) else t for t in tags]
+        if any(t.is_symbolic for t in resolved):
+            raise NotImplementedError("Symbolic (LID-based) tag access is not supported by the classic S7 client.")
         items = [{"area": Area(t.area), "db_number": t.db_number, "start": t.byte_offset, "size": t.size} for t in resolved]
         _code, data_list = self.read_multi_vars(items)
         return [decode_tag(t, bytearray(d), encoding=encoding) for t, d in zip(resolved, data_list)]
@@ -976,12 +979,14 @@ class Client(ClientMixin):
 
     @_instrumented("read_multi_vars")
     def read_multi_vars(self, items: Union[List[dict[str, Any]], "Array[S7DataItem]"]) -> Tuple[int, Any]:
-        """Read multiple variables in a single request.
+        """Read multiple variables in as few requests as possible.
 
         When given a list of dicts with two or more items, uses the multi-variable
         read optimizer to merge adjacent reads and pack them into minimal PDU
         exchanges.  This significantly reduces the number of round-trips compared
-        to reading each variable individually.
+        to reading each variable individually.  A list of dicts may hold any
+        number of items: each request carries at most ``MAX_VARS`` address
+        specifications and the rest go into further requests.
 
         .. warning::
 
@@ -999,16 +1004,15 @@ class Client(ClientMixin):
             ctypes array or a list of bytearrays in the original item order.
 
         Raises:
-            ValueError: If more than MAX_VARS items are requested.
+            ValueError: If a ctypes array holds more than MAX_VARS items.
         """
         if not items:
             return (0, items)
 
-        if len(items) > self.MAX_VARS:
-            raise ValueError(f"Too many items: {len(items)} exceeds MAX_VARS ({self.MAX_VARS})")
-
         # Handle S7DataItem array (ctypes) -- unchanged legacy path
         if hasattr(items, "_type_") and hasattr(items[0], "Area"):
+            if len(items) > self.MAX_VARS:
+                raise ValueError(f"Too many items: {len(items)} exceeds MAX_VARS ({self.MAX_VARS})")
             s7_items = cast("Array[S7DataItem]", items)
             for s7_item in s7_items:
                 area = Area(s7_item.Area)
@@ -1152,7 +1156,7 @@ class Client(ClientMixin):
             sorted_ri = sort_items(read_items)
             max_block = self._max_read_size()
             blocks = merge_items(sorted_ri, max_gap=self.multi_read_max_gap, max_block_size=max_block)
-            packets = packetize(blocks, self.pdu_length)
+            packets = packetize(blocks, self.pdu_length, max_items=self.MAX_VARS)
             self._opt_plan = _OptimizationPlan(cache_key, packets, read_items)
 
         # Deep-copy blocks from cached packets so we don't mutate cached state
