@@ -1,22 +1,22 @@
 CHANGES
 ========
 
-Unreleased
-----------
+3.5.0
+-----
 
 ### Bug fixes
 
 * `get_cpu_state()` now reads the CPU's operating state from SZL 0x0424, in both clients. Previously it sent a read
   request with no address and returned `"S7CpuStatusRun"` whatever the PLC answered. Startup, HOLD and DEFECT are
   reported as `"S7CpuStatusStop"`, as native Snap7 does. A PLC that refuses SZL 0x0424 now raises `S7ProtocolError`;
-  the heartbeat of the synchronous client counts such a refusal as a live connection. Not yet tested on hardware.
+  the heartbeat of the synchronous client counts such a refusal as a live connection. Not yet tested on hardware (#988).
 * The server answers SZL 0x0424 from its CPU state, and refuses a read request that has no address specification.
-  Previously it answered such a request with the first four bytes of DB1.
+  Previously it answered such a request with the first four bytes of DB1 (#988).
 * `read_tags` and `read_multi_vars` with a list of dicts now accept more than 20 items, in both clients. Previously
   they raised `ValueError` over `MAX_VARS`, although the read optimizer already splits a read over several requests.
   The optimizer now also puts at most 20 items in one request; `optimizer.packetize` takes a `max_items` argument
-  for this. The ctypes form of `read_multi_vars` and `write_multi_vars` keep the limit.
-* `read_tags` now raises `NotImplementedError` for a symbolic tag, as `read_tag` does, in both clients.
+  for this. The ctypes form of `read_multi_vars` and `write_multi_vars` keep the limit (#989).
+* `read_tags` now raises `NotImplementedError` for a symbolic tag, as `read_tag` does, in both clients (#989).
 
 3.4.0
 -----
