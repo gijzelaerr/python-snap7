@@ -13,41 +13,47 @@ Logo_7 = True
 
 logger = logging.getLogger(__name__)
 
-plc = Logo()
-plc.connect("192.168.0.41", 0x1000, 0x2000)
 
-if plc.get_connected():
-    logger.info("connected")
+def main() -> None:
+    plc = Logo()
+    plc.connect("192.168.0.41", 0x1000, 0x2000)
 
-    # read I1 from logo
-    vm_address = "V923.0" if Logo_7 else "V1024.0"
-    print(f"I1: {str(plc.read(vm_address))}")
+    if plc.get_connected():
+        logger.info("connected")
 
-    # write some values in VM addresses between 0 and 100
+        # read I1 from logo
+        vm_address = "V923.0" if Logo_7 else "V1024.0"
+        print(f"I1: {str(plc.read(vm_address))}")
 
-    value_1 = 0b10110001
-    value_2 = 480
+        # write some values in VM addresses between 0 and 100
 
-    print("write 0b10110001 to V10")
-    plc.write("V10", value_1)
+        value_1 = 0b10110001
+        value_2 = 480
 
-    print(f"read V10.0 must be 1 - check: {str(plc.read('V10.0'))}")
-    print(f"read V10.3 must be 0 - check: {str(plc.read('V10.3'))}")
-    print(f"read V10.7 must be 1 - check: {str(plc.read('V10.7'))}")
+        print("write 0b10110001 to V10")
+        plc.write("V10", value_1)
 
-    print("write 480 analog value to VW20")
-    plc.write("VW20", value_2)
+        print(f"read V10.0 must be 1 - check: {str(plc.read('V10.0'))}")
+        print(f"read V10.3 must be 0 - check: {str(plc.read('V10.3'))}")
+        print(f"read V10.7 must be 1 - check: {str(plc.read('V10.7'))}")
 
-    print(f"read VW20 must be 480 - check: {str(plc.read('VW20'))}")
+        print("write 480 analog value to VW20")
+        plc.write("VW20", value_2)
 
-    print("trigger V10.2")
-    plc.write("V10.2", 0)
-    plc.write("V10.2", 1)
-    plc.write("V10.2", 0)
+        print(f"read VW20 must be 480 - check: {str(plc.read('VW20'))}")
 
-else:
-    logger.error("Conncetion failed")
+        print("trigger V10.2")
+        plc.write("V10.2", 0)
+        plc.write("V10.2", 1)
+        plc.write("V10.2", 0)
 
-plc.disconnect()
-logger.info("Disconnected")
-plc.destroy()
+    else:
+        logger.error("Connection failed")
+
+    plc.disconnect()
+    logger.info("Disconnected")
+    plc.destroy()
+
+
+if __name__ == "__main__":
+    main()

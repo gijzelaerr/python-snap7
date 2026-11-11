@@ -8,12 +8,11 @@ import time
 from db_layouts import rc_if_db_1_layout
 from db_layouts import tank_rc_if_db_layout
 
-from snap7 import Client, Row, DB
-from snap7.type import Area
-from util.db import print_row
+from s7 import Client, Row, DB
+from s7.type import Area
+from s7.util.db import print_row
 
 client = Client()
-client.connect("192.168.200.24", 0, 3)
 
 
 def get_db1() -> None:
@@ -190,12 +189,14 @@ def print_open() -> None:
             print(row)
 
 
-# read_tank_db()
-# open_and_close()
-# open_and_close_db1()
-# time.sleep(1)
-# show_row(2)
-print_tag()
-# print_open()
-
-client.disconnect()
+if __name__ == "__main__":
+    client.connect("192.168.200.24", 0, 3)
+    try:
+        # read_tank_db()
+        # open_and_close()
+        # open_and_close_db1()
+        # show_row(2)
+        print_tag()
+        # print_open()
+    finally:
+        client.disconnect()

@@ -27,12 +27,11 @@ repos:
     rev: 'v1.19.1'
     hooks:
       - id: mypy
-        additional_dependencies: [types-setuptools, types-click]
-        files: ^snap7
+        additional_dependencies: [types-setuptools, types-click, pytest, pytest-asyncio, "pytest-bdd>=8.1,<10", hypothesis]
+        files: ^(snap7|s7|tests|example)/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: 'v0.17.2'
     hooks:
       - id: ruff
       - id: ruff-format
-exclude: "snap7/protocol.py"
