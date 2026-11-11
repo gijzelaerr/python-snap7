@@ -17,6 +17,10 @@ Unreleased
   The optimizer now also puts at most 20 items in one request; `optimizer.packetize` takes a `max_items` argument
   for this. The ctypes form of `read_multi_vars` and `write_multi_vars` keep the limit.
 * `read_tags` now raises `NotImplementedError` for a symbolic tag, as `read_tag` does, in both clients.
+* `disconnect()` now waits up to one second for the PLC to confirm the COTP disconnect request, or close the
+  connection, before closing the socket, in both clients. Previously the FIN followed the request within
+  microseconds, and a CP 343-1 answered with a reset and kept the connection's resource until the PLC restarted.
+  The request also no longer carries a stray byte after its header, which class 0 doesn't allow (#972).
 
 3.4.0
 -----

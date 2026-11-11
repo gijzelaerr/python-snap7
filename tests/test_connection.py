@@ -2,6 +2,8 @@
 
 import socket
 import struct
+import threading
+import time
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -89,8 +91,9 @@ class TestParseCOTPCC:
     # COTP CC from a CP 343-1 in front of an S7-313C-2 DP, captured for #972 (after the
     # TPKT header): dst-ref 0x0001 echoes our reference, src-ref 0x4431 is the CP's.
     CAPTURED_CC = bytes.fromhex("11 d0 0001 4431 00 c0 01 0a c1 02 01 00 c2 02 01 02")
-    # The DR must address the CP's reference; python-snap7 3.3.1 sent 06 80 0001 0001 00 00.
-    EXPECTED_DR = bytes.fromhex("03 00 00 0c 06 80 4431 0001 00 00")
+    # The DR must address the CP's reference; python-snap7 3.3.1 sent 06 80 0001 0001 00 00,
+    # and up to 3.4.0 a stray user-data byte followed the reason.
+    EXPECTED_DR = bytes.fromhex("03 00 00 0b 06 80 4431 0001 00")
 
     def test_captured_cc_gives_the_peer_reference(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
@@ -385,6 +388,74 @@ class TestDisconnect:
         conn.connected = False
         conn.disconnect()
         assert conn.socket is None
+
+
+class TestDisconnectWaitsForThePeer:
+    """disconnect() lets the peer answer the DR before the FIN goes out (#972)."""
+
+    DC = bytes.fromhex("03 00 00 09 05 c0 0001 4431")
+
+    @staticmethod
+    def _connected_pair() -> tuple[ISOTCPConnection, socket.socket]:
+        ours, peer = socket.socketpair()
+        conn = ISOTCPConnection("1.2.3.4")
+        conn.socket = ours
+        conn.connected = True
+        conn.dst_ref = 0x4431
+        return conn, peer
+
+    def test_no_fin_before_the_dc(self) -> None:
+        conn, peer = self._connected_pair()
+        seen: dict[str, bytes] = {}
+
+        def answer() -> None:
+            peer.settimeout(2.0)
+            seen["dr"] = peer.recv(64)
+            # Nothing else may arrive while the DR is unanswered: recv() would return b"" on a FIN.
+            peer.settimeout(0.2)
+            try:
+                seen["early"] = peer.recv(64)
+            except socket.timeout:
+                seen["early"] = b"<none>"
+            peer.sendall(self.DC)
+            peer.settimeout(2.0)
+            seen["after"] = peer.recv(64)
+
+        thread = threading.Thread(target=answer)
+        thread.start()
+        conn.disconnect()
+        thread.join(5.0)
+        peer.close()
+
+        assert seen["dr"] == bytes.fromhex("03 00 00 0b 06 80 4431 0001 00")
+        assert seen["early"] == b"<none>"
+        assert seen["after"] == b""  # our FIN, after the DC
+        assert conn.socket is None and conn.connected is False
+
+    def test_returns_when_the_peer_closes(self) -> None:
+        conn, peer = self._connected_pair()
+        peer.close()
+        start = time.monotonic()
+        conn.disconnect()
+        assert time.monotonic() - start < 0.5
+
+    def test_silent_peer_is_bounded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(ISOTCPConnection, "DISCONNECT_CONFIRM_TIMEOUT", 0.2)
+        conn, peer = self._connected_pair()
+        start = time.monotonic()
+        conn.disconnect()
+        elapsed = time.monotonic() - start
+        peer.close()
+        assert 0.15 <= elapsed < 1.0
+
+    def test_skips_other_frames_until_the_dc(self) -> None:
+        conn, peer = self._connected_pair()
+        late_response = bytes.fromhex("03 00 00 07 02 f0 80")
+        peer.sendall(late_response + self.DC)
+        start = time.monotonic()
+        conn.disconnect()
+        peer.close()
+        assert time.monotonic() - start < 0.5
 
 
 class TestContextManager:

@@ -355,7 +355,42 @@ async def test_async_disconnect_request_addresses_the_peer_reference() -> None:
 
     await connection.disconnect()
 
-    writer.write.assert_called_once_with(bytes.fromhex("03 00 00 0c 06 80 4431 0001 00 00"))
+    writer.write.assert_called_once_with(bytes.fromhex("03 00 00 0b 06 80 4431 0001 00"))
+
+
+@pytest.mark.asyncio
+async def test_async_disconnect_waits_for_the_dc_before_closing() -> None:
+    """The FIN goes out only after the peer has answered the DR (#972)."""
+    seen: dict[str, bytes] = {}
+    done = asyncio.Event()
+
+    async def peer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        seen["dr"] = await reader.read(64)
+        try:
+            seen["early"] = await asyncio.wait_for(reader.read(64), timeout=0.2)
+        except asyncio.TimeoutError:
+            seen["early"] = b"<none>"
+        writer.write(bytes.fromhex("03 00 00 09 05 c0 0001 4431"))
+        await writer.drain()
+        seen["after"] = await reader.read(64)
+        writer.close()
+        done.set()
+
+    server = await asyncio.start_server(peer, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    connection = AsyncISOTCPConnection("127.0.0.1", port)
+    connection._reader, connection._writer = await asyncio.open_connection("127.0.0.1", port)
+    connection.connected = True
+    connection.dst_ref = 0x4431
+
+    await connection.disconnect()
+    await asyncio.wait_for(done.wait(), timeout=5.0)
+    server.close()
+    await server.wait_closed()
+
+    assert seen["dr"] == bytes.fromhex("03 00 00 0b 06 80 4431 0001 00")
+    assert seen["early"] == b"<none>"
+    assert seen["after"] == b""
 
 
 @pytest.mark.parametrize(

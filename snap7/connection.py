@@ -9,6 +9,7 @@ import select
 import socket
 import struct
 import logging
+import time
 from enum import IntEnum
 from typing import Optional, Type, Union
 from types import TracebackType
@@ -65,6 +66,11 @@ class ISOTCPConnection:
     # S7 routing parameter codes
     COTP_PARAM_SUBNET_ID = 0xC6
     COTP_PARAM_ROUTING_TSAP = 0xC7
+
+    # How long disconnect() waits for the peer to answer the DR (a DC, or closing the
+    # connection) before it closes the socket itself. A CP 343-1 that received our FIN
+    # right behind the DR reset the connection and never freed its resource (#972).
+    DISCONNECT_CONFIRM_TIMEOUT = 1.0
 
     def __init__(
         self,
@@ -155,12 +161,17 @@ class ISOTCPConnection:
         if self.socket:
             try:
                 if self.connected:
-                    # Send COTP disconnect request
+                    # Send the COTP disconnect request, and give the peer the chance to
+                    # confirm it before our FIN arrives.
                     self._send_cotp_disconnect()
-                self.socket.close()
+                    self._await_disconnect_confirm()
             except Exception:
                 pass  # Ignore errors during disconnect
             finally:
+                try:
+                    self.socket.close()
+                except Exception:
+                    pass
                 self.socket = None
                 self.connected = False
                 logger.info(f"Disconnected from {self.host}:{self.port}")
@@ -436,21 +447,61 @@ class ISOTCPConnection:
         if self.socket is None:
             return  # Nothing to disconnect
 
-        dr_pdu = struct.pack(
-            ">BBHHBB",
-            6,  # PDU length
-            self.COTP_DR,  # PDU type
-            self.dst_ref,  # Destination reference
-            self.src_ref,  # Source reference
-            0x00,  # Reason (normal disconnect)
-            0x00,  # Additional info
-        )
-
-        tpkt_frame = self._build_tpkt(dr_pdu)
+        tpkt_frame = self._build_tpkt(self._build_cotp_dr())
         try:
             self.socket.sendall(tpkt_frame)
         except socket.error:
             pass  # Ignore errors during disconnect
+
+    def _build_cotp_dr(self) -> bytes:
+        """Build a class 0 COTP Disconnect Request.
+
+        The length indicator covers the PDU type, both references and the reason, and
+        nothing follows: class 0 allows no user data in a DR. Up to 3.4.0 a trailing
+        zero byte was sent after the header (#972).
+        """
+        return struct.pack(
+            ">BBHHB",
+            6,  # Length indicator
+            self.COTP_DR,  # PDU type
+            self.dst_ref,  # Destination reference: the peer's, from its CC
+            self.src_ref,  # Source reference: ours
+            0x00,  # Reason: normal disconnect
+        )
+
+    def _await_disconnect_confirm(self) -> None:
+        """Wait, briefly, for the peer to confirm the DR or close the connection.
+
+        Returns on a COTP DC, on the peer closing or resetting the connection, or when
+        :attr:`DISCONNECT_CONFIRM_TIMEOUT` (at most the connection timeout) has passed.
+        Any other data still in flight is discarded.
+        """
+        if self.socket is None:
+            return
+        deadline = time.monotonic() + min(self.timeout, self.DISCONNECT_CONFIRM_TIMEOUT)
+        buffer = b""
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            self.socket.settimeout(remaining)
+            try:
+                chunk = self.socket.recv(1024)
+            except (socket.timeout, OSError):
+                return
+            if not chunk:
+                return  # the peer closed the connection
+            buffer += chunk
+            # Scan complete TPKT frames for a COTP DC.
+            while len(buffer) >= 6:
+                length = struct.unpack(">H", buffer[2:4])[0]
+                if buffer[0] != 3 or length < 6:
+                    return  # not a TPKT stream we can follow; stop waiting
+                if len(buffer) < length:
+                    break
+                if buffer[5] == self.COTP_DC:
+                    return
+                buffer = buffer[length:]
 
     def _recv_exact(self, size: int) -> bytes:
         """
