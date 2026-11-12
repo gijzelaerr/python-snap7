@@ -99,6 +99,23 @@ Registering Multiple Areas
    range.
 
 
+Read-only Areas
+---------------
+
+Pass ``read_only=True`` to make the server refuse client writes to an area.
+Reads keep working, and the server side can still change the data.
+
+.. code-block:: python
+
+   server.register_area(SrvArea.DB, 1, bytearray(100), read_only=True)
+
+A write (Write Var) to such an area is answered with item return code ``0x03``,
+"accessing the object not allowed", and no error in the header. The client
+raises ``S7ProtocolError`` for it. This is what an S7-1214C (firmware V4.2)
+answers for a write to a write-protected DB; S7-300/400 has not been captured.
+A block download to a read-only DB is not refused.
+
+
 Using the Mainloop Helper
 --------------------------
 
