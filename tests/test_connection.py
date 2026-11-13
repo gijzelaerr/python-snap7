@@ -93,7 +93,6 @@ class TestParseCOTPCC:
     CAPTURED_CC = bytes.fromhex("11 d0 0001 4431 00 c0 01 0a c1 02 01 00 c2 02 01 02")
     # The DR must address the CP's reference; python-snap7 3.3.1 sent 06 80 0001 0001 00 00,
     # and up to 3.4.0 a stray user-data byte followed the reason.
-    EXPECTED_DR = bytes.fromhex("03 00 00 0b 06 80 4431 0001 00")
 
     def test_captured_cc_gives_the_peer_reference(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
@@ -101,14 +100,16 @@ class TestParseCOTPCC:
         assert conn.dst_ref == 0x4431
         assert conn.src_ref == 0x0001
 
-    def test_disconnect_request_addresses_the_peer_reference(self) -> None:
+    def test_disconnect_sends_no_disconnect_request(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
         conn._parse_cotp_cc(self.CAPTURED_CC)
         sock = MagicMock()
+        sock.recv.return_value = b""
         conn.socket = sock
         conn.connected = True
         conn.disconnect()
-        sock.sendall.assert_called_once_with(self.EXPECTED_DR)
+        sock.sendall.assert_not_called()
+        sock.shutdown.assert_called_once_with(socket.SHUT_WR)
 
     def test_cc_too_short(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
@@ -307,31 +308,6 @@ class TestRecvExact:
             conn._recv_exact(4)
 
 
-class TestSendCOTPDisconnect:
-    """Test _send_cotp_disconnect()."""
-
-    def test_disconnect_no_socket(self) -> None:
-        conn = ISOTCPConnection("1.2.3.4")
-        conn.socket = None
-        # Should return without error
-        conn._send_cotp_disconnect()
-
-    def test_disconnect_sends_dr(self) -> None:
-        conn = ISOTCPConnection("1.2.3.4")
-        mock_socket = MagicMock()
-        conn.socket = mock_socket
-        conn._send_cotp_disconnect()
-        mock_socket.sendall.assert_called_once()
-
-    def test_disconnect_ignores_socket_error(self) -> None:
-        conn = ISOTCPConnection("1.2.3.4")
-        mock_socket = MagicMock()
-        mock_socket.sendall.side_effect = socket.error("broken")
-        conn.socket = mock_socket
-        # Should not raise
-        conn._send_cotp_disconnect()
-
-
 class TestConnect:
     """Test connect() orchestration."""
 
@@ -373,6 +349,7 @@ class TestDisconnect:
     def test_disconnect_closes_socket(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
         mock_socket = MagicMock()
+        mock_socket.recv.return_value = b""
         conn.socket = mock_socket
         conn.connected = True
         conn.disconnect()
@@ -390,10 +367,8 @@ class TestDisconnect:
         assert conn.socket is None
 
 
-class TestDisconnectWaitsForThePeer:
-    """disconnect() lets the peer answer the DR before the FIN goes out (#972)."""
-
-    DC = bytes.fromhex("03 00 00 09 05 c0 0001 4431")
+class TestDisconnectClosesTheTcpConnection:
+    """disconnect() sends no COTP DR: it sends a FIN and lets the peer close first (#972)."""
 
     @staticmethod
     def _connected_pair() -> tuple[ISOTCPConnection, socket.socket]:
@@ -404,43 +379,43 @@ class TestDisconnectWaitsForThePeer:
         conn.dst_ref = 0x4431
         return conn, peer
 
-    def test_no_fin_before_the_dc(self) -> None:
+    def test_peer_sees_only_a_fin_and_can_still_answer(self) -> None:
         conn, peer = self._connected_pair()
-        seen: dict[str, bytes] = {}
+        seen: dict[str, object] = {}
 
         def answer() -> None:
             peer.settimeout(2.0)
-            seen["dr"] = peer.recv(64)
-            # Nothing else may arrive while the DR is unanswered: recv() would return b"" on a FIN.
-            peer.settimeout(0.2)
+            seen["received"] = peer.recv(64)
+            # Our side is only half closed: the peer can still send before it closes.
             try:
-                seen["early"] = peer.recv(64)
-            except socket.timeout:
-                seen["early"] = b"<none>"
-            peer.sendall(self.DC)
-            peer.settimeout(2.0)
-            seen["after"] = peer.recv(64)
+                peer.sendall(b"late")
+                seen["could_send"] = True
+            except OSError:
+                seen["could_send"] = False
+            peer.close()
 
         thread = threading.Thread(target=answer)
         thread.start()
+        start = time.monotonic()
         conn.disconnect()
+        elapsed = time.monotonic() - start
         thread.join(5.0)
-        peer.close()
 
-        assert seen["dr"] == bytes.fromhex("03 00 00 0b 06 80 4431 0001 00")
-        assert seen["early"] == b"<none>"
-        assert seen["after"] == b""  # our FIN, after the DC
+        assert seen["received"] == b""  # a FIN, and no disconnect request before it
+        assert seen["could_send"] is True
+        assert elapsed < 0.5  # returned when the peer closed, not at the timeout
         assert conn.socket is None and conn.connected is False
 
-    def test_returns_when_the_peer_closes(self) -> None:
+    def test_returns_when_the_peer_has_closed(self) -> None:
         conn, peer = self._connected_pair()
         peer.close()
         start = time.monotonic()
         conn.disconnect()
         assert time.monotonic() - start < 0.5
+        assert conn.socket is None
 
     def test_silent_peer_is_bounded(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(ISOTCPConnection, "DISCONNECT_CONFIRM_TIMEOUT", 0.2)
+        monkeypatch.setattr(ISOTCPConnection, "DISCONNECT_CLOSE_TIMEOUT", 0.2)
         conn, peer = self._connected_pair()
         start = time.monotonic()
         conn.disconnect()
@@ -448,14 +423,23 @@ class TestDisconnectWaitsForThePeer:
         peer.close()
         assert 0.15 <= elapsed < 1.0
 
-    def test_skips_other_frames_until_the_dc(self) -> None:
+    def test_discards_data_in_flight(self) -> None:
         conn, peer = self._connected_pair()
-        late_response = bytes.fromhex("03 00 00 07 02 f0 80")
-        peer.sendall(late_response + self.DC)
+        peer.sendall(bytes.fromhex("03 00 00 07 02 f0 80"))
+        peer.close()
         start = time.monotonic()
         conn.disconnect()
-        peer.close()
         assert time.monotonic() - start < 0.5
+
+    def test_socket_is_closed_when_shutdown_fails(self) -> None:
+        conn = ISOTCPConnection("1.2.3.4")
+        sock = MagicMock()
+        sock.shutdown.side_effect = OSError("not connected")
+        conn.socket = sock
+        conn.connected = True
+        conn.disconnect()
+        sock.close.assert_called_once()
+        assert conn.socket is None and conn.connected is False
 
 
 class TestContextManager:
@@ -468,6 +452,7 @@ class TestContextManager:
     def test_exit_calls_disconnect(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
         conn.socket = MagicMock()
+        conn.socket.recv.return_value = b""
         conn.connected = True
         conn.__exit__(None, None, None)
         assert conn.socket is None

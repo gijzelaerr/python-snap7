@@ -1471,5 +1471,94 @@ def test_multi_item_write_reports_per_item_errors() -> None:
     assert buffer == bytearray([5, 6, 0, 0, 0, 0, 0, 0, 0, 0])
 
 
+@pytest.mark.server
+def test_read_only_area_refuses_single_item_write_at_item_level() -> None:
+    """A write to a read-only area gets item code 0x03 and no header error.
+
+    This is what an S7-1214C V4.2 answers for a write-protected DB (#976).
+    """
+    server = Server()
+    buffer = bytearray(4)
+    server.register_area(SrvArea.DB, 1, buffer, read_only=True)
+    server.clear_events()
+
+    request = server.protocol.build_write_request(S7Area.DB, 1, 0, S7WordLen.BYTE, b"\x01\x02")
+    response = server._process_request(request, ("127.0.0.1", 12345))
+
+    assert response is not None
+    assert response[1] == S7PDUType.ACK_DATA
+    assert response[10:12] == b"\x00\x00"  # error class and code: no header error
+    assert response[12:] == bytes([S7Function.WRITE_AREA, 1, 0x03])
+    assert buffer == bytearray(4)
+    assert not server.pick_event()  # a refused write is not a data-write event
+
+
+@pytest.mark.server
+def test_read_only_area_refuses_multi_item_write_per_item() -> None:
+    """In a multi-item write only the items for read-only areas are refused."""
+    server = Server()
+    protected = bytearray(4)
+    writable = bytearray(4)
+    server.register_area(SrvArea.DB, 1, protected, read_only=True)
+    server.register_area(SrvArea.DB, 2, writable)
+
+    items = [
+        (2, 0, bytes([1, 2])),
+        (1, 0, bytes([3, 4])),
+        (1, 3, bytes([5, 6])),  # also out of range: read-only is reported first
+    ]
+    response = server._process_request(_build_multi_write_request(items), ("127.0.0.1", 12345))
+
+    assert response is not None
+    assert response[10:12] == b"\x00\x00"
+    assert response[14:] == b"\xff\x03\x03"
+    assert protected == bytearray(4)
+    assert writable == bytearray([1, 2, 0, 0])
+
+
+@pytest.mark.server
+def test_read_only_flag_is_cleared_by_register_and_unregister() -> None:
+    """Registering an area again, or unregistering it, drops the read-only flag."""
+    server = Server()
+    request = server.protocol.build_write_request(S7Area.DB, 1, 0, S7WordLen.BYTE, b"\x01")
+
+    server.register_area(SrvArea.DB, 1, bytearray(4), read_only=True)
+    buffer = bytearray(4)
+    server.register_area(SrvArea.DB, 1, buffer)
+    response = server._process_request(request, ("127.0.0.1", 12345))
+    assert response is not None
+    assert response[12:] == bytes([S7Function.WRITE_AREA, 1, 0xFF])
+    assert buffer[0] == 1
+
+    server.register_area(SrvArea.DB, 1, bytearray(4), read_only=True)
+    server.unregister_area(SrvArea.DB, 1)
+    buffer = bytearray(4)
+    server.register_area(SrvArea.DB, 1, buffer)
+    response = server._process_request(request, ("127.0.0.1", 12345))
+    assert response is not None
+    assert response[12:] == bytes([S7Function.WRITE_AREA, 1, 0xFF])
+
+
+@pytest.mark.server
+def test_client_write_to_read_only_area() -> None:
+    """The client raises for a write to a read-only DB, and can still read it."""
+    server = Server()
+    buffer = bytearray([7, 8, 9, 10])
+    server.register_area(SrvArea.DB, 1, buffer, read_only=True)
+    server.start(tcp_port=SERVER_PORT + 4)
+    client = Client()
+    try:
+        client.connect(ip, 0, 1, SERVER_PORT + 4)
+        with pytest.raises(S7ProtocolError, match="0x03"):
+            client.db_write(1, 0, bytearray([1]))
+        assert client.db_read(1, 0, 4) == bytearray([7, 8, 9, 10])
+        buffer[0] = 42  # the server side can still change the data
+        assert client.db_read(1, 0, 1) == bytearray([42])
+    finally:
+        client.disconnect()
+        server.stop()
+        server.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()

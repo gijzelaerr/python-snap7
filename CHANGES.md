@@ -4,23 +4,35 @@ CHANGES
 Unreleased
 ----------
 
+### New features
+
+* `Server.register_area()` takes a `read_only` keyword. The server refuses a client write to a read-only area with
+  item return code `0x03`, "accessing the object not allowed", and no header error, as an S7-1214C V4.2 does for a
+  write-protected DB. Reads still work, and a block download is not refused (#992).
+
+### Bug fixes
+
+* `disconnect()` no longer sends a COTP disconnect request, in both clients. It closes its sending side of the TCP
+  connection, waits up to one second for the PLC to close its own, and then closes the socket; RFC 1006 releases a
+  connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
+  until the PLC restarted. Not yet confirmed on that CP (#972).
+
+3.5.0
+-----
+
 ### Bug fixes
 
 * `get_cpu_state()` now reads the CPU's operating state from SZL 0x0424, in both clients. Previously it sent a read
   request with no address and returned `"S7CpuStatusRun"` whatever the PLC answered. Startup, HOLD and DEFECT are
   reported as `"S7CpuStatusStop"`, as native Snap7 does. A PLC that refuses SZL 0x0424 now raises `S7ProtocolError`;
-  the heartbeat of the synchronous client counts such a refusal as a live connection. Not yet tested on hardware.
+  the heartbeat of the synchronous client counts such a refusal as a live connection. Not yet tested on hardware (#988).
 * The server answers SZL 0x0424 from its CPU state, and refuses a read request that has no address specification.
-  Previously it answered such a request with the first four bytes of DB1.
+  Previously it answered such a request with the first four bytes of DB1 (#988).
 * `read_tags` and `read_multi_vars` with a list of dicts now accept more than 20 items, in both clients. Previously
   they raised `ValueError` over `MAX_VARS`, although the read optimizer already splits a read over several requests.
   The optimizer now also puts at most 20 items in one request; `optimizer.packetize` takes a `max_items` argument
-  for this. The ctypes form of `read_multi_vars` and `write_multi_vars` keep the limit.
-* `read_tags` now raises `NotImplementedError` for a symbolic tag, as `read_tag` does, in both clients.
-* `disconnect()` now waits up to one second for the PLC to confirm the COTP disconnect request, or close the
-  connection, before closing the socket, in both clients. Previously the FIN followed the request within
-  microseconds, and a CP 343-1 answered with a reset and kept the connection's resource until the PLC restarted.
-  The request also no longer carries a stray byte after its header, which class 0 doesn't allow (#972).
+  for this. The ctypes form of `read_multi_vars` and `write_multi_vars` keep the limit (#989).
+* `read_tags` now raises `NotImplementedError` for a symbolic tag, as `read_tag` does, in both clients (#989).
 
 3.4.0
 -----
