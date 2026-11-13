@@ -55,7 +55,11 @@ class AsyncISOTCPConnection:
     COTP_CR = 0xE0  # Connection Request
     COTP_CC = 0xD0  # Connection Confirm
     COTP_DR = 0x80  # Disconnect Request
+    COTP_DC = 0xC0  # Disconnect Confirm
     COTP_DT = 0xF0  # Data Transfer
+
+    # See ISOTCPConnection.DISCONNECT_CLOSE_TIMEOUT (#972).
+    DISCONNECT_CLOSE_TIMEOUT = 1.0
 
     # COTP parameter codes (ISO 8073)
     COTP_PARAM_PDU_SIZE = 0xC0
@@ -128,17 +132,14 @@ class AsyncISOTCPConnection:
         if self._writer:
             try:
                 if self.connected:
-                    dr_pdu = struct.pack(
-                        ">BBHHBB",
-                        6,
-                        self.COTP_DR,
-                        self.dst_ref,
-                        self.src_ref,
-                        0x00,
-                        0x00,
-                    )
-                    self._writer.write(self._build_tpkt(dr_pdu))
-                    await self._writer.drain()
+                    # No COTP disconnect request: see ISOTCPConnection.disconnect() (#972).
+                    # Close our sending side and let the peer close its own first.
+                    if self._writer.can_write_eof():
+                        self._writer.write_eof()
+                    await self._await_peer_close()
+            except Exception:
+                pass
+            try:
                 self._writer.close()
                 await self._writer.wait_closed()
             except Exception:
@@ -148,6 +149,22 @@ class AsyncISOTCPConnection:
                 self._writer = None
                 self.connected = False
                 logger.info(f"Disconnected from {self.host}:{self.port}")
+
+    async def _await_peer_close(self) -> None:
+        """Wait, briefly, for the peer to close the connection after our FIN."""
+        if self._reader is None:
+            return
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + min(self.timeout, self.DISCONNECT_CLOSE_TIMEOUT)
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            try:
+                if not await asyncio.wait_for(self._reader.read(1024), timeout=remaining):
+                    return  # the peer closed the connection
+            except (asyncio.TimeoutError, OSError):
+                return
 
     async def send_data(self, data: bytes) -> None:
         """Send data over ISO connection."""
