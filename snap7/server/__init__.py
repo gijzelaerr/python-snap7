@@ -14,7 +14,7 @@ import time
 from ctypes import Array, c_char
 from enum import IntEnum
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
 from ..datatypes import S7Area, S7WordLen
 from ..error import S7ConnectionError, S7ProtocolError
@@ -36,6 +36,11 @@ EVC_DATA_READ = 0x00020000
 EVC_DATA_WRITE = 0x00040000
 
 _EVENT_QUEUE_CAPACITY = 1024
+
+# Item return code "accessing the object not allowed". An S7-1214C V4.2 answers a
+# Write Var to a write-protected DB with it, at item level and without a header
+# error (capture in python-snap7 issue #976).
+_ITEM_ACCESS_NOT_ALLOWED = 0x03
 
 
 class ServerState(IntEnum):
@@ -94,6 +99,7 @@ class Server:
         # Memory areas
         self.memory_areas: Dict[Tuple[S7Area, int], bytearray] = {}
         self.area_locks: Dict[Tuple[S7Area, int], threading.Lock] = {}
+        self._read_only_areas: Set[Tuple[S7Area, int]] = set()
         self._upload_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
         self._download_contexts: Dict[Tuple[str, int], Dict[str, Any]] = {}
 
@@ -211,7 +217,9 @@ class Server:
         logger.info("S7 Server stopped")
         return 0
 
-    def register_area(self, area: SrvArea, index: int, userdata: Union[bytearray, "Array[c_char]"]) -> int:
+    def register_area(
+        self, area: SrvArea, index: int, userdata: Union[bytearray, "Array[c_char]"], *, read_only: bool = False
+    ) -> int:
         """
         Register a memory area with the server.
 
@@ -219,6 +227,11 @@ class Server:
             area: Memory area type
             index: Area index/number
             userdata: Initial data for the area (bytearray or ctypes array)
+            read_only: Refuse client writes (Write Var) to this area with item
+                return code ``0x03``, "accessing the object not allowed", as an
+                S7-1200 does for a write-protected DB. Reads still work, and so
+                do a block download and changes the server side makes to
+                ``userdata``. Registering the area again replaces the flag.
 
         Returns:
             0 on success
@@ -246,8 +259,12 @@ class Server:
         area_key = (s7_area, index)
         self.memory_areas[area_key] = data
         self.area_locks[area_key] = threading.Lock()
+        if read_only:
+            self._read_only_areas.add(area_key)
+        else:
+            self._read_only_areas.discard(area_key)
 
-        logger.info(f"Registered area {area.name} index {index}, size {len(data)}")
+        logger.info(f"Registered area {area.name} index {index}, size {len(data)}{', read-only' if read_only else ''}")
         return 0
 
     def unregister_area(self, area: SrvArea, index: int) -> int:
@@ -278,6 +295,7 @@ class Server:
         if area_key in self.memory_areas:
             del self.memory_areas[area_key]
             del self.area_locks[area_key]
+            self._read_only_areas.discard(area_key)
             logger.info(f"Unregistered area {area.name} index {index}")
 
         return 0
@@ -1083,10 +1101,16 @@ class Server:
 
             area, db_number, start, count, write_data = addr_info
 
-            # Write data to registered memory area
-            success = self._write_to_memory_area(area, db_number, start, write_data)
-            if not success:
-                return self._build_error_response(request, 0x8404)  # Area not found or write error
+            # A read-only area refuses the write at item level, with no header
+            # error, as a real S7-1200 does for a write-protected DB.
+            read_only = (area, db_number) in self._read_only_areas
+            if read_only:
+                logger.warning(f"Write to read-only area {area}#{db_number} refused")
+            else:
+                # Write data to registered memory area
+                success = self._write_to_memory_area(area, db_number, start, write_data)
+                if not success:
+                    return self._build_error_response(request, 0x8404)  # Area not found or write error
 
             # Build successful response with error bytes
             header = struct.pack(
@@ -1109,6 +1133,9 @@ class Server:
             )
 
             # Data section (write response)
+            if read_only:
+                return header + parameters + bytes((_ITEM_ACCESS_NOT_ALLOWED,))
+
             data_section = b"\xff"  # Success return code
 
             self._emit_event(
@@ -1310,8 +1337,10 @@ class Server:
 
         Returns:
             Item return code: ``0xFF`` on success, ``0x0A`` when the area is not
-            registered, and ``0x05`` when the range is outside the registered area.
-            Nothing is written unless the whole item fits.
+            registered, ``0x03`` when it is read-only, and ``0x05`` when the range
+            is outside the registered area. Nothing is written unless the whole
+            item fits. That read-only is checked before the range is a choice:
+            there is no capture of an out-of-range write to a protected DB.
         """
         try:
             area_key = (area, db_number)
@@ -1319,6 +1348,10 @@ class Server:
             if area_key not in self.memory_areas:
                 logger.warning(f"Memory area {area}#{db_number} not registered for write")
                 return 0x0A
+
+            if area_key in self._read_only_areas:
+                logger.warning(f"Write to read-only area {area}#{db_number} refused")
+                return _ITEM_ACCESS_NOT_ALLOWED
 
             with self.area_locks[area_key]:
                 area_data = self.memory_areas[area_key]

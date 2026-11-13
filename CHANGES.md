@@ -1,6 +1,15 @@
 CHANGES
 ========
 
+Unreleased
+----------
+
+### New features
+
+* `Server.register_area()` takes a `read_only` keyword. The server refuses a client write to a read-only area with
+  item return code `0x03`, "accessing the object not allowed", and no header error, as an S7-1214C V4.2 does for a
+  write-protected DB. Reads still work, and a block download is not refused (#992).
+
 3.5.0
 -----
 
