@@ -161,50 +161,62 @@ class TestPartnerPDU:
     def test_build_partner_data_pdu_small(self) -> None:
         p = Partner()
         data = b"\x01\x02\x03"
-        pdu = p._build_partner_data_pdu(data)
+        pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True)
         # S7 USERDATA header
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
         # Roundtrip recovers the payload
-        payload, r_id, pdu_ref = p._parse_partner_data_pdu(pdu)
+        payload, r_id, pdu_ref, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
-        pdu = p._build_partner_data_pdu(b"")
+        pdu, _ = p._build_partner_data_pdu(b"", 0, 1, 0, True)
         assert pdu[0:1] == b"\x32"
-        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
-        pdu = p._build_partner_data_pdu(data)
-        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True)
+        payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == data
+
+    def test_build_partner_data_pdu_fragmented(self) -> None:
+        p = Partner()
+        data = bytes(range(256)) * 4  # 1024 bytes
+        pdu, pdu_ref = p._build_partner_data_pdu(data, 0x1E, 0x00, 0, False) #Data, sequence_nr, data unit ref, bsend_lenght, last_unit, 
+        payload, _, pdu_ref_r, sequence, _, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        assert payload == data
+        assert pdu_ref_r == pdu_ref
+        assert sequence == 0x1E
+        assert last_unit == 0x01
+        assert data_bsend_lengh == 0
 
     def test_build_partner_data_pdu_r_id(self) -> None:
         """R-ID is embedded in the data section and extracted by parser."""
         p = Partner()
         p.r_id = 0xDEADBEEF
-        pdu = p._build_partner_data_pdu(b"\x01")
-        payload, r_id, _pdu_ref = p._parse_partner_data_pdu(pdu)
+        data = b"\x01"
+        pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True)
+        payload, r_id, _pdu_ref, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == b"\x01"
         assert r_id == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:
         p = Partner()
         original = b"Hello, Partner!"
-        pdu = p._build_partner_data_pdu(original)
-        parsed, _, _ = p._parse_partner_data_pdu(pdu)
+        pdu, _ = p._build_partner_data_pdu(original, 0, 1, len(original), True)
+        parsed, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert parsed == original
 
     def test_parse_partner_data_pdu_roundtrip_various_sizes(self) -> None:
         p = Partner()
         for size in [0, 1, 10, 100, 500, 1024]:
             data = (bytes(range(256)) * (size // 256 + 1))[:size]
-            pdu = p._build_partner_data_pdu(data)
-            payload, _, _ = p._parse_partner_data_pdu(pdu)
+            pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True)
+            payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
             assert payload == data
 
     def test_parse_partner_data_pdu_too_short(self) -> None:
@@ -225,6 +237,20 @@ class TestPartnerPDU:
         ack = p._build_partner_ack(pdu_ref=0x1234)
         _, _, _, pdu_ref, _, _ = struct.unpack(">BBHHHH", ack[:10])
         assert pdu_ref == 0x1234
+        
+    def test_build_partner_ack_sequence(self) -> None:
+        """ACK echoes the sequence_num from the data PDU."""
+        p = Partner()
+        ack = p._build_partner_ack(pdu_ref=0x1234, sequence=0xAB)
+        assert ack[17] == 0xAB
+
+    def test_parse_partner_ack(self) -> None:
+        """Test parsing of a captured PDU."""
+        p = Partner()
+        ack = b"\x32\x07\x00\x00\x01\xbb\x00\x0c\x00\x04\x00\x01\x12\x08\x12\x86\x01\xc2\x00\x00\x00\x00\x0a\x00\x00\x00"
+        pdu_ref, sequence = p._parse_partner_ack(ack)
+        assert sequence == 0xC2
+        assert pdu_ref == 0x01BB
 
     def test_parse_partner_ack_valid(self) -> None:
         p = Partner()
@@ -662,8 +688,9 @@ class TestDualPartner:
         try:
             _wire_partner(pa, sock_a)
             _wire_partner(pb, sock_b)
-
-            for size in [1, 10, 100, 480]:
+            
+            # including fragmentation test if size > max pdu
+            for size in [1, 10, 100, 480, 960, 1920, 3840, 65534]:
                 payload = (bytes(range(256)) * (size // 256 + 1))[:size]
                 pa.set_send_data(payload)
                 errors: list[Exception] = []
@@ -1127,3 +1154,4 @@ class TestPartnerConnectionErrors:
 
 if __name__ == "__main__":
     unittest.main()
+

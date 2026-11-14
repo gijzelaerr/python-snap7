@@ -10,6 +10,9 @@ Unreleased
   item return code `0x03`, "accessing the object not allowed", and no header error, as an S7-1214C V4.2 does for a
   write-protected DB. Reads still work, and a block download is not refused (#992).
 
+* b_send(), b_recv(), as_b_send() and as_b_recv() now allows fragmentation into multiple network frames.
+  This enables transmissions of up to 65,534 bytes per request.
+
 3.5.0
 -----
 
