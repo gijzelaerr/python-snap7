@@ -267,7 +267,7 @@ class Partner:
         
         if len(self._send_data) > 65534:
             self.send_errors += 1
-            raise S7ConnectionError("B_send data too long (>65534 bytes)")           
+            raise ValueError("B_send data too long (>65534 bytes)")           
 
         start_time = datetime.now()
         
@@ -289,7 +289,7 @@ class Partner:
 
         try:
             with self._io_lock:
-                while last_data_unit == False:
+                while not last_data_unit:
 
                     # parameters for the PDU
                     if first_fragment:
@@ -298,7 +298,7 @@ class Partner:
                     else:
                         max_length = bsend_fragm_payload_length
                     
-                    if fragmented == False:
+                    if not fragmented:
                         last_data_unit = True
                         data = self._send_data
                     else:
@@ -323,7 +323,7 @@ class Partner:
                         ack_pduref, sequence_num = self._parse_partner_ack(ack_data)                    
 
                     if send_pduref != ack_pduref:
-                        raise S7ConnectionError("Send failed: received wrong pdu-referenze-number")
+                        raise S7Error("Send failed: received wrong pdu-referenze-number")
                     
                     if first_fragment:
                         first_fragment = False
@@ -395,14 +395,14 @@ class Partner:
             r_id
         """
         if not self.connected or conn is None or conn.socket is None:
-            return bytes(0x00), 0
+            raise S7ConnectionError("Not connected")
                 
         last_segment = False
         fragmented = False
         reassembled = bytearray()
         bsend_lengh = 0
 
-        while last_segment == False:
+        while not last_segment:
             data = conn.receive_data()
             received, r_id, pdu_ref, par_seq_num, _, par_last_unit, data_bsend_lengh = self._parse_partner_data_pdu(data)
             
@@ -417,7 +417,7 @@ class Partner:
             
             if par_last_unit == 0:
                 last_segment = True
-                if fragmented == True:
+                if fragmented:
                     reassembled += bytearray(received)
                     received = bytes(reassembled)
                     if bsend_lengh != len(received):
@@ -431,6 +431,9 @@ class Partner:
             if len(reassembled) > 65534 or len(received) > 65534:
                 raise S7Error("Received s_send data too long (>65534 bytes)")
  
+            if len(reassembled) > bsend_lengh:
+                raise S7Error("Received s_send data too long (>announced length)")
+
         return received, r_id
     
 
@@ -1145,9 +1148,12 @@ class Partner:
             
             if par_func == 0x00 and par_items == 1 and par_var_spec == 0x12 and par_addr_lengh == 8 and par_syntax_id == 0x12 and data_len >= 13: #BSend
                 #BSend-data
-                if len(data) < 13:
-                    raise S7Error("USERDATA bsend data block too short")  
-                                
+                if len(param) < 12:
+                    raise S7Error("USERDATA bsend parameter block too short")
+                
+                if len(data) < 12:
+                    raise S7Error("USERDATA bsend data block too short")
+                
                 par_func_group, par_subfunc, par_seq_num, par_duref_num, par_last_unit, par_error_code = struct.unpack(">BBBBBH", param[5:12])
                                 
                 _, _, _, data_var_spec, data_var_len, data_syntax_id, _, data_r_id = struct.unpack(">BBHBBBBI", data[:12])
@@ -1156,28 +1162,25 @@ class Partner:
                 r_id = 0
                 data_bsend_lengh = 0
                 
-                if par_func_group == 0x46 and par_subfunc == 0x01 and par_error_code == 0:
-                    if par_last_unit == 0x00 and par_seq_num == 0x00: #not fragmented transmission
-                        data_bsend_lengh = struct.unpack(">H", data[12:14])[0]
-                        if data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13 and data_bsend_lengh >= 1:
-                            r_id = data_r_id
-                            # skip data header (6) + body (var_len) + length field (2)
-                            payload = data[6 + data_var_len + 2 :]
+                if par_func_group == 0x46 and par_subfunc == 0x01 and par_error_code == 0 and data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13:
+  
+                    if par_seq_num == 0x00: #not fragmented transmission or first segment of fragmented transmission
+                        if len(data) >= 14:
+                            data_bsend_lengh = struct.unpack(">H", data[12:14])[0]
+                        else:
+                            raise S7Error("USERDATA bsend data block too short")
+                        r_id = data_r_id
+                        # skip data header (6) + body (var_len) + length field (2)
+                        payload = data[6 + data_var_len + 2 :]
+                        
+                    else: #next segment of fragmented transmission
+                        r_id = data_r_id
+                        # skip data header (6) + body (var_len)
+                        payload = data[6 + data_var_len:]
+                        
+                    return payload, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh    
                             
-                    elif par_last_unit == 0x01 and par_seq_num == 0x00: #first segment of fragmented transmission
-                        data_bsend_lengh = struct.unpack(">H", data[12:14])[0]
-                        if data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13 and data_bsend_lengh >= 1:
-                            r_id = data_r_id
-                            # skip data header (6) + body (var_len) + length field (2)
-                            payload = data[6 + data_var_len + 2:]
-                            
-                    elif par_seq_num != 0x00: #next segment of fragmented transmission
-                        if data_var_spec == 0x12 and data_var_len == 0x06 and data_syntax_id == 0x13:
-                            r_id = data_r_id
-                            # skip data header (6) + body (var_len)
-                            payload = data[6 + data_var_len:]
-
-                return payload, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh
+                else: raise S7Error("Unsupported PDU function group, subfunction or b_send parameter")
 
             else:
                 #return bytes(0x00), 0, 0, 0, 0, 0, 0
