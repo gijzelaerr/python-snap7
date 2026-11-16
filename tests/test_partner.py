@@ -161,56 +161,122 @@ class TestPartnerPDU:
     def test_build_partner_data_pdu_small(self) -> None:
         p = Partner()
         data = b"\x01\x02\x03"
-        pdu = p._build_partner_data_pdu(data)
+        pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
         # S7 USERDATA header
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
         # Roundtrip recovers the payload
-        payload, r_id, pdu_ref = p._parse_partner_data_pdu(pdu)
+        payload, r_id, pdu_ref, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
-        pdu = p._build_partner_data_pdu(b"")
+        pdu, _ = p._build_partner_data_pdu(b"", 0, 1, 0, True, True)
         assert pdu[0:1] == b"\x32"
-        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
-        pdu = p._build_partner_data_pdu(data)
-        payload, _, _ = p._parse_partner_data_pdu(pdu)
+        pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
+        payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == data
+
+    def test_build_partner_data_pdu_fragmented(self) -> None:
+        p = Partner()
+        data = bytes(range(256)) * 4  # 1024 bytes
+        pdu, pdu_ref = p._build_partner_data_pdu(
+            data, 0x1E, 0x00, 1024, False, False
+        )  # Data, sequence_nr, data unit ref, bsend_lenght, last_unit, first_fragment
+        payload, _, pdu_ref_r, sequence, _, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        assert payload == data
+        assert pdu_ref_r == pdu_ref
+        assert sequence == 0x1E
+        assert last_unit == 0x01
+        assert data_bsend_lengh == 0
 
     def test_build_partner_data_pdu_r_id(self) -> None:
         """R-ID is embedded in the data section and extracted by parser."""
         p = Partner()
         p.r_id = 0xDEADBEEF
-        pdu = p._build_partner_data_pdu(b"\x01")
-        payload, r_id, _pdu_ref = p._parse_partner_data_pdu(pdu)
+        data = b"\x01"
+        pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
+        payload, r_id, _pdu_ref, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == b"\x01"
         assert r_id == 0xDEADBEEF
 
     def test_parse_partner_data_pdu_roundtrip(self) -> None:
         p = Partner()
         original = b"Hello, Partner!"
-        pdu = p._build_partner_data_pdu(original)
-        parsed, _, _ = p._parse_partner_data_pdu(pdu)
+        pdu, _ = p._build_partner_data_pdu(original, 0, 1, len(original), True, True)
+        parsed, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert parsed == original
 
     def test_parse_partner_data_pdu_roundtrip_various_sizes(self) -> None:
         p = Partner()
         for size in [0, 1, 10, 100, 500, 1024]:
             data = (bytes(range(256)) * (size // 256 + 1))[:size]
-            pdu = p._build_partner_data_pdu(data)
-            payload, _, _ = p._parse_partner_data_pdu(pdu)
+            pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
+            payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
             assert payload == data
 
     def test_parse_partner_data_pdu_too_short(self) -> None:
         p = Partner()
         with pytest.raises(S7Error, match="too short"):
             p._parse_partner_data_pdu(b"\x32\x07\x00")
+
+    def test_parse_partner_frag_data_pdu(self) -> None:
+        """Test parsing of a captured fragmentet PDU. 1st segment."""
+        p = Partner()
+        pdu = (
+            b"\x32\x07\x00\x00\x23\x66\x00\x0c\x00\xda\x00\x01\x12\x08\x12\x46\x01\x00\x7e\x01\x00\x00\xff\x09\x00\xd6\x12\x06\x13\x00\x00\x00\x00\x03\x03\x84\x00\x12\x00\x08\x00\x14\x00\x07\x00\x07\x00\x0e\x00\x46\x00\x5a\x00\x32\x00\x32\x00\x46\x00\x28\x00\x46\x00\x94\x00\xf0\x00\x01\x00\x01\x00\x00\x00\x00\xfe"
+            + b"\x00" * 165
+        )
+        payload, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        assert (
+            payload
+            == b"\x00\x12\x00\x08\x00\x14\x00\x07\x00\x07\x00\x0e\x00\x46\x00\x5a\x00\x32\x00\x32\x00\x46\x00\x28\x00\x46\x00\x94\x00\xf0\x00\x01\x00\x01\x00\x00\x00\x00\xfe"
+            + b"\x00" * 165
+        )
+        assert r_id == 3
+        assert pdu_ref == 9062
+        assert sequence == 0
+        assert duref == 126
+        assert last_unit == 0x01
+        assert data_bsend_lengh == 900
+
+    def test_parse_partner_frag_data_pdu2(self) -> None:
+        """Test parsing of a captured fragmentet PDU. Middle segment.."""
+        p = Partner()
+        pdu = (
+            b"\x32\x07\x00\x00\x23\x67\x00\x0c\x00\xda\x00\x01\x12\x08\x12\x46\x01\xc4\x7e\x01\x00\x00\xff\x09\x00\xd6\x12\x06\x13\x00\x00\x00\x00\x03"
+            + b"\x00" * 206
+        )
+        payload, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        assert payload == b"\x00" * 206
+        assert r_id == 3
+        assert pdu_ref == 9063
+        assert sequence == 196
+        assert duref == 126
+        assert last_unit == 0x01
+        assert data_bsend_lengh == 0
+
+    def test_parse_partner_frag_data_pdu3(self) -> None:
+        """Test parsing of a captured fragmentet PDU. Last segment.."""
+        p = Partner()
+        pdu = b"\x32\x07\x00\x00\x23\x6a\x00\x0c\x00\x5a\x00\x01\x12\x08\x12\x46\x01\xc4\x7e\x00\x00\x00\xff\x09\x00\x56\x12\x06\x13\x00\x00\x00\x00\x03\x00\x55\x00\x00\x00\x00\x00\x00\x00\x00\x03\xe7\x00\x00\x00\x46\x00\x01\x00\x03\x00\x03\x00\x04\x00\x04\x00\x50\x00\x50\x00\x28\x00\x64\x00\x00\x03\xe8\x0e\x10\x01\xf4\x00\x00\x2a\xf8\x00\x00\x1f\x40\x00\x00\x00\x64\x00\x00\x00\x00\x01\x90\x00\x00\x4e\x20\x00\x09\x27\xc0\x00\x32\x01\x2c\x01\x2c\x00\x01\x00\x00"
+        payload, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        assert (
+            payload
+            == b"\x00\x55\x00\x00\x00\x00\x00\x00\x00\x00\x03\xe7\x00\x00\x00\x46\x00\x01\x00\x03\x00\x03\x00\x04\x00\x04\x00\x50\x00\x50\x00\x28\x00\x64\x00\x00\x03\xe8\x0e\x10\x01\xf4\x00\x00\x2a\xf8\x00\x00\x1f\x40\x00\x00\x00\x64\x00\x00\x00\x00\x01\x90\x00\x00\x4e\x20\x00\x09\x27\xc0\x00\x32\x01\x2c\x01\x2c\x00\x01\x00\x00"
+        )
+        assert r_id == 3
+        assert pdu_ref == 9066
+        assert sequence == 196
+        assert duref == 126
+        assert last_unit == 0x00
+        assert data_bsend_lengh == 0
 
     def test_build_partner_ack(self) -> None:
         p = Partner()
@@ -225,6 +291,20 @@ class TestPartnerPDU:
         ack = p._build_partner_ack(pdu_ref=0x1234)
         _, _, _, pdu_ref, _, _ = struct.unpack(">BBHHHH", ack[:10])
         assert pdu_ref == 0x1234
+
+    def test_build_partner_ack_sequence(self) -> None:
+        """ACK echoes the sequence_num from the data PDU."""
+        p = Partner()
+        ack = p._build_partner_ack(pdu_ref=0x1234, sequence=0xAB)
+        assert ack[17] == 0xAB
+
+    def test_parse_partner_ack(self) -> None:
+        """Test parsing of a captured PDU."""
+        p = Partner()
+        ack = b"\x32\x07\x00\x00\x01\xbb\x00\x0c\x00\x04\x00\x01\x12\x08\x12\x86\x01\xc2\x00\x00\x00\x00\x0a\x00\x00\x00"
+        pdu_ref, sequence = p._parse_partner_ack(ack)
+        assert sequence == 0xC2
+        assert pdu_ref == 0x01BB
 
     def test_parse_partner_ack_valid(self) -> None:
         p = Partner()
@@ -663,7 +743,8 @@ class TestDualPartner:
             _wire_partner(pa, sock_a)
             _wire_partner(pb, sock_b)
 
-            for size in [1, 10, 100, 480]:
+            # including fragmentation test if size > max pdu
+            for size in [1, 10, 100, 480, 960, 1920, 3840, 65534]:
                 payload = (bytes(range(256)) * (size // 256 + 1))[:size]
                 pa.set_send_data(payload)
                 errors: list[Exception] = []
