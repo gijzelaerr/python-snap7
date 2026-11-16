@@ -1180,10 +1180,10 @@ class Partner:
                         
                     return payload, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh    
                             
-                else: raise S7Error("Unsupported PDU function group, subfunction or b_send parameter")
+                else: 
+                    raise S7Error("Unsupported PDU function group, subfunction or b_send parameter")
 
             else:
-                #return bytes(0x00), 0, 0, 0, 0, 0, 0
                 raise S7Error("Unknown USERDATA-Type")
         else:
             raise S7Error(f"Unexpected PDU type in partner data: {pdu_type:#04x}")
@@ -1201,7 +1201,6 @@ class Partner:
         Returns:
             Complete S7 PDU bytes.
         """
-        #sequence = self._protocol._next_sequence()
 
         param = struct.pack(
             ">BBBBBBBB",
