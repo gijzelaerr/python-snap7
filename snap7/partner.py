@@ -376,7 +376,7 @@ class Partner:
 
         if item_count >= 2:
             if self._send_data2 is not None:
-                d2_len = len(self._send_data) + 4  # 4 byte header
+                d2_len = len(self._send_data2) + 4  # 4 byte header
                 if d2_len % 2 != 0:  # additional byte if length is odd
                     d2_len += 1
                 d_len += d2_len
@@ -386,7 +386,7 @@ class Partner:
 
         if item_count >= 3:
             if self._send_data3 is not None:
-                d3_len = len(self._send_data) + 4  # 4 byte header
+                d3_len = len(self._send_data3) + 4  # 4 byte header
                 if d3_len % 2 != 0:  # additional byte if length is odd
                     d3_len += 1
                 d_len += d3_len
@@ -396,7 +396,7 @@ class Partner:
 
         if item_count == 4:
             if self._send_data4 is not None:
-                d4_len = len(self._send_data) + 4  # 4 byte header
+                d4_len = len(self._send_data4) + 4  # 4 byte header
                 if d4_len % 2 != 0:  # additional byte if length is odd
                     d4_len += 1
                 d_len += d4_len
@@ -552,11 +552,13 @@ class Partner:
                         conn.socket.settimeout(sock_timeout)  # Set timeout for next segment
 
                 if len(reassembled) > 65534 or len(received) > 65534:
-                    raise S7Error("Received s_send data too long (>65534 bytes)")
+                    raise S7Error("Received b_send data too long (>65534 bytes)")
 
                 if len(reassembled) > bsend_lengh:
-                    raise S7Error("Received s_send data too long (>announced length)")
+                    raise S7Error("Received b_send data too long (>announced length)")
             else:  # u_send
+                if fragmented:
+                    raise S7Error("Received u_send data during a fragmented `bsend` reception")
                 last_segment = True
 
         bytes_rcv = len(received)
@@ -1076,7 +1078,7 @@ class Partner:
             self._recv_data3 = received3
             self._recv_data4 = received4
             self._recv_r_id = r_id
-            self._datablock_count = datablock_count
+            self._recv_datablock_count = datablock_count
             self._async_recv_queue.put([received, received2, received3, received4, r_id, datablock_count])
             self.bytes_recv += bytes_rec
             self._async_recv_result = 0
