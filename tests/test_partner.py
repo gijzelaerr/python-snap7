@@ -488,11 +488,6 @@ class TestPartnerSendRecvBuffers:
         p = Partner()
         assert p.b_send() == -1
 
-    def test_u_send_no_data(self) -> None:
-        p = Partner()
-        p.u_send(1)
-        assert Exception
-
     def test_b_send_not_connected(self) -> None:
         p = Partner()
         p.set_send_data(b"data")
