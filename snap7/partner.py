@@ -377,7 +377,7 @@ class Partner:
         if item_count >= 2:
             if self._send_data2 is not None:
                 d2_len = len(self._send_data) + 4  # 4 byte header
-                if d2_len % 2 != 0:  #additional byte if length is odd
+                if d2_len % 2 != 0:  # additional byte if length is odd
                     d2_len += 1
                 d_len += d2_len
             else:
@@ -387,7 +387,7 @@ class Partner:
         if item_count >= 3:
             if self._send_data3 is not None:
                 d3_len = len(self._send_data) + 4  # 4 byte header
-                if d3_len % 2 != 0:  #additional byte if length is odd
+                if d3_len % 2 != 0:  # additional byte if length is odd
                     d3_len += 1
                 d_len += d3_len
             else:
@@ -397,7 +397,7 @@ class Partner:
         if item_count == 4:
             if self._send_data4 is not None:
                 d4_len = len(self._send_data) + 4  # 4 byte header
-                if d4_len % 2 != 0:  #additional byte if length is odd
+                if d4_len % 2 != 0:  # additional byte if length is odd
                     d4_len += 1
                 d_len += d4_len
             else:
@@ -418,7 +418,7 @@ class Partner:
             # Build partner data PDU
             pdu = self._build_partner_data_pdu_u(
                 self._send_data, self._send_data2, self._send_data3, self._send_data4, item_count
-            )    
+            )
 
             with self._io_lock:
                 # Send via ISO connection
@@ -519,7 +519,8 @@ class Partner:
                 received2,
                 received3,
                 received4,
-                r_id, pdu_ref,
+                r_id,
+                pdu_ref,
                 par_seq_num,
                 _,
                 par_last_unit,
@@ -527,7 +528,7 @@ class Partner:
                 frame_type,
             ) = self._parse_partner_data_pdu(data)
 
-            if frame_type == 0:  # 0 = b_send 
+            if frame_type == 0:  # 0 = b_send
                 if par_seq_num == 0:
                     sequence = self._next_bsend_param_sequence()  # set sequence for new fragemneted transmission
                     bsend_lengh = data_bsend_lengh
@@ -809,7 +810,7 @@ class Partner:
 
         if parameter == Parameter.LocalPort:
             self.local_port = value
-            
+
         logger.debug(f"Setting parameter {parameter} to {value}")
         return 0
 
@@ -829,7 +830,7 @@ class Partner:
         self._recv_callback = callback
         logger.debug(f"Receive callback {'set' if callback else 'cleared'}")
         return 0
-    
+
     def set_send_callback(self, callback: Optional[Callable[[int], None]] = None) -> int:
         """
         Register a callback for completed async sends.
@@ -855,10 +856,10 @@ class Partner:
 
     def set_u_send_data(
         self, data1: bytes, data2: Optional[bytes] = None, data3: Optional[bytes] = None, data4: Optional[bytes] = None
-    )-> None:
+    ) -> None:
         """
         Set data1-4 to be sent by u_send()
-        
+
         The data1 is shared with the data for b_send.
         Data 2-4 can be None when not needed.
 
@@ -881,7 +882,7 @@ class Partner:
             Received data or None
         """
         return self._recv_data
-    
+
     def get_u_recv_data(self) -> Tuple[bytes | None, bytes | None, bytes | None, bytes | None, int]:
         """
         Get data1-4 and datablock_count by b_recv() or async receive
@@ -1305,8 +1306,8 @@ class Partner:
         data3: Optional[bytes] = None,
         data4: Optional[bytes] = None,
         item_count: int = 1,
-        r_id: Optional[int] = None
-    )-> bytes:
+        r_id: Optional[int] = None,
+    ) -> bytes:
         """Build an S7 USERDATA PDU for partner data push (Usend).
 
         The PDU uses the standard S7 USERDATA header (10 bytes) followed by
@@ -1380,7 +1381,7 @@ class Partner:
             0x32,
             S7PDUType.USERDATA,
             0x0000,
-            0x0000, #PDU-ref
+            0x0000, # PDU-ref
             len(param),
             len(data_section),
         )
@@ -1489,12 +1490,12 @@ class Partner:
                         par_duref_num,
                         par_last_unit,
                         data_bsend_lengh,
-                        frame_type
+                        frame_type,
                     )
 
                 else:
                     raise S7Error("Unsupported PDU function group, subfunction or b_send parameter")
-            
+
             elif par_func == 0x00 and par_var_spec == 0x12 and par_syntax_id == 0x13 and data_len >= 6:  # USend
 
                 if len(param) < 10:
@@ -1521,7 +1522,7 @@ class Partner:
                             raise S7Error("USERDATA usend data block too short")
 
                         _, item_tranportsize, item_length = struct.unpack(">BBH", data[item_start : item_start + 4])
-                        
+
                         # determine length
                         if item_tranportsize == 3 or item_tranportsize == 4:  # item_length is in bits when tranportsize = 3 or 4
                             item_bytes = int(item_length / 8)
@@ -1546,7 +1547,7 @@ class Partner:
                         if item_bytes % 2 != 0:
                             item_bytes += 1
 
-                        # start next item    
+                        # start next item
                         item_start += 4 + item_bytes
                         frame_type = nr
 
