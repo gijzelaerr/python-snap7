@@ -226,7 +226,7 @@ class TestPartnerPDU:
         p = Partner()
         with pytest.raises(S7Error, match="too short"):
             p._parse_partner_data_pdu(b"\x32\x07\x00")
-            
+
     def test_build_parse_usend_data_pdu_roundtrip(self) -> None:
         p = Partner()
         original1 = b"Hello, Partner!"
@@ -244,9 +244,7 @@ class TestPartnerPDU:
     def test_parse_partner_usend_pdu(self) -> None:
         """Test parsing of a captured usend PDU with 1 data block"""
         p = Partner()
-        pdu = (
-            b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x09\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x01\x00\x04\x00\x08\x3b"
-        )
+        pdu = b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x09\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x01\x00\x04\x00\x08\x3b"
         payload, _, _, _, r_id, pdu_ref, _, _, _, _, ftype = p._parse_partner_data_pdu(pdu)
         
         assert payload == b"\x3b"
@@ -257,11 +255,10 @@ class TestPartnerPDU:
     def test_parse_partner_usend4_pdu(self) -> None:
         """Test parsing of a captured usend PDU with 4 data block"""
         p = Partner()
-        pdu = (
-            b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x1c\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x04\x00\x04\x00\x10\x3b\x00\x00\x04\x00\x08\x00\x00\x00\x04\x00\x08\x3b\x00\x00\x04\x00\x10\x01\x00"
-        )
+        pdu = b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x1c\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x04\x00\x04\x00\x10\x3b\x00\x00\x04\x00\x08\x00\x00\x00\x04\x00\x08\x3b\x00\x00\x04\x00\x10\x01\x00"
+
         payload1, payload2, payload3, payload4, r_id, pdu_ref, _, _, _, _, ftype = p._parse_partner_data_pdu(pdu)
-        
+
         assert payload1 == b"\x3b\x00"
         assert payload2 == b"\x00"
         assert payload3 == b"\x3b"
@@ -493,6 +490,7 @@ class TestPartnerSendRecvBuffers:
 
     def test_u_send_no_data(self) -> None:
         p = Partner()
+        p.usend(1)
         assert Exception
 
     def test_b_send_not_connected(self) -> None:
@@ -845,7 +843,7 @@ class TestDualPartner:
         finally:
             pa.stop()
             pb.stop()
-            
+
     def test_u_send_u_recv(self) -> None:
         sock_a, sock_b = _make_socket_pair()
         pa, pb = Partner(), Partner()
@@ -885,7 +883,7 @@ class TestDualPartner:
             assert pb.get_u_recv_data()[3] == payload4
             assert pb.get_u_recv_data()[4] == 4
             assert pb.get_recv_r_id() == 0
-          
+
         finally:
             pa.stop()
             pb.stop()
@@ -1333,3 +1331,4 @@ class TestPartnerConnectionErrors:
 
 if __name__ == "__main__":
     unittest.main()
+
