@@ -15,6 +15,18 @@ CHANGES
   A BSend that fits in one frame now carries an incrementing data-unit reference, as a CPU's own BSEND does in
   captures from an S7-300 and an S7-1500; the rest of that frame is unchanged (#994).
 
+* U-SEND and U-RECV communication with up to 4 data blocks. Sending is performed using the function 
+  `u_send(number of blocks)`. `b_recv()` and `as_b_recv()` process both b_send and u_send data. Since the payload of 
+  u_send transmissions can be splitted into up to 4 parts, new helpers are required for the data buffers: 
+   * `set_u_send_data(data_1, data_2, data_3, data_4)`. 
+     The data_1 is shared with the data for b_send. Data 2-4 can be None when not needed.
+   * `get_u_recv_data()` returns a tuple with:
+	    data_1: Received data from b_send or u_send transmissions
+            data_2: Received data from u_send transmissions
+            data_3: Received data from u_send transmissions
+            data_4: Received data from u_send transmissions
+            datablock_count: 0 for b_send or 1-4 for u_send transmissions.
+
 3.5.0
 -----
 
