@@ -246,7 +246,7 @@ class TestPartnerPDU:
         p = Partner()
         pdu = b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x09\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x01\x00\x04\x00\x08\x3b"
         payload, _, _, _, r_id, pdu_ref, _, _, _, _, ftype = p._parse_partner_data_pdu(pdu)
-        
+
         assert payload == b"\x3b"
         assert r_id == 2
         assert pdu_ref == 0
