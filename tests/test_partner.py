@@ -490,7 +490,7 @@ class TestPartnerSendRecvBuffers:
 
     def test_u_send_no_data(self) -> None:
         p = Partner()
-        p.usend(1)
+        p.u_send(1)
         assert Exception
 
     def test_b_send_not_connected(self) -> None:
@@ -1331,4 +1331,3 @@ class TestPartnerConnectionErrors:
 
 if __name__ == "__main__":
     unittest.main()
-
