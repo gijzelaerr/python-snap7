@@ -1,8 +1,8 @@
 CHANGES
 ========
 
-Unreleased
-----------
+3.6.0
+-----
 
 ### New features
 
@@ -10,8 +10,10 @@ Unreleased
   item return code `0x03`, "accessing the object not allowed", and no header error, as an S7-1214C V4.2 does for a
   write-protected DB. Reads still work, and a block download is not refused (#992).
 
-* b_send(), b_recv(), as_b_send() and as_b_recv() now allows fragmentation into multiple network frames.
-  This enables transmissions of up to 65,534 bytes per request.
+* `b_send()`, `b_recv()`, `as_b_send()` and `as_b_recv()` now allow fragmentation into multiple network frames.
+  This enables transmissions of up to 65,534 bytes per request (#994).
+  A BSend that fits in one frame now carries an incrementing data-unit reference, as a CPU's own BSEND does in
+  captures from an S7-300 and an S7-1500; the rest of that frame is unchanged (#994).
 
 3.5.0
 -----
