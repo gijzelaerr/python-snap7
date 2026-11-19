@@ -135,7 +135,7 @@ class Partner:
         self._recv_data2: Optional[bytes] = None
         self._recv_data3: Optional[bytes] = None
         self._recv_data4: Optional[bytes] = None
-        self._recv_datablock_count = 0 # 0 for bsend, 1-4 for usend
+        self._recv_datablock_count = 0  # 0 for bsend, 1-4 for usend
         self._async_send_in_progress = False
         self._async_send_result = 0
         self._async_recv_in_progress = False
@@ -361,11 +361,11 @@ class Partner:
             0 on success
         """
         max_length = self.pdu_length - 28
-        
+
         if item_count < 1 or item_count > 4:
             self.send_errors += 1
             raise ValueError("incorrect number of data blocks")
-                
+
         if self._send_data is not None:
             d_len = len(self._send_data)
             if d_len % 2 != 0:
@@ -376,8 +376,8 @@ class Partner:
 
         if item_count >= 2:
             if self._send_data2 is not None:
-                d2_len  = len(self._send_data) + 4 # 4 byte header
-                if d2_len % 2 != 0: #additional byte if length is odd
+                d2_len = len(self._send_data) + 4  # 4 byte header
+                if d2_len % 2 != 0:  #additional byte if length is odd
                     d2_len += 1
                 d_len += d2_len
             else:
@@ -386,8 +386,8 @@ class Partner:
 
         if item_count >= 3:
             if self._send_data3 is not None:
-                d3_len  = len(self._send_data) + 4 # 4 byte header
-                if d3_len % 2 != 0: #additional byte if length is odd
+                d3_len = len(self._send_data) + 4  # 4 byte header
+                if d3_len % 2 != 0:  #additional byte if length is odd
                     d3_len += 1
                 d_len += d3_len
             else:
@@ -396,8 +396,8 @@ class Partner:
 
         if item_count == 4:
             if self._send_data4 is not None:
-                d4_len  = len(self._send_data) + 4 # 4 byte header
-                if d4_len % 2 != 0: #additional byte if length is odd
+                d4_len = len(self._send_data) + 4  # 4 byte header
+                if d4_len % 2 != 0:  #additional byte if length is odd
                     d4_len += 1
                 d_len += d4_len
             else:
@@ -416,18 +416,20 @@ class Partner:
 
         try:
             # Build partner data PDU
-            pdu = self._build_partner_data_pdu_u(self._send_data, self._send_data2, self._send_data3, self._send_data4, item_count)
+            pdu = self._build_partner_data_pdu_u(
+                self._send_data, self._send_data2, self._send_data3, self._send_data4, item_count
+            )    
 
             with self._io_lock:
                 # Send via ISO connection
                 self._connection.send_data(pdu)
 
             bytes_snd = len(self._send_data)
-            if item_count >= 2 and self._send_data2 != None:
+            if item_count >= 2 and self._send_data2 is not None:
                 bytes_snd += len(self._send_data2)
-                if item_count >= 3 and self._send_data3 != None:
+                if item_count >= 3 and self._send_data3 is not None:
                     bytes_snd += len(self._send_data3)
-                    if item_count == 4 and self._send_data4 != None:
+                    if item_count == 4 and self._send_data4 is not None:
                         bytes_snd += len(self._send_data4)
 
             self.bytes_sent += bytes_snd
@@ -486,7 +488,9 @@ class Partner:
             logger.error(f"Synchronous receive failed: {e}")
             return -1
 
-    def _b_recv_loop(self, conn: ISOTCPConnection, sock_timeout: Optional[float] = None) -> Tuple[bytes, bytes | None, bytes | None, bytes | None, int, int, int]:
+    def _b_recv_loop(
+        self, conn: ISOTCPConnection, sock_timeout: Optional[float] = None
+    ) -> Tuple[bytes, bytes | None, bytes | None, bytes | None, int, int, int]:
         """
         Receives the frames and reassembles fragmented data
 
@@ -499,7 +503,6 @@ class Partner:
             r_id
             data block type/count: 0 for b_send, 1 to 4 for u_send
             bytes count
-            
         """
         if not self.connected or conn is None or conn.socket is None:
             raise S7ConnectionError("Not connected")
@@ -511,9 +514,20 @@ class Partner:
 
         while not last_segment:
             data = conn.receive_data()
-            received, received2, received3, received4, r_id, pdu_ref, par_seq_num, _, par_last_unit, data_bsend_lengh, frame_type = self._parse_partner_data_pdu(data)
+            (
+                received,
+                received2,
+                received3,
+                received4,
+                r_id, pdu_ref,
+                par_seq_num,
+                _,
+                par_last_unit,
+                data_bsend_lengh,
+                frame_type,
+            ) = self._parse_partner_data_pdu(data)
 
-            if frame_type == 0: # 0 = b_send 
+            if frame_type == 0:  # 0 = b_send 
                 if par_seq_num == 0:
                     sequence = self._next_bsend_param_sequence()  # set sequence for new fragemneted transmission
                     bsend_lengh = data_bsend_lengh
@@ -541,9 +555,9 @@ class Partner:
 
                 if len(reassembled) > bsend_lengh:
                     raise S7Error("Received s_send data too long (>announced length)")
-            else: # u_send
+            else:  # u_send
                 last_segment = True
-                
+
         bytes_rcv = len(received)
         if received2 is not None:
             bytes_rcv += len(received2)
@@ -667,7 +681,9 @@ class Partner:
             return -1
 
         try:
-            self._recv_data, self._recv_data2, self._recv_data3, self._recv_data4, self._recv_r_id, self._recv_datablock_count = self._async_recv_queue.get_nowait()
+            self._recv_data, self._recv_data2, self._recv_data3, self._recv_data4, self._recv_r_id, self._recv_datablock_count = (
+                self._async_recv_queue.get_nowait()
+            )
             return 0  # Data available
         except Empty:
             return 1  # No data yet
@@ -793,6 +809,7 @@ class Partner:
 
         if parameter == Parameter.LocalPort:
             self.local_port = value
+            
         logger.debug(f"Setting parameter {parameter} to {value}")
         return 0
 
@@ -836,7 +853,9 @@ class Partner:
         """
         self._send_data = data
 
-    def set_u_send_data(self, data1: bytes, data2: Optional[bytes] = None, data3: Optional[bytes] = None, data4: Optional[bytes] = None) -> None:
+    def set_u_send_data(
+        self, data1: bytes, data2: Optional[bytes] = None, data3: Optional[bytes] = None, data4: Optional[bytes] = None
+    )-> None:
         """
         Set data1-4 to be sent by u_send()
         
@@ -847,7 +866,7 @@ class Partner:
             data1: Data to send b_send or u_send
             data2: Data to send u_send
             data3: Data to send u_send
-            data4: Data to send u_send         
+            data4: Data to send u_send
         """
         self._send_data = data1
         self._send_data2 = data2
@@ -1027,7 +1046,9 @@ class Partner:
                     old_timeout = conn.socket.gettimeout()
                     conn.socket.settimeout(self.recv_timeout)
                     try:
-                        received, received2, received3, received4, r_id, datablock_count, bytes_rec = self._b_recv_loop(conn, old_timeout)
+                        received, received2, received3, received4, r_id, datablock_count, bytes_rec = self._b_recv_loop(
+                            conn, old_timeout
+                        )
 
                     finally:
                         try:
@@ -1277,7 +1298,15 @@ class Partner:
 
         return header + param + data_section, sequence
 
-    def _build_partner_data_pdu_u(self, data1: bytes, data2: Optional[bytes] = None, data3: Optional[bytes] = None, data4: Optional[bytes] = None, item_count: int = 1, r_id: Optional[int] = None) -> bytes:
+    def _build_partner_data_pdu_u(
+        self,
+        data1: bytes,
+        data2: Optional[bytes] = None,
+        data3: Optional[bytes] = None,
+        data4: Optional[bytes] = None,
+        item_count: int = 1,
+        r_id: Optional[int] = None
+    )-> bytes:
         """Build an S7 USERDATA PDU for partner data push (Usend).
 
         The PDU uses the standard S7 USERDATA header (10 bytes) followed by
@@ -1314,37 +1343,37 @@ class Partner:
         # payload length in bits + payload
         data = var_spec + struct.pack(">H", len(data1) * 8) + data1
         items = 1
-        
-        if item_count >= 2 and data2 != None:
-            #additional byte if length was odd
+
+        if item_count >= 2 and data2 is not None:
+            # additional byte if length was odd
             if len(data1) % 2 != 0:
                 data += struct.pack(">B", 0x00)
-            
-            #Variable specification, payload length in bits + payload
+
+            # Variable specification, payload length in bits + payload
             data += var_spec + struct.pack(">H", len(data2) * 8) + data2
             items = 2
- 
-            if item_count >= 3 and data3 != None:
-                #additional byte if length was odd
+
+            if item_count >= 3 and data3 is not None:
+                # additional byte if length was odd
                 if len(data2) % 2 != 0:
                     data += struct.pack(">B", 0x00)
-                
-                #Variable specification, payload length in bits + payload
+
+                # Variable specification, payload length in bits + payload
                 data += var_spec + struct.pack(">H", len(data3) * 8) + data3
                 items = 3
- 
-                if item_count == 4 and data4 != None:
-                    #additional byte if length was odd
+
+                if item_count == 4 and data4 is not None:
+                    # additional byte if length was odd
                     if len(data3) % 2 != 0:
                         data += struct.pack(">B", 0x00)
 
-                    #Variable specification, payload length in bits + payload
+                    # Variable specification, payload length in bits + payload
                     data += var_spec + struct.pack(">H", len(data4) * 8) + data4
-                    items = 4            
-            
+                    items = 4
+
         # Data header: return_code=0xFF, PBC Usend unknown 1=0x02, itenm count(1-4)
         data_section = struct.pack(">BBH", 0xFF, 0x02, items) + data
-        
+
         # S7 USERDATA header (10 bytes)
         header = struct.pack(
             ">BBHHHH",
@@ -1358,12 +1387,14 @@ class Partner:
 
         return header + param + data_section
 
-    def _parse_partner_data_pdu(self, pdu: bytes) -> Tuple[bytes, bytes | None, bytes | None, bytes | None, int, int, int, int, int, int, int]:
+    def _parse_partner_data_pdu(
+        self, pdu: bytes
+    ) -> Tuple[bytes, bytes | None, bytes | None, bytes | None, int, int, int, int, int, int, int]:
         """Parse an incoming partner data push PDU and extract the payload.
 
         Returns:
             Payload, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh, frame_type.
-            
+
             frame_type:
              0: bsend
              1: usend with 1 data block
@@ -1407,9 +1438,8 @@ class Partner:
                 and par_syntax_id == 0x12
                 and data_len >= 13
             ):  # BSend
-
                 frame_type = 0
-                
+
                 if len(param) < 12:
                     raise S7Error("USERDATA bsend parameter block too short")
 
@@ -1448,54 +1478,61 @@ class Partner:
                         # skip data header (6) + body (var_len)
                         payload = data[6 + data_var_len :]
 
-                    return payload, None, None, None, r_id, pdu_ref, par_seq_num, par_duref_num, par_last_unit, data_bsend_lengh, frame_type
+                    return (
+                        payload,
+                        None,
+                        None,
+                        None,
+                        r_id,
+                        pdu_ref,
+                        par_seq_num,
+                        par_duref_num,
+                        par_last_unit,
+                        data_bsend_lengh,
+                        frame_type
+                    )
 
                 else:
                     raise S7Error("Unsupported PDU function group, subfunction or b_send parameter")
             
-            elif (
-                par_func == 0x00
-                and par_var_spec == 0x12
-                and par_syntax_id == 0x13
-                and data_len >= 6
-            ):  # USend
-                
+            elif par_func == 0x00 and par_var_spec == 0x12 and par_syntax_id == 0x13 and data_len >= 6:  # USend
+
                 if len(param) < 10:
                     raise S7Error("USERDATA usend parameter block too short")
 
                 if len(data) < 6:
                     raise S7Error("USERDATA usend data block too short")
-                
+
                 r_id = struct.unpack(">I", param[6:10])[0]
-                
+
                 _, _, data_items = struct.unpack(">BBH", data[:4])
-                
+
                 payload = bytes()
                 payload1 = bytes()
                 payload2 = None
                 payload3 = None
                 payload4 = None
-                
+
                 if data_items >= 1 and data_items <= 4:
                     item_start = 4
                     for nr in range(1, data_items + 1):
                         # Check payload transportsize and length
                         if len(data) < item_start + 4:
                             raise S7Error("USERDATA usend data block too short")
-                        
+
                         _, item_tranportsize, item_length = struct.unpack(">BBH", data[item_start : item_start + 4])
                         
                         # determine length
-                        if item_tranportsize == 3 or item_tranportsize == 4: # item_length is in bits when tranportsize = 3 or 4
+                        if item_tranportsize == 3 or item_tranportsize == 4:  # item_length is in bits when tranportsize = 3 or 4
                             item_bytes = int(item_length / 8)
                         else:
                             item_bytes = item_length
-                        
+
                         if len(data) < item_start + 4 + item_bytes:
                             raise S7Error("USERDATA usend data block too short")
-                        
+
                         payload = bytes(data[item_start + 4 : item_start + 4 + item_bytes])
-                        
+
                         if nr == 1:
                             payload1 = payload
                         elif nr == 2:
@@ -1504,17 +1541,17 @@ class Partner:
                             payload3 = payload
                         elif nr == 4:
                             payload4 = payload
-                        
+
                         # additional byte if length is odd
                         if item_bytes % 2 != 0:
                             item_bytes += 1
-                            
+
                         # start next item    
                         item_start += 4 + item_bytes
                         frame_type = nr
-                 
+
                     return payload1, payload2, payload3, payload4, r_id, pdu_ref, 0, 0, 0, 0, frame_type
-                
+
                 else:
                     raise S7Error("Invalid number of u_send data blocks")
             else:
