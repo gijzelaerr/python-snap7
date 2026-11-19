@@ -1381,7 +1381,7 @@ class Partner:
             0x32,
             S7PDUType.USERDATA,
             0x0000,
-            0x0000, # PDU-ref
+            0x0000,  # PDU-ref
             len(param),
             len(data_section),
         )
@@ -1497,7 +1497,6 @@ class Partner:
                     raise S7Error("Unsupported PDU function group, subfunction or b_send parameter")
 
             elif par_func == 0x00 and par_var_spec == 0x12 and par_syntax_id == 0x13 and data_len >= 6:  # USend
-
                 if len(param) < 10:
                     raise S7Error("USERDATA usend parameter block too short")
 
@@ -1664,4 +1663,3 @@ class Partner:
             self.stop()
         except Exception:
             pass
-
