@@ -16,6 +16,13 @@ from snap7.type import Parameter
 logging.basicConfig(level=logging.WARNING)
 
 
+@pytest.fixture(autouse=True)
+def _short_disconnect_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two partners in one process: the one that stays up doesn't close when the other
+    disconnects, so each stop() would wait out the full DISCONNECT_CLOSE_TIMEOUT."""
+    monkeypatch.setattr(ISOTCPConnection, "DISCONNECT_CLOSE_TIMEOUT", 0.05)
+
+
 @pytest.mark.partner
 class TestPartner(unittest.TestCase):
     def setUp(self) -> None:

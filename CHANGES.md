@@ -32,6 +32,13 @@ Unreleased
   A BSend that fits in one frame now carries an incrementing data-unit reference, as a CPU's own BSEND does in
   captures from an S7-300 and an S7-1500; the rest of that frame is unchanged (#994).
 
+### Bug fixes
+
+* `disconnect()` no longer sends a COTP disconnect request, in both clients. It closes its sending side of the TCP
+  connection, waits up to one second for the PLC to close its own, and then closes the socket; RFC 1006 releases a
+  connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
+  until the PLC restarted. Not yet confirmed on that CP (#972).
+
 3.5.0
 -----
 
