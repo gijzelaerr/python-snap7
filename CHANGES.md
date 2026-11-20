@@ -70,9 +70,9 @@ Unreleased
 * `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
   stale fragment was added to the result (#967).
 * `disconnect()` now addresses its COTP disconnect request to the PLC's connection reference, in both clients.
-  Previously it used the client's own reference. That is the likely reason a CP 343-1 kept each connection
-  allocated until it was restarted (#972, not yet confirmed on the CP). The passive `Partner` now echoes the active
-  partner's reference in its connection confirm (#979).
+  Previously it used the client's own reference. The passive `Partner` now echoes the active partner's reference in
+  its connection confirm (#979). This does not fix #972: a capture with this change shows a CP 343-1 still keeping
+  each connection allocated until it is restarted.
 * All `snap7.util` setters now raise `ValueError` when the value doesn't fit in the buffer. Most of them silently grew
   a short `bytearray`, which changed the length written to the PLC or shifted later fields, and `set_lreal`,
   `set_string`, `set_bool` and the other single-byte setters raised `struct.error` or `IndexError` (#975).
