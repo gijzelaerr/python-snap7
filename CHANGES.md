@@ -17,7 +17,7 @@ Unreleased
      * data_3: Received data from u_send transmissions
      * data_4: Received data from u_send transmissions
      * datablock_count: 0 for b_send or 1-4 for u_send transmissions.
-    
+
 * New function: partner.set_socket_timeout(timeout).
 
 3.6.0
