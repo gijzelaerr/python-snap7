@@ -222,7 +222,7 @@ class ISOTCPConnection:
             return self._parse_cotp_data(payload)
 
         except socket.timeout:
-            if self.ignore_rcv_tout == False:
+            if not self.ignore_rcv_tout:
                 self.connected = False
             raise S7TimeoutError("Receive timeout")
         except socket.error as e:
@@ -481,7 +481,7 @@ class ISOTCPConnection:
                     raise S7ConnectionError("Connection closed by peer")
                 data.extend(chunk)
             except socket.timeout:
-                if self.ignore_rcv_tout == False:
+                if not self.ignore_rcv_tout:
                     self.connected = False
                 raise S7TimeoutError("Receive timeout")
             except socket.error as e:
