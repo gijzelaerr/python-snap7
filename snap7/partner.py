@@ -730,6 +730,9 @@ class Partner:
         Returns:
             Status code (0=stopped, 1=running, 2=connected)
         """
+        if self._connection is not None and not self._connection.connected:
+            self.connected = False
+
         if self.connected:
             return c_int32(PartnerStatus.CONNECTED)
         elif self.running:
@@ -832,6 +835,22 @@ class Partner:
         self._recv_callback = callback
         logger.debug(f"Receive callback {'set' if callback else 'cleared'}")
         return 0
+
+    def set_socket_timeout(self, timeout: float) -> None:
+        """
+        Sets the socket timeout.
+
+        Args:
+            timetout in s.
+        """
+        if timeout < 0:
+            raise ValueError("Socket timeout < 0")
+
+        if self._connection is None or self._connection.socket is None:
+            self.send_errors += 1
+            raise S7ConnectionError("Not connected")
+
+        self._connection.socket.settimeout(timeout)
 
     def set_send_callback(self, callback: Optional[Callable[[int], None]] = None) -> int:
         """
@@ -1046,6 +1065,7 @@ class Partner:
 
             try:
                 with self._io_lock:
+                    conn.ignore_rcv_tout = True
                     old_timeout = conn.socket.gettimeout()
                     conn.socket.settimeout(self.recv_timeout)
                     try:
@@ -1055,15 +1075,12 @@ class Partner:
 
                     finally:
                         try:
+                            conn.ignore_rcv_tout = False
                             if conn.socket is not None:
                                 conn.socket.settimeout(old_timeout)
                         except OSError:
                             pass
             except (S7TimeoutError, socket.timeout):
-                # Timeout is expected — restore connected flag since
-                # ISOTCPConnection.receive_data() sets it to False on timeout
-                if conn is not None:
-                    conn.connected = True
                 continue
             except Exception as e:
                 self.recv_errors += 1
