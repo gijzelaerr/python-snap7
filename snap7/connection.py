@@ -94,6 +94,7 @@ class ISOTCPConnection:
         self.connected = False
         self.pdu_size = 240  # Default PDU size, negotiated during connection
         self.timeout = 5.0  # Default timeout in seconds
+        self.ignore_rcv_tout = False  # When True: self.connected is not set to False opon receicve timeout
 
         # Connection parameters
         self.src_ref = 0x0001  # Source reference
@@ -221,7 +222,8 @@ class ISOTCPConnection:
             return self._parse_cotp_data(payload)
 
         except socket.timeout:
-            self.connected = False
+            if not self.ignore_rcv_tout:
+                self.connected = False
             raise S7TimeoutError("Receive timeout")
         except socket.error as e:
             self.connected = False
@@ -479,7 +481,8 @@ class ISOTCPConnection:
                     raise S7ConnectionError("Connection closed by peer")
                 data.extend(chunk)
             except socket.timeout:
-                self.connected = False
+                if not self.ignore_rcv_tout:
+                    self.connected = False
                 raise S7TimeoutError("Receive timeout")
             except socket.error as e:
                 self.connected = False
