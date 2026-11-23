@@ -6,12 +6,31 @@ Unreleased
 
 ### New features
 
+* U-SEND and U-RECV communication with up to 4 data blocks. Sending is performed using the function
+  `u_send(number of blocks)`. `b_recv()` and `as_b_recv()` process both b_send and u_send data. Since the payload of
+  u_send transmissions can be split into up to 4 parts, new helpers are required for the data buffers:
+   * `set_u_send_data(data_1, data_2, data_3, data_4)`.
+     The data_1 is shared with the data for b_send. Data 2-4 can be None when not needed.
+   * `get_u_recv_data()` returns a tuple with:
+     * data_1: Received data from b_send or u_send transmissions
+     * data_2: Received data from u_send transmissions
+     * data_3: Received data from u_send transmissions
+     * data_4: Received data from u_send transmissions
+     * datablock_count: 0 for b_send or 1-4 for u_send transmissions.
+
+3.6.0
+-----
+
+### New features
+
 * `Server.register_area()` takes a `read_only` keyword. The server refuses a client write to a read-only area with
   item return code `0x03`, "accessing the object not allowed", and no header error, as an S7-1214C V4.2 does for a
   write-protected DB. Reads still work, and a block download is not refused (#992).
 
-* b_send(), b_recv(), as_b_send() and as_b_recv() now allows fragmentation into multiple network frames.
-  This enables transmissions of up to 65,534 bytes per request.
+* `b_send()`, `b_recv()`, `as_b_send()` and `as_b_recv()` now allow fragmentation into multiple network frames.
+  This enables transmissions of up to 65,534 bytes per request (#994).
+  A BSend that fits in one frame now carries an incrementing data-unit reference, as a CPU's own BSEND does in
+  captures from an S7-300 and an S7-1500; the rest of that frame is unchanged (#994).
 
 ### Bug fixes
 
@@ -58,9 +77,9 @@ Unreleased
 * `read_szl` and `list_blocks_of_type` now check the PDU reference of follow-up replies, in both clients. Previously a
   stale fragment was added to the result (#967).
 * `disconnect()` now addresses its COTP disconnect request to the PLC's connection reference, in both clients.
-  Previously it used the client's own reference. That is the likely reason a CP 343-1 kept each connection
-  allocated until it was restarted (#972, not yet confirmed on the CP). The passive `Partner` now echoes the active
-  partner's reference in its connection confirm (#979).
+  Previously it used the client's own reference. The passive `Partner` now echoes the active partner's reference in
+  its connection confirm (#979). This does not fix #972: a capture with this change shows a CP 343-1 still keeping
+  each connection allocated until it is restarted.
 * All `snap7.util` setters now raise `ValueError` when the value doesn't fit in the buffer. Most of them silently grew
   a short `bytearray`, which changed the length written to the PLC or shifted later fields, and `set_lreal`,
   `set_string`, `set_bool` and the other single-byte setters raised `struct.error` or `IndexError` (#975).

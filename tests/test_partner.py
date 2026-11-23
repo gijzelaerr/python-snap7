@@ -173,21 +173,21 @@ class TestPartnerPDU:
         assert pdu[0:1] == b"\x32"
         assert pdu[1:2] == b"\x07"
         # Roundtrip recovers the payload
-        payload, r_id, pdu_ref, _, _, _, _ = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, r_id, pdu_ref, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == data
 
     def test_build_partner_data_pdu_empty(self) -> None:
         p = Partner()
         pdu, _ = p._build_partner_data_pdu(b"", 0, 1, 0, True, True)
         assert pdu[0:1] == b"\x32"
-        payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, _, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == b""
 
     def test_build_partner_data_pdu_large(self) -> None:
         p = Partner()
         data = bytes(range(256)) * 4  # 1024 bytes
         pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
-        payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, _, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == data
 
     def test_build_partner_data_pdu_fragmented(self) -> None:
@@ -196,12 +196,13 @@ class TestPartnerPDU:
         pdu, pdu_ref = p._build_partner_data_pdu(
             data, 0x1E, 0x00, 1024, False, False
         )  # Data, sequence_nr, data unit ref, bsend_lenght, last_unit, first_fragment
-        payload, _, pdu_ref_r, sequence, _, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, _, pdu_ref_r, sequence, _, last_unit, data_bsend_lengh, dtype = p._parse_partner_data_pdu(pdu)
         assert payload == data
         assert pdu_ref_r == pdu_ref
         assert sequence == 0x1E
         assert last_unit == 0x01
         assert data_bsend_lengh == 0
+        assert dtype == 0
 
     def test_build_partner_data_pdu_r_id(self) -> None:
         """R-ID is embedded in the data section and extracted by parser."""
@@ -209,7 +210,7 @@ class TestPartnerPDU:
         p.r_id = 0xDEADBEEF
         data = b"\x01"
         pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
-        payload, r_id, _pdu_ref, _, _, _, _ = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, r_id, _pdu_ref, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert payload == b"\x01"
         assert r_id == 0xDEADBEEF
 
@@ -217,7 +218,7 @@ class TestPartnerPDU:
         p = Partner()
         original = b"Hello, Partner!"
         pdu, _ = p._build_partner_data_pdu(original, 0, 1, len(original), True, True)
-        parsed, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
+        parsed, _, _, _, _, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
         assert parsed == original
 
     def test_parse_partner_data_pdu_roundtrip_various_sizes(self) -> None:
@@ -225,13 +226,78 @@ class TestPartnerPDU:
         for size in [0, 1, 10, 100, 500, 1024]:
             data = (bytes(range(256)) * (size // 256 + 1))[:size]
             pdu, _ = p._build_partner_data_pdu(data, 0, 1, len(data), True, True)
-            payload, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
+            payload, _, _, _, _, _, _, _, _, _, _ = p._parse_partner_data_pdu(pdu)
             assert payload == data
 
     def test_parse_partner_data_pdu_too_short(self) -> None:
         p = Partner()
         with pytest.raises(S7Error, match="too short"):
             p._parse_partner_data_pdu(b"\x32\x07\x00")
+
+    def test_build_partner_usend_pdu(self) -> None:
+        # build a u_send PDU with 1 block and compare with a captured PDU
+        p = Partner()
+        payload = b"\xef"
+        p.r_id = 2
+        pdu = p.pdu = p._build_partner_data_pdu_u(payload, None, None, None, 1)
+        assert (
+            pdu
+            == b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x09\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x01\x00\x04\x00\x08\xef"
+        )
+
+    def test_build_partner_usend4_pdu(self) -> None:
+        # build a u_send with 4 blocks PDU and compare with a captured PDU
+        p = Partner()
+        payload1 = b"\x3b\xff"
+        payload2 = b"\xf0"
+        payload3 = b"\x3b"
+        payload4 = b"\xf1\x90"
+        p.r_id = 4
+        pdu = p.pdu = p._build_partner_data_pdu_u(payload1, payload2, payload3, payload4, 4)
+        assert (
+            pdu
+            == b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x1c\x00\x01\x12\x06\x13\x00\x00\x00\x00\x04\xff\x02\x00\x04\x00\x04\x00\x10\x3b\xff\x00\x04\x00\x08\xf0\x00\x00\x04\x00\x08\x3b\x00\x00\x04\x00\x10\xf1\x90"
+        )
+
+    def test_build_parse_usend_data_pdu_roundtrip(self) -> None:
+        p = Partner()
+        original1 = b"Hello, Partner!"
+        original2 = b"sent with"
+        original3 = b"u_send"
+        original4 = b"in 4 parts"
+        pdu = p._build_partner_data_pdu_u(original1, original2, original3, original4, 4)
+        parsed1, parsed2, parsed3, parsed4, _, _, _, _, _, _, f_type = p._parse_partner_data_pdu(pdu)
+        assert parsed1 == original1
+        assert parsed2 == original2
+        assert parsed3 == original3
+        assert parsed4 == original4
+        assert f_type == 4
+
+    def test_parse_partner_usend_pdu(self) -> None:
+        """Test parsing of a captured usend PDU with 1 data block"""
+        p = Partner()
+        pdu = b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x09\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x01\x00\x04\x00\x08\x3b"
+        payload, _, _, _, r_id, pdu_ref, _, _, _, _, ftype = p._parse_partner_data_pdu(pdu)
+
+        assert payload == b"\x3b"
+        assert r_id == 2
+        assert pdu_ref == 0
+        assert ftype == 1
+
+    def test_parse_partner_usend4_pdu(self) -> None:
+        """Test parsing of a captured usend PDU with 4 data block"""
+        p = Partner()
+        pdu = b"\x32\x07\x00\x00\x00\x00\x00\x0a\x00\x1c\x00\x01\x12\x06\x13\x00\x00\x00\x00\x02\xff\x02\x00\x04\x00\x04\x00\x10\x3b\x00\x00\x04\x00\x08\x00\x00\x00\x04\x00\x08\x3b\x00\x00\x04\x00\x10\x01\x00"
+
+        payload1, payload2, payload3, payload4, r_id, pdu_ref, _, _, _, _, ftype = p._parse_partner_data_pdu(pdu)
+
+        assert payload1 == b"\x3b\x00"
+        assert payload2 == b"\x00"
+        assert payload3 == b"\x3b"
+        assert payload4 == b"\x01\x00"
+        assert r_id == 2
+        assert pdu_ref == 0
+        assert ftype == 4
 
     def test_parse_partner_frag_data_pdu(self) -> None:
         """Test parsing of a captured fragmentet PDU. 1st segment."""
@@ -240,7 +306,7 @@ class TestPartnerPDU:
             b"\x32\x07\x00\x00\x23\x66\x00\x0c\x00\xda\x00\x01\x12\x08\x12\x46\x01\x00\x7e\x01\x00\x00\xff\x09\x00\xd6\x12\x06\x13\x00\x00\x00\x00\x03\x03\x84\x00\x12\x00\x08\x00\x14\x00\x07\x00\x07\x00\x0e\x00\x46\x00\x5a\x00\x32\x00\x32\x00\x46\x00\x28\x00\x46\x00\x94\x00\xf0\x00\x01\x00\x01\x00\x00\x00\x00\xfe"
             + b"\x00" * 165
         )
-        payload, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh, ftype = p._parse_partner_data_pdu(pdu)
         assert (
             payload
             == b"\x00\x12\x00\x08\x00\x14\x00\x07\x00\x07\x00\x0e\x00\x46\x00\x5a\x00\x32\x00\x32\x00\x46\x00\x28\x00\x46\x00\x94\x00\xf0\x00\x01\x00\x01\x00\x00\x00\x00\xfe"
@@ -252,6 +318,7 @@ class TestPartnerPDU:
         assert duref == 126
         assert last_unit == 0x01
         assert data_bsend_lengh == 900
+        assert ftype == 0
 
     def test_parse_partner_frag_data_pdu2(self) -> None:
         """Test parsing of a captured fragmentet PDU. Middle segment.."""
@@ -260,7 +327,7 @@ class TestPartnerPDU:
             b"\x32\x07\x00\x00\x23\x67\x00\x0c\x00\xda\x00\x01\x12\x08\x12\x46\x01\xc4\x7e\x01\x00\x00\xff\x09\x00\xd6\x12\x06\x13\x00\x00\x00\x00\x03"
             + b"\x00" * 206
         )
-        payload, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh, ftype = p._parse_partner_data_pdu(pdu)
         assert payload == b"\x00" * 206
         assert r_id == 3
         assert pdu_ref == 9063
@@ -268,12 +335,13 @@ class TestPartnerPDU:
         assert duref == 126
         assert last_unit == 0x01
         assert data_bsend_lengh == 0
+        assert ftype == 0
 
     def test_parse_partner_frag_data_pdu3(self) -> None:
         """Test parsing of a captured fragmentet PDU. Last segment.."""
         p = Partner()
         pdu = b"\x32\x07\x00\x00\x23\x6a\x00\x0c\x00\x5a\x00\x01\x12\x08\x12\x46\x01\xc4\x7e\x00\x00\x00\xff\x09\x00\x56\x12\x06\x13\x00\x00\x00\x00\x03\x00\x55\x00\x00\x00\x00\x00\x00\x00\x00\x03\xe7\x00\x00\x00\x46\x00\x01\x00\x03\x00\x03\x00\x04\x00\x04\x00\x50\x00\x50\x00\x28\x00\x64\x00\x00\x03\xe8\x0e\x10\x01\xf4\x00\x00\x2a\xf8\x00\x00\x1f\x40\x00\x00\x00\x64\x00\x00\x00\x00\x01\x90\x00\x00\x4e\x20\x00\x09\x27\xc0\x00\x32\x01\x2c\x01\x2c\x00\x01\x00\x00"
-        payload, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh = p._parse_partner_data_pdu(pdu)
+        payload, _, _, _, r_id, pdu_ref, sequence, duref, last_unit, data_bsend_lengh, ftype = p._parse_partner_data_pdu(pdu)
         assert (
             payload
             == b"\x00\x55\x00\x00\x00\x00\x00\x00\x00\x00\x03\xe7\x00\x00\x00\x46\x00\x01\x00\x03\x00\x03\x00\x04\x00\x04\x00\x50\x00\x50\x00\x28\x00\x64\x00\x00\x03\xe8\x0e\x10\x01\xf4\x00\x00\x2a\xf8\x00\x00\x1f\x40\x00\x00\x00\x64\x00\x00\x00\x00\x01\x90\x00\x00\x4e\x20\x00\x09\x27\xc0\x00\x32\x01\x2c\x01\x2c\x00\x01\x00\x00"
@@ -284,6 +352,7 @@ class TestPartnerPDU:
         assert duref == 126
         assert last_unit == 0x00
         assert data_bsend_lengh == 0
+        assert ftype == 0
 
     def test_build_partner_ack(self) -> None:
         p = Partner()
@@ -424,9 +493,28 @@ class TestPartnerSendRecvBuffers:
         p.set_send_data(b"test")
         assert p._send_data == b"test"
 
+    def test_set_u_send_data_and_retrieve(self) -> None:
+        p = Partner()
+        assert p._send_data is None
+        assert p._send_data2 is None
+        assert p._send_data3 is None
+        assert p._send_data4 is None
+        p.set_u_send_data(b"test1", b"test2", b"test3", b"test4")
+        assert p._send_data == b"test1"
+        assert p._send_data2 == b"test2"
+        assert p._send_data3 == b"test3"
+        assert p._send_data4 == b"test4"
+
     def test_get_recv_data_initially_none(self) -> None:
         p = Partner()
         assert p.get_recv_data() is None
+
+    def test_get_u_recv_data_initially_none(self) -> None:
+        p = Partner()
+        assert p.get_u_recv_data()[0] is None
+        assert p.get_u_recv_data()[1] is None
+        assert p.get_u_recv_data()[2] is None
+        assert p.get_u_recv_data()[3] is None
 
     def test_b_send_no_data(self) -> None:
         p = Partner()
@@ -437,6 +525,12 @@ class TestPartnerSendRecvBuffers:
         p.set_send_data(b"data")
         with pytest.raises(S7ConnectionError, match="Not connected"):
             p.b_send()
+
+    def test_u_send_not_connected(self) -> None:
+        p = Partner()
+        p.set_send_data(b"data")
+        with pytest.raises(S7ConnectionError, match="Not connected"):
+            p.u_send(1)
 
     def test_b_recv_not_connected(self) -> None:
         p = Partner()
@@ -514,9 +608,14 @@ class TestPartnerSendRecvBuffers:
 
     def test_check_as_b_recv_completion_with_data(self) -> None:
         p = Partner()
-        p._async_recv_queue.put(b"queued data")
+        p._async_recv_queue.put([b"queued data1", b"queued data2", b"queued data3", b"queued data4", 1, 4])
         assert p.check_as_b_recv_completion() == 0
-        assert p._recv_data == b"queued data"
+        assert p._recv_data == b"queued data1"
+        assert p._recv_data2 == b"queued data2"
+        assert p._recv_data3 == b"queued data3"
+        assert p._recv_data4 == b"queued data4"
+        assert p._recv_r_id == 1
+        assert p._recv_datablock_count == 4
 
     def test_check_as_b_send_completion_not_in_progress(self) -> None:
         p = Partner()
@@ -768,6 +867,50 @@ class TestDualPartner:
                 t.join(timeout=3.0)
                 assert pb.get_recv_data() == payload, f"Failed for size {size}"
                 assert not errors
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_u_send_u_recv(self) -> None:
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            payload1 = b"12345678"
+            payload2 = b"asdfghj"
+            payload3 = b"qwertz"
+            payload4 = b"9876543210"
+            pa.set_u_send_data(payload1, payload2, payload3, payload4)
+
+            def do_send() -> None:
+                pa.u_send(4)
+
+            t = threading.Thread(target=do_send)
+            t.start()
+            pb.b_recv()
+            t.join(timeout=3.0)
+
+            sent, _, s_err, _ = pa.get_stats()
+            assert sent.value == len(payload1) + len(payload2) + len(payload3) + len(payload4)
+            assert s_err.value == 0
+
+            _, recv, _, r_err = pb.get_stats()
+            assert recv.value == len(payload1) + len(payload2) + len(payload3) + len(payload4)
+            assert r_err.value == 0
+
+            send_t, _ = pa.get_times()
+            assert send_t.value >= 0
+            _, recv_t = pb.get_times()
+            assert recv_t.value >= 0
+            assert pb.get_u_recv_data()[0] == payload1
+            assert pb.get_u_recv_data()[1] == payload2
+            assert pb.get_u_recv_data()[2] == payload3
+            assert pb.get_u_recv_data()[3] == payload4
+            assert pb.get_u_recv_data()[4] == 4
+            assert pb.get_recv_r_id() == 0
+
         finally:
             pa.stop()
             pb.stop()
