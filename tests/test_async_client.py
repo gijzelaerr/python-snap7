@@ -7,7 +7,7 @@ import asyncio
 import logging
 import struct
 from collections.abc import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -341,21 +341,41 @@ def test_async_cotp_accepts_valid_pdu_sizes(parameter: bytes, expected: int) -> 
 
 
 @pytest.mark.asyncio
-async def test_async_disconnect_request_addresses_the_peer_reference() -> None:
-    """The DR carries the CC's source reference as its destination reference (#972)."""
+async def test_async_cc_gives_the_peer_reference() -> None:
     connection = AsyncISOTCPConnection("127.0.0.1")
     # COTP CC from a CP 343-1 (#972): dst-ref 0x0001 echoes ours, src-ref 0x4431 is the CP's.
     connection._parse_cotp_cc(bytes.fromhex("11 d0 0001 4431 00 c0 01 0a c1 02 01 00 c2 02 01 02"))
     assert connection.dst_ref == 0x4431
-    writer = MagicMock()
-    writer.drain = AsyncMock()
-    writer.wait_closed = AsyncMock()
-    connection._writer = writer
+
+
+@pytest.mark.asyncio
+async def test_async_disconnect_sends_a_fin_and_no_disconnect_request() -> None:
+    """disconnect() sends no COTP DR: it sends a FIN and lets the peer close first (#972)."""
+    seen: dict[str, object] = {}
+    done = asyncio.Event()
+
+    async def peer(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        seen["received"] = await reader.read(64)
+        # Our side is only half closed: the peer can still send before it closes.
+        writer.write(b"late")
+        await writer.drain()
+        writer.close()
+        done.set()
+
+    server = await asyncio.start_server(peer, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    connection = AsyncISOTCPConnection("127.0.0.1", port)
+    connection._reader, connection._writer = await asyncio.open_connection("127.0.0.1", port)
     connection.connected = True
+    connection.dst_ref = 0x4431
 
     await connection.disconnect()
+    await asyncio.wait_for(done.wait(), timeout=5.0)
+    server.close()
+    await server.wait_closed()
 
-    writer.write.assert_called_once_with(bytes.fromhex("03 00 00 0c 06 80 4431 0001 00 00"))
+    assert seen["received"] == b""  # a FIN, and no disconnect request before it
+    assert connection._writer is None and connection.connected is False
 
 
 @pytest.mark.parametrize(

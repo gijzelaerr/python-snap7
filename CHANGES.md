@@ -18,6 +18,14 @@ Unreleased
      * data_4: Received data from u_send transmissions
      * datablock_count: 0 for b_send or 1-4 for u_send transmissions.
 
+### Bug fixes
+
+* `disconnect()` no longer sends a COTP disconnect request, in both clients. It closes its sending side of the TCP
+  connection, waits up to one second for the PLC to close its own, and then closes the socket; RFC 1006 releases a
+  connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
+  until the PLC restarted. The reporter confirmed on a CPU 313C behind a CP 343-1 that the resource is now
+  released (#972, #987).
+
 3.6.0
 -----
 

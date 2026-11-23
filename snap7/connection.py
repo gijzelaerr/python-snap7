@@ -9,6 +9,7 @@ import select
 import socket
 import struct
 import logging
+import time
 from enum import IntEnum
 from typing import Optional, Type, Union
 from types import TracebackType
@@ -65,6 +66,10 @@ class ISOTCPConnection:
     # S7 routing parameter codes
     COTP_PARAM_SUBNET_ID = 0xC6
     COTP_PARAM_ROUTING_TSAP = 0xC7
+
+    # How long disconnect() waits, after closing its sending side, for the peer to close
+    # the connection too before it closes the socket itself (#972).
+    DISCONNECT_CLOSE_TIMEOUT = 1.0
 
     def __init__(
         self,
@@ -155,12 +160,19 @@ class ISOTCPConnection:
         if self.socket:
             try:
                 if self.connected:
-                    # Send COTP disconnect request
-                    self._send_cotp_disconnect()
-                self.socket.close()
+                    # RFC 1006 releases a connection by closing the TCP connection; no
+                    # COTP disconnect request is sent. A CP 343-1 answered such a request
+                    # with a reset and kept the connection's resource (#972). Close our
+                    # sending side and let the peer close its own before the socket goes.
+                    self.socket.shutdown(socket.SHUT_WR)
+                    self._await_peer_close()
             except Exception:
                 pass  # Ignore errors during disconnect
             finally:
+                try:
+                    self.socket.close()
+                except Exception:
+                    pass
                 self.socket = None
                 self.connected = False
                 logger.info(f"Disconnected from {self.host}:{self.port}")
@@ -431,26 +443,26 @@ class ISOTCPConnection:
 
         return cotp_pdu[3:]  # Return data portion
 
-    def _send_cotp_disconnect(self) -> None:
-        """Send COTP Disconnect Request."""
+    def _await_peer_close(self) -> None:
+        """Wait, briefly, for the peer to close the connection after our FIN.
+
+        Returns when the peer closes or resets the connection, or when
+        :attr:`DISCONNECT_CLOSE_TIMEOUT` (at most the connection timeout) has passed.
+        Data still in flight is discarded.
+        """
         if self.socket is None:
-            return  # Nothing to disconnect
-
-        dr_pdu = struct.pack(
-            ">BBHHBB",
-            6,  # PDU length
-            self.COTP_DR,  # PDU type
-            self.dst_ref,  # Destination reference
-            self.src_ref,  # Source reference
-            0x00,  # Reason (normal disconnect)
-            0x00,  # Additional info
-        )
-
-        tpkt_frame = self._build_tpkt(dr_pdu)
-        try:
-            self.socket.sendall(tpkt_frame)
-        except socket.error:
-            pass  # Ignore errors during disconnect
+            return
+        deadline = time.monotonic() + min(self.timeout, self.DISCONNECT_CLOSE_TIMEOUT)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            self.socket.settimeout(remaining)
+            try:
+                if not self.socket.recv(1024):
+                    return  # the peer closed the connection
+            except (socket.timeout, OSError):
+                return
 
     def _recv_exact(self, size: int) -> bytes:
         """
