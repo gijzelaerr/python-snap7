@@ -355,7 +355,8 @@ def set_s5time(bytearray_: Buffer, byte_index: int, s5time: Union[timedelta, str
         Buffer with the written value.
 
     Raises:
-        :obj:`ValueError`: if the duration is negative or above 2:46:30.
+        :obj:`TypeError`: if the value is neither a timedelta nor a string.
+        :obj:`ValueError`: if the duration is negative or above 2:46:30, or the string is malformed.
 
     Examples:
         >>> from datetime import timedelta
@@ -365,7 +366,7 @@ def set_s5time(bytearray_: Buffer, byte_index: int, s5time: Union[timedelta, str
     """
     _check_space(bytearray_, byte_index, 2)
     if isinstance(s5time, str):
-        match = re.fullmatch(r"(\d+):(\d{2}):(\d{2})(?:\.(\d{1,6}))?", s5time.strip())
+        match = re.fullmatch(r"(\d+):([0-5]\d):([0-5]\d)(?:\.(\d{1,6}))?", s5time.strip())
         if match is None:
             raise ValueError(f"S5TIME string must look like 'H:MM:SS[.ffffff]', got {s5time!r}")
         hours, minutes, seconds, fraction = match.groups()
@@ -375,6 +376,8 @@ def set_s5time(bytearray_: Buffer, byte_index: int, s5time: Union[timedelta, str
             seconds=int(seconds),
             microseconds=int((fraction or "0").ljust(6, "0")),
         )
+    elif not isinstance(s5time, timedelta):
+        raise TypeError(f"S5TIME must be a timedelta or a 'H:MM:SS[.ffffff]' string, got {type(s5time).__name__}")
     milliseconds = (s5time.days * 86400 + s5time.seconds) * 1000 + s5time.microseconds // 1000
     if milliseconds < 0 or milliseconds > 9_990_000:
         raise ValueError("S5TIME must be between 0:00:00 and 2:46:30")

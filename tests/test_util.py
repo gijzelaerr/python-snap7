@@ -250,15 +250,20 @@ class TestS7util(unittest.TestCase):
         self.assertEqual(row["testS5time"], "0:00:00.100000")
 
     def test_set_s5time(self) -> None:
-        cases = [
+        cases: list[tuple[datetime.timedelta | str, str]] = [
             (datetime.timedelta(0), "0000"),
             (datetime.timedelta(milliseconds=10), "0001"),
             (datetime.timedelta(milliseconds=9990), "0999"),
+            (datetime.timedelta(milliseconds=9999), "0999"),  # just below the 100 ms base
+            (datetime.timedelta(milliseconds=99999), "1999"),  # just below the 1 s base
+            (datetime.timedelta(milliseconds=999900), "2999"),  # just below the 10 s base
             (datetime.timedelta(seconds=10), "1100"),
             (datetime.timedelta(seconds=12, milliseconds=300), "1123"),
             (datetime.timedelta(minutes=1, seconds=5, milliseconds=10), "1650"),  # truncated to 100 ms
             (datetime.timedelta(minutes=10), "2600"),
             (datetime.timedelta(hours=2, minutes=46, seconds=30), "3999"),
+            ("0:00:12.3", "1123"),
+            ("0:00:12.300000", "1123"),
         ]
         for value, expected in cases:
             data = bytearray(2)
@@ -281,6 +286,12 @@ class TestS7util(unittest.TestCase):
             setters.set_s5time(data, 0, datetime.timedelta(milliseconds=-10))
         with self.assertRaises(ValueError):
             setters.set_s5time(data, 0, "12s")
+        with self.assertRaises(ValueError):
+            setters.set_s5time(data, 0, "0:75:99")
+        with self.assertRaises(ValueError):
+            setters.set_s5time(data, 0, "0:00:60")
+        with self.assertRaises(TypeError):
+            setters.set_s5time(data, 0, 1500)  # type: ignore[arg-type]
         with self.assertRaises(ValueError):
             setters.set_s5time(bytearray(1), 0, datetime.timedelta(seconds=1))
 
