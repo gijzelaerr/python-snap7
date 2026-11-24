@@ -28,7 +28,7 @@ Unreleased
 * `b_recv()` returns 1 and not -1 on a timeout, as documented (#1000).
 * `ISOTCPConnection._recv_exact()`: If a timeout occurs before the first byte of a frame, the connection remains
   intact. If a frame is incomplete, an S7ConnectionError is raised and the connection state is reset (#1000).
-* `partner._recv_listener()`: a short `time.sleep(0.001)` after a receive timeout enables reliable threadlocking (#1000). 
+* `partner._recv_listener()`: a short `time.sleep(0.001)` after a receive timeout enables reliable threadlocking (#1000).
 
 3.6.0
 -----
