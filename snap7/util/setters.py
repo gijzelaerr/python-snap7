@@ -334,6 +334,59 @@ def set_udint(bytearray_: Buffer, byte_index: int, udint: int) -> Buffer:
     return bytearray_
 
 
+def set_s5time(bytearray_: Buffer, byte_index: int, s5time: Union[timedelta, str]) -> Buffer:
+    """Set S5TIME value.
+
+    Notes:
+        Datatype `S5TIME` is stored in 2 bytes: bits 12-13 hold the time base
+        (0 = 10 ms, 1 = 100 ms, 2 = 1 s, 3 = 10 s) and bits 0-11 hold the
+        count as three BCD digits (0-999). The smallest time base that holds the
+        value is used, and the value is truncated to that base's resolution,
+        as STEP 7 does for an ``S5T#`` constant.
+        Range: 0 to 2:46:30 (``S5T#2H46M30S``).
+
+    Args:
+        bytearray_: buffer to write to.
+        byte_index: byte index from where to start writing.
+        s5time: duration to write, as a :class:`~datetime.timedelta` or as the
+            string that :func:`~snap7.util.get_s5time` returns, e.g. ``"0:00:12.300000"``.
+
+    Returns:
+        Buffer with the written value.
+
+    Raises:
+        :obj:`ValueError`: if the duration is negative or above 2:46:30.
+
+    Examples:
+        >>> from datetime import timedelta
+        >>> data = bytearray(2)
+        >>> set_s5time(data, 0, timedelta(seconds=12, milliseconds=300))
+            bytearray(b'\\x11#')
+    """
+    _check_space(bytearray_, byte_index, 2)
+    if isinstance(s5time, str):
+        match = re.fullmatch(r"(\d+):(\d{2}):(\d{2})(?:\.(\d{1,6}))?", s5time.strip())
+        if match is None:
+            raise ValueError(f"S5TIME string must look like 'H:MM:SS[.ffffff]', got {s5time!r}")
+        hours, minutes, seconds, fraction = match.groups()
+        s5time = timedelta(
+            hours=int(hours),
+            minutes=int(minutes),
+            seconds=int(seconds),
+            microseconds=int((fraction or "0").ljust(6, "0")),
+        )
+    milliseconds = (s5time.days * 86400 + s5time.seconds) * 1000 + s5time.microseconds // 1000
+    if milliseconds < 0 or milliseconds > 9_990_000:
+        raise ValueError("S5TIME must be between 0:00:00 and 2:46:30")
+    for base_code, base_ms in enumerate((10, 100, 1000, 10000)):
+        count = milliseconds // base_ms
+        if count <= 999:
+            break
+    bcd = ((count // 100) << 8) | (((count // 10) % 10) << 4) | (count % 10)
+    bytearray_[byte_index : byte_index + 2] = ((base_code << 12) | bcd).to_bytes(2, byteorder="big")
+    return bytearray_
+
+
 def set_time(bytearray_: Buffer, byte_index: int, time_string: str) -> Buffer:
     """Set value in bytearray to time
 

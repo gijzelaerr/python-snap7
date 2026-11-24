@@ -249,6 +249,41 @@ class TestS7util(unittest.TestCase):
 
         self.assertEqual(row["testS5time"], "0:00:00.100000")
 
+    def test_set_s5time(self) -> None:
+        cases = [
+            (datetime.timedelta(0), "0000"),
+            (datetime.timedelta(milliseconds=10), "0001"),
+            (datetime.timedelta(milliseconds=9990), "0999"),
+            (datetime.timedelta(seconds=10), "1100"),
+            (datetime.timedelta(seconds=12, milliseconds=300), "1123"),
+            (datetime.timedelta(minutes=1, seconds=5, milliseconds=10), "1650"),  # truncated to 100 ms
+            (datetime.timedelta(minutes=10), "2600"),
+            (datetime.timedelta(hours=2, minutes=46, seconds=30), "3999"),
+        ]
+        for value, expected in cases:
+            data = bytearray(2)
+            setters.set_s5time(data, 0, value)
+            self.assertEqual(data.hex(), expected, value)
+
+    def test_set_s5time_round_trip(self) -> None:
+        test_array = bytearray(_bytearray)
+        row = Row(test_array, test_spec, layout_offset=4)
+        row["testS5time"] = datetime.timedelta(minutes=2, seconds=3)
+        self.assertEqual(row["testS5time"], "0:02:03")
+        row["testS5time"] = "0:00:12.300000"
+        self.assertEqual(row["testS5time"], "0:00:12.300000")
+
+    def test_set_s5time_out_of_range(self) -> None:
+        data = bytearray(2)
+        with self.assertRaises(ValueError):
+            setters.set_s5time(data, 0, datetime.timedelta(hours=2, minutes=46, seconds=31))
+        with self.assertRaises(ValueError):
+            setters.set_s5time(data, 0, datetime.timedelta(milliseconds=-10))
+        with self.assertRaises(ValueError):
+            setters.set_s5time(data, 0, "12s")
+        with self.assertRaises(ValueError):
+            setters.set_s5time(bytearray(1), 0, datetime.timedelta(seconds=1))
+
     def test_get_dt(self) -> None:
         """
         DATE_AND_TIME extraction from bytearray

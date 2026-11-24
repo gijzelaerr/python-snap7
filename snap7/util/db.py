@@ -109,6 +109,7 @@ from snap7.util import (
     set_wchar,
     set_usint,
     set_sint,
+    set_s5time,
     set_time,
     set_lreal,
     set_date,
@@ -716,6 +717,9 @@ class Row:
 
         if type_ == "TIME" and isinstance(value, str):
             return set_time(bytearray_, byte_index, value)
+
+        if type_ == "S5TIME" and isinstance(value, (str, timedelta)):
+            return set_s5time(bytearray_, byte_index, value)
 
         if type_ == "DATE" and isinstance(value, date):
             return set_date(bytearray_, byte_index, value)

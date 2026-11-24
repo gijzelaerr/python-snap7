@@ -17,6 +17,10 @@ Unreleased
      * data_3: Received data from u_send transmissions
      * data_4: Received data from u_send transmissions
      * datablock_count: 0 for b_send or 1-4 for u_send transmissions.
+* `set_s5time()` writes an `S5TIME` value from a `timedelta`, or from the string that `get_s5time()` returns. It picks
+  the smallest time base that holds the value and truncates to that base's resolution, as STEP 7 does for an `S5T#`
+  constant. `S5TIME` tags can now be written with `write_tag` and `encode_tag`, and `Row` sets `S5TIME` fields.
+  Previously writing an `S5TIME` tag raised `ValueError` (#PR).
 
 ### Bug fixes
 
