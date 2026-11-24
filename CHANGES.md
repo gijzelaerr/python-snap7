@@ -20,7 +20,7 @@ Unreleased
 * `set_s5time()` writes an `S5TIME` value from a `timedelta`, or from the string that `get_s5time()` returns. It picks
   the smallest time base that holds the value and truncates to that base's resolution, as STEP 7 does for an `S5T#`
   constant. `S5TIME` tags can now be written with `write_tag` and `encode_tag`, and `Row` sets `S5TIME` fields.
-  Previously writing an `S5TIME` tag raised `ValueError` (#PR).
+  Previously writing an `S5TIME` tag raised `ValueError` (#1002).
 
 ### Bug fixes
 
