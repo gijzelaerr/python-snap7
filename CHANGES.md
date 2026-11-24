@@ -18,7 +18,17 @@ Unreleased
      * data_4: Received data from u_send transmissions
      * datablock_count: 0 for b_send or 1-4 for u_send transmissions.
 
-* New function: partner.set_socket_timeout(timeout).
+### Bug fixes
+
+* `disconnect()` no longer sends a COTP disconnect request, in both clients. It closes its sending side of the TCP
+  connection, waits up to one second for the PLC to close its own, and then closes the socket; RFC 1006 releases a
+  connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
+  until the PLC restarted. The reporter confirmed on a CPU 313C behind a CP 343-1 that the resource is now
+  released (#972, #987).
+* `b_recv()` returns 1 and not -1 on a timeout, as documented (#1000).
+* `ISOTCPConnection._recv_exact()`: If a timeout occurs before the first byte of a frame, the connection remains
+  intact. If a frame is incomplete, an S7ConnectionError is raised and the connection state is reset (#1000).
+* `partner._recv_listener()`: a short `time.sleep(0.001)` after a receive timeout enables reliable threadlocking (#1000). 
 
 3.6.0
 -----
