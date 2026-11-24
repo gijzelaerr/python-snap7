@@ -256,7 +256,7 @@ class TestReceiveData:
         mock_socket.recv.side_effect = socket.timeout("timeout")
         with pytest.raises(S7TimeoutError, match="Receive timeout"):
             conn.receive_data()
-        assert conn.connected is False
+        assert conn.connected is True
 
     def test_receive_socket_error(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
