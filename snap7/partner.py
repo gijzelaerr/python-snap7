@@ -11,6 +11,7 @@ import struct
 import logging
 import sys
 import threading
+import time
 from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
 from typing import Any
@@ -1060,6 +1061,7 @@ class Partner:
                         except OSError:
                             pass
             except (S7TimeoutError, socket.timeout):
+                time.sleep(0.001)
                 continue
             except Exception as e:
                 self.recv_errors += 1
