@@ -973,6 +973,19 @@ class TestDualPartner:
             pa.stop()
             pb.stop()
 
+    def test_status_after_peer_closes(self) -> None:
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+            sock_b.close()
+            pa.b_recv()
+            assert pa.get_status().value == PartnerStatus.RUNNING
+        finally:
+            pa.stop()
+            pb.stop()
+
     def test_recv_callback_fires(self) -> None:
         sock_a, sock_b = _make_socket_pair()
         pa, pb = Partner(), Partner()
@@ -1287,7 +1300,7 @@ class TestDualPartner:
             pb.stop()
 
     def test_b_recv_error_returns_negative(self) -> None:
-        """b_recv returns -1 on receive error when no data arrives."""
+        """b_recv returns -1 on receive error after the peer closes."""
         sock_a, sock_b = _make_socket_pair()
         pa, pb = Partner(), Partner()
         try:
@@ -1301,6 +1314,38 @@ class TestDualPartner:
             pa.stop()
             pb.stop()
 
+    def test_b_recv_timeout_returns_1(self) -> None:
+        """b_recv returns 1 on timeout error when no data arrives."""
+        sock_a, sock_b = _make_socket_pair()
+        sock_b.settimeout(0.1)
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+            result = pb.b_recv()
+            assert result == 1
+            assert pb._connection.connected is True
+        finally:
+            pa.stop()
+            pb.stop()
+
+    def test_status_after_as_b_recv(self) -> None:
+        """Async receive without data - the status staying 2 = connected."""
+        sock_a, sock_b = _make_socket_pair()
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+
+            assert pb.as_b_recv() == 0
+
+            result = pb.wait_as_b_recv_completion(timeout=1000)
+
+            assert result == -1
+            assert pb.get_status().value == PartnerStatus.CONNECTED
+        finally:
+            pa.stop()
+            pb.stop()
 
 # ---------------------------------------------------------------------------
 # Passive partner accept/listen tests
