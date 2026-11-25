@@ -1324,7 +1324,7 @@ class TestDualPartner:
             _wire_partner(pb, sock_b)
             result = pb.b_recv()
             assert result == 1
-            assert pb._connection.connected is True
+            assert pb.get_status().value == PartnerStatus.CONNECTED
         finally:
             pa.stop()
             pb.stop()
