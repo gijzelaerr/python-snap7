@@ -219,14 +219,21 @@ class ISOTCPConnection:
             version, reserved, length = struct.unpack(">BBH", tpkt_header)
 
             if version != 3:
+                self.connected = False
                 raise S7ConnectionError(f"Invalid TPKT version: {version}")
 
             # Receive remaining data
             remaining = length - 4
             if length < 7:
+                self.connected = False
                 raise S7ConnectionError("Invalid TPKT length")
 
-            payload = self._recv_exact(remaining)
+            try:
+                payload = self._recv_exact(remaining)
+
+            except S7TimeoutError:
+                self.connected = False
+                raise S7ConnectionError("Timeout receiving payload data")
 
             # Parse COTP header and extract data
             logger.debug(f"Received TPKT: version={version} length={length} payload ({len(payload)} bytes): {payload.hex(' ')}")
