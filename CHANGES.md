@@ -17,6 +17,10 @@ Unreleased
      * data_3: Received data from u_send transmissions
      * data_4: Received data from u_send transmissions
      * datablock_count: 0 for b_send or 1-4 for u_send transmissions.
+* `set_s5time()` writes an `S5TIME` value from a `timedelta`, or from the string that `get_s5time()` returns. It picks
+  the smallest time base that holds the value and truncates to that base's resolution, as STEP 7 does for an `S5T#`
+  constant. `S5TIME` tags can now be written with `write_tag` and `encode_tag`, and `Row` sets `S5TIME` fields.
+  Previously writing an `S5TIME` tag raised `ValueError` (#1002).
 
 ### Bug fixes
 
@@ -25,10 +29,11 @@ Unreleased
   connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
   until the PLC restarted. The reporter confirmed on a CPU 313C behind a CP 343-1 that the resource is now
   released (#972, #987).
-* `b_recv()` returns 1 and not -1 on a timeout, as documented (#1000).
+* get_status(): A lost connection drops the status from 2 (connected) to 1 (started). Previously, the status remained
+  at 2. (#1000).
+* `b_recv()` returns 1 and not -1 on a timeout, as documented. The read timeout no longer drops the connection (#1000).
 * `ISOTCPConnection._recv_exact()`: If a timeout occurs before the first byte of a frame, the connection remains
   intact. If a frame is incomplete, an S7ConnectionError is raised and the connection state is reset (#1000).
-* `partner._recv_listener()`: a short `time.sleep(0.001)` after a receive timeout enables reliable threadlocking (#1000).
 
 3.6.0
 -----
