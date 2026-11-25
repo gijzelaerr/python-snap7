@@ -1,6 +1,7 @@
 """Tests for the Tag parser and loaders."""
 
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -207,9 +208,14 @@ class TestParseTagKnownSize:
         assert tag.size == 2
         assert decode_tag(tag, bytearray(bytes.fromhex("0123"))) == util.get_s5time(bytearray(bytes.fromhex("0123")), 0)
 
-    def test_s5time_write_is_refused(self) -> None:
-        with pytest.raises(ValueError, match="S5TIME"):
-            encode_tag(parse_tag("DB1.DBW0:S5TIME"), bytearray(2), "10ms")
+    def test_s5time_write_round_trips(self) -> None:
+        tag = parse_tag("DB1.DBW0:S5TIME")
+        buf = bytearray(2)
+        encode_tag(tag, buf, timedelta(seconds=12, milliseconds=300))
+        assert buf == bytearray(bytes.fromhex("1123"))
+        assert decode_tag(tag, buf) == "0:00:12.300000"
+        encode_tag(tag, buf, decode_tag(tag, bytearray(bytes.fromhex("2600"))))
+        assert buf == bytearray(bytes.fromhex("2600"))
 
 
 class TestLoadCsv:

@@ -638,6 +638,9 @@ def _encode_scalar(datatype: str, buf: bytearray, offset: int, value: Any, bit: 
     if datatype == "DATE":
         util.set_date(buf, offset, value)
         return
+    if datatype == "S5TIME":
+        util.set_s5time(buf, offset, value)
+        return
     if datatype == "DINT":
         util.set_dint(buf, offset, value)
         return
