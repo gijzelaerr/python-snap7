@@ -24,6 +24,9 @@ Unreleased
 
 ### Bug fixes
 
+* `Row` reads and writes `LINT`, `ULINT`, `LWORD`, `LTIME`, `LTOD` and `LDT` fields, and accepts `DT` as a short name for
+  `DATE_AND_TIME`, as tags already do. Previously a layout with one of these types raised a bare `ValueError` on read
+  and write, although the getters and setters exist (#PR).
 * `disconnect()` no longer sends a COTP disconnect request, in both clients. It closes its sending side of the TCP
   connection, waits up to one second for the PLC to close its own, and then closes the socket; RFC 1006 releases a
   connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
