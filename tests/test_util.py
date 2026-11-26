@@ -295,6 +295,31 @@ class TestS7util(unittest.TestCase):
         with self.assertRaises(ValueError):
             setters.set_s5time(bytearray(1), 0, datetime.timedelta(seconds=1))
 
+    def test_row_64bit_types(self) -> None:
+        spec = """
+0     testLint     LINT
+8     testUlint    ULINT
+16    testLword    LWORD
+24    testLtime    LTIME
+32    testLtod     LTOD
+40    testLdt      LDT
+48    testDt       DT
+"""
+        row = Row(bytearray(56), spec, layout_offset=0)
+        values: dict[str, object] = {
+            "testLint": -9_000_000_000,
+            "testUlint": 2**64 - 1,
+            "testLword": 0xDEADBEEFCAFE,
+            "testLtime": datetime.timedelta(seconds=-1, milliseconds=-500),
+            "testLtod": datetime.timedelta(hours=12, minutes=30),
+            "testLdt": datetime.datetime(2024, 1, 15, 10, 30, 0, 123456),
+        }
+        for name, value in values.items():
+            row[name] = value
+            self.assertEqual(row[name], value, name)
+        row["testDt"] = datetime.datetime(2020, 7, 12, 17, 32, 2, 854000)
+        self.assertEqual(row["testDt"], "2020-07-12T17:32:02.854000")
+
     def test_get_dt(self) -> None:
         """
         DATE_AND_TIME extraction from bytearray

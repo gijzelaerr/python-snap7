@@ -116,6 +116,12 @@ from snap7.util import (
     set_tod,
     set_dtl,
     set_dt,
+    set_lint,
+    set_ulint,
+    set_lword,
+    set_ltime,
+    set_ltod,
+    set_ldt,
     get_bool,
     get_fstring,
     get_string,
@@ -139,6 +145,12 @@ from snap7.util import (
     get_char,
     get_wchar,
     get_dtl,
+    get_lint,
+    get_ulint,
+    get_lword,
+    get_ltime,
+    get_ltod,
+    get_ldt,
 )
 
 logger = getLogger(__name__)
@@ -631,6 +643,13 @@ class Row:
                 "CHAR": get_char,
                 "WCHAR": get_wchar,
                 "DTL": get_dtl,
+                "DT": get_dt,
+                "LINT": get_lint,
+                "ULINT": get_ulint,
+                "LWORD": get_lword,
+                "LTIME": get_ltime,
+                "LTOD": get_ltod,
+                "LDT": get_ldt,
             }
             if type_ in type_to_func:
                 return type_to_func[type_](bytearray_, byte_index)
@@ -711,6 +730,9 @@ class Row:
                 "BYTE": set_byte,
                 "USINT": set_usint,
                 "SINT": set_sint,
+                "LINT": set_lint,
+                "ULINT": set_ulint,
+                "LWORD": set_lword,
             }
             if type_ in type_to_func:
                 return type_to_func[type_](bytearray_, byte_index, value)
@@ -730,7 +752,16 @@ class Row:
         if type_ == "DTL" and isinstance(value, datetime):
             return set_dtl(bytearray_, byte_index, value)
 
-        if type_ == "DATE_AND_TIME" and isinstance(value, datetime):
+        if type_ == "LTIME" and isinstance(value, timedelta):
+            return set_ltime(bytearray_, byte_index, value)
+
+        if type_ == "LTOD" and isinstance(value, timedelta):
+            return set_ltod(bytearray_, byte_index, value)
+
+        if type_ == "LDT" and isinstance(value, datetime):
+            return set_ldt(bytearray_, byte_index, value)
+
+        if type_ in ("DATE_AND_TIME", "DT") and isinstance(value, datetime):
             return set_dt(bytearray_, byte_index, value)
 
         raise ValueError
