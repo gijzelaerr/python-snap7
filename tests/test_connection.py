@@ -325,6 +325,7 @@ class TestRecvExact:
             conn.receive_data()
         assert conn.connected is False
 
+
 class TestConnect:
     """Test connect() orchestration."""
 
