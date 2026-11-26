@@ -497,9 +497,10 @@ class ISOTCPConnection:
                     self.connected = False
                     raise S7ConnectionError("Connection closed by peer")
                 data.extend(chunk)
-            except socket.timeout:
+            except socket.timeout as e:
                 if len(data) > 0:
                     self.connected = False
+                    raise S7ConnectionError(f"Receive error: {e}")
                 raise S7TimeoutError("Receive timeout")
             except socket.error as e:
                 self.connected = False
