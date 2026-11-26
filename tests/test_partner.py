@@ -1361,6 +1361,20 @@ class TestDualPartner:
             pa.stop()
             pb.stop()
 
+    def test_status_after_timeout_part_header(self) -> None:
+        sock_a, sock_b = _make_socket_pair()
+        sock_b.settimeout(0.1)
+        pa, pb = Partner(), Partner()
+        try:
+            _wire_partner(pa, sock_a)
+            _wire_partner(pb, sock_b)
+            sock_a.sendall(b"\x03\x00")
+            assert pb.b_recv() == -1
+            assert pb.get_status().value == PartnerStatus.RUNNING
+        finally:
+            pa.stop()
+            pb.stop()
+
 
 # ---------------------------------------------------------------------------
 # Passive partner accept/listen tests
