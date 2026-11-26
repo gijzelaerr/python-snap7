@@ -1,6 +1,7 @@
 """Tests for connection heartbeat and automatic reconnection features."""
 
 import logging
+import socket
 import threading
 import time
 import unittest
@@ -8,7 +9,8 @@ import unittest
 import pytest
 
 from snap7.client import Client
-from snap7.error import S7ConnectionError
+from snap7.datatypes import S7Area, S7WordLen
+from snap7.error import S7ConnectionError, S7TimeoutError
 from snap7.server import Server
 from snap7.tags import Tag
 from snap7.type import Area, SrvArea
@@ -464,5 +466,94 @@ class TestBackwardCompatibility(unittest.TestCase):
             client.mb_write(0, 4, bytearray([0xAA, 0xBB, 0xCC, 0xDD]))
             data = client.mb_read(0, 4)
             assert data == bytearray([0xAA, 0xBB, 0xCC, 0xDD])
+        finally:
+            client.disconnect()
+
+
+class _LateReplySocket:
+    """A socket whose next ``recv`` times out, as when the PLC answers too late.
+
+    The reply that was not read stays in the real socket, so it is the first
+    thing a later ``recv`` returns.
+    """
+
+    def __init__(self, sock: socket.socket) -> None:
+        self._sock = sock
+        self._timed_out = False
+
+    def recv(self, size: int) -> bytes:
+        if not self._timed_out:
+            self._timed_out = True
+            raise socket.timeout("timed out")
+        return self._sock.recv(size)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._sock, name)
+
+
+@pytest.mark.client
+class TestReadTimeout(unittest.TestCase):
+    """A reply that does not arrive in time ends the client's connection."""
+
+    server: Server
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.server = Server()
+        cls.server.register_area(SrvArea.DB, 1, bytearray(100))
+        cls.server.start(tcp_port=tcpport)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls.server:
+            cls.server.stop()
+            cls.server.destroy()
+
+    @staticmethod
+    def _make_next_reply_late(client: Client) -> None:
+        assert client.connection is not None and client.connection.socket is not None
+        client.connection.socket = _LateReplySocket(client.connection.socket)  # type: ignore[assignment]
+
+    def test_read_timeout_drops_the_connection(self) -> None:
+        client = Client()
+        client.connect(ip, rack, slot, tcpport)
+        try:
+            self._make_next_reply_late(client)
+            with pytest.raises(S7TimeoutError):
+                client.db_read(db_number, 0, 4)
+
+            assert client.connection is not None and client.connection.connected is False
+            with pytest.raises(S7ConnectionError):
+                client.db_read(db_number, 0, 4)
+        finally:
+            client.disconnect()
+
+    def test_late_reply_is_not_read_as_the_next_answer(self) -> None:
+        client = Client()
+        client.connect(ip, rack, slot, tcpport)
+        try:
+            request = client.protocol.build_read_request(S7Area.DB, db_number, 0, S7WordLen.BYTE, 4)
+            self._make_next_reply_late(client)
+            with pytest.raises(S7TimeoutError):
+                client.iso_exchange_buffer(bytearray(request))
+
+            # iso_exchange_buffer does not match replies to requests, so on an open
+            # connection this call would return the reply to the request above.
+            with pytest.raises(S7ConnectionError):
+                client.iso_exchange_buffer(bytearray(request))
+        finally:
+            client.disconnect()
+
+    def test_auto_reconnect_after_a_read_timeout(self) -> None:
+        reconnected = threading.Event()
+        client = Client(auto_reconnect=True, max_retries=3, retry_delay=0.1, on_reconnect=reconnected.set)
+        client.connect(ip, rack, slot, tcpport)
+        try:
+            self._make_next_reply_late(client)
+            with pytest.raises(S7TimeoutError):
+                client.db_read(db_number, 0, 4)
+
+            assert len(client.db_read(db_number, 0, 4)) == 4
+            assert reconnected.is_set()
         finally:
             client.disconnect()
