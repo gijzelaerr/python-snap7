@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from snap7 import DB, Row
 from snap7.type import Area, WordLen
-from snap7.util import get_byte, get_time, get_fstring, get_int, get_string, get_wstring
+from snap7.util import get_byte, get_s5time, get_time, get_fstring, get_int, get_string, get_wstring
 from snap7.util import set_byte, set_time, set_fstring, set_int, setters
 from snap7.util.db import print_row
 
@@ -248,6 +248,14 @@ class TestS7util(unittest.TestCase):
         row = Row(test_array, test_spec, layout_offset=4)
 
         self.assertEqual(row["testS5time"], "0:00:00.100000")
+
+    def test_get_s5time_ignores_bits_14_and_15(self) -> None:
+        for raw in ("1123", "5123", "9123", "d123"):
+            self.assertEqual(get_s5time(bytearray.fromhex(raw), 0), "0:00:12.300000", raw)
+
+    def test_get_s5time_rejects_non_bcd(self) -> None:
+        with self.assertRaises(ValueError):
+            get_s5time(bytearray.fromhex("1a23"), 0)
 
     def test_set_s5time(self) -> None:
         cases: list[tuple[datetime.timedelta | str, str]] = [
