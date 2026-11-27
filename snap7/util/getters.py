@@ -615,7 +615,7 @@ def get_ltime(bytearray_: Buffer, byte_index: int) -> timedelta:
         byte_index: byte index from where to start reading.
 
     Returns:
-        timedelta value.
+        timedelta value, truncated towards zero to whole microseconds.
 
     Examples:
         >>> data = bytearray(8)
@@ -625,7 +625,10 @@ def get_ltime(bytearray_: Buffer, byte_index: int) -> timedelta:
     """
     raw = bytearray_[byte_index : byte_index + 8]
     nanoseconds: int = struct.unpack(">q", struct.pack("8B", *raw))[0]
-    return timedelta(microseconds=nanoseconds // 1000)
+    # timedelta holds microseconds; drop the sub-microsecond part towards zero, so that
+    # -1500 ns reads as -1 us like 1500 ns reads as 1 us (floor division would give -2 us).
+    microseconds = abs(nanoseconds) // 1000
+    return timedelta(microseconds=-microseconds if nanoseconds < 0 else microseconds)
 
 
 def get_ltod(bytearray_: Buffer, byte_index: int) -> timedelta:
