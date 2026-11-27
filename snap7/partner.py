@@ -11,6 +11,7 @@ import struct
 import logging
 import sys
 import threading
+import time
 from typing import Optional, Tuple, Callable, Type
 from queue import Queue, Empty
 from typing import Any
@@ -478,7 +479,7 @@ class Partner:
             logger.debug(f"Received {bytes_rcv} bytes synchronously")
             return 0
 
-        except socket.timeout:
+        except (S7TimeoutError, socket.timeout):
             self._recv_data = None
             return 1  # Timeout
         except Exception as e:
@@ -730,7 +731,7 @@ class Partner:
         Returns:
             Status code (0=stopped, 1=running, 2=connected)
         """
-        if self.connected:
+        if self.connected and self._connection is not None and self._connection.connected:
             return c_int32(PartnerStatus.CONNECTED)
         elif self.running:
             return c_int32(PartnerStatus.RUNNING)
@@ -1060,10 +1061,7 @@ class Partner:
                         except OSError:
                             pass
             except (S7TimeoutError, socket.timeout):
-                # Timeout is expected — restore connected flag since
-                # ISOTCPConnection.receive_data() sets it to False on timeout
-                if conn is not None:
-                    conn.connected = True
+                time.sleep(0.001)
                 continue
             except Exception as e:
                 self.recv_errors += 1
