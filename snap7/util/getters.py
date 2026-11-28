@@ -306,29 +306,35 @@ def get_udint(bytearray_: Buffer, byte_index: int) -> int:
 
 
 def get_s5time(bytearray_: Buffer, byte_index: int) -> str:
-    micro_to_milli = 1000
-    data_bytearray = bytearray_[byte_index : byte_index + 2]
-    s5time_data_int_like = list(data_bytearray.hex())
-    if s5time_data_int_like[0] == "0":
-        # 10ms
-        time_base = 10
-    elif s5time_data_int_like[0] == "1":
-        # 100ms
-        time_base = 100
-    elif s5time_data_int_like[0] == "2":
-        # 1s
-        time_base = 1000
-    elif s5time_data_int_like[0] == "3":
-        # 10s
-        time_base = 10000
-    else:
-        raise ValueError("This value should not be greater than 3")
+    """Get S5TIME value from bytearray.
 
-    s5time_bcd = int(s5time_data_int_like[1]) * 100 + int(s5time_data_int_like[2]) * 10 + int(s5time_data_int_like[3])
-    s5time_microseconds = time_base * s5time_bcd
-    s5time = timedelta(microseconds=s5time_microseconds * micro_to_milli)
-    # here we must return a string like variable, otherwise nothing will return
-    return "".join(str(s5time))
+    Notes:
+        Datatype `S5TIME` is stored in 2 bytes: bits 12-13 hold the time base
+        (0 = 10 ms, 1 = 100 ms, 2 = 1 s, 3 = 10 s) and bits 0-11 hold the
+        count as three BCD digits. Bits 14 and 15 are not part of the value
+        and are ignored, as the CPU does.
+
+    Args:
+        bytearray_: buffer to read.
+        byte_index: byte index from where to start reading.
+
+    Returns:
+        The duration as the string form of a :class:`~datetime.timedelta`, e.g. ``"0:00:12.300000"``.
+
+    Raises:
+        :obj:`ValueError`: if a count digit is not a BCD digit (0-9).
+
+    Examples:
+        >>> get_s5time(bytearray(b"\\x11\\x23"), 0)
+            '0:00:12.300000'
+    """
+    word = int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big")
+    time_base_ms = (10, 100, 1000, 10000)[(word >> 12) & 0x3]
+    digits = ((word >> 8) & 0xF, (word >> 4) & 0xF, word & 0xF)
+    if any(digit > 9 for digit in digits):
+        raise ValueError(f"S5TIME count {word & 0xFFF:03x} is not BCD")
+    count = digits[0] * 100 + digits[1] * 10 + digits[2]
+    return str(timedelta(milliseconds=count * time_base_ms))
 
 
 def get_dt(bytearray_: Buffer, byte_index: int) -> str:

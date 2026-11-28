@@ -24,6 +24,9 @@ Unreleased
 
 ### Bug fixes
 
+* `get_s5time()` ignores bits 14 and 15 of the word, which are not part of an `S5TIME` value. Previously a value with
+  either bit set raised `ValueError: This value should not be greater than 3`. A count digit that is not BCD now
+  raises a `ValueError` that says so, instead of an `int()` parse error (#1005).
 * `get_ltime()` truncates a negative value towards zero to whole microseconds, as it already did for a positive one.
   Previously `LTIME#-1500NS` read as -2 µs and `LTIME#-999NS` as -1 µs (#1006).
 * `Row` reads and writes `LINT`, `ULINT`, `LWORD`, `LTIME`, `LTOD` and `LDT` fields, and accepts `DT` as a short name for
