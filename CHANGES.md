@@ -40,7 +40,6 @@ Unreleased
 * get_status(): A lost connection drops the status from 2 (connected) to 1 (started). Previously, the status remained
   at 2. (#1000).
 * `b_recv()` returns 1 and not -1 on a timeout, as documented (#1000).
-* A client read timeout no longer drops the connection (#1000).
 * `ISOTCPConnection._recv_exact()`: If a timeout occurs before the first byte of a frame, the connection remains
   intact. If a frame is incomplete, an S7ConnectionError is raised and the connection state is reset (#1000).
 

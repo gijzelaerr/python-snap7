@@ -249,6 +249,21 @@ class Client(ClientMixin):
         self._rate_limiter.acquire()
         conn.send_data(request)
 
+    @staticmethod
+    def _receive(conn: ISOTCPConnection) -> bytes:
+        """Receive one PDU. A timeout ends the connection.
+
+        The connection itself stays usable after a timeout that read nothing,
+        which is what a partner waiting on an idle link needs. A client is
+        waiting for a reply: one that arrives after the timeout would be read
+        as the answer to a later request.
+        """
+        try:
+            return conn.receive_data()
+        except S7TimeoutError:
+            conn.connected = False
+            raise
+
     def _send_receive(self, request: bytes, max_stale_retries: int = 3) -> dict[str, Any]:
         """Send a request and receive/parse the response with stale packet retry.
 
@@ -274,7 +289,7 @@ class Client(ClientMixin):
             self._send_data(conn, request)
 
             for attempt in range(max_stale_retries + 1):
-                response_data = conn.receive_data()
+                response_data = self._receive(conn)
                 response = self.protocol.parse_response(response_data)
 
                 try:
@@ -1108,7 +1123,7 @@ class Client(ClientMixin):
                 if not conn.data_available(timeout=wait_time):
                     raise S7TimeoutError(f"Timeout waiting for {remaining} parallel response(s)")
 
-                response_data = conn.receive_data()
+                response_data = self._receive(conn)
                 response = self.protocol.parse_response(response_data)
                 resp_seq = response["sequence"]
 
@@ -1547,7 +1562,7 @@ class Client(ClientMixin):
             if max_slice <= 0:
                 raise S7ProtocolError("Negotiated PDU is too small for download")
             for _ in range(1000):
-                request_data = conn.receive_data()
+                request_data = self._receive(conn)
                 sequence = self.protocol.parse_download_service_request(request_data, 0x1B, block_num)
                 fragment = bytes(data[offset : offset + max_slice])
                 offset += len(fragment)
@@ -1558,7 +1573,7 @@ class Client(ClientMixin):
             else:
                 raise S7ProtocolError("Download exceeded fragment limit")
 
-            request_data = conn.receive_data()
+            request_data = self._receive(conn)
             sequence = self.protocol.parse_download_service_request(request_data, 0x1C, block_num)
             self._send_data(conn, self.protocol.build_download_ended_response(sequence))
 
@@ -2136,7 +2151,7 @@ class Client(ClientMixin):
         conn = self._get_connection()
 
         self._send_data(conn, bytes(data))
-        response = conn.receive_data()
+        response = self._receive(conn)
         return bytearray(response)
 
     # Convenience methods for specific memory areas
