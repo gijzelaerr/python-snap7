@@ -26,7 +26,7 @@ Unreleased
 
 * `get_s5time()` ignores bits 14 and 15 of the word, which are not part of an `S5TIME` value. Previously a value with
   either bit set raised `ValueError: This value should not be greater than 3`. A count digit that is not BCD now
-  raises a `ValueError` that says so, instead of an `int()` parse error (#PR).
+  raises a `ValueError` that says so, instead of an `int()` parse error (#1005).
 * `Row` reads and writes `LINT`, `ULINT`, `LWORD`, `LTIME`, `LTOD` and `LDT` fields, and accepts `DT` as a short name for
   `DATE_AND_TIME`, as tags already do. Previously a layout with one of these types raised a bare `ValueError` on read
   and write, although the getters and setters exist (#1004).
