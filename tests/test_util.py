@@ -847,6 +847,14 @@ class TestNewSetters(unittest.TestCase):
         result = get_ltime(data, 0)
         self.assertEqual(result, datetime.timedelta(seconds=1))
 
+    def test_get_ltime_negative_sub_microsecond(self) -> None:
+        from snap7.util.getters import get_ltime
+
+        data = bytearray(8)
+        for ns, expected_us in ((1500, 1), (-1500, -1), (999, 0), (-999, 0), (-1000, -1), (-1_000_001_500, -1_000_001)):
+            struct.pack_into(">q", data, 0, ns)
+            self.assertEqual(get_ltime(data, 0), datetime.timedelta(microseconds=expected_us), ns)
+
     def test_get_ltod(self) -> None:
         from snap7.util.getters import get_ltod
 

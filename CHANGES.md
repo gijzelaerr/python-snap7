@@ -24,6 +24,8 @@ Unreleased
 
 ### Bug fixes
 
+* `get_ltime()` truncates a negative value towards zero to whole microseconds, as it already did for a positive one.
+  Previously `LTIME#-1500NS` read as -2 µs and `LTIME#-999NS` as -1 µs (#1006).
 * `Row` reads and writes `LINT`, `ULINT`, `LWORD`, `LTIME`, `LTOD` and `LDT` fields, and accepts `DT` as a short name for
   `DATE_AND_TIME`, as tags already do. Previously a layout with one of these types raised a bare `ValueError` on read
   and write, although the getters and setters exist (#1004).
