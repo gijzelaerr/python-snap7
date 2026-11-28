@@ -10,6 +10,17 @@ Buffer = Union[bytearray, memoryview]
 logger = getLogger(__name__)
 
 
+def _require_bytes(bytearray_: Buffer, byte_index: int, size: int, type_name: str) -> None:
+    """Raise ``ValueError`` if fewer than ``size`` bytes follow ``byte_index``.
+
+    Slicing past the end of a buffer silently returns fewer bytes, so getters
+    that decode a slice without ``struct`` would otherwise return a wrong value.
+    """
+    available = max(0, len(bytearray_) - byte_index)
+    if available < size:
+        raise ValueError(f"{type_name} needs {size} bytes, but only {available} are in the buffer at index {byte_index}")
+
+
 def get_bool(bytearray_: Buffer, byte_index: int, bool_index: int) -> bool:
     """Get the boolean value from location in bytearray
 
@@ -176,6 +187,7 @@ def get_fstring(
         >>> get_fstring(data, 0, 15, remove_padding=False)
         'hello world    '
     """
+    _require_bytes(bytearray_, byte_index, max_length, "FSTRING")
     raw = bytes(bytearray_[byte_index : byte_index + max_length])
     string = raw.decode(encoding)
 
@@ -322,12 +334,14 @@ def get_s5time(bytearray_: Buffer, byte_index: int) -> str:
         The duration as the string form of a :class:`~datetime.timedelta`, e.g. ``"0:00:12.300000"``.
 
     Raises:
-        :obj:`ValueError`: if a count digit is not a BCD digit (0-9).
+        :obj:`ValueError`: if a count digit is not a BCD digit (0-9), or the buffer
+            holds fewer than 2 bytes from ``byte_index``.
 
     Examples:
         >>> get_s5time(bytearray(b"\\x11\\x23"), 0)
             '0:00:12.300000'
     """
+    _require_bytes(bytearray_, byte_index, 2, "S5TIME")
     word = int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big")
     time_base_ms = (10, 100, 1000, 10000)[(word >> 12) & 0x3]
     digits = ((word >> 8) & 0xF, (word >> 4) & 0xF, word & 0xF)
@@ -408,6 +422,7 @@ def get_time(bytearray_: Buffer, byte_index: int) -> str:
         >>> get_time(data, 0)
             '24:20:31:23.647'
     """
+    _require_bytes(bytearray_, byte_index, 4, "TIME")
     data_bytearray = bytearray_[byte_index : byte_index + 4]
     bits = 32
     sign = 1
