@@ -31,6 +31,7 @@ from .setters import (
 )
 
 from .getters import (
+    BufferTooShortError,
     get_bool,
     get_fstring,
     get_string,
@@ -64,6 +65,7 @@ from .getters import (
 )
 
 __all__ = [
+    "BufferTooShortError",
     "get_bool",
     "get_real",
     "get_dword",

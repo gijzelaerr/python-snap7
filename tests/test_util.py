@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 from snap7 import DB, Row
 from snap7.type import Area, WordLen
+from snap7.util import BufferTooShortError, getters
 from snap7.util import get_byte, get_s5time, get_time, get_fstring, get_int, get_string, get_wstring
 from snap7.util import set_byte, set_time, set_fstring, set_int, setters
 from snap7.util.db import print_row
@@ -417,20 +418,46 @@ class TestS7util(unittest.TestCase):
             pass
 
     def test_getters_reject_a_short_buffer(self) -> None:
-        def fstring5(buf: bytearray, index: int) -> str:
-            return get_fstring(buf, index, 5)
+        def fstring5(buf: bytearray, index: int) -> object:
+            return getters.get_fstring(buf, index, 5)
 
-        cases: tuple[tuple[Callable[[bytearray, int], str], int], ...] = (
-            (get_s5time, 2),
-            (get_time, 4),
-            (fstring5, 5),
-        )
-        for getter, size in cases:
+        def bool0(buf: bytearray, index: int) -> object:
+            return getters.get_bool(buf, index, 0)
+
+        sizes = {
+            "get_byte": 1, "get_word": 2, "get_int": 2, "get_uint": 2, "get_real": 4, "get_dword": 4,
+            "get_dint": 4, "get_udint": 4, "get_s5time": 2, "get_dt": 8, "get_date_time_object": 8,
+            "get_time": 4, "get_usint": 1, "get_sint": 1, "get_lint": 8, "get_lreal": 8, "get_lword": 8,
+            "get_ulint": 8, "get_tod": 4, "get_date": 2, "get_ltime": 8, "get_ltod": 8, "get_ldt": 8,
+            "get_dtl": 12, "get_char": 1, "get_wchar": 2, "get_string": 2, "get_wstring": 4,
+        }  # fmt: skip
+        cases: list[tuple[str, Callable[[bytearray, int], object], int]] = [
+            (name, getattr(getters, name), size) for name, size in sizes.items()
+        ]
+        cases += [("get_fstring", fstring5, 5), ("get_bool", bool0, 1)]
+        for name, getter, size in cases:
             # One byte short, and the right length starting one byte too late.
             for buf, index in ((bytearray(size - 1), 0), (bytearray(size), 1)):
-                with self.assertRaisesRegex(ValueError, "bytes, but only"):
-                    getter(buf, index)
-            getter(bytearray(size), 0)
+                with self.subTest(getter=name, length=len(buf), index=index):
+                    with self.assertRaises(BufferTooShortError) as raised:
+                        getter(buf, index)
+                    self.assertEqual(
+                        str(raised.exception), f"{size} bytes at index {index} do not fit in a buffer of {len(buf)} bytes"
+                    )
+
+    def test_buffer_too_short_error_is_caught_as_before(self) -> None:
+        # Getters raised IndexError or struct.error for a short buffer, setters ValueError.
+        for caught in (ValueError, IndexError, struct.error):
+            with self.assertRaises(caught):
+                get_int(bytearray(1), 0)
+            with self.assertRaises(caught):
+                set_int(bytearray(1), 0, 1)
+
+    def test_string_content_past_the_buffer_raises_buffer_too_short(self) -> None:
+        with self.assertRaises(BufferTooShortError):
+            get_string(bytearray(b"\x0a\x05abc"), 0)
+        with self.assertRaises(BufferTooShortError):
+            get_wstring(bytearray(b"\x00\x0a\x00\x05\x00a"), 0)
 
     def test_get_fstring(self) -> None:
         data = bytearray(ord(letter) for letter in "hello world    ")

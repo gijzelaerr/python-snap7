@@ -10,15 +10,31 @@ Buffer = Union[bytearray, memoryview]
 logger = getLogger(__name__)
 
 
-def _require_bytes(bytearray_: Buffer, byte_index: int, size: int, type_name: str) -> None:
-    """Raise ``ValueError`` if fewer than ``size`` bytes follow ``byte_index``.
+class BufferTooShortError(ValueError, IndexError, struct.error):
+    """The buffer holds fewer bytes than the value needs.
 
-    Slicing past the end of a buffer silently returns fewer bytes, so getters
-    that decode a slice without ``struct`` would otherwise return a wrong value.
+    Getters and setters raise this when ``byte_index`` plus the size of the
+    type runs past the end of the buffer. It subclasses :obj:`ValueError`, and
+    also :obj:`IndexError` and :obj:`struct.error`, which getters raised for a
+    short buffer before, so existing ``except`` clauses still catch it.
     """
-    available = max(0, len(bytearray_) - byte_index)
-    if available < size:
-        raise ValueError(f"{type_name} needs {size} bytes, but only {available} are in the buffer at index {byte_index}")
+
+
+def _check_space(buffer: Buffer, byte_index: int, size: int) -> None:
+    """Raise :class:`BufferTooShortError` if ``size`` bytes don't fit at ``byte_index``.
+
+    Slicing past the end of a buffer silently returns fewer bytes, and slice
+    assignment past the end grows a bytearray, so without this a getter can
+    return a wrong value and a setter can change the buffer's length.
+    """
+    try:
+        length = len(buffer)
+    except TypeError:
+        # A ctypes pointer, such as an S7DataItem's pData after read_multi_vars(),
+        # has no length to check against.
+        return
+    if byte_index + size > length:
+        raise BufferTooShortError(f"{size} bytes at index {byte_index} do not fit in a buffer of {length} bytes")
 
 
 def get_bool(bytearray_: Buffer, byte_index: int, bool_index: int) -> bool:
@@ -37,6 +53,7 @@ def get_bool(bytearray_: Buffer, byte_index: int, bool_index: int) -> bool:
         >>> get_bool(buffer, 0, 0)  # The bit 0 starts at the right.
             True
     """
+    _check_space(bytearray_, byte_index, 1)
     index_value = 1 << bool_index
     byte_value = bytearray_[byte_index]
     current_value = byte_value & index_value
@@ -56,6 +73,7 @@ def get_byte(bytearray_: Buffer, byte_index: int) -> int:
     Returns:
         value get from the byte index.
     """
+    _check_space(bytearray_, byte_index, 1)
     data = bytearray_[byte_index : byte_index + 1]
     data[0] = data[0] & 0xFF
     packed = struct.pack("B", *data)
@@ -80,6 +98,7 @@ def get_word(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_word(bytearray([0, 100]), 0)
             100
     """
+    _check_space(bytearray_, byte_index, 2)
     data = bytearray_[byte_index : byte_index + 2]
     data[1] = data[1] & 0xFF
     data[0] = data[0] & 0xFF
@@ -105,6 +124,7 @@ def get_int(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_int(bytearray([0, 255]), 0)
             255
     """
+    _check_space(bytearray_, byte_index, 2)
     data = bytearray_[byte_index : byte_index + 2]
     data[1] = data[1] & 0xFF
     data[0] = data[0] & 0xFF
@@ -133,6 +153,7 @@ def get_uint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_uint(data, 0)
             65535
     """
+    _check_space(bytearray_, byte_index, 2)
     return get_word(bytearray_, byte_index)
 
 
@@ -155,6 +176,7 @@ def get_real(bytearray_: Buffer, byte_index: int) -> float:
         >>> get_real(data, 0)
             123.32099914550781
     """
+    _check_space(bytearray_, byte_index, 4)
     x = bytearray_[byte_index : byte_index + 4]
     real: float = struct.unpack(">f", struct.pack("4B", *x))[0]
     return real
@@ -187,7 +209,7 @@ def get_fstring(
         >>> get_fstring(data, 0, 15, remove_padding=False)
         'hello world    '
     """
-    _require_bytes(bytearray_, byte_index, max_length, "FSTRING")
+    _check_space(bytearray_, byte_index, max_length)
     raw = bytes(bytearray_[byte_index : byte_index + max_length])
     string = raw.decode(encoding)
 
@@ -220,6 +242,7 @@ def get_string(bytearray_: Buffer, byte_index: int, encoding: str = "latin-1") -
         'hello world'
     """
 
+    _check_space(bytearray_, byte_index, 2)
     str_length = int(bytearray_[byte_index + 1])
     max_string_size = int(bytearray_[byte_index])
 
@@ -231,7 +254,7 @@ def get_string(bytearray_: Buffer, byte_index: int, encoding: str = "latin-1") -
             "larger than 254. Bytearray doesn't seem to be a valid string."
         )
     if byte_index + 2 + str_length > len(bytearray_):
-        raise ValueError(
+        raise BufferTooShortError(
             f"String contains {str_length} chars, but only {len(bytearray_) - byte_index - 2} bytes are in the buffer"
         )
     raw = bytes(bytearray_[byte_index + 2 : byte_index + 2 + str_length])
@@ -258,6 +281,7 @@ def get_dword(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_dword(data, 0)
             4294967295
     """
+    _check_space(bytearray_, byte_index, 4)
     data = bytearray_[byte_index : byte_index + 4]
     dword: int = struct.unpack(">I", struct.pack("4B", *data))[0]
     return dword
@@ -285,6 +309,7 @@ def get_dint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_dint(data, 0)
             2147483647
     """
+    _check_space(bytearray_, byte_index, 4)
     data = bytearray_[byte_index : byte_index + 4]
     dint: int = struct.unpack(">i", struct.pack("4B", *data))[0]
     return dint
@@ -312,6 +337,7 @@ def get_udint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_udint(data, 0)
             4294967295
     """
+    _check_space(bytearray_, byte_index, 4)
     data = bytearray_[byte_index : byte_index + 4]
     dint: int = struct.unpack(">I", struct.pack("4B", *data))[0]
     return dint
@@ -341,7 +367,7 @@ def get_s5time(bytearray_: Buffer, byte_index: int) -> str:
         >>> get_s5time(bytearray(b"\\x11\\x23"), 0)
             '0:00:12.300000'
     """
-    _require_bytes(bytearray_, byte_index, 2, "S5TIME")
+    _check_space(bytearray_, byte_index, 2)
     word = int.from_bytes(bytearray_[byte_index : byte_index + 2], byteorder="big")
     time_base_ms = (10, 100, 1000, 10000)[(word >> 12) & 0x3]
     digits = ((word >> 8) & 0xF, (word >> 4) & 0xF, word & 0xF)
@@ -380,6 +406,8 @@ def get_date_time_object(bytearray_: Buffer, byte_index: int) -> datetime:
         >>> get_date_time_object(data,0)
             datetime.datetime(2020, 7, 12, 17, 32, 2, 854000)
     """
+
+    _check_space(bytearray_, byte_index, 8)
 
     def bcd_to_byte(byte: int) -> int:
         return (byte >> 4) * 10 + (byte & 0xF)
@@ -422,7 +450,7 @@ def get_time(bytearray_: Buffer, byte_index: int) -> str:
         >>> get_time(data, 0)
             '24:20:31:23.647'
     """
-    _require_bytes(bytearray_, byte_index, 4, "TIME")
+    _check_space(bytearray_, byte_index, 4)
     data_bytearray = bytearray_[byte_index : byte_index + 4]
     bits = 32
     sign = 1
@@ -465,6 +493,7 @@ def get_usint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_usint(data, 0)
             255
     """
+    _check_space(bytearray_, byte_index, 1)
     data = bytearray_[byte_index] & 0xFF
     packed = struct.pack("B", data)
     value: int = struct.unpack(">B", packed)[0]
@@ -491,6 +520,7 @@ def get_sint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_sint(data, 0)
             127
     """
+    _check_space(bytearray_, byte_index, 1)
     data = bytearray_[byte_index]
     packed = struct.pack("B", data)
     value: int = struct.unpack(">b", packed)[0]
@@ -522,6 +552,7 @@ def get_lint(bytearray_: Buffer, byte_index: int) -> int:
         12345
     """
 
+    _check_space(bytearray_, byte_index, 8)
     raw_lint = bytearray_[byte_index : byte_index + 8]
     lint = struct.unpack(">q", struct.pack("8B", *raw_lint))[0]
     return int(lint)
@@ -549,6 +580,7 @@ def get_lreal(bytearray_: Buffer, byte_index: int) -> float:
         >>> get_lreal(data, 0)
         12345.12345
     """
+    _check_space(bytearray_, byte_index, 8)
     return float(struct.unpack_from(">d", bytearray_, offset=byte_index)[0])
 
 
@@ -572,6 +604,7 @@ def get_lword(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_lword(data, 0)
         43981
     """
+    _check_space(bytearray_, byte_index, 8)
     data = bytearray_[byte_index : byte_index + 8]
     lword: int = struct.unpack(">Q", struct.pack("8B", *data))[0]
     return lword
@@ -597,16 +630,15 @@ def get_ulint(bytearray_: Buffer, byte_index: int) -> int:
         >>> get_ulint(data, 0)
         12345
     """
+    _check_space(bytearray_, byte_index, 8)
     raw_ulint = bytearray_[byte_index : byte_index + 8]
     lint: int = struct.unpack(">Q", struct.pack("8B", *raw_ulint))[0]
     return lint
 
 
 def get_tod(bytearray_: Buffer, byte_index: int) -> timedelta:
-    len_bytearray_ = len(bytearray_)
+    _check_space(bytearray_, byte_index, 4)
     byte_range = byte_index + 4
-    if len_bytearray_ < byte_range:
-        raise ValueError("Date can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
     time_val = timedelta(milliseconds=int.from_bytes(bytearray_[byte_index:byte_range], byteorder="big"))
     if time_val.days >= 1:
         raise ValueError("Time_Of_Date can't be extracted from bytearray. Bytearray contains unexpected values.")
@@ -614,10 +646,8 @@ def get_tod(bytearray_: Buffer, byte_index: int) -> timedelta:
 
 
 def get_date(bytearray_: Buffer, byte_index: int = 0) -> date:
-    len_bytearray_ = len(bytearray_)
+    _check_space(bytearray_, byte_index, 2)
     byte_range = byte_index + 2
-    if len_bytearray_ < byte_range:
-        raise ValueError("Date can't be extracted from bytearray. bytearray_[Index:Index+16] would cause overflow.")
     date_val = date(1990, 1, 1) + timedelta(days=int.from_bytes(bytearray_[byte_index:byte_range], byteorder="big"))
     if date_val > date(2168, 12, 31):
         raise ValueError("date_val is higher than specification allows.")
@@ -644,6 +674,7 @@ def get_ltime(bytearray_: Buffer, byte_index: int) -> timedelta:
         >>> get_ltime(data, 0)
         datetime.timedelta(seconds=1)
     """
+    _check_space(bytearray_, byte_index, 8)
     raw = bytearray_[byte_index : byte_index + 8]
     nanoseconds: int = struct.unpack(">q", struct.pack("8B", *raw))[0]
     # timedelta holds microseconds; drop the sub-microsecond part towards zero, so that
@@ -667,6 +698,7 @@ def get_ltod(bytearray_: Buffer, byte_index: int) -> timedelta:
     Returns:
         timedelta value representing time of day.
     """
+    _check_space(bytearray_, byte_index, 8)
     raw = bytearray_[byte_index : byte_index + 8]
     nanoseconds: int = struct.unpack(">Q", struct.pack("8B", *raw))[0]
     result = timedelta(microseconds=nanoseconds // 1000)
@@ -689,6 +721,7 @@ def get_ldt(bytearray_: Buffer, byte_index: int) -> datetime:
     Returns:
         datetime value.
     """
+    _check_space(bytearray_, byte_index, 8)
     raw = bytearray_[byte_index : byte_index + 8]
     nanoseconds: int = struct.unpack(">Q", struct.pack("8B", *raw))[0]
     epoch = datetime(1970, 1, 1)
@@ -716,6 +749,7 @@ def get_dtl(bytearray_: Buffer, byte_index: int) -> datetime:
     Returns:
         datetime value (microsecond precision; sub-microsecond nanoseconds are truncated).
     """
+    _check_space(bytearray_, byte_index, 12)
     nanoseconds = struct.unpack(">I", bytearray_[byte_index + 8 : byte_index + 12])[0]
     microsecond = nanoseconds // 1000
 
@@ -753,6 +787,7 @@ def get_char(bytearray_: Buffer, byte_index: int) -> str:
         >>> get_char(data, 0)
         'C'
     """
+    _check_space(bytearray_, byte_index, 1)
     char = chr(bytearray_[byte_index])
     return char
 
@@ -776,6 +811,7 @@ def get_wchar(bytearray_: Buffer, byte_index: int) -> str:
         >>> get_wchar(data, 0)
         'C'
     """
+    _check_space(bytearray_, byte_index, 2)
     if bytearray_[byte_index] == 0:
         return chr(bytearray_[byte_index + 1])
     return bytes(bytearray_[byte_index : byte_index + 2]).decode("utf-16-be")
@@ -805,6 +841,7 @@ def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
     """
     # Byte 0 + 1 --> total length of wstring, should be bytearray_ - 4
     # Byte 2, 3 --> used length of wstring
+    _check_space(bytearray_, byte_index, 4)
     wstring_start = byte_index + 4
 
     max_wstring_size = bytearray_[byte_index : byte_index + 2]
@@ -824,7 +861,7 @@ def get_wstring(bytearray_: Buffer, byte_index: int) -> str:
 
     wstr_bytes = wstr_chars * 2
     if wstring_start + wstr_bytes > len(bytearray_):
-        raise ValueError(
+        raise BufferTooShortError(
             f"WString contains {wstr_chars} chars, but only {len(bytearray_) - wstring_start} bytes are in the buffer"
         )
     return bytes(bytearray_[wstring_start : wstring_start + wstr_bytes]).decode("utf-16-be")

@@ -3,21 +3,11 @@ import struct
 from datetime import date, datetime, timedelta
 from typing import Union
 
-from .getters import get_bool
+from .getters import _check_space, get_bool
 
 #: Buffer types accepted by setter functions.
 #: Both :class:`bytearray` and writable :class:`memoryview` are supported.
 Buffer = Union[bytearray, memoryview]
-
-
-def _check_space(buffer: Buffer, byte_index: int, size: int) -> None:
-    """Raise ValueError if ``size`` bytes don't fit at ``byte_index``.
-
-    A slice assignment past the end would otherwise grow a bytearray, which changes
-    the length of what gets written back to the PLC or shifts the fields after it.
-    """
-    if byte_index + size > len(buffer):
-        raise ValueError(f"{size} bytes at index {byte_index} do not fit in a buffer of {len(buffer)} bytes")
 
 
 def set_bool(bytearray_: Buffer, byte_index: int, bool_index: int, value: bool) -> Buffer:
