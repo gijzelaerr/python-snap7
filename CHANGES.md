@@ -24,9 +24,11 @@ Unreleased
 
 ### Bug fixes
 
-* `get_s5time()`, `get_time()` and `get_fstring()` raise `ValueError` when the buffer holds fewer bytes than the type
-  needs from `byte_index`. Previously they decoded whatever bytes were there and returned a wrong value; `get_time()`
-  could even turn a negative `TIME` positive. The other getters already raised (#1008).
+* Getters raise `BufferTooShortError` when the buffer holds fewer bytes than the value needs from `byte_index`, with
+  the setters' message (`2 bytes at index 0 do not fit in a buffer of 1 bytes`). Setters raise it too. It subclasses
+  `ValueError`, `IndexError` and `struct.error`, so code that caught what a getter raised before still catches it.
+  Previously getters raised one of those three depending on the type, and `get_s5time()`, `get_time()` and
+  `get_fstring()` returned a wrong value; `get_time()` could turn a negative `TIME` positive (#1008, #NNNN).
 * `get_s5time()` ignores bits 14 and 15 of the word, which are not part of an `S5TIME` value. Previously a value with
   either bit set raised `ValueError: This value should not be greater than 3`. A count digit that is not BCD now
   raises a `ValueError` that says so, instead of an `int()` parse error (#1005).
