@@ -27,6 +27,8 @@ Unreleased
 * `get_s5time()` ignores bits 14 and 15 of the word, which are not part of an `S5TIME` value. Previously a value with
   either bit set raised `ValueError: This value should not be greater than 3`. A count digit that is not BCD now
   raises a `ValueError` that says so, instead of an `int()` parse error (#1005).
+* `get_ltime()` truncates a negative value towards zero to whole microseconds, as it already did for a positive one.
+  Previously `LTIME#-1500NS` read as -2 µs and `LTIME#-999NS` as -1 µs (#1006).
 * `Row` reads and writes `LINT`, `ULINT`, `LWORD`, `LTIME`, `LTOD` and `LDT` fields, and accepts `DT` as a short name for
   `DATE_AND_TIME`, as tags already do. Previously a layout with one of these types raised a bare `ValueError` on read
   and write, although the getters and setters exist (#1004).
@@ -35,6 +37,12 @@ Unreleased
   connection that way. A CP 343-1 answered the disconnect request with a reset and kept the connection's resource
   until the PLC restarted. The reporter confirmed on a CPU 313C behind a CP 343-1 that the resource is now
   released (#972, #987).
+* get_status(): A lost connection drops the status from 2 (connected) to 1 (started). Previously, the status remained
+  at 2. (#1000).
+* `b_recv()` returns 1 and not -1 on a timeout, as documented (#1000).
+* A client read timeout no longer drops the connection (#1000).
+* `ISOTCPConnection._recv_exact()`: If a timeout occurs before the first byte of a frame, the connection remains
+  intact. If a frame is incomplete, an S7ConnectionError is raised and the connection state is reset (#1000).
 
 3.6.0
 -----

@@ -256,7 +256,7 @@ class TestReceiveData:
         mock_socket.recv.side_effect = socket.timeout("timeout")
         with pytest.raises(S7TimeoutError, match="Receive timeout"):
             conn.receive_data()
-        assert conn.connected is False
+        assert conn.connected is True
 
     def test_receive_socket_error(self) -> None:
         conn = ISOTCPConnection("1.2.3.4")
@@ -306,6 +306,24 @@ class TestRecvExact:
         conn.socket.recv.side_effect = socket.error("broken")
         with pytest.raises(S7ConnectionError, match="Receive error"):
             conn._recv_exact(4)
+
+    def test_receive_timeout_after_header(self) -> None:
+        conn = ISOTCPConnection("1.2.3.4")
+        conn.connected = True
+        conn.socket = MagicMock()
+        conn.socket.recv.side_effect = [b"\x03\x00\x00\x10", socket.timeout("timeout")]
+        with pytest.raises(S7ConnectionError, match="Timeout receiving payload"):
+            conn.receive_data()
+        assert conn.connected is False
+
+    def test_receive_timeout_part_header(self) -> None:
+        conn = ISOTCPConnection("1.2.3.4")
+        conn.connected = True
+        conn.socket = MagicMock()
+        conn.socket.recv.side_effect = [b"\x03\x00", socket.timeout("timeout")]
+        with pytest.raises(S7ConnectionError, match="Receive error"):
+            conn.receive_data()
+        assert conn.connected is False
 
 
 class TestConnect:
