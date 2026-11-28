@@ -3,7 +3,7 @@ import logging
 import pytest
 import unittest
 import struct
-from typing import cast
+from typing import Callable, cast
 from unittest.mock import MagicMock
 
 from snap7 import DB, Row
@@ -415,6 +415,22 @@ class TestS7util(unittest.TestCase):
             row["NAME"] = "TrĪt"
         except ValueError:
             pass
+
+    def test_getters_reject_a_short_buffer(self) -> None:
+        def fstring5(buf: bytearray, index: int) -> str:
+            return get_fstring(buf, index, 5)
+
+        cases: tuple[tuple[Callable[[bytearray, int], str], int], ...] = (
+            (get_s5time, 2),
+            (get_time, 4),
+            (fstring5, 5),
+        )
+        for getter, size in cases:
+            # One byte short, and the right length starting one byte too late.
+            for buf, index in ((bytearray(size - 1), 0), (bytearray(size), 1)):
+                with self.assertRaisesRegex(ValueError, "bytes, but only"):
+                    getter(buf, index)
+            getter(bytearray(size), 0)
 
     def test_get_fstring(self) -> None:
         data = bytearray(ord(letter) for letter in "hello world    ")

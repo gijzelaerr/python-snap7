@@ -24,6 +24,9 @@ Unreleased
 
 ### Bug fixes
 
+* `get_s5time()`, `get_time()` and `get_fstring()` raise `ValueError` when the buffer holds fewer bytes than the type
+  needs from `byte_index`. Previously they decoded whatever bytes were there and returned a wrong value; `get_time()`
+  could even turn a negative `TIME` positive. The other getters already raised (#1008).
 * `get_s5time()` ignores bits 14 and 15 of the word, which are not part of an `S5TIME` value. Previously a value with
   either bit set raised `ValueError: This value should not be greater than 3`. A count digit that is not BCD now
   raises a `ValueError` that says so, instead of an `int()` parse error (#1005).
